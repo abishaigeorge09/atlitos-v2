@@ -1,7 +1,7 @@
 import { BillSummary, Button, TextField, styles } from '@/components/organisms/_shared';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
-import { formatINR, spacing } from '@atlitos/theme';
+import { formatINR, radii, spacing } from '@atlitos/theme';
 import * as Haptics from 'expo-haptics';
 import * as React from 'react';
 import { Pressable, Text, View } from 'react-native';
@@ -49,7 +49,7 @@ export function DonationSheet({ causeTitle, presetAmounts, fundItem, platformFee
           style={[
             styles.between,
             {
-              borderRadius: 16,
+              borderRadius: radii.lg,
               borderWidth: 1,
               borderColor: colors.border,
               backgroundColor: colors.card,
@@ -74,7 +74,7 @@ export function DonationSheet({ causeTitle, presetAmounts, fundItem, platformFee
                 minHeight: 44,
                 minWidth: 44,
                 paddingHorizontal: spacing.lg,
-                borderRadius: 999,
+                borderRadius: radii.pill,
                 alignItems: 'center',
                 justifyContent: 'center',
                 backgroundColor: active ? colors.accent : colors.surfaceMuted,

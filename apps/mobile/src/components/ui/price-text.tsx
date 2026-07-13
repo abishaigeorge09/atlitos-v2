@@ -24,8 +24,10 @@ const SIZE_VARIANT = {
  * Renders `formatINR` (Indian digit grouping, e.g. ₹2,31,000) in JetBrains
  * Mono with tabular figures via `textStyle`, the house numerics rule, never
  * plain Inter and never a bare ungrouped number. `strike` renders the price
- * crossed out in textTertiary, for the discount pair pattern (a struck
- * original PriceText next to the active discounted PriceText).
+ * crossed out in textSecondary, for the discount pair pattern (a struck
+ * original PriceText next to the active discounted PriceText). textSecondary,
+ * not textTertiary: this pattern typically sits on a card surface (product
+ * cards, cart lines), and textTertiary fails AA contrast there in dark mode.
  */
 function PriceText({ amount, size = 'base', strike, className }: PriceTextProps) {
   const colors = useThemeColors();
@@ -35,7 +37,7 @@ function PriceText({ amount, size = 'base', strike, className }: PriceTextProps)
       className={cn(className)}
       style={[
         textStyle(SIZE_VARIANT[size]),
-        { color: strike ? colors.textTertiary : colors.text },
+        { color: strike ? colors.textSecondary : colors.text },
         strike ? { textDecorationLine: 'line-through' as const } : null,
       ]}
     >

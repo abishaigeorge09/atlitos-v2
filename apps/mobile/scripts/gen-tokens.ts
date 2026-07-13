@@ -34,7 +34,24 @@ function colorVarBlock(palette: ColorPalette): string {
   return lines.join("\n");
 }
 
-/** Shadcn/react-native-reusables slot name -> Atlitos color token name (kebab case). */
+/**
+ * Shadcn/react-native-reusables slot name -> Atlitos color token name (kebab
+ * case). NOTE: upstream shadcn's "accent" slot is a TINT (hover/pressed
+ * background for ghost/muted surfaces), not a brand color. It is emitted
+ * here as `--accent-soft` / `--accent-soft-foreground`, deliberately NOT
+ * `--accent`/`--accent-foreground`, so it can never collide with (and
+ * silently shadow) the real Atlitos brand accent Tailwind utility that
+ * rawColorBlock below generates from packages/theme's `accent` token. Fixed
+ * in the Phase 1 fix cycle: this collision previously made `bg-accent` /
+ * `text-accent` / `border-accent` resolve to the pale accent TINT instead of
+ * the true ember brand accent everywhere (primary CTA, active tab, selected
+ * chips, progress fills), see docs/design/DESIGN-LANGUAGE.md "Brand accent".
+ * Nothing in this codebase currently reads the shadcn tint slot (no vendored
+ * RNR internal here uses `bg-accent`/`text-accent-foreground` for a hover
+ * tint), it is kept only for shadcn-pattern compatibility, reachable
+ * explicitly via `bg-accent-soft`/`text-accent-soft-foreground` if a future
+ * vendored component needs it.
+ */
 const slotToColorToken: Record<string, string> = {
   background: "color-bg",
   foreground: "color-text",
@@ -48,8 +65,8 @@ const slotToColorToken: Record<string, string> = {
   "secondary-foreground": "color-text",
   muted: "color-surface-muted",
   "muted-foreground": "color-text-secondary",
-  accent: "color-accent-tint",
-  "accent-foreground": "color-text",
+  "accent-soft": "color-accent-tint",
+  "accent-soft-foreground": "color-text",
   destructive: "color-danger",
   "destructive-foreground": "color-ink-on-accent",
   border: "color-border",
@@ -106,14 +123,18 @@ function radiiBlock(): string {
 
 /**
  * Full raw @atlitos/theme color palette as Tailwind color utilities
- * (bg-danger, text-success, bg-accent-tint, ...). Skips keys that collide
- * with a shadcn/react-native-reusables slot name already defined above
- * ("border", "card", "accent"), the slot version wins there since RNR
- * components read those specific semantics (e.g. shadcn's "accent" slot is
- * the accent TINT, ghost/hover background, not the raw accent color).
+ * (bg-danger, text-success, bg-accent-tint, bg-accent, ...). Skips keys that
+ * collide with a shadcn/react-native-reusables slot name already defined
+ * above ("border", "card"), those two are safe no-op collisions (the slot
+ * and the raw palette both resolve to the exact same CSS var, so whichever
+ * wins is identical). "accent" is intentionally NOT in this collision set:
+ * the raw Atlitos `accent` (true brand ember) must win the `bg-accent` /
+ * `text-accent` / `border-accent` utilities, see the slotToColorToken
+ * comment above for why the shadcn tint slot was renamed to `accent-soft`
+ * instead of being left here to collide.
  */
 function rawColorBlock(): string {
-  const slotCollisions = new Set(["border", "card", "accent"]);
+  const slotCollisions = new Set(["border", "card"]);
   const keys = Object.keys(colors.light) as Array<keyof ColorPalette>;
   return keys
     .map((key) => {
@@ -170,9 +191,12 @@ module.exports = {
           DEFAULT: "var(--muted)",
           foreground: "var(--muted-foreground)",
         },
-        accent: {
-          DEFAULT: "var(--accent)",
-          foreground: "var(--accent-foreground)",
+        // Shadcn/RNR compat tint slot only, NOT the brand accent, see
+        // gen-tokens.ts's slotToColorToken comment. The brand accent utility
+        // ("accent") comes from the raw palette block below instead.
+        "accent-soft": {
+          DEFAULT: "var(--accent-soft)",
+          foreground: "var(--accent-soft-foreground)",
         },
         popover: {
           DEFAULT: "var(--popover)",

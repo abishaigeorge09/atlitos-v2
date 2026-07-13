@@ -48,8 +48,8 @@
     --secondary-foreground: hsl(var(--color-text));
     --muted: hsl(var(--color-surface-muted));
     --muted-foreground: hsl(var(--color-text-secondary));
-    --accent: hsl(var(--color-accent-tint));
-    --accent-foreground: hsl(var(--color-text));
+    --accent-soft: hsl(var(--color-accent-tint));
+    --accent-soft-foreground: hsl(var(--color-text));
     --destructive: hsl(var(--color-danger));
     --destructive-foreground: hsl(var(--color-ink-on-accent));
     --border: hsl(var(--color-border));
@@ -98,8 +98,8 @@
     --secondary-foreground: hsl(var(--color-text));
     --muted: hsl(var(--color-surface-muted));
     --muted-foreground: hsl(var(--color-text-secondary));
-    --accent: hsl(var(--color-accent-tint));
-    --accent-foreground: hsl(var(--color-text));
+    --accent-soft: hsl(var(--color-accent-tint));
+    --accent-soft-foreground: hsl(var(--color-text));
     --destructive: hsl(var(--color-danger));
     --destructive-foreground: hsl(var(--color-ink-on-accent));
     --border: hsl(var(--color-border));

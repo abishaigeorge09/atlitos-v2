@@ -1,7 +1,7 @@
 import { Button, styles } from '@/components/organisms/_shared';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
-import { formatINR, spacing } from '@atlitos/theme';
+import { formatINR, radii, spacing } from '@atlitos/theme';
 import * as Haptics from 'expo-haptics';
 import { ArrowDownToLine, Send } from 'lucide-react-native';
 import { Text, View } from 'react-native';
@@ -29,7 +29,7 @@ export function EarningsHeader({ balance, thisMonth, pending, onSend, onTransfer
   return (
     <View
       style={{
-        borderRadius: 20,
+        borderRadius: radii.xl,
         backgroundColor: colors.card,
         borderWidth: 1,
         borderColor: colors.border,
@@ -38,7 +38,9 @@ export function EarningsHeader({ balance, thisMonth, pending, onSend, onTransfer
       }}
     >
       <View>
-        <Text style={[textStyle('overline'), { color: colors.textTertiary }]}>Balance</Text>
+        {/* textSecondary, not tertiary: this whole header is a colors.card
+            surface, textTertiary fails AA contrast against it in dark mode. */}
+        <Text style={[textStyle('overline'), { color: colors.textSecondary }]}>Balance</Text>
         <Text style={[textStyle('numericDisplay'), { color: colors.text }]}>{formatINR(balance)}</Text>
       </View>
 
@@ -55,12 +57,12 @@ export function EarningsHeader({ balance, thisMonth, pending, onSend, onTransfer
 
       <View style={[styles.row, { gap: spacing.xl }]}>
         <View style={{ gap: spacing.xs }}>
-          <Text style={[textStyle('caption'), { color: colors.textTertiary }]}>This month</Text>
+          <Text style={[textStyle('caption'), { color: colors.textSecondary }]}>This month</Text>
           <Text style={[textStyle('numericBase'), { color: colors.text }]}>{formatINR(thisMonth)}</Text>
         </View>
         {pending !== undefined ? (
           <View style={{ gap: spacing.xs }}>
-            <Text style={[textStyle('caption'), { color: colors.textTertiary }]}>Pending</Text>
+            <Text style={[textStyle('caption'), { color: colors.textSecondary }]}>Pending</Text>
             <Text style={[textStyle('numericBase'), { color: colors.warning }]}>{formatINR(pending)}</Text>
           </View>
         ) : null}

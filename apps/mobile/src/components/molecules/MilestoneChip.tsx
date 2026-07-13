@@ -44,6 +44,10 @@ export interface MilestoneChipProps {
 export function MilestoneChip({ iconName, label, earned = true }: MilestoneChipProps) {
   const colors = useThemeColors();
   const Icon = ICON_MAP[iconName] ?? Award;
+  // Unearned label text sits on `bg-surface-muted`; `textTertiary` fails AA
+  // (~4:1) on that surface in dark mode, `textSecondary` (~7:1) is the
+  // correct token here (Lock icon can stay on textTertiary, icons only need
+  // the lower 3:1 non-text contrast minimum).
   const tone = earned ? colors.accent : colors.textTertiary;
 
   return (
@@ -55,7 +59,7 @@ export function MilestoneChip({ iconName, label, earned = true }: MilestoneChipP
     >
       {earned ? <Icon size={16} strokeWidth={2} color={tone} /> : <Lock size={16} strokeWidth={2} color={tone} />}
       <Text
-        className={cn('font-sans-semibold text-xs', earned ? 'text-accent' : 'text-text-tertiary')}
+        className={cn('font-sans-semibold text-xs', earned ? 'text-accent' : 'text-text-secondary')}
       >
         {label}
       </Text>

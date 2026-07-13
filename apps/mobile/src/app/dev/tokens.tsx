@@ -1,7 +1,8 @@
 import { radii, spacing } from '@atlitos/theme';
 import { Moon, Sun } from 'lucide-react-native';
+import { colorScheme as nwColorScheme } from 'nativewind';
 import { useState } from 'react';
-import { Appearance, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/button';
@@ -65,7 +66,10 @@ export default function TokensScreen() {
   const toggle = () => {
     const next = !dark;
     setDark(next);
-    Appearance.setColorScheme(next ? 'dark' : 'light');
+    // nativewind's colorScheme.set(), not RN's Appearance.setColorScheme
+    // (react-native-web does not implement manual overrides and throws),
+    // see src/app/dev/gallery.tsx's ThemeToggle for the fuller writeup.
+    nwColorScheme.set(next ? 'dark' : 'light');
   };
 
   return (

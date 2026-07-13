@@ -1,7 +1,7 @@
 import { Button } from '@/components/organisms/_shared';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
-import { spacing } from '@atlitos/theme';
+import { radii, spacing } from '@atlitos/theme';
 import type { LucideIcon } from 'lucide-react-native';
 import { Text, View } from 'react-native';
 
@@ -26,7 +26,7 @@ export function EmptyState({ icon: Icon, title, body, ctaLabel, onCtaPress }: Em
         style={{
           height: 80,
           width: 80,
-          borderRadius: 999,
+          borderRadius: radii.pill,
           alignItems: 'center',
           justifyContent: 'center',
           backgroundColor: colors.surfaceMuted,

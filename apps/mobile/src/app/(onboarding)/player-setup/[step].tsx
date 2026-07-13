@@ -1,7 +1,7 @@
 import { useProfile } from '@atlitos/api';
 import type { ApiError } from '@atlitos/types';
 import { SPORTS, type Sport } from '@atlitos/types';
-import { spacing } from '@atlitos/theme';
+import { radii, spacing } from '@atlitos/theme';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Camera } from 'lucide-react-native';
@@ -182,7 +182,7 @@ export default function PlayerSetupStepScreen() {
                     right: -4,
                     height: 28,
                     width: 28,
-                    borderRadius: 14,
+                    borderRadius: radii.pill,
                     backgroundColor: colors.accent,
                     alignItems: 'center',
                     justifyContent: 'center',

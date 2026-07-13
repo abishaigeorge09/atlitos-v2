@@ -12,7 +12,7 @@ The v1 Expo prototype (mock services, emoji glyphs, basic styling) proved the fl
 - **Product vision:** consumer superapp (Vision A) absorbing a Learn module (drills/roadmap/XP) from the academy SRS; NOT WhatsApp-UPI-OCR
 - **Atlitos Life:** web portal in monorepo, not a separate mobile app yet
 - **Design:** NEW language synthesized from his projects — synth token discipline (packages/theme, zero hardcoded hex), warm off-white premium base + dark first-class, Atlitos orange accent (#FF4200 vs #E46136 decided at Phase 0 gate via token gallery), Inter + JetBrains Mono numerics, SRM uppercase-mono eyebrows, GMV shadcn dashboards for portals. lucide icons only. House copy rules: no emojis, no em-dashes/hyphens, concise
-- **OSS:** react-native-reusables (mobile UI) · shadcn/ui (portals) · Refine.dev+Supabase (admin) · Cloudflare Stream + react-native-video-feed (Clutch) · Supabase Realtime (chat) · razorpay SDK + react-native-razorpay + Route · custom Supabase slot engine (not Cal.com — AGPL + overkill for windowed hourly slots)
+- **OSS:** react-native-reusables (mobile UI) · shadcn/ui (portals) · Refine.dev+Supabase (admin) · Cloudflare Stream + react-native-video-feed (Clutch) · Supabase Realtime (chat) · razorpay SDK + react-native-razorpay + Route · custom Supabase slot engine (not Cal.com — AGPL + overkill for windowed hourly slots) · zustand + @tanstack/react-query (state/server-state, the founder's standard stack per docs/design/TASTE.md; added at P1 gate after approver flagged the omission, pending founder ratification)
 
 ## Monorepo `~/dev/atlitos/` (new repo)
 

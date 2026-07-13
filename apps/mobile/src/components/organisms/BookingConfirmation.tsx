@@ -1,7 +1,7 @@
 import { BillSummary, Button, type BillSummaryLine } from '@/components/organisms/_shared';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
-import { spacing } from '@atlitos/theme';
+import { radii, spacing } from '@atlitos/theme';
 import { CheckCircle2 } from 'lucide-react-native';
 import { Text, View } from 'react-native';
 
@@ -42,7 +42,7 @@ export function BookingConfirmation({
           style={{
             height: 72,
             width: 72,
-            borderRadius: 999,
+            borderRadius: radii.pill,
             alignItems: 'center',
             justifyContent: 'center',
             backgroundColor: colors.successTint,
@@ -59,7 +59,7 @@ export function BookingConfirmation({
 
       <View
         style={{
-          borderRadius: 20,
+          borderRadius: radii.xl,
           borderWidth: 1,
           borderColor: colors.border,
           backgroundColor: colors.card,

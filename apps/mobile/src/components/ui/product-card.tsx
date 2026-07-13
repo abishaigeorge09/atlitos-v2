@@ -52,7 +52,9 @@ function ProductCard({
     <View className="flex-row items-center gap-xs">
       <Text className="font-mono-semibold text-base text-text">{formatINR(price)}</Text>
       {originalPrice && originalPrice > price ? (
-        <Text className="font-mono text-xs text-text-tertiary line-through">
+        // text-secondary, not tertiary: sits on bg-card, textTertiary fails
+        // AA contrast against the card surface in dark mode.
+        <Text className="font-mono text-xs text-text-secondary line-through">
           {formatINR(originalPrice)}
         </Text>
       ) : null}

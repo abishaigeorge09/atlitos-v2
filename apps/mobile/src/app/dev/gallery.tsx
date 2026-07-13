@@ -9,8 +9,9 @@ import {
   Sun,
   Trophy,
 } from 'lucide-react-native';
-import { useState, type ReactNode } from 'react';
-import { Appearance, ScrollView, StyleSheet, Text, View, useColorScheme } from 'react-native';
+import { colorScheme as nwColorScheme, useColorScheme } from 'nativewind';
+import { useEffect, useState, type ReactNode } from 'react';
+import { ScrollView, StyleSheet, Text, View, useColorScheme as useSystemColorScheme } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AdBannerCarousel } from '@/components/molecules/AdBannerCarousel';
@@ -79,31 +80,50 @@ import { useThemeColors } from '@/theme/use-theme-colors';
  * previewed inside a fixed height framed card rather than full screen, they
  * are bottom sheets in the real app, not standalone screens.
  *
- * Theme toggle at the top calls `Appearance.setColorScheme`, which both
- * react-native's own `useColorScheme` (what `useThemeColors` reads) and
- * nativewind's `dark:` class resolution subscribe to, so one call flips
- * every component on this screen regardless of which of the two token
- * patterns it uses. No ThemeProvider needed, matching PHASE-1-SPIKE.md's
- * finding that one was not required.
+ * Theme toggle at the top calls nativewind's `colorScheme.set()` (from the
+ * 'nativewind' package, NOT React Native's own `Appearance.setColorScheme`,
+ * which react-native-web does not implement and throws on web). `useThemeColors`
+ * reads nativewind's resolved scheme too (see src/theme/use-theme-colors.ts),
+ * and nativewind's own `dark:` class resolution subscribes to the same
+ * source, so one call flips every component on this screen regardless of
+ * which of the two token patterns it uses. No ThemeProvider needed, matching
+ * PHASE-1-SPIKE.md's finding that one was not required.
+ *
+ * "system" always resolves to a concrete `light`/`dark` before calling
+ * `colorScheme.set()` (never passes the literal `"system"` through) because
+ * nativewind's web runtime, with `darkMode: "class"` (this app's config),
+ * clears the `dark` class rather than checking `prefers-color-scheme` when
+ * given `"system"` directly, an upstream nativewind/react-native-css-interop
+ * behavior for the class strategy, not something to route around with a
+ * media-query strategy switch. Resolving explicitly here keeps "system" a
+ * real live follow-system option on every platform, including web, and an
+ * effect re-applies it if the OS scheme changes while "system" is selected.
  */
 
 type ThemePreference = 'light' | 'dark' | 'system';
 
 function ThemeToggle() {
   const colors = useThemeColors();
-  const systemScheme = useColorScheme();
+  const { colorScheme: resolvedScheme } = useColorScheme();
+  const systemScheme = useSystemColorScheme();
   const [preference, setPreference] = useState<ThemePreference>('system');
+
+  useEffect(() => {
+    if (preference === 'system') {
+      nwColorScheme.set(systemScheme === 'dark' ? 'dark' : 'light');
+    }
+  }, [preference, systemScheme]);
 
   const cyclePreference = () => {
     const next: ThemePreference =
       preference === 'system' ? 'light' : preference === 'light' ? 'dark' : 'system';
     setPreference(next);
-    Appearance.setColorScheme(next === 'system' ? 'unspecified' : next);
+    nwColorScheme.set(next === 'system' ? (systemScheme === 'dark' ? 'dark' : 'light') : next);
   };
 
   const Icon = preference === 'system' ? Monitor : preference === 'light' ? Sun : Moon;
   const label =
-    preference === 'system' ? `System (${systemScheme ?? 'light'})` : preference === 'light' ? 'Light' : 'Dark';
+    preference === 'system' ? `System (${resolvedScheme ?? 'light'})` : preference === 'light' ? 'Light' : 'Dark';
 
   return (
     <Button variant="secondary" size="sm" onPress={cyclePreference}>

@@ -57,7 +57,10 @@ function UPACard({
               <Text className="font-mono-semibold text-xs text-text">
                 {formatINR(raisedAmount)} raised
               </Text>
-              <Text className="font-mono text-xs text-text-tertiary">
+              {/* text-secondary, not tertiary: this sits directly on bg-card,
+                  and textTertiary fails AA contrast against the card surface
+                  in dark mode. */}
+              <Text className="font-mono text-xs text-text-secondary">
                 of {formatINR(goalAmount)}
               </Text>
             </View>

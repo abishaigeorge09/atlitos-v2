@@ -1,7 +1,7 @@
 import { StatusPill, styles } from '@/components/organisms/_shared';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
-import { spacing } from '@atlitos/theme';
+import { radii, spacing } from '@atlitos/theme';
 import * as Haptics from 'expo-haptics';
 import { ChevronRight } from 'lucide-react-native';
 import { FlatList, Image, Pressable, Text, View } from 'react-native';
@@ -70,7 +70,7 @@ export function SearchResults({
                 style={{
                   minHeight: 44,
                   paddingHorizontal: spacing.lg,
-                  borderRadius: 999,
+                  borderRadius: radii.pill,
                   alignItems: 'center',
                   justifyContent: 'center',
                   backgroundColor: active ? colors.accent : colors.surfaceMuted,
@@ -109,7 +109,7 @@ export function SearchResults({
               styles.row,
               {
                 gap: spacing.md,
-                borderRadius: 16,
+                borderRadius: radii.lg,
                 borderWidth: 1,
                 borderColor: colors.border,
                 backgroundColor: colors.card,
@@ -119,7 +119,7 @@ export function SearchResults({
             ]}
           >
             {item.imageUrl ? (
-              <Image source={{ uri: item.imageUrl }} style={{ height: 56, width: 56, borderRadius: 12 }} />
+              <Image source={{ uri: item.imageUrl }} style={{ height: 56, width: 56, borderRadius: radii.md }} />
             ) : null}
             <View style={{ flex: 1, gap: spacing.xs }}>
               <Text style={[textStyle('body'), { color: colors.text }]} numberOfLines={1}>

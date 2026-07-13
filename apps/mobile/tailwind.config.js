@@ -41,9 +41,12 @@ module.exports = {
           DEFAULT: "var(--muted)",
           foreground: "var(--muted-foreground)",
         },
-        accent: {
-          DEFAULT: "var(--accent)",
-          foreground: "var(--accent-foreground)",
+        // Shadcn/RNR compat tint slot only, NOT the brand accent, see
+        // gen-tokens.ts's slotToColorToken comment. The brand accent utility
+        // ("accent") comes from the raw palette block below instead.
+        "accent-soft": {
+          DEFAULT: "var(--accent-soft)",
+          foreground: "var(--accent-soft-foreground)",
         },
         popover: {
           DEFAULT: "var(--popover)",
@@ -64,6 +67,7 @@ module.exports = {
         "text-tertiary": "hsl(var(--color-text-tertiary))",
         "text-inverse": "hsl(var(--color-text-inverse))",
         "border-strong": "hsl(var(--color-border-strong))",
+        "accent": "hsl(var(--color-accent))",
         "accent-pressed": "hsl(var(--color-accent-pressed))",
         "accent-tint": "hsl(var(--color-accent-tint))",
         "ink-on-accent": "hsl(var(--color-ink-on-accent))",

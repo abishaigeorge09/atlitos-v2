@@ -1,7 +1,7 @@
 import { Button } from '@/components/organisms/_shared';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
-import { formatINR, spacing } from '@atlitos/theme';
+import { formatINR, radii, spacing } from '@atlitos/theme';
 import * as Haptics from 'expo-haptics';
 import { Heart } from 'lucide-react-native';
 import { FlatList, Image, Pressable, Text, View } from 'react-native';
@@ -60,14 +60,14 @@ export function WishlistGrid({ variant, items, numColumns = 2 }: WishlistGridPro
           style={{
             flex: 1,
             gap: spacing.sm,
-            borderRadius: 16,
+            borderRadius: radii.lg,
             borderWidth: 1,
             borderColor: colors.border,
             backgroundColor: colors.card,
             padding: spacing.md,
           }}
         >
-          <View style={{ borderRadius: 12, backgroundColor: colors.surfaceMuted, aspectRatio: 1, overflow: 'hidden' }}>
+          <View style={{ borderRadius: radii.md, backgroundColor: colors.surfaceMuted, aspectRatio: 1, overflow: 'hidden' }}>
             {item.imageUrl ? <Image source={{ uri: item.imageUrl }} style={{ flex: 1 }} /> : null}
             {variant === 'product' ? (
               <Pressable
@@ -84,7 +84,7 @@ export function WishlistGrid({ variant, items, numColumns = 2 }: WishlistGridPro
                   right: spacing.xs,
                   height: 32,
                   width: 32,
-                  borderRadius: 999,
+                  borderRadius: radii.pill,
                   alignItems: 'center',
                   justifyContent: 'center',
                   backgroundColor: colors.overlay,
@@ -118,7 +118,7 @@ function UpaProgress({ item }: { item: WishlistUpaItem }) {
 
   return (
     <View style={{ gap: spacing.xs }}>
-      <View style={{ height: 6, borderRadius: 999, backgroundColor: colors.surfaceMuted, overflow: 'hidden' }}>
+      <View style={{ height: 6, borderRadius: radii.pill, backgroundColor: colors.surfaceMuted, overflow: 'hidden' }}>
         <View style={{ height: 6, width: `${pct * 100}%`, backgroundColor: colors.accent }} />
       </View>
       <Text style={[textStyle('numericSm'), { color: colors.textSecondary }]}>

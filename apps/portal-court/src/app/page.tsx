@@ -37,10 +37,10 @@ export default function Home() {
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" render={<Link href="/signin" />}>
+          <Button variant="ghost" nativeButton={false} render={<Link href="/signin" />}>
             Sign in
           </Button>
-          <Button render={<Link href="/signup" />}>
+          <Button nativeButton={false} render={<Link href="/signup" />}>
             Get started
             <ArrowRight />
           </Button>
@@ -59,11 +59,11 @@ export default function Home() {
             Manage venues, availability, pricing and payouts for your courts in one place.
           </p>
           <div className="mt-2 flex items-center gap-3">
-            <Button size="lg" render={<Link href="/signup" />}>
+            <Button size="lg" nativeButton={false} render={<Link href="/signup" />}>
               Get started
               <ArrowRight />
             </Button>
-            <Button size="lg" variant="outline" render={<Link href="/signin" />}>
+            <Button size="lg" variant="outline" nativeButton={false} render={<Link href="/signin" />}>
               Sign in
             </Button>
           </div>

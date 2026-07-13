@@ -9,8 +9,9 @@ import { PortalHost } from '@rn-primitives/portal';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { useColorScheme } from 'nativewind';
 import { useEffect } from 'react';
-import { StatusBar, useColorScheme } from 'react-native';
+import { StatusBar } from 'react-native';
 
 import { startSessionListener } from '@/store/session-store';
 import { useThemeColors } from '@/theme/use-theme-colors';
@@ -20,7 +21,10 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 });
 
 export default function RootLayout() {
-  const scheme = useColorScheme();
+  // nativewind's resolved scheme, not RN's own useColorScheme, so the
+  // status bar style always agrees with useThemeColors()/the `dark` class,
+  // see src/theme/use-theme-colors.ts for why the two can disagree on web.
+  const { colorScheme: scheme } = useColorScheme();
   const colors = useThemeColors();
 
   const [fontsLoaded, fontError] = useFonts({

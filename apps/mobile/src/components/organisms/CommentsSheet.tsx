@@ -37,8 +37,8 @@ export function CommentsSheet({ comments, onSubmit, onClose }: CommentsSheetProp
   return (
     <View
       style={{
-        borderTopLeftRadius: 28,
-        borderTopRightRadius: 28,
+        borderTopLeftRadius: radii['2xl'],
+        borderTopRightRadius: radii['2xl'],
         backgroundColor: colors.surface,
         maxHeight: '80%',
       }}
@@ -71,7 +71,10 @@ export function CommentsSheet({ comments, onSubmit, onClose }: CommentsSheetProp
           <View style={{ gap: spacing.xs }}>
             <View style={[styles.row, { gap: spacing.sm }]}>
               <Text style={[textStyle('label'), { color: colors.text }]}>{item.author}</Text>
-              <Text style={[textStyle('caption'), { color: colors.textTertiary }]}>{item.timestamp}</Text>
+              {/* textSecondary, not tertiary: the whole sheet is a
+                  colors.surface fill, textTertiary fails AA contrast against
+                  it in dark mode. */}
+              <Text style={[textStyle('caption'), { color: colors.textSecondary }]}>{item.timestamp}</Text>
             </View>
             <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>{item.text}</Text>
           </View>

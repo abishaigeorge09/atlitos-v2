@@ -1,7 +1,7 @@
 import { Button } from '@/components/organisms/_shared';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
-import { spacing } from '@atlitos/theme';
+import { radii, spacing } from '@atlitos/theme';
 import { X } from 'lucide-react-native';
 import { Pressable, Text, View } from 'react-native';
 
@@ -21,8 +21,8 @@ export function LoginGateSheet({ onLogin, onRegister, onClose }: LoginGateSheetP
   return (
     <View
       style={{
-        borderTopLeftRadius: 28,
-        borderTopRightRadius: 28,
+        borderTopLeftRadius: radii['2xl'],
+        borderTopRightRadius: radii['2xl'],
         backgroundColor: colors.surface,
         padding: spacing.xl,
         gap: spacing.lg,

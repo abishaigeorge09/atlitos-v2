@@ -69,8 +69,11 @@ function CoachCard({
             From {formatINR(priceFrom)}
           </Text>
           <View className="flex-row items-center gap-xs">
+            {/* Icon can stay textTertiary (icons only need the 3:1 non-text
+                minimum), but the distance text sits on bg-card and needs
+                text-secondary to clear AA in dark mode. */}
             <MapPin size={14} strokeWidth={1.75} color={colors.textTertiary} />
-            <Text className="font-mono text-xs text-text-tertiary">{distanceKm} km</Text>
+            <Text className="font-mono text-xs text-text-secondary">{distanceKm} km</Text>
           </View>
         </View>
       </View>

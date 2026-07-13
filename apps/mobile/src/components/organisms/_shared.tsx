@@ -173,10 +173,14 @@ export function Stepper({ steps, current }: { steps: string[]; current: number }
                   backgroundColor: done || active ? colors.accent : colors.surfaceMuted,
                 }}
               >
+                {/* textSecondary, not tertiary: this circle fills
+                    surfaceMuted when neither done nor active, and
+                    textTertiary fails AA contrast against that surface in
+                    dark mode. */}
                 <Text
                   style={[
                     textStyle('numericSm'),
-                    { color: done || active ? colors.inkOnAccent : colors.textTertiary },
+                    { color: done || active ? colors.inkOnAccent : colors.textSecondary },
                   ]}
                 >
                   {index + 1}

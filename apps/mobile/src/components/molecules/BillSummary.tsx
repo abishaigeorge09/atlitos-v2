@@ -40,14 +40,13 @@ export function BillSummary({ rows, donationRow, total }: BillSummaryProps) {
     <View className="gap-sm">
       {rows.map((row) => (
         <View key={row.label} className="flex-row items-center justify-between">
-          <Text
-            className={cn(
-              'text-sm',
-              row.emphasis === 'muted' ? 'text-text-tertiary' : 'text-text-secondary',
-            )}
-          >
-            {row.label}
-          </Text>
+          {/* Both emphasis levels use text-secondary: callers commonly wrap
+              BillSummary in a bg-card container (BookingConfirmation,
+              CoachProfileSheet pricing), and text-tertiary fails AA contrast
+              against a card surface in dark mode. Muted rows keep their
+              lighter visual weight from being de-emphasized relative to
+              other line items via row order/spacing, not a dimmer ink. */}
+          <Text className="text-sm text-text-secondary">{row.label}</Text>
           <Text className="font-mono text-sm text-text">{formatINR(row.amount)}</Text>
         </View>
       ))}
