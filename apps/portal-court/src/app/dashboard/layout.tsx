@@ -22,7 +22,7 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex min-h-screen w-full bg-background">
-      <Sidebar brandLabel="Atlitos Partners" brandIcon={Building2}>
+      <Sidebar brandLabel="Atlitos Partners" brandIcon={<Building2 className="size-4" strokeWidth={1.75} />}>
         <UserMenu email={user.email ?? "Signed in"} />
       </Sidebar>
       <main className="flex flex-1 flex-col gap-6 overflow-y-auto p-8">
