@@ -1,0 +1,102 @@
+-- ATLITOS v2 — 0011_courts_payment_state.sql
+-- Domain: courts (extends 0009_courts.sql) + payments (0010_payments_core.sql).
+-- Epic AT-4 (Courts), AT-11 (Payments and Ledger).
+--
+-- Why this migration exists: `book-court` (this pass's edge function) must
+-- hold a court_bookings row for the duration of the Razorpay checkout sheet
+-- so the slot cannot be double-booked while payment is in flight, but
+-- 0009_courts.sql's `court_booking_status` enum only had a terminal
+-- 'confirmed' state with no notion of "created, awaiting payment". Per this
+-- task's brief: "add to the state machine in 0009 if missing:
+-- pending_payment->confirmed on payment, pending_payment->expired". This
+-- migration adds ONLY the two enum values; everything that references them
+-- (the widened concurrency-guard index, the two new RPCs) lives in the
+-- *next* migration, 0012_courts_payment_state_rpcs.sql, deliberately, not
+-- in this one:
+--
+--   Postgres will not let a new enum value be used at all, anywhere (a
+--   comparison, a cast, an index predicate, a PL/pgSQL function body that
+--   references it) in the same transaction that added it via `ALTER TYPE
+--   ... ADD VALUE`, raising "unsafe use of new value of enum type" if you
+--   try (https://www.postgresql.org/docs/current/sql-altertype.html: this
+--   restriction cannot be avoided within the same transaction, any use
+--   must happen in a later transaction). Whatever applies this migration
+--   (the Supabase MCP `apply_migration` tool, `supabase db push`, or a
+--   bare `psql -f`) may well run an entire multi-statement file as one
+--   implicit transaction, so this file contains *nothing* beyond the two
+--   `ALTER TYPE ... ADD VALUE` statements: not the index (its predicate
+--   compares against `'expired'`), not the RPC bodies (they compare
+--   against `'pending_payment'`). `pending_payment`/`expired` must be
+--   committed as their own migration before anything else can reference
+--   them, regardless of how these files are applied. Splitting is the
+--   only way to guarantee that ordering; it costs nothing since 0012
+--   depends on 0011 anyway.
+--
+-- Decisions made for this pair of migrations (documented once, here, since
+-- 0012 depends on this file's context):
+--
+--   1. `pending_payment` -> `confirmed` and `pending_payment` -> `expired`
+--      are NOT folded into the existing `court_booking_transition` RPC.
+--      That RPC is granted to `authenticated` (the athlete/partner acting on
+--      their own booking); a payment confirmation is not an action any
+--      authenticated caller should be able to trigger by calling an RPC with
+--      the right arguments; it must only ever happen as a direct
+--      consequence of a Razorpay-verified capture event. Two new, narrowly
+--      scoped functions instead (0012): `court_booking_confirm_payment` and
+--      `court_booking_expire_payment`, both `security definer`, both
+--      revoked from `public`/`anon`/`authenticated` and granted only to
+--      `service_role`. Only `razorpay-webhook` and `verify-payment` (both
+--      service-role edge functions) can ever call the confirm path; only a
+--      future scheduled cleanup job would call the expire path. This keeps
+--      the "state machine transitions are enforced by a Postgres RPC, never
+--      by client logic setting a status field" invariant (CLAUDE.md) intact
+--      even for the service-role caller: the edge function still asks
+--      Postgres to enforce `pending_payment` as the only valid starting
+--      state (`INVALID_TRANSITION` otherwise) rather than issuing a raw
+--      `UPDATE ... SET status = 'confirmed'` itself.
+--   2. Neither new function writes `ledger_entries`. Same rule 0009's
+--      header note 7 already established for `court_booking_transition`:
+--      ledger writes happen only in the edge function's own TypeScript
+--      code (a single `insert([...])` array call, still one atomic SQL
+--      statement), never inside a SQL function, matching CLAUDE.md's
+--      financial invariant literally, not just in substance.
+--   3. `court_bookings.payment_intent_id` is set by
+--      `court_booking_confirm_payment`, not by the edge function issuing a
+--      direct `update court_bookings set payment_intent_id = ...` after
+--      insert (the pattern 0009's own comment describes for the *initial*
+--      insert, which is a plain service-role insert, not a transition).
+--      Once a booking is past `pending_payment`, every further column
+--      change on it goes through an RPC for consistency; only the initial
+--      `insert` (still pending_payment, no transition has happened yet) is
+--      a direct service-role write.
+--   4. The partial unique index that frees a slot on cancellation
+--      (`court_bookings_court_date_slot_unique`, `where status <>
+--      'cancelled'`) is widened here to also free the slot when a booking
+--      expires unpaid (`where status not in ('cancelled', 'expired')`).
+--      Without this, an abandoned checkout would permanently squat the
+--      slot forever, which defeats the entire purpose of having an
+--      `expired` state. `pending_payment` itself deliberately still holds
+--      the slot (unchanged): that is exactly what stops a second buyer
+--      from booking the same slot while the first buyer's Razorpay
+--      checkout sheet is open.
+--   5. No default-value change on `court_bookings.status` (stays
+--      'confirmed'): the walk-in booking path (API-MAPPING.md's
+--      "portal-court's walk-in form ... service-role bypasses payment for
+--      a walk-in") is out of this task's scope and, per its own note,
+--      inserts a row that is `confirmed` immediately since no payment is
+--      collected; `book-court`'s self-service path (this task) explicitly
+--      sets `status = 'pending_payment'` on insert rather than relying on
+--      the column default, so both call sites remain explicit and neither
+--      depends on the other's assumption about what the default should be.
+
+-- ============================================================================
+-- Enum additions
+-- ============================================================================
+
+alter type public.court_booking_status add value if not exists 'pending_payment';
+alter type public.court_booking_status add value if not exists 'expired';
+
+-- Nothing else in this file. See the header comment: the widened unique
+-- index and the two new RPC functions both reference these values and
+-- must live in 0012, a separate migration/transaction, or applying this
+-- pair could fail with "unsafe use of new value of enum type".
