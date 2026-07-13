@@ -35,15 +35,22 @@ export const VENUE_STATUSES = ['pending', 'verified', 'rejected'] as const;
 export type VenueStatus = (typeof VENUE_STATUSES)[number];
 
 export const COURT_BOOKING_STATUSES = [
+  'pending_payment',
   'confirmed',
   'completed',
   'cancelled',
   'rescheduled',
   'no_show',
+  'expired',
 ] as const;
 export type CourtBookingStatus = (typeof COURT_BOOKING_STATUSES)[number];
 // Rating is tracked by a non-null `rating` column once `completed`, not by
 // a further status value (asymmetric with sessions, see SCHEMA.md).
+// `pending_payment`/`expired` added by 0011_courts_payment_state.sql +
+// 0012_courts_payment_state_rpcs.sql (book-court's Razorpay checkout hold
+// state and its unpaid-abandonment terminal state); this file documents
+// intent and had drifted behind the migrations that actually shipped them,
+// see CLAUDE.md's docs update duty.
 
 export const ORDER_STATUSES = ['placed', 'shipped', 'in_transit', 'delivered', 'cancelled'] as const;
 export type OrderStatus = (typeof ORDER_STATUSES)[number];

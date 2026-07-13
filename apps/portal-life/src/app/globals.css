@@ -58,6 +58,7 @@
   --color-surface: 0 0% 100%;
   --color-surface-muted: 37 41% 91%;
   --color-card: 0 0% 100%;
+  --color-overlay: rgba(28,20,13,0.45);
   --color-text: 30 22% 9%;
   --color-text-secondary: 32 12% 32%;
   --color-text-tertiary: 32 10% 50%;
@@ -121,6 +122,7 @@
   --color-surface: 34 30% 9%;
   --color-surface-muted: 30 29% 12%;
   --color-card: 34 30% 9%;
+  --color-overlay: rgba(0,0,0,0.6);
   --color-text: 37 47% 93%;
   --color-text-secondary: 36 18% 65%;
   --color-text-tertiary: 35 14% 47%;

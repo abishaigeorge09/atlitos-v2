@@ -175,8 +175,11 @@ export interface Court {
   // courts, exposed as `Venue.sports` below where that shape is needed.
   basePricePerHour: number;
   rating: number;
+  ratingCount: number;
   images: string[];
   active: boolean;
+  // hydrated for list/discovery screens, mirrors CoachProfile.distanceKm
+  distanceKm?: number;
 }
 
 export interface Venue {
@@ -214,7 +217,12 @@ export interface CourtBooking {
   checkedInAt?: string;
   rating?: number;
   remarks?: string;
-  courtName?: string; // hydrated
+  cancellationReason?: string;
+  // hydrated (joined from courts/venues) for list/detail screens
+  courtName?: string;
+  sport?: Sport;
+  venueName?: string;
+  location?: string;
 }
 
 // ---------------------------------------------------------------------------

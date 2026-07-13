@@ -1,5 +1,5 @@
 import { useLogout, useGetIdentity } from "@refinedev/core";
-import { LayoutGrid, LogOut, ShieldCheck, Users } from "lucide-react";
+import { Building2, CalendarClock, LayoutGrid, LogOut, Percent, ShieldCheck, Users } from "lucide-react";
 import type { ReactNode } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 
@@ -11,6 +11,9 @@ import { NavLink, Outlet } from "react-router-dom";
 // the lint no-hex rule and CLAUDE.md "Tokens only" both pass.
 const navItems = [
   { to: "/verification", label: "Verification queue", icon: ShieldCheck },
+  { to: "/venues", label: "Venues", icon: Building2 },
+  { to: "/bookings", label: "Bookings", icon: CalendarClock },
+  { to: "/fee-config", label: "Fee config", icon: Percent },
   { to: "/users", label: "Users", icon: Users },
 ];
 

@@ -2,7 +2,7 @@
   "name": "@atlitos/ui-web",
   "version": "0.1.0",
   "private": true,
-  "description": "Atlitos shared web UI primitives, consumed by apps/portal-court, apps/portal-life, and apps/admin. Ships a placeholder Eyebrow component today; later phases grow this into the shared web primitive set that sits alongside each portal's own shadcn/ui component bones.",
+  "description": "Atlitos shared web UI primitives, consumed by apps/portal-court, apps/portal-life, and apps/admin. Ships Eyebrow (uppercase mono section label) and BillSummary (the one shared money-summary component, CLAUDE.md's financial invariant) today; later phases grow this into the full shared web primitive set that sits alongside each portal's own shadcn/ui component bones.",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {

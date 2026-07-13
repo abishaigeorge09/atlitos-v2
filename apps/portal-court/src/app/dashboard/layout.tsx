@@ -4,6 +4,7 @@ import { Building2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Sidebar } from "@/components/sidebar";
 import { UserMenu } from "@/components/user-menu";
+import { VenueScopeProvider } from "@/components/venue-scope";
 
 export default async function DashboardLayout({
   children,
@@ -24,7 +25,9 @@ export default async function DashboardLayout({
       <Sidebar brandLabel="Atlitos Partners" brandIcon={Building2}>
         <UserMenu email={user.email ?? "Signed in"} />
       </Sidebar>
-      <main className="flex flex-1 flex-col gap-6 overflow-y-auto p-8">{children}</main>
+      <main className="flex flex-1 flex-col gap-6 overflow-y-auto p-8">
+        <VenueScopeProvider>{children}</VenueScopeProvider>
+      </main>
     </div>
   );
 }

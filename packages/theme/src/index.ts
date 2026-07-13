@@ -115,10 +115,21 @@ export function hslVar(name: string): string {
 export function toCssVars(palette: ColorPalette, prefix = "color"): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [key, value] of Object.entries(palette)) {
-    if (typeof value !== "string" || value.startsWith("rgba(")) continue; // skip non-hex (overlay)
+    if (typeof value !== "string") continue;
     const kebab = key.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
     const varName = prefix ? `${prefix}-${kebab}` : kebab;
-    out[`--${varName}`] = hexToHsl(value);
+    if (value.startsWith("rgba(")) {
+      // `overlay` is the one non-hex palette entry (a translucent scrim, see
+      // DESIGN-LANGUAGE.md's Light/Dark theme tables). Every other entry
+      // here is consumed as a bare "H S% L%" triplet so callers can compose
+      // `hsl(var(--color-x) / <alpha>)`; that composition does not apply to
+      // an already-translucent rgba() value, so this one var is emitted as
+      // the full `rgba(...)` string and consumed directly (e.g.
+      // `bg-[var(--color-overlay)]`), never wrapped in `hsl(...)`.
+      out[`--${varName}`] = value;
+    } else {
+      out[`--${varName}`] = hexToHsl(value);
+    }
   }
   return out;
 }

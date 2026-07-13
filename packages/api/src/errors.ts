@@ -1,3 +1,4 @@
+import { FunctionsHttpError } from "@supabase/supabase-js";
 import type { ApiError, ApiErrorCode } from "@atlitos/types";
 
 /**
@@ -44,16 +45,20 @@ export function mapPostgrestError(error: { message: string; code?: string }): Ap
     const known: ApiErrorCode[] = [
       "UNAUTHENTICATED",
       "GUEST_FORBIDDEN",
+      "FORBIDDEN",
       "VALIDATION",
       "NOT_FOUND",
       "ALREADY_SETUP",
       "INVALID_TRANSITION",
+      "ALREADY_RATED",
+      "REASON_REQUIRED",
       "SLOT_TAKEN",
       "NOT_COACH",
     ];
     const code = known.find((candidate) => candidate === prefix);
     if (code) {
-      return { code, message: rest || error.message, status: code === "UNAUTHENTICATED" ? 401 : 400 };
+      const status = code === "UNAUTHENTICATED" ? 401 : code === "FORBIDDEN" ? 403 : 400;
+      return { code, message: rest || error.message, status };
     }
   }
 
@@ -62,4 +67,38 @@ export function mapPostgrestError(error: { message: string; code?: string }): Ap
   }
 
   return { code: "INTERNAL", message: error.message, status: 500 };
+}
+
+/**
+ * Maps a Supabase Edge Function invocation error (`client.functions.invoke`)
+ * to `ApiError`. Every function under `supabase/functions/` throws `AppError`
+ * and returns it as `{ error: { code, message } }` (see
+ * `supabase/functions/_shared/http.ts`'s `errorResponse`), never a raw stack
+ * trace; this reads that body back out. `FunctionsHttpError.context` is the
+ * raw `Response`, only readable once (`.json()`), so this is async, unlike
+ * the sync PostgREST/Auth mappers above.
+ */
+export async function mapEdgeFunctionError(error: unknown): Promise<ApiError> {
+  if (error instanceof FunctionsHttpError) {
+    try {
+      const body = (await error.context.json()) as { error?: { code?: string; message?: string } };
+      const code = body.error?.code as ApiErrorCode | undefined;
+      if (code) {
+        return {
+          code,
+          message: body.error?.message ?? error.message,
+          status: error.context.status || 400,
+        };
+      }
+    } catch {
+      // Body wasn't the expected JSON shape; fall through to the generic
+      // mapping below rather than throwing a second error while handling one.
+    }
+  }
+
+  return {
+    code: "INTERNAL",
+    message: error instanceof Error ? error.message : "Something went wrong. Please try again.",
+    status: 500,
+  };
 }

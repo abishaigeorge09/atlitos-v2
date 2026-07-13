@@ -11,6 +11,11 @@ export type ApiErrorCode =
   | 'GUEST_FORBIDDEN'
   | 'VALIDATION'
   | 'NOT_FOUND'
+  // role/ownership check failed on an RPC or edge function (e.g.
+  // court_booking_transition's "not the booking athlete or venue
+  // partner/staff", verify-payment's payment_intent ownership check).
+  // Distinct from GUEST_FORBIDDEN (the caller has no account at all).
+  | 'FORBIDDEN'
   // auth
   | 'INVALID_CREDENTIALS'
   | 'EMAIL_TAKEN'
@@ -24,11 +29,17 @@ export type ApiErrorCode =
   | 'INVALID_TRANSITION'
   | 'NOT_COMPLETED'
   | 'ALREADY_RATED'
+  // court_booking_transition('cancel', ...)/(0009_courts.sql) requires a
+  // non-empty p_reason
+  | 'REASON_REQUIRED'
   // booking concurrency
   | 'SLOT_TAKEN'
   // payments (see PAYMENTS.md)
   | 'PRICE_MISMATCH'
   | 'PAYMENT_FAILED'
+  // verify-payment: the razorpay_signature triple did not verify against
+  // RAZORPAY_KEY_SECRET
+  | 'INVALID_SIGNATURE'
   // commerce
   | 'OUT_OF_STOCK'
   | 'PINCODE_INVALID'

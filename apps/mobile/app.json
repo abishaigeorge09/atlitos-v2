@@ -33,6 +33,12 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 120
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermissionDescription": "Atlitos uses your location to show courts near you and sort them by distance."
+        }
       ]
     ],
     "experiments": {

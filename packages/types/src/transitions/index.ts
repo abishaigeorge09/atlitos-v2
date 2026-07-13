@@ -46,18 +46,30 @@ export const SESSION_TRANSITIONS: TransitionMap<SessionStatus> = {
 };
 
 /**
+ * pending_payment -> (confirmed | expired): the `book-court` edge function's
+ * checkout-in-flight hold (0011/0012_courts_payment_state*.sql). Neither
+ * edge is client triggered: `court_booking_confirm_payment` /
+ * `court_booking_expire_payment` are `service_role`-only RPCs, called only
+ * by `verify-payment`/`razorpay-webhook` and a future cleanup job
+ * respectively, never by `court_booking_transition` (the `authenticated`
+ * RPC). Listed here anyway so this map stays exhaustive over
+ * `CourtBookingStatus` and so `canTransition` still answers correctly for
+ * any UI code that checks "is this booking still awaiting payment".
  * confirmed -> (completed | cancelled | rescheduled | no_show)
  * rescheduled behaves like confirmed going forward.
+ * expired is terminal: an abandoned checkout, no further edge.
  * Rating has no terminal status of its own here (unlike sessions): a
  * completed booking's `rating` column going non-null is the "rated" fact,
  * checked with `canRateCourtBooking()` below, not a further status.
  */
 export const COURT_BOOKING_TRANSITIONS: TransitionMap<CourtBookingStatus> = {
+  pending_payment: ['confirmed', 'expired'],
   confirmed: ['completed', 'cancelled', 'rescheduled', 'no_show'],
   rescheduled: ['completed', 'cancelled', 'rescheduled', 'no_show'],
   completed: [],
   cancelled: [],
   no_show: [],
+  expired: [],
 };
 
 export function canRateCourtBooking(booking: { status: CourtBookingStatus; rating: number | null }): boolean {

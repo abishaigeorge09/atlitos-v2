@@ -340,6 +340,8 @@ Indexes: `idx_court_bookings_court_date` on `(court_id, date)`, `idx_court_booki
 
 Rating is embedded on the booking row itself (matches the v1 `CourtBooking.rating` shape and PRD-03's "ratings" surface); there is no separate `court_ratings` table.
 
+`get_court_rating_summary(p_court_id)` (`0015_court_rating_summary.sql`, `security definer`, granted to `anon`/`authenticated`) returns the aggregate `(rating, rating_count)` for one court. This exists because `court_bookings`' own RLS (`court_bookings_select`, above) correctly restricts row-level reads to the booking's own athlete or the venue's partner/staff, which means a browsing athlete/guest cannot aggregate other athletes' rating values directly to render the courts list/detail star rating; this function is the aggregate-only read path, mirroring `get_court_busy_slots`' "expose the aggregate/shape, never the underlying booking rows" pattern.
+
 ---
 
 ## Domain: commerce

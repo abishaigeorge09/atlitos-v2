@@ -6,11 +6,14 @@ export type Status =
   | 'underReview'
   | 'verified'
   | 'pending'
+  | 'confirmed'
   | 'completed'
   | 'cancelled'
   | 'rescheduled'
   | 'delivered'
-  | 'shipped';
+  | 'shipped'
+  | 'noShow'
+  | 'expired';
 
 interface StatusConfig {
   label: string;
@@ -22,16 +25,23 @@ interface StatusConfig {
  * Status -> semantic token mapping. Every color routes through the tint/base
  * pair generated from @atlitos/theme, never a raw hex, per DESIGN-LANGUAGE.
  * Copy strings avoid hyphens per the house style (voice and copy rules).
+ * `confirmed`/`noShow`/`expired` are Phase 2 courts-slice additions
+ * (`court_booking_status`, 0009/0011_courts*.sql): `pending` already covers
+ * `pending_payment` (same "awaiting" meaning as the verification/order
+ * `pending` this pill already renders, no separate mapped value needed).
  */
 const STATUS_CONFIG: Record<Status, StatusConfig> = {
   underReview: { label: 'Under review', bgClass: 'bg-info-tint', textClass: 'text-info' },
   verified: { label: 'Verified', bgClass: 'bg-success-tint', textClass: 'text-success' },
   pending: { label: 'Pending', bgClass: 'bg-warning-tint', textClass: 'text-warning' },
+  confirmed: { label: 'Confirmed', bgClass: 'bg-success-tint', textClass: 'text-success' },
   completed: { label: 'Completed', bgClass: 'bg-success-tint', textClass: 'text-success' },
   cancelled: { label: 'Cancelled', bgClass: 'bg-danger-tint', textClass: 'text-danger' },
   rescheduled: { label: 'Rescheduled', bgClass: 'bg-warning-tint', textClass: 'text-warning' },
   delivered: { label: 'Delivered', bgClass: 'bg-success-tint', textClass: 'text-success' },
   shipped: { label: 'Shipped', bgClass: 'bg-info-tint', textClass: 'text-info' },
+  noShow: { label: 'No show', bgClass: 'bg-danger-tint', textClass: 'text-danger' },
+  expired: { label: 'Expired', bgClass: 'bg-danger-tint', textClass: 'text-danger' },
 };
 
 export interface StatusPillProps {

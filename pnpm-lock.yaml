@@ -133,6 +133,9 @@ importers:
       expo-linking:
         specifier: ~57.0.2
         version: 57.0.2(expo@57.0.4)(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)
+      expo-location:
+        specifier: ~57.0.2
+        version: 57.0.2(expo@57.0.4)(typescript@5.6.3)
       expo-router:
         specifier: ~57.0.4
         version: 57.0.4(mhw6m7evjgv67pctasp4tq6jli)
@@ -163,6 +166,9 @@ importers:
       react-native-css-interop:
         specifier: 0.2.6
         version: 0.2.6(react-native-reanimated@4.5.0(react-native-worklets@0.10.2(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(react-native-safe-area-context@5.7.0(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(react-native-svg@15.15.5(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)(tailwindcss@3.4.19(tsx@4.23.1)(yaml@2.9.0))
+      react-native-razorpay:
+        specifier: ^2.3.0
+        version: 2.3.1(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)
       react-native-reanimated:
         specifier: 4.5.0
         version: 4.5.0(react-native-worklets@0.10.2(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)
@@ -224,12 +230,15 @@ importers:
       '@atlitos/types':
         specifier: workspace:*
         version: link:../../packages/types
+      '@atlitos/ui-web':
+        specifier: workspace:*
+        version: link:../../packages/ui-web
       '@base-ui/react':
         specifier: ^1.6.0
         version: 1.6.0(@types/react@19.2.17)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@supabase/ssr':
-        specifier: ^0.5.2
-        version: 0.5.2(@supabase/supabase-js@2.110.2)
+        specifier: ^0.12.0
+        version: 0.12.0(@supabase/supabase-js@2.110.2)
       '@supabase/supabase-js':
         specifier: ^2.110.2
         version: 2.110.2
@@ -2511,6 +2520,11 @@ packages:
     resolution: {integrity: sha512-z3jTOTPgyn6E3r6dVOOQ10He4yAMB2czjFw7xVdX3s16MHElna5rY1gVaePs0NIo6xvtMYbtmOXlFaFt/ePLpg==}
     engines: {node: '>=22.0.0'}
 
+  '@supabase/ssr@0.12.0':
+    resolution: {integrity: sha512-d9XV5XzJvzzZbeAIM7fWTCUYxQJZ2Ru6ny3dJHmHGp/LIrJ+o9FpD7N9Rf/UhhWEvHXSoDe8SI32Z2ouOdMjBg==}
+    peerDependencies:
+      '@supabase/supabase-js': ^2.108.0
+
   '@supabase/ssr@0.5.2':
     resolution: {integrity: sha512-n3plRhr2Bs8Xun1o4S3k1CDv17iH5QY9YcoEvXX3bxV1/5XSasA0mNXYycFmADIdtdE6BG9MRjP5CGIs8qxC8A==}
     peerDependencies:
@@ -4024,6 +4038,11 @@ packages:
     peerDependencies:
       react: '*'
       react-native: '*'
+
+  expo-location@57.0.2:
+    resolution: {integrity: sha512-yyize0BsBfZjgelBQdhWFH2JUh9OLJOUt7fxz73Y70nbRV2rXZ7A9r0J6jfAa9lXqH7y/GDsFLqecfTc/PcFUQ==}
+    peerDependencies:
+      expo: '*'
 
   expo-modules-autolinking@57.0.5:
     resolution: {integrity: sha512-Vv2PVeEUN0/VW19ItkVA8LxAuH8SV8cjui0MKhJxCKrNyCAGGZU6sRsBJciYXR4uVxuXWKiepGW6E3k/c+Ytdg==}
@@ -5969,6 +5988,12 @@ packages:
     peerDependencies:
       react: '*'
       react-native: '*'
+
+  react-native-razorpay@2.3.1:
+    resolution: {integrity: sha512-aEod2YigiWx9Vik+2YRpTh9kNKK9KZbfhrRpk5tU8z8ZPDdLt57rRsqd7lVuDybqqO6nLY6ughPjMN+FPyX8Ag==}
+    peerDependencies:
+      react: '>=16.8.0'
+      react-native: '>=0.66.0'
 
   react-native-reanimated@4.5.0:
     resolution: {integrity: sha512-+iPfvK34PKKYP/p/4TaBliFkbfvjGDIvXuiiaxvISP5ip7sWegvlacwU/uAV6zNDSSmX0tDyER7PurPMKGDipA==}
@@ -9521,6 +9546,11 @@ snapshots:
       '@supabase/phoenix': 0.4.4
       tslib: 2.8.1
 
+  '@supabase/ssr@0.12.0(@supabase/supabase-js@2.110.2)':
+    dependencies:
+      '@supabase/supabase-js': 2.110.2
+      cookie: 1.1.1
+
   '@supabase/ssr@0.5.2(@supabase/supabase-js@2.110.2)':
     dependencies:
       '@supabase/supabase-js': 2.110.2
@@ -11511,6 +11541,14 @@ snapshots:
     transitivePeerDependencies:
       - expo
       - supports-color
+
+  expo-location@57.0.2(expo@57.0.4)(typescript@5.6.3):
+    dependencies:
+      '@expo/image-utils': 0.11.1(typescript@5.6.3)
+      expo: 57.0.4(@babel/core@7.29.7)(@expo/dom-webview@57.0.0)(@expo/metro-runtime@57.0.3)(expo-router@57.0.4)(react-dom@19.2.3(react@19.2.3))(react-native-web@0.21.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-native-worklets@0.10.2(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)(typescript@5.6.3)
+    transitivePeerDependencies:
+      - supports-color
+      - typescript
 
   expo-modules-autolinking@57.0.5(typescript@5.6.3):
     dependencies:
@@ -13629,6 +13667,11 @@ snapshots:
       react-native: 0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3)
 
   react-native-is-edge-to-edge@1.3.1(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3):
+    dependencies:
+      react: 19.2.3
+      react-native: 0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3)
+
+  react-native-razorpay@2.3.1(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3):
     dependencies:
       react: 19.2.3
       react-native: 0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3)

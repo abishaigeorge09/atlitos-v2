@@ -64,11 +64,22 @@ Identical pattern to sessions, per PLAN.md's "Courts lifecycle = Sessions lifecy
 | v1 fn | v1 route | v2 lane | Function / RPC | Note |
 |---|---|---|---|---|
 | `list` | GET `/courts` | PostgREST | `courts` select joined to `venues`, filters as query params | RLS restricts to `venues.status = 'verified'` |
-| `get` | GET `/courts/:id` | PostgREST + RPC | `courts` select + `get_court_busy_slots(court_id, from, to)` | mirrors `coaches.get`, hides other athletes' booking detail |
+| `get` | GET `/courts/:id` | PostgREST + RPC | `courts` select + `get_court_busy_slots(court_id, from, to)` + `get_court_rating_summary(court_id)` | mirrors `coaches.get`, hides other athletes' booking detail; the rating summary call is required because `court_bookings`' own RLS scopes row reads to the booking's own athlete or the venue's partner/staff, so the aggregate star rating cannot come from a direct `court_bookings` select (`0015_court_rating_summary.sql`) |
 | `book` | POST `/courts/:id/book` | Edge Function | `book-court` | creates `payment_intents` + `court_bookings` (`confirmed`), re-prices server side, also the path `portal-court`'s walk-in form calls (partner-scoped variant, same function, service-role bypasses payment for a walk-in flagged `booking_source='walk_in'`) |
 | `cancel` | POST `/court-bookings/:id/cancel` | RPC | `court_booking_transition(id, 'cancel', reason)` | releases the slot (unique index) unless the start time has passed, in which case it becomes `no_show` per PRD-03 FR-18 |
 | `reschedule` | POST `/court-bookings/:id/reschedule` | RPC | `court_booking_transition(id, 'reschedule', date, slot)` | `SLOT_TAKEN` on conflict |
 | `rate` | POST `/court-bookings/:id/rate` | RPC | `rate_court_booking(id, rating, remarks)` | only from `completed`, once |
+
+## portal-court (v2-only, no v1 mock)
+
+`apps/portal-court` has no v1 mock to map from (v1 had no partner-facing surface at all); these ship in `0009_courts.sql` alongside the courts domain tables, same pattern as "Edge functions not in the v1 contract" below.
+
+| Function | Called by | Note |
+|---|---|---|
+| `submit_venue_verification(payload)` (RPC) | Venue onboarding wizard, Review and submit step (PRD-03 FR-1 through FR-6) | `SECURITY DEFINER`, mirrors `submit_coach_verification`: grants `court_partner`, creates the `venues` row (`status='pending'`), its `courts`, optional `venue_photos`, and a `verification_requests` row (`applicant_type='venue'`), atomically. The only path that can ever create a venue; the plain `venues` RLS insert policy requires `has_role('court_partner')` already true and exists only for a partner's later, already-verified additional venue |
+| `accept_venue_staff_invite(venue_staff_id)` (RPC) | Staff invite acceptance link (PRD-03 FR-28) | `SECURITY DEFINER`, sets `accepted_at`; a trigger on that same update grants the `court_staff` role, matching `SCHEMA.md`'s `venue_staff` note |
+| `court_booking_check_in(booking_id)` (RPC) | Today dashboard check-in action (PRD-03 FR-16) | Not a status transition (`court_bookings.status` stays `confirmed`), sets `checked_in_at`; venue partner/staff only |
+| `get_court_available_slots(court_id, date)` (RPC) | Consumer app `SlotPicker`, portal-court walk-in form's slot picker | Read only, `SECURITY DEFINER`. Availability windows minus blackouts minus non-cancelled bookings for one date, with the peak-adjusted price per slot; complements `get_court_busy_slots` above (that one returns occupied pairs over a range for the court detail/calendar read, this one returns the actual bookable list for one date) |
 
 ## shop
 

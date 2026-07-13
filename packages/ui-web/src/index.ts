@@ -3,3 +3,4 @@
 // never a deeper path.
 
 export * from "./Eyebrow";
+export * from "./BillSummary";
