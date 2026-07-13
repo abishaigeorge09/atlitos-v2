@@ -13,3 +13,7 @@ Crash recovery trail for the Courts vertical slice integration pass. Read this f
 - 0015_court_rating_summary.sql applied: name=0015_court_rating_summary, version=20260713145135. Added get_court_rating_summary(uuid) security definer aggregate RPC, granted to anon/authenticated.
 
 All 7 migrations (0009 through 0015) now applied remotely on syzzfgaudpifwvbpycyi. `list_migrations` confirms contiguous version chain through 20260713145135.
+
+## Edge functions deployed (remote, project syzzfgaudpifwvbpycyi)
+
+- book-court deployed: function id=da716abd-83d7-4723-b0bc-48dcb216b9c2, version=1, status=ACTIVE, verify_jwt=true (per supabase/functions/README.md's deploy list). Entrypoint index.ts plus _shared/{cors,http,app-error,supabase,razorpay,fee-config}.ts bundled.
