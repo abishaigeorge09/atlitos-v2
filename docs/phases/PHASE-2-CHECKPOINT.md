@@ -10,3 +10,6 @@ Crash recovery trail for the Courts vertical slice integration pass. Read this f
 - 0012_courts_payment_state_rpcs.sql applied: name=0012_courts_payment_state_rpcs, version=20260713145005. Widened court_bookings_court_date_slot_unique to free slot on 'expired' too; added service_role-only RPCs court_booking_confirm_payment and court_booking_expire_payment.
 - 0013_admin_courts_bookings.sql applied: name=0013_admin_courts_bookings, version=20260713145037. Added court_bookings_select_admin RLS policy (admin/moderator read-only support access) and admin_update_fee_config RPC (audit-logged fee edits, admin only).
 - 0014_venue_media_bucket.sql applied: name=0014_venue_media_bucket, version=20260713145109. Created public storage bucket venue-media plus public read / partner-scoped insert/update/delete storage.objects policies (path convention {venue_id}/{filename}).
+- 0015_court_rating_summary.sql applied: name=0015_court_rating_summary, version=20260713145135. Added get_court_rating_summary(uuid) security definer aggregate RPC, granted to anon/authenticated.
+
+All 7 migrations (0009 through 0015) now applied remotely on syzzfgaudpifwvbpycyi. `list_migrations` confirms contiguous version chain through 20260713145135.
