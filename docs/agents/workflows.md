@@ -54,6 +54,15 @@ A builder agent, on picking up a story:
 - Reconciles the Jira board: every story tied to this phase should be Done; anything left open gets moved to the next relevant epic or flagged to the founder if it should have been done and wasn't.
 - Commits the docs updates. This is the only artifact the next phase's agents can rely on for phase history; there is no other memory.
 
+## Crash recovery / checkpoint protocol
+
+Integration passes are long, touch remote state (Supabase migrations, edge function deploys) that a local `git revert` cannot undo, and run in an environment where the agent session can crash or be killed mid-pass. This is a permanent rule for every phase's integrator, not a one-off from any specific phase.
+
+- **Commit after every discrete, independently-meaningful integration step**, not once at the end of the phase. A step is commit-worthy the moment it is independently true and would be expensive to re-derive: one migration applied to the remote project, one edge function deployed, `pnpm turbo typecheck build lint` going green, an advisor run completing with a recorded verdict. Do not batch a whole phase's remote actions into a single end-of-phase commit; if the session dies between step 3 and step 4, a single batched commit means step 3's work is invisible to the agent that resumes.
+- **Maintain a scratch log at `docs/phases/PHASE-N-CHECKPOINT.md` for the duration of an in-flight phase.** Record exactly what has landed (which migration versions are applied remotely and their returned version ids, which edge functions are deployed and their status, whether build/lint is green, whether advisors have been run and their verdict) versus what is still pending. Write to it as you go, not retroactively.
+- **A resumed or freshly-spawned agent reads the checkpoint file plus `git log` before doing anything else**, and treats any step already recorded there as done, not to be repeated (re-applying an already-applied migration or re-deploying an already-deployed function wastes time at best and risks a version collision at worst). This is the same "write it down or it didn't happen" principle the rest of this doc applies to phase memory, scoped down to single-phase, in-progress granularity.
+- **The checkpoint file's job ends when the phase closes.** Phase-close folds `PHASE-N-CHECKPOINT.md`'s content into `PHASE-N-STATUS.md` (a "History" section is a reasonable place for it) and then deletes the checkpoint file. `PHASE-N-STATUS.md` is the only artifact that persists across phases; the checkpoint file is working memory for one phase's resumability and should not accumulate as permanent clutter once that phase has a real status doc.
+
 ## Context hygiene rules
 
 - **Fresh agents per phase.** No agent identity or conversation persists across phases. Every agent in phase N+1 starts cold and reconstructs context entirely from repo docs.
