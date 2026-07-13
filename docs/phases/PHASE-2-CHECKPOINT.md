@@ -18,3 +18,10 @@ All 7 migrations (0009 through 0015) now applied remotely on syzzfgaudpifwvbpycy
 
 - book-court deployed: function id=da716abd-83d7-4723-b0bc-48dcb216b9c2, version=1, status=ACTIVE, verify_jwt=true (per supabase/functions/README.md's deploy list). Entrypoint index.ts plus _shared/{cors,http,app-error,supabase,razorpay,fee-config}.ts bundled.
 - verify-payment deployed: function id=2ee29f22-e859-42a0-a642-3dda3cb2c947, version=1, status=ACTIVE, verify_jwt=true. Entrypoint index.ts plus _shared/{cors,http,app-error,supabase,razorpay,fee-config,finalize-court-booking-payment}.ts bundled.
+- razorpay-webhook deployed: function id=929276a1-041a-4a67-80b8-3e8d8f963f25, version=1, status=ACTIVE, verify_jwt=false (per README: Razorpay's caller never presents a Supabase JWT, the function's own x-razorpay-signature check is the auth). Entrypoint index.ts plus _shared/{cors,app-error,supabase,razorpay,fee-config,finalize-court-booking-payment}.ts bundled.
+
+All 3 edge functions (book-court, verify-payment, razorpay-webhook) confirmed ACTIVE via list_edge_functions with verify_jwt settings matching supabase/functions/README.md's deploy list exactly.
+
+## Secrets note (not set by this pass)
+
+RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET / RAZORPAY_WEBHOOK_SECRET are not settable via the Supabase MCP tool surface available to this agent (no `secrets set` tool was exposed). The three functions above are deployed but will throw a 500 "Server misconfiguration" at runtime until an operator with dashboard/CLI access sets these per supabase/functions/README.md's "Required secrets" table. Flagging this explicitly so the next agent does not assume a red runtime test means the deploy failed.
