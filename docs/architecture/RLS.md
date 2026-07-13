@@ -44,7 +44,7 @@ Registered in the Supabase dashboard (Auth > Hooks > Customize Access Token Clai
 ## `has_role()` and friends
 
 ```sql
-create or replace function public.has_role(_role public.app_role)
+create or replace function public.has_role(_role text)
 returns boolean
 language sql
 stable
@@ -52,7 +52,7 @@ security definer
 set search_path = public
 as $$
   select coalesce(
-    (auth.jwt() -> 'app_metadata' -> 'roles') @> to_jsonb(_role::text),
+    (auth.jwt() -> 'app_metadata' -> 'roles') @> to_jsonb(_role),
     false
   );
 $$;
@@ -61,6 +61,11 @@ create or replace function public.is_admin()
 returns boolean
 language sql stable
 as $$ select public.has_role('admin'); $$;
+
+create or replace function public.is_moderator()
+returns boolean
+language sql stable
+as $$ select public.has_role('moderator'); $$;
 
 create or replace function public.is_guest()
 returns boolean
@@ -71,6 +76,8 @@ as $$
   );
 $$;
 ```
+
+As shipped in `0001_identity.sql`, `has_role()` takes `text` rather than `public.app_role`: it compares the literal string directly against the JWT's `app_metadata.roles` array, so callers pass a string without an enum cast. `is_moderator()` was added alongside `is_admin()` for the `moderator` role introduced in the same migration (see `SCHEMA.md`'s `app_role` enum).
 
 `has_role()` is `SECURITY DEFINER` only so it can be called from any policy without each caller needing `EXECUTE` re-granted per table; it touches no table, only the JWT already in the request, so it carries no elevation risk. Every policy below is written in terms of `has_role()`, `auth.uid()`, and ownership columns, never a raw role string comparison, so a future role rename is a one-function change.
 
@@ -109,15 +116,16 @@ Each row states the policy in plain terms; the actual SQL is one `create policy`
 
 | Table | `SELECT` | `INSERT`/`UPDATE`/`DELETE` |
 |---|---|---|
-| `users` | own row; any authenticated user may also read the public-facing subset (name, avatar_url, channel_name) of a coach/creator/UPA's row via a `security invoker` view `public_profiles`, never the base table cross-user | own row only, `INSERT` is trigger-only (on `auth.users` insert) |
-| `user_roles` | own rows; admin reads all | no `authenticated` write at all; every role grant happens through a `SECURITY DEFINER` RPC (`complete_player_setup`, the verification-approval RPC, venue staff acceptance) so a user can never grant themselves `admin` or `coach` by a direct insert |
-| `addresses` | own rows | own rows, `DELETE` blocked by a trigger if referenced by a non-`delivered`/non-`cancelled` order (PRD-07 FR-30) |
+| `users` | own row; any authenticated user may also read the public-facing subset (name, avatar_url, channel_name) of a coach/creator/UPA's row via the view `public_profiles`, never the base table cross-user | own row only, `INSERT` is trigger-only (on `auth.users` insert, `handle_new_user()` also seeds a default `player` `user_roles` row) |
+| `user_roles` | own rows; admin reads all | no `authenticated` write at all; every role grant happens through a `SECURITY DEFINER` path (the signup trigger for the initial `player` role, a future verification-approval RPC, venue staff acceptance) so a user can never grant themselves `admin` or `coach` by a direct insert |
+| `addresses` | own rows | own rows, `DELETE` blocked by a trigger if referenced by a non-`delivered`/non-`cancelled` order (PRD-07 FR-30); that trigger ships with the commerce domain migration once `orders` exists, not in `0001_identity.sql` |
+| `athlete_sports` (new, `0001_identity.sql`) | own rows; admin reads all | own rows, full CRUD |
 
 ### coaching
 
 | Table | `SELECT` | `INSERT`/`UPDATE`/`DELETE` |
 |---|---|---|
-| `coach_profiles` | verified rows public; own row always (any status) | own row `INSERT`/`UPDATE` only while not `pending_review` locked fields (sport immutability enforced by trigger, not RLS); status column itself never client-writable |
+| `coach_profiles` | own row always (any status); admin reads all; the base table has **no** public `SELECT` policy, public discovery of verified coaches reads the view `coach_profiles_public` instead (as shipped in `0001_identity.sql`, a definer-style view filtered to `status = 'verified'` that bypasses the base table's owner/admin-only RLS by design) | own row `INSERT`/`UPDATE`, `WITH CHECK` requires `has_role('coach')`; `status`, `rating`, `rating_count`, `players_coached_count` locked to admin-only by a trigger (sport immutability enforced by a separate trigger once `verification_requests` exists, not by RLS) |
 | `coach_certificates`, `session_types`, `coach_availability_windows` | own coach's rows; verified coach's `session_types`/`availability_windows` also public (discovery needs them) | own coach only (`has_role('coach') AND coach_id = auth.uid()`) |
 | `sessions` | `has_role('coach') AND coach_id = auth.uid()` OR `player_id = auth.uid()` | **no** direct `authenticated` write; all writes via `book-session` edge function (insert) or `session_transition`/`rate_session` RPCs (status/rating) |
 
@@ -178,8 +186,9 @@ Realtime broadcast on `chat_messages` respects the same `SELECT` policy: Supabas
 
 | Table | `SELECT` | `INSERT`/`UPDATE`/`DELETE` |
 |---|---|---|
-| `notifications` | own rows | **no** `authenticated` `INSERT` (written by `notify-dispatch` and various RPCs/edge functions as `service_role`); `UPDATE` limited to `read_at` on own rows |
-| `device_tokens` | own rows | own rows |
+| `notifications` | own rows | **no** `authenticated` `INSERT` (written by `notify-dispatch` and various RPCs/edge functions as `service_role`); `UPDATE` limited to `read_at` on own rows, enforced by a trigger that rejects a change to any other column |
+| `push_tokens` (renamed from `device_tokens`, `0002_notifications.sql`) | own rows | own rows, full CRUD |
+| `notification_prefs` (new, `0002_notifications.sql`) | own rows | own rows, full CRUD |
 
 ### payments
 
@@ -196,11 +205,11 @@ Covered in full under "The financial write prohibition" above. Read policies:
 
 | Table | `SELECT` | `INSERT`/`UPDATE`/`DELETE` |
 |---|---|---|
-| `verification_requests` | own linked applicant rows (coach reads own, venue partner reads own, UPA reads own); admin reads all | own row `INSERT` on submit/resubmit (via the `setupCoach`/venue-submit/UPA-submit RPCs, not a raw insert); `UPDATE` (approve/reject) restricted to `has_role('admin')` |
+| `verification_requests` | own linked applicant rows (coach reads own, venue partner reads own, UPA reads own); admin or moderator reads all | own row `INSERT` on submit/resubmit (coach applicant type ships in `0003_moderation_audit.sql` as a direct `WITH CHECK (applicant_id = auth.uid() AND has_role('coach'))` policy; venue/UPA applicant types are added once `venues`/`upa_applications` exist); `UPDATE` (approve/reject) restricted to `has_role('admin') OR has_role('moderator')` |
 | `reports` | own submitted reports; admin reads all | own row `INSERT` (`reporter_id = auth.uid()`, `NOT is_guest()`); `UPDATE` (resolve) restricted to `has_role('admin')` |
-| `feature_flags` | `has_role('admin')` only; **not** publicly readable, flag checks happen server side (RPC/edge function) so a disabled feature's existence is not discoverable client side | `has_role('admin')` only |
-| `audit_log` | `has_role('admin')` only | **no** `authenticated`/`anon` write at all, ever; `service_role` `INSERT` only, and even `service_role`'s grants exclude `UPDATE`/`DELETE` at the table level (PRD-04 FR-54, enforced identically to `ledger_entries`) |
-| `support_tickets` | own rows; admin reads all | own row `INSERT`; `UPDATE` (resolve) restricted to `has_role('admin')` |
+| `feature_flags` | `has_role('admin') OR has_role('moderator')`; **not** publicly readable, flag checks happen server side (RPC/edge function) so a disabled feature's existence is not discoverable client side | `has_role('admin')` only (moderators can read flags but not flip them; ships this way in `0003_moderation_audit.sql`) |
+| `audit_log` | `has_role('admin') OR has_role('moderator')` | **no** `authenticated`/`anon` write at all, ever; `service_role` `INSERT` only, and even `service_role`'s grants exclude `UPDATE`/`DELETE` at the table level (PRD-04 FR-54, enforced identically to `ledger_entries`) |
+| `support_tickets` | own rows; admin or moderator reads all | own row `INSERT`; `UPDATE` (resolve) restricted to `has_role('admin') OR has_role('moderator')` |
 
 ## Storage
 

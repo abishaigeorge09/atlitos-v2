@@ -16,7 +16,7 @@ Source of truth for every table in the Supabase Postgres schema. One domain per 
 
 | Enum | Values | Notes |
 |---|---|---|
-| `app_role` | `player`, `coach`, `court_partner`, `court_staff`, `upa`, `admin` | `guest` is never persisted, it is the absence of a session (or a Supabase anonymous auth session with zero `user_roles` rows) |
+| `app_role` | `player`, `coach`, `court_partner`, `court_staff`, `upa`, `admin`, `moderator` | `guest` is never persisted, it is the absence of a session (or a Supabase anonymous auth session with zero `user_roles` rows); `moderator` added in `0001_identity.sql` for moderation/audit RLS (audit log, feature flags, verification review, support tickets), distinct from `admin` |
 | `sport` | `football`, `cricket`, `badminton`, `tennis` | extend by adding a value, never a second enum |
 | `session_status` | `requested`, `accepted`, `declined`, `completed`, `cancelled`, `rescheduled`, `rated` | machine: `requested` to (`accepted` or `declined`); `accepted` to (`completed` or `cancelled` or `rescheduled`); `completed` to `rated` |
 | `session_frequency` | `one_time`, `weekly`, `monthly` | |
@@ -97,6 +97,21 @@ Shopper shipping addresses (commerce domain, kept here as it is an identity-adja
 | `created_at` | `timestamptz` | |
 
 Indexes: `idx_addresses_user_id` on `user_id`.
+
+### `athlete_sports`
+Added in `0001_identity.sql`, not originally in this doc. Normalizes an athlete's per-sport detail (skill level, which sport is primary) alongside the denormalized `users.sports sport[]` cache column, which remains the fast-path summary array; reconciling the two is an application-layer concern, not enforced by a trigger in Phase 1.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `uuid` | PK |
+| `user_id` | `uuid` | not null, references `users(id)` |
+| `sport` | `sport` | not null |
+| `skill_level` | `text` | nullable |
+| `is_primary` | `boolean` | not null default `false` |
+| `created_at`, `updated_at` | `timestamptz` | |
+
+Constraints: `UNIQUE(user_id, sport)`.
+Indexes: `idx_athlete_sports_user_id` on `user_id`.
 
 **JWT custom claims**: see `RLS.md` for the `custom_access_token_hook` that reads `user_roles` at token mint time and injects `app_metadata.roles: string[]` into the JWT, which `has_role()` reads without a query on every RLS check.
 
@@ -725,7 +740,8 @@ Indexes: `idx_chat_messages_thread_id` on `(thread_id, created_at)`. Realtime is
 
 Indexes: `idx_notifications_user_id_read_at` on `(user_id, read_at)`.
 
-### `device_tokens`
+### `push_tokens`
+Named `push_tokens` (renamed from this doc's earlier `device_tokens`) as of `0002_notifications.sql`; same shape.
 
 | Column | Type | Constraints |
 |---|---|---|
@@ -734,6 +750,23 @@ Indexes: `idx_notifications_user_id_read_at` on `(user_id, read_at)`.
 | `token` | `text` | not null, unique |
 | `platform` | `text` | not null, `CHECK (platform IN ('ios','android'))` |
 | `created_at` | `timestamptz` | |
+
+Indexes: `idx_push_tokens_user_id` on `user_id`.
+
+### `notification_prefs`
+Added in `0002_notifications.sql`, not originally in this doc. Per notification_type push/email opt-out, finer grained than a single device token.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `uuid` | PK |
+| `user_id` | `uuid` | not null, references `users(id)` |
+| `notification_type` | `notification_type` | not null |
+| `push_enabled` | `boolean` | not null default `true` |
+| `email_enabled` | `boolean` | not null default `true` |
+| `created_at`, `updated_at` | `timestamptz` | |
+
+Constraints: `UNIQUE(user_id, notification_type)`.
+Indexes: `idx_notification_prefs_user_id` on `user_id`.
 
 ---
 

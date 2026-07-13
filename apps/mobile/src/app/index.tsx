@@ -1,83 +1,16 @@
-import { radii, spacing } from '@atlitos/theme';
-import { StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Redirect } from 'expo-router';
 
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Text as UIText } from '@/components/ui/text';
-import { textStyle } from '@/theme/text-style';
-import { useThemeColors } from '@/theme/use-theme-colors';
-
-export default function HomeScreen() {
-  const colors = useThemeColors();
-
-  return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
-      <View style={styles.content}>
-        <View style={[styles.eyebrowChip, { backgroundColor: colors.accentTint }]}>
-          <Text style={[textStyle('overline'), { color: colors.accent }]}>Sport superapp</Text>
-        </View>
-
-        <Text style={[textStyle('display'), styles.wordmark, { color: colors.text }]}>
-          Atlitos
-        </Text>
-
-        <Text style={[textStyle('body'), styles.tagline, { color: colors.textSecondary }]}>
-          Learn, book courts, hire coaches and follow the game, all in one place.
-        </Text>
-
-        <View className="w-full max-w-sm gap-lg">
-          {/* Phase 1 spike proof: react-native-reusables Card, themed via
-              tailwind.config.js generated from @atlitos/theme. See
-              docs/phases/PHASE-1-SPIKE.md. */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Book a court</CardTitle>
-              <CardDescription>Instant confirmation, no back and forth.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <UIText className="text-text-secondary">
-                Nativewind and react-native-reusables proof components, themed with
-                @atlitos/theme tokens.
-              </UIText>
-            </CardContent>
-            <CardFooter>
-              <Button className="flex-1">
-                <UIText>Reserve now</UIText>
-              </Button>
-            </CardFooter>
-          </Card>
-
-          <Button variant="secondary">
-            <UIText>Secondary action</UIText>
-          </Button>
-        </View>
-      </View>
-    </SafeAreaView>
-  );
+/**
+ * Root "/" only ever redirects to the splash screen, which does the real
+ * session-based routing (PRD-01 3.1 "Splash: loading only (auto-route),
+ * routes by session"). Keeping this a plain redirect (rather than putting
+ * the routing logic here) means "/" always resolves to a real file for
+ * expo-router, independent of the (auth) group's own layout logic.
+ *
+ * The Phase 1 spike proof content that used to live here (Card/Button
+ * proof, "Dev tools" link) moved to src/app/dev/showcase.tsx, now reachable
+ * from the Home tab's dev-only link (see (tabs)/index.tsx).
+ */
+export default function Index() {
+  return <Redirect href="/(auth)/splash" />;
 }
-
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-  },
-  content: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
-    gap: spacing.lg,
-  },
-  eyebrowChip: {
-    borderRadius: radii.pill,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-  },
-  wordmark: {
-    textAlign: 'center',
-  },
-  tagline: {
-    textAlign: 'center',
-    maxWidth: 320,
-  },
-});

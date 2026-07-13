@@ -1,0 +1,84 @@
+/* GENERATED FILE. Source of truth: packages/theme/src/*.ts.
+ * Regenerate with: pnpm --filter @atlitos/admin gen-tokens
+ * Do not hand edit the token values below, see docs/design/DESIGN-LANGUAGE.md. */
+
+:root {
+  /* Atlitos tokens, from @atlitos/theme colors.light ("Paper") */
+  --color-bg: hsl(36 56% 96%);
+  --color-surface: hsl(0 0% 100%);
+  --color-surface-muted: hsl(37 41% 91%);
+  --color-card: hsl(0 0% 100%);
+  --color-text: hsl(30 22% 9%);
+  --color-text-secondary: hsl(32 12% 32%);
+  --color-text-tertiary: hsl(32 10% 50%);
+  --color-text-inverse: hsl(36 56% 96%);
+  --color-border: hsl(38 33% 86%);
+  --color-border-strong: hsl(37 29% 77%);
+  --color-accent: hsl(15 76% 55%);
+  --color-accent-pressed: hsl(15 67% 46%);
+  --color-accent-tint: hsl(17 80% 94%);
+  --color-ink-on-accent: hsl(18 91% 9%);
+  --color-brand-orange: hsl(16 100% 50%);
+  --color-brand-ember: hsl(15 76% 55%);
+  --color-success: hsl(154 67% 32%);
+  --color-success-tint: hsl(143 43% 92%);
+  --color-warning: hsl(37 86% 39%);
+  --color-warning-tint: hsl(37 84% 90%);
+  --color-info: hsl(211 74% 44%);
+  --color-info-tint: hsl(214 78% 93%);
+  --color-danger: hsl(352 70% 50%);
+  --color-danger-tint: hsl(353 76% 93%);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 20px;
+  --space-2xl: 24px;
+}
+
+/* Dark ("Espresso") tokens, ready for a future admin theme toggle; the
+ * shell itself defaults to the warm light sidebar per PRD-04/DESIGN-LANGUAGE
+ * and does not switch this class today. */
+.dark {
+  --color-bg: hsl(33 29% 6%);
+  --color-surface: hsl(34 30% 9%);
+  --color-surface-muted: hsl(30 29% 12%);
+  --color-card: hsl(34 30% 9%);
+  --color-text: hsl(37 47% 93%);
+  --color-text-secondary: hsl(36 18% 65%);
+  --color-text-tertiary: hsl(35 14% 47%);
+  --color-text-inverse: hsl(33 29% 6%);
+  --color-border: hsl(34 26% 16%);
+  --color-border-strong: hsl(36 24% 22%);
+  --color-accent: hsl(15 76% 55%);
+  --color-accent-pressed: hsl(15 67% 46%);
+  --color-accent-tint: hsl(20 66% 14%);
+  --color-ink-on-accent: hsl(18 91% 9%);
+  --color-brand-orange: hsl(16 100% 50%);
+  --color-brand-ember: hsl(15 76% 55%);
+  --color-success: hsl(154 59% 49%);
+  --color-success-tint: hsl(153 40% 14%);
+  --color-warning: hsl(39 75% 56%);
+  --color-warning-tint: hsl(37 55% 15%);
+  --color-info: hsl(211 75% 63%);
+  --color-info-tint: hsl(212 45% 16%);
+  --color-danger: hsl(354 83% 66%);
+  --color-danger-tint: hsl(354 49% 15%);
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: Inter, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
