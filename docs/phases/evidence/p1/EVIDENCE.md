@@ -29,3 +29,18 @@ All three deployed from the monorepo with rootDirectory project settings and Sup
 
 ## Residual web-only dev warning
 react-native-web nests a button inside ClutchPostCard pressables (dev overlay warning, cosmetic on web, absent on native). Tracked as P2 polish.
+
+## Coverage extension, second pass (same day)
+
+Additional screens verified hands on in Chrome (Paper light; Espresso covered via the dev gallery whose 42 components compose these screens):
+- /register: full form (name, email, phone, DOB, password x2), required asterisks, ember CTA, Log in link. Clean.
+- /forgot: reset password step 1, disabled Send code until input, correct copy.
+- /role-select: player and coach cards with lucide icons in accent tint circles, house copy style.
+- portal-life landing (localhost:3002): loads clean, same token pipeline as portal-court.
+- admin login (localhost:3003): warm card, ember Sign in, copy "Admin accounts are provisioned outside this app."
+
+## Blocked from verification, founder dependency (not code defects)
+
+1. Guest mode end to end: Supabase project has anonymous sign ins DISABLED (auth API returns anonymous_provider_disabled; confirmed via curl). Founder toggle: Dashboard, Authentication, Sign In providers, Anonymous. Until then Continue as guest fails; splash now surfaces the error instead of silently swallowing it (fixed this pass).
+2. Tabs shell, onboarding wizard steps, portal dashboards, admin authed pages: all require a signed in user; new project also has email confirmation ON by default, so UI signup needs a real inbox or the founder toggling confirmations off for dev. Deferred to the founder session, then a full authed sweep completes coverage.
+3. Espresso dark for app screens: app screens follow the system scheme; the dev gallery dual theme run verified every composed component in both themes. Per screen dark captures follow once a signed in sweep is possible.

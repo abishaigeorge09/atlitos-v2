@@ -1,6 +1,6 @@
 import { spacing } from '@atlitos/theme';
 import { router } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -23,6 +23,7 @@ import { useThemeColors } from '@/theme/use-theme-colors';
  */
 export default function SplashScreen() {
   const colors = useThemeColors();
+  const [guestError, setGuestError] = useState<string | null>(null);
   const status = useSessionStore((state) => state.status);
   const hydrated = useSessionStore((state) => state.hydrated);
   const me = useSessionStore((state) => state.me);
@@ -61,9 +62,21 @@ export default function SplashScreen() {
 
         {showGuestSplash ? (
           <View style={styles.actions}>
-            <Button onPress={() => void continueAsGuest()}>
+            <Button
+              onPress={() => {
+                setGuestError(null);
+                continueAsGuest().catch((e: unknown) => {
+                  // Surfaces infra failures (e.g. anonymous sign ins disabled
+                  // on the Supabase project) instead of a silent no op.
+                  setGuestError(e instanceof Error ? e.message : 'Could not start a guest session. Try again.');
+                });
+              }}
+            >
               <Text style={[textStyle('label'), { color: colors.inkOnAccent }]}>Continue as guest</Text>
             </Button>
+            {guestError ? (
+              <Text style={[textStyle('caption'), { color: colors.danger, textAlign: 'center' }]}>{guestError}</Text>
+            ) : null}
             <Button variant="text" onPress={() => router.push('/(auth)/login')}>
               <Text style={[textStyle('label'), { color: colors.accent }]}>Log in</Text>
             </Button>
