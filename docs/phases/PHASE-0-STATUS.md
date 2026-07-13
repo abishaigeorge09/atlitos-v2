@@ -50,8 +50,8 @@ Last updated: 2026-07-13.
 - [x] Supabase project created via MCP: name `atlitos`, ref `syzzfgaudpifwvbpycyi`, org Synth_Web_&_App, region ap-south-1 (Mumbai), $10/mo cost confirmed 2026-07-13
 - [ ] Vercel projects created and linked for portal-court, portal-life, admin (owner: orchestrator inline via Vercel MCP; after app shells exist)
 - [ ] Jira ATL project created, Kanban, 12 epics filed — BLOCKED: Atlassian MCP has no create-project tool and a browser attempt was denied. Founder options: create empty software project ATL at synthsports.atlassian.net (2 clicks) and orchestrator fills 12 epics via MCP, or approve a browser session. cloudId 86e91c66-2964-4a92-a1aa-a9aaad1d1bc1
-- [ ] Razorpay test mode signup (owner: founder, hand-off, browser session with orchestrator driving)
-- [ ] Cloudflare Stream account setup (owner: founder, hand-off, browser session with orchestrator driving)
+- [x] Razorpay test mode: existing account, key regenerated, secret in local supabase/.env (gitignored), public key id rzp_test_TCwxkMaUz54BPH in apps/mobile/.env; smoke tested with a real ₹560 test order (order_TCx7DBAun87Kyk)
+- [x] Cloudflare: account logged in, Stream purchase DEFERRED by founder decision 2026-07-13; v1 Clutch uses a free Supabase Storage adapter (docs/architecture/VIDEO.md decision update)
 - [ ] Vercel account hookup confirmed (owner: founder, hand-off if account level auth needed, otherwise orchestrator inline via MCP)
 
 ## Notes

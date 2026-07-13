@@ -147,3 +147,15 @@ A `published` clip can still be reported (`reports` table, `entity_type='clip'`,
 | Reports against published content | `reports` table (Postgres) |
 | Who approved/rejected what and when | `audit_log` table (Postgres) |
 | Playback URLs | minted on demand from Cloudflare Stream's signed-URL API, never stored |
+
+## DECISION UPDATE (2026-07-13, founder at P1 gate)
+
+Cloudflare Stream is DEFERRED until Clutch has real traffic (founder declined the $5/mo storage block at signup; account exists, logged in, plan page reached, no purchase).
+
+v1 video provider: Supabase Storage adapter behind the SAME two edge function contracts:
+- stream-upload-url: returns a signed Supabase Storage upload URL (bucket clips, private), clip row status uploading
+- stream-webhook: replaced by an on-upload finalizer (storage webhook or client confirm call) that sets status ready, stores the storage path as playback ref; client-side thumbnail capture at upload
+- Playback: direct MP4 progressive via react-native-video from a signed URL. No HLS/ABR until the Stream swap.
+- The clips table columns keep Stream-shaped names (cloudflare_uid nullable, playback_id = storage path for now) so the provider swap is config + one adapter, not a migration.
+
+Accepted tradeoffs at prototype scale: no transcode (odd codecs may fail), no adaptive bitrate, client-side thumbnails.
