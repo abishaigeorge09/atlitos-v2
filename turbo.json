@@ -4,6 +4,15 @@
     "build": { "dependsOn": ["^build"], "outputs": ["dist/**", ".next/**", "!.next/cache/**"] },
     "typecheck": { "dependsOn": ["^typecheck"] },
     "lint": {},
-    "dev": { "cache": false, "persistent": true }
+    "dev": { "cache": false, "persistent": true },
+    "@atlitos/api#build": { "outputs": [] },
+    "@atlitos/ui-native#build": { "outputs": [] },
+    "@atlitos/ui-web#build": { "outputs": [] },
+    "@atlitos/portal-court#typecheck": {
+      "dependsOn": ["^typecheck", "@atlitos/portal-court#build"]
+    },
+    "@atlitos/portal-life#typecheck": {
+      "dependsOn": ["^typecheck", "@atlitos/portal-life#build"]
+    }
   }
 }

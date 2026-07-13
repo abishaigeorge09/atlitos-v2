@@ -38,12 +38,12 @@ Last updated: 2026-07-13.
 ### Monorepo scaffold
 
 - [x] Turborepo/pnpm monorepo initialized at ~/dev/atlitos (apps/, packages/, supabase/, docs/, pnpm-workspace.yaml, turbo.json, package.json present)
-- [ ] apps/mobile (Expo) scaffolded and building green (owner: orchestrator inline)
-- [ ] apps/portal-court (Next.js) scaffolded and building green (owner: orchestrator inline)
-- [ ] apps/portal-life (Next.js) scaffolded and building green (owner: orchestrator inline)
-- [ ] apps/admin (Refine.dev) scaffolded and building green (owner: orchestrator inline)
-- [ ] packages/theme, packages/ui-native, packages/ui-web, packages/api, packages/types, packages/config scaffolded (owner: orchestrator inline)
-- [ ] pnpm turbo typecheck/build green across the monorepo (owner: orchestrator inline, gate blocker)
+- [x] apps/mobile (Expo) scaffolded and building green (expo export succeeds, ios/android/web bundles)
+- [x] apps/portal-court (Next.js) scaffolded and building green (next build, static pages, gen-tokens from @atlitos/theme)
+- [x] apps/portal-life (Next.js) scaffolded and building green (next build, static pages, gen-tokens from @atlitos/theme)
+- [x] apps/admin (Refine.dev) scaffolded and building green (tsc --noEmit && vite build)
+- [x] packages/theme, packages/ui-native, packages/ui-web, packages/api, packages/types, packages/config scaffolded (all present, typecheck/lint green)
+- [x] pnpm turbo typecheck/build green across the monorepo (24/24 tasks green, `pnpm turbo typecheck build lint` incl. lint, full turbo cache confirmed on rerun)
 
 ### Infra and accounts
 

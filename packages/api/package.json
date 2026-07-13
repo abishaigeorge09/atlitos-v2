@@ -1,0 +1,27 @@
+{
+  "name": "@atlitos/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Typed Supabase client factory and domain hooks for every Atlitos app. Wraps every v1 services/api.ts function in a typed hook with the same name (docs/architecture/API-MAPPING.md) so screens do not change when a mock swaps for the real PostgREST/RPC/edge function call.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "dev": "echo \"@atlitos/api has no standalone dev server, it is consumed by every app\"",
+    "build": "echo \"@atlitos/api ships as source, no build step until an app bundler needs one\"",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@atlitos/types": "workspace:*",
+    "@supabase/supabase-js": "^2.110.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

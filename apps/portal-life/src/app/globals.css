@@ -1,0 +1,190 @@
+/* GENERATED FILE. Source of truth: packages/theme/src/*.ts.
+ * Regenerate with: pnpm --filter @atlitos/portal-life gen-tokens
+ * Do not hand edit the token values below, see docs/design/DESIGN-LANGUAGE.md. */
+
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  /* Atlitos tokens, from @atlitos/theme colors.light */
+  --color-bg: 36 56% 96%;
+  --color-surface: 0 0% 100%;
+  --color-surface-muted: 37 41% 91%;
+  --color-card: 0 0% 100%;
+  --color-text: 30 22% 9%;
+  --color-text-secondary: 32 12% 32%;
+  --color-text-tertiary: 32 10% 50%;
+  --color-text-inverse: 36 56% 96%;
+  --color-border: 38 33% 86%;
+  --color-border-strong: 37 29% 77%;
+  --color-accent: 16 100% 50%;
+  --color-accent-pressed: 15 100% 43%;
+  --color-accent-tint: 22 95% 93%;
+  --color-ink-on-accent: 18 91% 9%;
+  --color-brand-orange: 16 100% 50%;
+  --color-brand-ember: 15 76% 55%;
+  --color-success: 154 67% 32%;
+  --color-success-tint: 143 43% 92%;
+  --color-warning: 37 86% 39%;
+  --color-warning-tint: 37 84% 90%;
+  --color-info: 211 74% 44%;
+  --color-info-tint: 214 78% 93%;
+  --color-danger: 352 70% 50%;
+  --color-danger-tint: 353 76% 93%;
+
+  /* shadcn slots, mapped to the Atlitos tokens above */
+  --background: hsl(var(--color-bg));
+  --foreground: hsl(var(--color-text));
+  --card: hsl(var(--color-card));
+  --card-foreground: hsl(var(--color-text));
+  --popover: hsl(var(--color-surface));
+  --popover-foreground: hsl(var(--color-text));
+  --primary: hsl(var(--color-accent));
+  --primary-foreground: hsl(var(--color-ink-on-accent));
+  --secondary: hsl(var(--color-surface-muted));
+  --secondary-foreground: hsl(var(--color-text));
+  --muted: hsl(var(--color-surface-muted));
+  --muted-foreground: hsl(var(--color-text-secondary));
+  --accent: hsl(var(--color-accent-tint));
+  --accent-foreground: hsl(var(--color-text));
+  --destructive: hsl(var(--color-danger));
+  --destructive-foreground: hsl(var(--color-ink-on-accent));
+  --border: hsl(var(--color-border));
+  --input: hsl(var(--color-border));
+  --ring: hsl(var(--color-accent));
+  --chart-1: hsl(var(--color-accent));
+  --chart-2: hsl(var(--color-success));
+  --chart-3: hsl(var(--color-info));
+  --chart-4: hsl(var(--color-warning));
+  --chart-5: hsl(var(--color-danger));
+  --sidebar: hsl(var(--color-surface));
+  --sidebar-foreground: hsl(var(--color-text));
+  --sidebar-primary: hsl(var(--color-accent));
+  --sidebar-primary-foreground: hsl(var(--color-ink-on-accent));
+  --sidebar-accent: hsl(var(--color-surface-muted));
+  --sidebar-accent-foreground: hsl(var(--color-text));
+  --sidebar-border: hsl(var(--color-border));
+  --sidebar-ring: hsl(var(--color-accent));
+  --radius: 1rem;
+}
+
+.dark {
+  /* Atlitos tokens, from @atlitos/theme colors.dark */
+  --color-bg: 33 29% 6%;
+  --color-surface: 34 30% 9%;
+  --color-surface-muted: 30 29% 12%;
+  --color-card: 34 30% 9%;
+  --color-text: 37 47% 93%;
+  --color-text-secondary: 36 18% 65%;
+  --color-text-tertiary: 35 14% 47%;
+  --color-text-inverse: 33 29% 6%;
+  --color-border: 34 26% 16%;
+  --color-border-strong: 36 24% 22%;
+  --color-accent: 16 100% 50%;
+  --color-accent-pressed: 15 100% 43%;
+  --color-accent-tint: 20 66% 14%;
+  --color-ink-on-accent: 18 91% 9%;
+  --color-brand-orange: 16 100% 50%;
+  --color-brand-ember: 15 76% 55%;
+  --color-success: 154 59% 49%;
+  --color-success-tint: 153 40% 14%;
+  --color-warning: 39 75% 56%;
+  --color-warning-tint: 37 55% 15%;
+  --color-info: 211 75% 63%;
+  --color-info-tint: 212 45% 16%;
+  --color-danger: 354 83% 66%;
+  --color-danger-tint: 354 49% 15%;
+
+  /* shadcn slots, mapped to the Atlitos tokens above */
+  --background: hsl(var(--color-bg));
+  --foreground: hsl(var(--color-text));
+  --card: hsl(var(--color-card));
+  --card-foreground: hsl(var(--color-text));
+  --popover: hsl(var(--color-surface));
+  --popover-foreground: hsl(var(--color-text));
+  --primary: hsl(var(--color-accent));
+  --primary-foreground: hsl(var(--color-ink-on-accent));
+  --secondary: hsl(var(--color-surface-muted));
+  --secondary-foreground: hsl(var(--color-text));
+  --muted: hsl(var(--color-surface-muted));
+  --muted-foreground: hsl(var(--color-text-secondary));
+  --accent: hsl(var(--color-accent-tint));
+  --accent-foreground: hsl(var(--color-text));
+  --destructive: hsl(var(--color-danger));
+  --destructive-foreground: hsl(var(--color-ink-on-accent));
+  --border: hsl(var(--color-border));
+  --input: hsl(var(--color-border));
+  --ring: hsl(var(--color-accent));
+  --chart-1: hsl(var(--color-accent));
+  --chart-2: hsl(var(--color-success));
+  --chart-3: hsl(var(--color-info));
+  --chart-4: hsl(var(--color-warning));
+  --chart-5: hsl(var(--color-danger));
+  --sidebar: hsl(var(--color-surface));
+  --sidebar-foreground: hsl(var(--color-text));
+  --sidebar-primary: hsl(var(--color-accent));
+  --sidebar-primary-foreground: hsl(var(--color-ink-on-accent));
+  --sidebar-accent: hsl(var(--color-surface-muted));
+  --sidebar-accent-foreground: hsl(var(--color-text));
+  --sidebar-border: hsl(var(--color-border));
+  --sidebar-ring: hsl(var(--color-accent));
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}

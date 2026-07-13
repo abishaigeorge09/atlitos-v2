@@ -1,0 +1,25 @@
+/*
+ * Eyebrow, the SRM-influenced uppercase mono section label
+ * (docs/design/DESIGN-LANGUAGE.md "overline" variant). Reads the
+ * @atlitos/theme CSS variable set a portal's globals.css generates from
+ * `toCssVars` (see packages/theme/src/index.ts). Fallback values match the
+ * light theme "Paper" tokens so this still renders sensibly in a shell that
+ * has not wired the variable set up yet.
+ */
+
+.atlitos-eyebrow {
+  display: inline-block;
+  margin: 0;
+  font-family: var(--font-mono, "JetBrains Mono", monospace);
+  font-weight: 600;
+  font-size: 11px;
+  line-height: 14px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-tertiary, #8c8072);
+}
+
+.atlitos-eyebrow--accent {
+  color: var(--color-accent, #ff4200);
+}

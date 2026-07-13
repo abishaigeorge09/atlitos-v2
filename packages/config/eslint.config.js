@@ -11,8 +11,30 @@
 //      token read from @atlitos/theme, never a literal.
 //   2. No emoji codepoints in string literals, anywhere, no exceptions.
 
+const fs = require("node:fs");
+const path = require("node:path");
 const js = require("@eslint/js");
 const tseslint = require("typescript-eslint");
+
+/**
+ * Every app/package script runs `eslint .` with its own package directory as
+ * cwd (see each package.json's "lint" script), so a single eslint.config.js
+ * invocation only ever sees files under one package at a time. That means
+ * file/ignore glob patterns can't encode a repo-relative path like
+ * "packages/theme/**" (there is no "packages/theme/" prefix left once cwd is
+ * already packages/theme), they have to key off which package is currently
+ * running. Read the nearest package.json's "name" instead.
+ */
+function currentPackageName() {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8"));
+    return typeof pkg.name === "string" ? pkg.name : "";
+  } catch {
+    return "";
+  }
+}
+
+const isThemePackage = currentPackageName() === "@atlitos/theme";
 
 /** Matches "#fff", "#ffff" (rgba short), "#ffffff", "#ffffffff" hex literals. */
 const HEX_COLOR_SELECTOR = "Literal[value=/^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/]";
@@ -50,22 +72,67 @@ const noEmojiOnly = {
   "no-restricted-syntax": ["error", { selector: EMOJI_SELECTOR, message: EMOJI_MESSAGE }],
 };
 
+/**
+ * Rule only config objects, no plugin/parser registration. Use this instead
+ * of the default export when composing into a host that already registers
+ * its own "@typescript-eslint" plugin instance (eslint-config-next does),
+ * since two different plugin instances under the same name is a flat config
+ * error ("Cannot redefine plugin"). Next.js apps: spread `atlitos.houseRules`
+ * alongside `compat.extends("next/core-web-vitals", "next/typescript")`
+ * instead of spreading the full default export.
+ */
+const houseRules = [
+  // packages/theme is the one place hex literals are the point, it IS the
+  // token source. Emoji stay banned everywhere, no exceptions. Everywhere
+  // else: no hex literals, no emoji. Keyed off the running package's own
+  // name (see currentPackageName above), not a repo-relative path, since
+  // every package lints with itself as cwd.
+  {
+    files: ["**/*.{js,jsx,ts,tsx}"],
+    rules: isThemePackage ? noEmojiOnly : noHexNoEmoji,
+  },
+  // eslint.config.js itself: every package's config composes this file via
+  // `require()`, which is CommonJS syntax the rest of this config's rules
+  // (written for app/library source, not tooling config) would otherwise
+  // flag, and the lint environment has no Node globals registered by
+  // default so `require`/`module` read as undefined.
+  {
+    files: ["eslint.config.{js,cjs,mjs}"],
+    languageOptions: {
+      sourceType: "commonjs",
+      globals: {
+        require: "readonly",
+        module: "writable",
+        __dirname: "readonly",
+        process: "readonly",
+      },
+    },
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
+  {
+    // Placeholder function params/vars prefixed with "_" are intentionally
+    // unused (P0 shells stub out signatures future phases fill in, see
+    // packages/api/src/hooks.ts). This is the standard TS convention for
+    // "intentionally unused", not a strictness weakening.
+    files: ["**/*.{js,jsx,ts,tsx}"],
+    rules: {
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
+    },
+  },
+];
+
 module.exports = tseslint.config(
   {
     ignores: ["**/node_modules/**", "**/dist/**", "**/.next/**", "**/.expo/**", "**/build/**"],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
-  {
-    // Everywhere except packages/theme: no hex literals, no emoji.
-    files: ["**/*.{js,jsx,ts,tsx}"],
-    ignores: ["packages/theme/**"],
-    rules: noHexNoEmoji,
-  },
-  {
-    // packages/theme is the one place hex literals are the point, it IS the
-    // token source. Emoji stay banned everywhere, no exceptions.
-    files: ["packages/theme/**/*.{js,jsx,ts,tsx}"],
-    rules: noEmojiOnly,
-  },
+  ...houseRules,
 );
+
+module.exports.houseRules = houseRules;
