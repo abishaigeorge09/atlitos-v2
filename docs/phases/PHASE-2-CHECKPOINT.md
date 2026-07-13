@@ -17,3 +17,4 @@ All 7 migrations (0009 through 0015) now applied remotely on syzzfgaudpifwvbpycy
 ## Edge functions deployed (remote, project syzzfgaudpifwvbpycyi)
 
 - book-court deployed: function id=da716abd-83d7-4723-b0bc-48dcb216b9c2, version=1, status=ACTIVE, verify_jwt=true (per supabase/functions/README.md's deploy list). Entrypoint index.ts plus _shared/{cors,http,app-error,supabase,razorpay,fee-config}.ts bundled.
+- verify-payment deployed: function id=2ee29f22-e859-42a0-a642-3dda3cb2c947, version=1, status=ACTIVE, verify_jwt=true. Entrypoint index.ts plus _shared/{cors,http,app-error,supabase,razorpay,fee-config,finalize-court-booking-payment}.ts bundled.
