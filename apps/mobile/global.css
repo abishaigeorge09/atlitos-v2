@@ -1,0 +1,109 @@
+/* GENERATED FILE. Source of truth: packages/theme/src/*.ts.
+ * Regenerate with: pnpm --filter @atlitos/mobile gen-tokens
+ * Do not hand edit the token values below, see docs/design/DESIGN-LANGUAGE.md. */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Atlitos tokens, from @atlitos/theme colors.light */
+    --color-bg: 36 56% 96%;
+    --color-surface: 0 0% 100%;
+    --color-surface-muted: 37 41% 91%;
+    --color-card: 0 0% 100%;
+    --color-text: 30 22% 9%;
+    --color-text-secondary: 32 12% 32%;
+    --color-text-tertiary: 32 10% 50%;
+    --color-text-inverse: 36 56% 96%;
+    --color-border: 38 33% 86%;
+    --color-border-strong: 37 29% 77%;
+    --color-accent: 15 76% 55%;
+    --color-accent-pressed: 15 67% 46%;
+    --color-accent-tint: 17 80% 94%;
+    --color-ink-on-accent: 18 91% 9%;
+    --color-brand-orange: 16 100% 50%;
+    --color-brand-ember: 15 76% 55%;
+    --color-success: 154 67% 32%;
+    --color-success-tint: 143 43% 92%;
+    --color-warning: 37 86% 39%;
+    --color-warning-tint: 37 84% 90%;
+    --color-info: 211 74% 44%;
+    --color-info-tint: 214 78% 93%;
+    --color-danger: 352 70% 50%;
+    --color-danger-tint: 353 76% 93%;
+    --color-overlay: rgba(28,20,13,0.45);
+
+    /* react-native-reusables slots, mapped to the Atlitos tokens above */
+    --background: hsl(var(--color-bg));
+    --foreground: hsl(var(--color-text));
+    --card: hsl(var(--color-card));
+    --card-foreground: hsl(var(--color-text));
+    --popover: hsl(var(--color-surface));
+    --popover-foreground: hsl(var(--color-text));
+    --primary: hsl(var(--color-accent));
+    --primary-foreground: hsl(var(--color-ink-on-accent));
+    --secondary: hsl(var(--color-surface-muted));
+    --secondary-foreground: hsl(var(--color-text));
+    --muted: hsl(var(--color-surface-muted));
+    --muted-foreground: hsl(var(--color-text-secondary));
+    --accent: hsl(var(--color-accent-tint));
+    --accent-foreground: hsl(var(--color-text));
+    --destructive: hsl(var(--color-danger));
+    --destructive-foreground: hsl(var(--color-ink-on-accent));
+    --border: hsl(var(--color-border));
+    --input: hsl(var(--color-border));
+    --ring: hsl(var(--color-accent));
+  }
+
+  .dark:root {
+    /* Atlitos tokens, from @atlitos/theme colors.dark */
+    --color-bg: 33 29% 6%;
+    --color-surface: 34 30% 9%;
+    --color-surface-muted: 30 29% 12%;
+    --color-card: 34 30% 9%;
+    --color-text: 37 47% 93%;
+    --color-text-secondary: 36 18% 65%;
+    --color-text-tertiary: 35 14% 47%;
+    --color-text-inverse: 33 29% 6%;
+    --color-border: 34 26% 16%;
+    --color-border-strong: 36 24% 22%;
+    --color-accent: 15 76% 55%;
+    --color-accent-pressed: 15 67% 46%;
+    --color-accent-tint: 20 66% 14%;
+    --color-ink-on-accent: 18 91% 9%;
+    --color-brand-orange: 16 100% 50%;
+    --color-brand-ember: 15 76% 55%;
+    --color-success: 154 59% 49%;
+    --color-success-tint: 153 40% 14%;
+    --color-warning: 39 75% 56%;
+    --color-warning-tint: 37 55% 15%;
+    --color-info: 211 75% 63%;
+    --color-info-tint: 212 45% 16%;
+    --color-danger: 354 83% 66%;
+    --color-danger-tint: 354 49% 15%;
+    --color-overlay: rgba(0,0,0,0.6);
+
+    /* react-native-reusables slots, mapped to the Atlitos tokens above */
+    --background: hsl(var(--color-bg));
+    --foreground: hsl(var(--color-text));
+    --card: hsl(var(--color-card));
+    --card-foreground: hsl(var(--color-text));
+    --popover: hsl(var(--color-surface));
+    --popover-foreground: hsl(var(--color-text));
+    --primary: hsl(var(--color-accent));
+    --primary-foreground: hsl(var(--color-ink-on-accent));
+    --secondary: hsl(var(--color-surface-muted));
+    --secondary-foreground: hsl(var(--color-text));
+    --muted: hsl(var(--color-surface-muted));
+    --muted-foreground: hsl(var(--color-text-secondary));
+    --accent: hsl(var(--color-accent-tint));
+    --accent-foreground: hsl(var(--color-text));
+    --destructive: hsl(var(--color-danger));
+    --destructive-foreground: hsl(var(--color-ink-on-accent));
+    --border: hsl(var(--color-border));
+    --input: hsl(var(--color-border));
+    --ring: hsl(var(--color-accent));
+  }
+}

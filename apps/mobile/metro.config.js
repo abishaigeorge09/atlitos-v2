@@ -6,6 +6,7 @@
 // node_modules, per Expo's monorepo guide.
 // https://docs.expo.dev/guides/monorepos/
 const { getDefaultConfig } = require('expo/metro-config');
+const { withNativeWind } = require('nativewind/metro');
 const path = require('node:path');
 
 const projectRoot = __dirname;
@@ -22,4 +23,6 @@ config.resolver.nodeModulesPaths = [
 // disable the strict single node_modules assumption some Metro presets use.
 config.resolver.disableHierarchicalLookup = false;
 
-module.exports = config;
+// react-native-reusables uses a fixed 16px rem regardless of platform font
+// scaling, per their manual install guide.
+module.exports = withNativeWind(config, { input: './global.css', inlineRem: 16 });

@@ -1,8 +1,11 @@
-import { Inter_400Regular, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
+import '../../global.css';
+
+import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import {
   JetBrainsMono_500Medium,
   JetBrainsMono_600SemiBold,
 } from '@expo-google-fonts/jetbrains-mono';
+import { PortalHost } from '@rn-primitives/portal';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -21,6 +24,7 @@ export default function RootLayout() {
 
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
+    Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
     JetBrainsMono_500Medium,
@@ -48,6 +52,7 @@ export default function RootLayout() {
           contentStyle: { backgroundColor: colors.bg },
         }}
       />
+      <PortalHost />
     </>
   );
 }
