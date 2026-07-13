@@ -17,12 +17,12 @@ export const brand = {
 } as const;
 
 /**
- * Active accent swap point. TODO(P0-GATE): set to `brand.ember` if the founder
- * picks ember at the Phase 0 gate. This is the ONLY line that needs to change,
- * nothing else in the codebase should reference `brand.orange` / `brand.ember`
- * directly, only `color.accent`.
+ * Active accent swap point. DECIDED(P0-GATE, 2026-07-13): founder picked
+ * ember at the Phase 0 token gallery gate. This remains the ONLY line that
+ * changes if the pick is ever revisited; nothing else in the codebase should
+ * reference `brand.orange` / `brand.ember` directly, only `color.accent`.
  */
-const ACTIVE_ACCENT: string = brand.orange;
+const ACTIVE_ACCENT: string = brand.ember;
 
 /** Pressed state per accent candidate, so the gallery can preview both live. */
 const accentPressed: Record<"orange" | "ember", string> = {
@@ -97,7 +97,7 @@ export const lightColors: ColorPalette = {
 
   accent: ACTIVE_ACCENT,
   accentPressed: ACTIVE_ACCENT === brand.orange ? accentPressed.orange : accentPressed.ember,
-  accentTint: "#FEE7DA",
+  accentTint: "#FCEBE4",
   inkOnAccent,
 
   brandOrange: brand.orange,
