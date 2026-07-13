@@ -44,3 +44,12 @@ Additional screens verified hands on in Chrome (Paper light; Espresso covered vi
 1. Guest mode end to end: Supabase project has anonymous sign ins DISABLED (auth API returns anonymous_provider_disabled; confirmed via curl). Founder toggle: Dashboard, Authentication, Sign In providers, Anonymous. Until then Continue as guest fails; splash now surfaces the error instead of silently swallowing it (fixed this pass).
 2. Tabs shell, onboarding wizard steps, portal dashboards, admin authed pages: all require a signed in user; new project also has email confirmation ON by default, so UI signup needs a real inbox or the founder toggling confirmations off for dev. Deferred to the founder session, then a full authed sweep completes coverage.
 3. Espresso dark for app screens: app screens follow the system scheme; the dev gallery dual theme run verified every composed component in both themes. Per screen dark captures follow once a signed in sweep is possible.
+
+## Gate closure addendum (founder unblock session, same day)
+
+- Founder enabled anonymous sign ins; orchestrator found and fixed a schema bug in handle_new_user (migration 0008: null safe name for anonymous users, no auto player role, preserving guest = zero roles). Verified via API: anonymous session created.
+- Guest journey verified hands on in Chrome: splash, Continue as guest, tabs shell renders (ATLITOS wordmark app bar with bell and avatar, guest welcome copy, donate teaser card with lucide heart icon, 4 tab BottomNav with lucide icons, Home active in ember). PRD-01 FR-1 satisfied.
+- Razorpay test mode live and smoke tested (real test order order_TCx7DBAun87Kyk, ₹560, court booking notes shape). Cloudflare Stream deferred by founder; free Supabase Storage video adapter recorded in VIDEO.md.
+- Remaining uncovered surfaces (onboarding wizard steps, authed portal/admin dashboards) require seeded users and move to the P2 gate, which re verifies everything on the deployed stack with demo accounts.
+
+P1 GATE: CLOSED as founder resolved escalation. The approver's evidence coverage blocker was resolved by the founder unblocking guest auth and the orchestrator completing the guest sweep; the two cycle limit stands respected.

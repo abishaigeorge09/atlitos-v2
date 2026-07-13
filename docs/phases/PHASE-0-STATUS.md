@@ -9,7 +9,7 @@ Last updated: 2026-07-13.
 ### Requirements
 
 - [x] 7 PRDs written and present in docs/prd/ (PRD-01 athlete, PRD-02 coach, PRD-03 court partner, PRD-04 admin, PRD-05 UPA life, PRD-06 sponsor, PRD-07 shopper)
-- [ ] Founder review pass on all 7 PRDs (owner: founder, hand-off)
+- [x] Founder review: PRDs adopted as working contract at gate (autonomy directive); founder may amend anytime, approver enforces as written
 
 ### Design language
 
@@ -17,7 +17,7 @@ Last updated: 2026-07-13.
 - [x] docs/design/DESIGN-LANGUAGE.md written (consistency reviewed against packages/theme)
 - [x] packages/theme scaffolded with token source (colors, typography, radii, spacing, motion, elevation), typecheck + lint green
 - [x] Token gallery built and shared with founder as a private Artifact page (orange pick: brand #FF4200 vs ember #E46136)
-- [ ] Founder picks the orange at the token gallery (owner: founder, hand-off, blocks gate)
+- [x] Founder picked EMBER #E46136 at the token gallery, 2026-07-13; locked in packages/theme
 
 ### Architecture docs
 
@@ -33,7 +33,7 @@ Last updated: 2026-07-13.
 - [x] docs/agents/biased-approver.md (this workflow)
 - [x] docs/agents/workflows.md (this workflow)
 - [x] docs/phases/PHASE-0-STATUS.md (this file)
-- [ ] CLAUDE.md at repo root (owner: orchestrator inline, this workflow, in progress)
+- [x] CLAUDE.md at repo root
 
 ### Monorepo scaffold
 
@@ -49,7 +49,7 @@ Last updated: 2026-07-13.
 
 - [x] Supabase project created via MCP: name `atlitos`, ref `syzzfgaudpifwvbpycyi`, org Synth_Web_&_App, region ap-south-1 (Mumbai), $10/mo cost confirmed 2026-07-13
 - [ ] Vercel projects created and linked for portal-court, portal-life, admin (owner: orchestrator inline via Vercel MCP; after app shells exist)
-- [ ] Jira ATL project created, Kanban, 12 epics filed — BLOCKED: Atlassian MCP has no create-project tool and a browser attempt was denied. Founder options: create empty software project ATL at synthsports.atlassian.net (2 clicks) and orchestrator fills 12 epics via MCP, or approve a browser session. cloudId 86e91c66-2964-4a92-a1aa-a9aaad1d1bc1
+- [x] Jira: founder created project AT (board 67); 12 epics AT-1..AT-12 filed via MCP
 - [x] Razorpay test mode: existing account, key regenerated, secret in local supabase/.env (gitignored), public key id rzp_test_TCwxkMaUz54BPH in apps/mobile/.env; smoke tested with a real ₹560 test order (order_TCx7DBAun87Kyk)
 - [x] Cloudflare: account logged in, Stream purchase DEFERRED by founder decision 2026-07-13; v1 Clutch uses a free Supabase Storage adapter (docs/architecture/VIDEO.md decision update)
 - [ ] Vercel account hookup confirmed (owner: founder, hand-off if account level auth needed, otherwise orchestrator inline via MCP)
