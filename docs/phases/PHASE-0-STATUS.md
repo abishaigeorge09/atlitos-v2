@@ -14,9 +14,9 @@ Last updated: 2026-07-13.
 ### Design language
 
 - [x] TASTE.md founder taste digest present at docs/design/TASTE.md
-- [ ] docs/design/DESIGN-LANGUAGE.md written (owner: orchestrator inline, next in this workflow)
-- [ ] packages/theme scaffolded with token source (colors, typography, radii, spacing, motion, elevation) (owner: orchestrator inline)
-- [ ] Token gallery built and deployed for the orange pick (#FF4200 vs #E46136) (owner: orchestrator inline)
+- [x] docs/design/DESIGN-LANGUAGE.md written (consistency reviewed against packages/theme)
+- [x] packages/theme scaffolded with token source (colors, typography, radii, spacing, motion, elevation), typecheck + lint green
+- [x] Token gallery built and shared with founder as a private Artifact page (orange pick: brand #FF4200 vs ember #E46136)
 - [ ] Founder picks the orange at the token gallery (owner: founder, hand-off, blocks gate)
 
 ### Architecture docs
