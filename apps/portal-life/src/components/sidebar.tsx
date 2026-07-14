@@ -2,25 +2,30 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { navItems } from "@/components/nav-items";
 
 interface SidebarProps {
   brandLabel: string;
-  brandIcon: LucideIcon;
+  // A rendered node, not a `LucideIcon` component reference: this component
+  // is a Client Component, and `DashboardLayout` (its caller) is a Server
+  // Component. React Server Components can pass already-rendered elements
+  // across that boundary but not raw function/class values (a component
+  // reference is a function), so the caller renders the icon element itself
+  // and passes the result, matching how `children` already works below.
+  brandIcon: React.ReactNode;
   children?: React.ReactNode;
 }
 
-export function Sidebar({ brandLabel, brandIcon: BrandIcon, children }: SidebarProps) {
+export function Sidebar({ brandLabel, brandIcon, children }: SidebarProps) {
   const pathname = usePathname();
 
   return (
     <aside className="flex h-full w-64 shrink-0 flex-col border-r border-border bg-card">
       <div className="flex h-16 items-center gap-2.5 border-b border-border px-5">
         <div className="flex size-8 items-center justify-center rounded-lg bg-accent text-primary">
-          <BrandIcon className="size-4" strokeWidth={1.75} />
+          {brandIcon}
         </div>
         <span className="text-sm font-semibold tracking-tight text-foreground">
           {brandLabel}
