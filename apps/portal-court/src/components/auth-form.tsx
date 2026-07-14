@@ -40,7 +40,11 @@ export function AuthForm({ mode }: AuthFormProps) {
       return;
     }
 
-    const next = searchParams.get("next") ?? "/dashboard";
+    // PRD-03 FR-7: a brand new signup never has a venue yet, so send them
+    // straight into onboarding rather than /dashboard (which would just
+    // redirect them there anyway). Sign in still defaults to /dashboard;
+    // its own layout gate handles anyone who signs back in unverified.
+    const next = searchParams.get("next") ?? (mode === "signup" ? "/onboarding" : "/dashboard");
     router.push(next);
     router.refresh();
   }
