@@ -79,3 +79,17 @@ Both cycle-3 agents were killed by session limits before doing any work; NOTHING
 4. Then approver cycle 3 (founder pre-authorized), then phase-close, then P3 planner.
 
 Founder to-do list so far: delete tmp-seed-demo-users edge function (dashboard); 2-minute payment + Live Today demo when staged; post-wake review of the cycle-3 approver verdict.
+
+## Cycle-3 progress (2026-07-18 ~23:20 IST)
+
+- Punch item 1 DONE: venue picker scoped to owned/staffed venues, commit 55523e4, deployed to production, script-verified (partner@ sees exactly Onboarding Demo Turf). Bonus fix in the same commit: the FR-7 dashboard gate had the identical unscoped query (any signed-in user passed if anyone had a verified venue).
+- Punch item 3 IN FLIGHT: evidence agent (haiku) capturing dark signin/signup and onboarding wizard steps.
+- Advisory cleared: the 3 stale pending_payment bookings expired via court_booking_expire_payment, slots freed. A scheduled sweep still needs wiring next phase (ticket for P3 planner).
+- Demo staging DONE: Turf 1 (Onboarding Demo Turf) has 7-day 06:00 to 23:00 windows at Rs 600/hr.
+
+## Founder 2-minute demo script (punch item 2, the last gate item)
+
+1. Open the Expo app (localhost:8090, restart with nohup npx expo start --web --port 8090 in apps/mobile if dead), signed in as player@atlitos.dev.
+2. Courts, pick Onboarding Demo Turf's Turf 1, book a TODAY slot, pay via Netbanking, any bank, Success in the popup.
+3. Open https://atlitos-portal-court.vercel.app as partner@atlitos.dev, Live Today: the booking should appear (Realtime, no refresh). Capture light and dark. Check Earnings reconciles the net amount.
+4. Then say "run the approver" and the cycle-3 review completes the gate.
