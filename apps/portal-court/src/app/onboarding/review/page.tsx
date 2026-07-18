@@ -37,9 +37,21 @@ export default function ReviewStep() {
     setStatus("loading");
     setError(null);
 
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      setError("Not authenticated.");
+      setStatus("error");
+      return;
+    }
+
+    // Owner filter required: venues RLS also exposes other partners'
+    // verified venues (public browse policy), never rely on RLS alone here.
     const { data: venues, error: venueError } = await supabase
       .from("venues")
       .select("*")
+      .eq("partner_user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(1);
 

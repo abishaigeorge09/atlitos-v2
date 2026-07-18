@@ -73,15 +73,23 @@ export const MAX_VENUE_PHOTOS = 12;
 /**
  * The partner's most recently created venue, if any, plus enough of its
  * courts/photos to drive the onboarding router's step decisions (FR-2
- * through FR-6). RLS (`venues_select_own`) already scopes this to the
- * caller's own venues, so no `partner_user_id` filter is needed client side.
+ * through FR-6). The explicit `partner_user_id` filter is REQUIRED: RLS on
+ * venues is permissive-OR (`venues_select_own` plus `venues_select_public`),
+ * so an unscoped select also returns every other partner's verified venues,
+ * which routed brand new partners into a dashboard/onboarding redirect loop.
  */
 export async function fetchLatestOnboardingVenue(
   supabase: AtlitosSupabaseClient,
 ): Promise<{ venue: VenueRow | null; photoCount: number; courtCount: number }> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated.");
+
   const { data: venues, error: venueError } = await supabase
     .from("venues")
     .select("*")
+    .eq("partner_user_id", user.id)
     .order("created_at", { ascending: false })
     .limit(1);
 

@@ -27,9 +27,13 @@ export default async function OnboardingIndexPage() {
     redirect("/signin?next=/onboarding");
   }
 
+  // Explicit owner filter required: venues RLS is permissive-OR (own plus
+  // public-verified), so an unscoped select sees other partners' venues and
+  // routes a brand new partner into a dashboard/onboarding redirect loop.
   const { data: venues } = await supabase
     .from("venues")
     .select("id, status")
+    .eq("partner_user_id", user.id)
     .order("created_at", { ascending: false })
     .limit(1);
 
