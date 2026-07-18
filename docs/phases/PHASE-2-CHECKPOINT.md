@@ -93,3 +93,10 @@ Founder to-do list so far: delete tmp-seed-demo-users edge function (dashboard);
 2. Courts, pick Onboarding Demo Turf's Turf 1, book a TODAY slot, pay via Netbanking, any bank, Success in the popup.
 3. Open https://atlitos-portal-court.vercel.app as partner@atlitos.dev, Live Today: the booking should appear (Realtime, no refresh). Capture light and dark. Check Earnings reconciles the net amount.
 4. Then say "run the approver" and the cycle-3 review completes the gate.
+
+## Cycle-3 completion state (2026-07-18 ~23:45 IST)
+
+- Punch item 1 DONE AND EXTENDED: after the picker fix (55523e4), capturing wizard evidence surfaced the SAME unscoped-venues bug in the onboarding router, review, pending, and fetchLatestOnboardingVenue, which redirect-looped every brand new partner. Fixed (explicit partner_user_id filters), committed, deployed to production. Root cause recorded: venues RLS is permissive-OR (own + public-verified); never rely on RLS alone to scope venue reads in this portal.
+- Punch item 3 DONE: evidence matrix complete (dark signin/signup via next-themes' persisted mechanism; wizard venue-details and courts steps as a fresh script-created partner, no submission; photos/review/pending demonstrated-by-data). See EVIDENCE-REPORT.md.
+- Punch item 2 REMAINS: founder's 2-minute demo per the script above, then approver cycle 3.
+- Throwaway account evidence-partner@atlitos.dev exists (no venue, no submission); admin can ignore or delete.
