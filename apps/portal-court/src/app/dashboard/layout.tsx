@@ -25,11 +25,18 @@ export default async function DashboardLayout({
   // Bookings until their venue is verified. Accepted `court_staff` (an
   // invited staff member, `venue_staff.accepted_at is not null`) are let
   // through even though they own no venue themselves; everyone else needs
-  // at least one `venues` row at `status='verified'` (`venues_select_own`
-  // RLS already scopes this read to the caller's own venues). Anyone who
-  // fails both checks is sent to `/onboarding`, whose own router decides
-  // which step of the wizard they still need.
-  const { data: verifiedVenues } = await supabase.from("venues").select("id").eq("status", "verified").limit(1);
+  // at least one `venues` row at `status='verified'` that they themselves
+  // own. `venues` carries a `venues_select_public` RLS policy so consumer
+  // browse can read every verified venue regardless of owner, so this check
+  // must filter explicitly to `partner_user_id = auth.uid()`, not rely on
+  // RLS to scope it. Anyone who fails both checks is sent to `/onboarding`,
+  // whose own router decides which step of the wizard they still need.
+  const { data: verifiedVenues } = await supabase
+    .from("venues")
+    .select("id")
+    .eq("status", "verified")
+    .eq("partner_user_id", user.id)
+    .limit(1);
 
   if (!verifiedVenues || verifiedVenues.length === 0) {
     const { data: staffMembership } = await supabase

@@ -22,13 +22,21 @@ interface VenueScopeState {
 const VenueScopeContext = createContext<VenueScopeState | null>(null);
 
 /**
- * Loads every venue the signed-in partner owns (RLS `venues_select_own`,
- * 0009_courts.sql) once, and holds "which venue is the dashboard currently
+ * Loads every venue the signed-in partner owns or has an accepted staff
+ * membership in, once, and holds "which venue is the dashboard currently
  * scoped to" as shared client state. Every /dashboard/* page below the
- * layout reads this instead of re-fetching venues itself, and PRD-03's
- * venue switcher (out of this pass's UI scope, single-venue is the realistic
- * P2 demo scenario per PRD-03's open question 6) can be added on top of this
- * same context later without touching the pages.
+ * layout reads this instead of re-fetching venues itself.
+ *
+ * `venues` carries a `venues_select_public` RLS policy so consumer browse
+ * can read every verified venue regardless of owner (PRD-03 intentionally
+ * keeps verified venues publicly readable). That means a plain
+ * `.from("venues").select("*")` here would return every other partner's
+ * verified venues too, not just this partner's own. RLS still fails closed
+ * on every other /dashboard/* table (court_bookings etc. require
+ * `is_court_partner_or_staff`), but the picker itself has to filter
+ * explicitly to `partner_user_id = auth.uid()` OR an accepted `venue_staff`
+ * row, the same ownership condition `is_court_partner_or_staff` already
+ * checks server side.
  */
 export function VenueScopeProvider({ children }: { children: ReactNode }) {
   const [venues, setVenues] = useState<VenueRow[]>([]);
@@ -40,9 +48,39 @@ export function VenueScopeProvider({ children }: { children: ReactNode }) {
     setStatus("loading");
     setError(null);
     const supabase = createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      setError("Not signed in.");
+      setStatus("error");
+      return;
+    }
+
+    const { data: staffRows, error: staffError } = await supabase
+      .from("venue_staff")
+      .select("venue_id")
+      .eq("user_id", user.id)
+      .not("accepted_at", "is", null);
+
+    if (staffError) {
+      setError(staffError.message);
+      setStatus("error");
+      return;
+    }
+
+    const staffVenueIds = (staffRows ?? []).map((r) => r.venue_id);
+    const ownedOrStaffedFilter =
+      staffVenueIds.length > 0
+        ? `partner_user_id.eq.${user.id},id.in.(${staffVenueIds.join(",")})`
+        : `partner_user_id.eq.${user.id}`;
+
     const { data, error: queryError } = await supabase
       .from("venues")
       .select("*")
+      .or(ownedOrStaffedFilter)
       .order("created_at", { ascending: true });
 
     if (queryError) {
