@@ -39,6 +39,10 @@ $$;
 
 Registered in the Supabase dashboard (Auth > Hooks > Customize Access Token Claims) pointing at this function, granted `EXECUTE` only to `supabase_auth_admin`. The JWT's `app_metadata.roles` is then a plain string array every RLS policy reads via `auth.jwt()`, with no extra query per policy check.
 
+**Hook execution context (0017, learned the hard way)**: GoTrue executes the hook as `supabase_auth_admin`, and that role is subject to RLS on `public.user_roles` like any other non-owner. Registering the hook alone therefore produced `roles: []` in every JWT (P2 finding 4's true root cause). `0017_auth_hook_user_roles_grant.sql` adds the required `grant usage on schema public` + `grant select on public.user_roles` to `supabase_auth_admin` and a permissive select policy scoped to it. If a future migration recreates `user_roles` or flips its policies, this grant and policy must survive or every newly issued token silently loses its roles again.
+
+**Storage policy scoping (0016)**: inside a `storage.objects` policy whose subquery joins another table, an unqualified `name` binds to the joined table's `name` column, not the object path. `0014`'s venue-media partner policies hit exactly this (`storage.foldername(name)` captured `venues.name`, denying every partner upload); `0016_fix_venue_media_rls.sql` re-creates them with `objects.name` qualified. Qualify `objects.name` in any future storage policy that joins a table owning a `name` column.
+
 **Staleness note**: a role granted or revoked mid-session does not appear until the client's next token refresh. `apps/admin` explicitly relies on this for FR-3 (a revoked admin's next session refresh fails); mutating role changes elsewhere (coach verification approval, user suspension) either wait for the natural refresh cycle or the affected app forces one via `supabase.auth.refreshSession()` after a realtime notification, never by trusting a cached client-side role flag.
 
 ## `has_role()` and friends
