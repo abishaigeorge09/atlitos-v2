@@ -69,3 +69,13 @@ Cloud synthsports.atlassian.net (cloudId 86e91c66-2964-4a92-a1aa-a9aaad1d1bc1), 
 The biased approver REJECTED cycle 2 with 3 blocking findings (venue picker scoping, the undemonstrated "partner sees it live" gate leg, incomplete evidence matrix) and confirmed all 8 cycle-1 findings resolved. Full verdict preserved in the approver agent run; punch list: (1) scope the portal-court venue picker and dashboard queries to owned/staffed venues, (2) demonstrate a confirmed paid booking on the owning partner's Live Today with earnings reconciliation, light+dark, (3) complete the evidence matrix (onboarding wizard steps, pending screen, dark signin/signup). Approver also confirmed webhook_events now contains the real payment.captured event (TErGu0RHq4IggE) from Razorpay's post-fix retry: webhook path proven.
 
 Escalation rule: cycle 3 requires a founder decision. The founder pre-authorized continuation before sleeping (2026-07-18 ~11:45 IST, verbatim intent: keep going through the workflow, he will test later). Cycle-3 fix pass proceeds under that authorization; his post-wake review stands in for the formal sign-off and must be recorded in PHASE-2-STATUS.md at phase-close.
+
+## Cycle-3 state at limits pause (2026-07-18 ~12:05 IST, resets 16:00 IST)
+
+Both cycle-3 agents were killed by session limits before doing any work; NOTHING of the punch list is fixed yet. On resume, relaunch:
+1. Builder (sonnet): scope the portal-court venue picker query to venues the partner owns (partner_user_id = uid) or has accepted venue_staff membership in; verify via partner@ session script that exactly 'Onboarding Demo Turf' returns; commit; redeploy portal-court to production (repo-root deploy with VERCEL_PROJECT_ID prj_GpJ2lauFEpztmfMLmGwpDaSeA7LT).
+2. Evidence agent (sonnet): dark signin/signup via next-themes localStorage 'theme'='dark' (the toggle's own persistence, not devtools class injection); onboarding wizard step screenshots via a throwaway script-created partner (evidence-partner@atlitos.dev) with SSR cookie injection; save to docs/phases/evidence/p2-cycle2/.
+3. Live Today demonstration needs the founder OR a today-dated paid booking on Onboarding Demo Turf (its court likely has no availability windows yet; add windows via partner-session script first). Netbanking popup cannot be driven by the extension; founder clicks Success. STAGE everything so his part is 2 minutes.
+4. Then approver cycle 3 (founder pre-authorized), then phase-close, then P3 planner.
+
+Founder to-do list so far: delete tmp-seed-demo-users edge function (dashboard); 2-minute payment + Live Today demo when staged; post-wake review of the cycle-3 approver verdict.
