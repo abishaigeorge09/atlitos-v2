@@ -63,3 +63,9 @@ Cloud synthsports.atlassian.net (cloudId 86e91c66-2964-4a92-a1aa-a9aaad1d1bc1), 
 - Razorpay dashboard IS in Personal Chrome (Test Mode, account activation 10 percent; live mode out of scope).
 - Demo sessions for browser evidence: mint via supabase-js signInWithPassword in a Node one-liner (fixture creds), then inject: portals want the `sb-syzzfgaudpifwvbpycyi-auth-token` COOKIE (value = 'base64-' + base64url(session JSON)); admin and Expo web want the same-named localStorage key. Never type passwords into browser forms; session injection via script-minted tokens is the sanctioned pattern.
 - Expo web: `npx expo start --web --port 8090` in apps/mobile, run with nohup + disown (the harness reaps plain background dev servers).
+
+## Cycle-2 verdict: REJECT (2026-07-18, ~11:50 IST) and founder-authorized cycle 3
+
+The biased approver REJECTED cycle 2 with 3 blocking findings (venue picker scoping, the undemonstrated "partner sees it live" gate leg, incomplete evidence matrix) and confirmed all 8 cycle-1 findings resolved. Full verdict preserved in the approver agent run; punch list: (1) scope the portal-court venue picker and dashboard queries to owned/staffed venues, (2) demonstrate a confirmed paid booking on the owning partner's Live Today with earnings reconciliation, light+dark, (3) complete the evidence matrix (onboarding wizard steps, pending screen, dark signin/signup). Approver also confirmed webhook_events now contains the real payment.captured event (TErGu0RHq4IggE) from Razorpay's post-fix retry: webhook path proven.
+
+Escalation rule: cycle 3 requires a founder decision. The founder pre-authorized continuation before sleeping (2026-07-18 ~11:45 IST, verbatim intent: keep going through the workflow, he will test later). Cycle-3 fix pass proceeds under that authorization; his post-wake review stands in for the formal sign-off and must be recorded in PHASE-2-STATUS.md at phase-close.
