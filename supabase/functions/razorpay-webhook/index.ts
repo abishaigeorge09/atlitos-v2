@@ -35,7 +35,11 @@ interface RazorpayPaymentEntity {
 }
 
 interface RazorpayWebhookEvent {
-  id: string;
+  // Razorpay does NOT put the event id in the JSON body; it arrives in the
+  // x-razorpay-event-id request header. Body has entity/account_id/event/
+  // contains/payload/created_at. An `id` property is kept optional here only
+  // as a defensive fallback.
+  id?: string;
   event: string;
   payload: {
     payment?: { entity: RazorpayPaymentEntity };
@@ -81,6 +85,18 @@ Deno.serve(async (req) => {
     return plainResponse("invalid json", 400);
   }
 
+  // Razorpay carries the event id in this header, not in the body. Fixed
+  // 2026-07-18: reading event.id from the body yielded undefined, the
+  // webhook_events insert failed its not-null primary key, this function
+  // returned 500 for every real delivery, and Razorpay retried forever.
+  const eventId = req.headers.get("x-razorpay-event-id") ?? event.id;
+  if (!eventId) {
+    // Signature already verified, so this is a Razorpay contract change,
+    // not an attacker. Acknowledge to stop retries and log for follow up.
+    console.error("razorpay-webhook: delivery with no x-razorpay-event-id header; event type:", event.event);
+    return plainResponse("ok (no event id)", 200);
+  }
+
   const supabase = serviceRoleClient();
 
   // Idempotency gate: insert-before-act. A duplicate delivery of the same
@@ -89,7 +105,7 @@ Deno.serve(async (req) => {
   // acknowledged without a second side effect.
   const { error: dedupeError } = await supabase
     .from("webhook_events")
-    .insert({ id: event.id, event_type: event.event, payload: event });
+    .insert({ id: eventId, event_type: event.event, payload: event });
 
   if (dedupeError) {
     if (dedupeError.code === "23505") {
@@ -134,7 +150,7 @@ Deno.serve(async (req) => {
     // side-effect step fails, log for investigation but still ack so
     // Razorpay does not retry indefinitely into a guaranteed-duplicate
     // event id. Manual reconciliation reads webhook_events.payload.
-    console.error(`razorpay-webhook: failed to process event ${event.id} (${event.event}):`, err);
+    console.error(`razorpay-webhook: failed to process event ${eventId} (${event.event}):`, err);
   }
 
   return plainResponse("ok", 200);
