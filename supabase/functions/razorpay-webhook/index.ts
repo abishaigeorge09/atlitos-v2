@@ -8,10 +8,10 @@
 //   2. Idempotency: insert the event id into `webhook_events` before any
 //      side effect; a `23505` unique violation means this exact event was
 //      already processed, acknowledge and stop.
-//   3. Branch on `event.event`; only `payment.captured` and
-//      `payment.failed` are implemented in this phase (commerce/donation
-//      domains, and refund.processed/transfer.* events, do not exist yet —
-//      SCHEMA.md's phase sequencing, PHASE-1-STATUS.md's handoff notes).
+//   3. Branch on `event.event`: `payment.captured`, `payment.failed`, and as
+//      of AT-60 `refund.processed` (commerce/donation domains and transfer.*
+//      events do not exist yet — SCHEMA.md's phase sequencing,
+//      PHASE-1-STATUS.md's handoff notes).
 //      The `session` domain joined `court` in AT-40 and needs no new branch
 //      here, because the domain fan-out lives behind the shared gate.
 //   4. Always return 200 once the event is durably recorded, even for
@@ -37,6 +37,14 @@ interface RazorpayPaymentEntity {
   status: string;
 }
 
+interface RazorpayRefundEntity {
+  id: string;
+  payment_id: string;
+  /** Paise, as everywhere in Razorpay's API. */
+  amount: number;
+  status: string;
+}
+
 interface RazorpayWebhookEvent {
   // Razorpay does NOT put the event id in the JSON body; it arrives in the
   // x-razorpay-event-id request header. Body has entity/account_id/event/
@@ -46,11 +54,111 @@ interface RazorpayWebhookEvent {
   event: string;
   payload: {
     payment?: { entity: RazorpayPaymentEntity };
+    refund?: { entity: RazorpayRefundEntity };
   };
 }
 
 function plainResponse(body: string, status: number): Response {
   return new Response(body, { status, headers: corsHeaders });
+}
+
+/**
+ * `refund.processed` (AT-60). Resolves the event to one `refunds` row and
+ * settles it. Three lookups in priority order, because the row this event
+ * belongs to may or may not have been created by us:
+ *
+ *   1. By `razorpay_refund_id`. The normal case on a duplicate delivery of
+ *      an event whose refund we already settled or at least recorded.
+ *   2. By the payment intent. The normal case on the FIRST delivery for a
+ *      refund cancel-session-refund created but had not yet settled.
+ *   3. Neither: the refund was issued outside this system, most plausibly by
+ *      hand in the Razorpay dashboard while unsticking a pending one. A row
+ *      is created so the ledger still records the money leaving, rather than
+ *      the event being dropped and the books quietly going wrong.
+ *
+ * `settle_refund` does the actual work atomically and returns unchanged if
+ * the row is already `processed`, so every path here is safe to run twice.
+ */
+async function handleRefundProcessed(
+  supabase: ReturnType<typeof serviceRoleClient>,
+  refund: RazorpayRefundEntity,
+): Promise<void> {
+  const { data: byRefundId } = await supabase
+    .from("refunds")
+    .select("id")
+    .eq("razorpay_refund_id", refund.id)
+    .maybeSingle<{ id: string }>();
+
+  let refundRowId = byRefundId?.id ?? null;
+
+  const { data: intent } = await supabase
+    .from("payment_intents")
+    .select("id, domain, entity_id, amount")
+    .eq("razorpay_payment_id", refund.payment_id)
+    .maybeSingle<
+      { id: string; domain: string; entity_id: string | null; amount: number }
+    >();
+
+  if (!refundRowId) {
+    if (!intent) {
+      console.error(
+        `razorpay-webhook: refund.processed for unknown payment ${refund.payment_id}; nothing to settle.`,
+      );
+      return;
+    }
+
+    const { data: byIntent } = await supabase
+      .from("refunds")
+      .select("id")
+      .eq("payment_intent_id", intent.id)
+      .maybeSingle<{ id: string }>();
+
+    refundRowId = byIntent?.id ?? null;
+
+    if (!refundRowId) {
+      if (!intent.entity_id) {
+        console.error(
+          `razorpay-webhook: refund.processed for intent ${intent.id} with no entity_id; cannot attribute the ledger group.`,
+        );
+        return;
+      }
+      // Externally issued refund. Amount comes from Razorpay's own entity
+      // (paise), not from the intent, so a partial dashboard refund is
+      // recorded at the amount that actually moved.
+      const { data: created, error: createError } = await supabase
+        .from("refunds")
+        .insert({
+          payment_intent_id: intent.id,
+          domain: intent.domain,
+          entity_id: intent.entity_id,
+          amount: refund.amount / 100,
+          razorpay_refund_id: refund.id,
+        })
+        .select("id")
+        .maybeSingle<{ id: string }>();
+
+      if (createError || !created) {
+        console.error(
+          `razorpay-webhook: could not record externally issued refund ${refund.id}:`,
+          createError?.message,
+        );
+        return;
+      }
+      refundRowId = created.id;
+    }
+  }
+
+  const { error: settleError } = await supabase.rpc("settle_refund", {
+    p_refund_id: refundRowId,
+    p_razorpay_refund_id: refund.id,
+  });
+
+  if (settleError) {
+    console.error(
+      `razorpay-webhook: settle_refund failed for refund row ${refundRowId} (${refund.id}):`,
+      settleError.message,
+    );
+  }
 }
 
 Deno.serve(async (req) => {
@@ -141,11 +249,24 @@ Deno.serve(async (req) => {
         }
         break;
       }
+      case "refund.processed": {
+        // AT-60, PRD-02 FR-35. Razorpay's final confirmation that a refund
+        // SETTLED, as opposed to the synchronous response cancel-session-
+        // refund already got confirming it was ACCEPTED. Both paths call
+        // settle_refund, which is a no-op on an already-processed row, so a
+        // duplicate webhook plus the synchronous path converge on exactly one
+        // refund record and exactly one reversing ledger group.
+        const refund = event.payload.refund?.entity;
+        if (refund) {
+          await handleRefundProcessed(supabase, refund);
+        }
+        break;
+      }
       default:
-        // refund.processed / transfer.processed / transfer.failed are named
-        // in PAYMENTS.md but their domains (Route transfers, refunds) are
-        // not built in this pass; unrecognized/unimplemented event types are
-        // acknowledged, not errored, matching PAYMENTS.md's blueprint.
+        // transfer.processed / transfer.failed are named in PAYMENTS.md but
+        // Route transfers are not built in this pass; unrecognized or
+        // unimplemented event types are acknowledged, not errored, matching
+        // PAYMENTS.md's blueprint.
         break;
     }
   } catch (err) {
