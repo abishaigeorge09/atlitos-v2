@@ -414,8 +414,10 @@ export function useCoachSessions(client: AtlitosClient) {
 
       const slots: { from: string; to: string }[] = [];
       for (const window of (windowRows ?? []) as { start_time: string; end_time: string }[]) {
-        const [startH, startM] = window.start_time.slice(0, 5).split(":").map(Number);
-        const [endH, endM] = window.end_time.slice(0, 5).split(":").map(Number);
+        // Defaults satisfy noUncheckedIndexedAccess; a malformed time string
+        // yields a zero-length window that the loop below simply skips.
+        const [startH = 0, startM = 0] = window.start_time.slice(0, 5).split(":").map(Number);
+        const [endH = 0, endM = 0] = window.end_time.slice(0, 5).split(":").map(Number);
         let cursor = startH * 60 + startM;
         const end = endH * 60 + endM;
 
@@ -607,7 +609,12 @@ export interface TransferResult {
   amount: number;
 }
 
-const TRANSACTION_KIND_MAP: Record<string, TransactionKind> = {
+// Keyed by the exact payment domain union rather than `string`, so indexing
+// it returns TransactionKind and not TransactionKind | undefined.
+const TRANSACTION_KIND_MAP: Record<
+  "session" | "court" | "commerce" | "donation" | "payout",
+  TransactionKind
+> = {
   session: "session",
   court: "court",
   commerce: "commerce",

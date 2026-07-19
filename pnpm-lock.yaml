@@ -206,6 +206,9 @@ importers:
       '@atlitos/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@types/node':
+        specifier: ^20
+        version: 20.19.43
       '@types/react':
         specifier: ~19.2.2
         version: 19.2.17

@@ -57,6 +57,7 @@
   },
   "devDependencies": {
     "@atlitos/config": "workspace:*",
+    "@types/node": "^20",
     "@types/react": "~19.2.2",
     "eslint": "^9.15.0",
     "prettier-plugin-tailwindcss": "^0.5.11",

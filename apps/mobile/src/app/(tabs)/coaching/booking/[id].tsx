@@ -1,9 +1,9 @@
-import { computeAvailableSessionSlots, useCoaching } from '@atlitos/api';
+import { computeAvailableSessionSlots, useChat, useCoaching } from '@atlitos/api';
 import { canTransition, SESSION_TRANSITIONS } from '@atlitos/types';
 import type { ApiError, Session } from '@atlitos/types';
 import { radii, spacing } from '@atlitos/theme';
 import { router, useLocalSearchParams } from 'expo-router';
-import { CalendarClock, TriangleAlert, XCircle } from 'lucide-react-native';
+import { CalendarClock, MessageCircle, TriangleAlert, XCircle } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -145,6 +145,22 @@ export default function SessionDetailScreen() {
     }
   }
 
+  const chat = useChat(supabase);
+  const [openingThread, setOpeningThread] = useState(false);
+
+  async function handleMessageCoach() {
+    if (!session) return;
+    setOpeningThread(true);
+    try {
+      const threadId = await chat.openCoachingThread(session.coachId, session.id);
+      router.push({ pathname: '/(tabs)/chat/[id]', params: { id: threadId } });
+    } catch (err) {
+      Alert.alert('Could not open chat', (err as ApiError).message ?? 'Please try again.');
+    } finally {
+      setOpeningThread(false);
+    }
+  }
+
   async function handleConfirmReschedule() {
     if (!session || !reschedSelected) return;
     setReschedSubmitting(true);
@@ -276,6 +292,18 @@ export default function SessionDetailScreen() {
             Waiting for the coach to accept. You can't cancel until then.
           </Text>
         ) : null}
+
+        {/* Chat lives at Track E's shared route, reachable by both roles.
+            openCoachingThread gets or creates the thread; the server re-checks
+            session_links_pair, so this never trusts the client's word for it. */}
+        <Button
+          variant="secondary"
+          loading={openingThread}
+          onPress={() => void handleMessageCoach()}
+        >
+          <MessageCircle size={16} strokeWidth={1.75} color={colors.text} />
+          <Text style={{ color: colors.text }}>Message coach</Text>
+        </Button>
 
         {canCancel || canReschedule ? (
           <View style={{ gap: spacing.sm }}>
