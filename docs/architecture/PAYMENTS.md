@@ -212,13 +212,41 @@ There are exactly two refund paths in v2, and the distinction is deliberate: one
 
 **`cancel-session-refund` (added 2026-07-19, PRD-02 FR-35).** Automatic, no admin step, for one case only: an athlete cancels a session still in `requested`, before the coach ever answered. No service was rendered and nobody is owed a split, so the full captured amount goes back and the platform retains no fee. The function transitions the session, calls Razorpay's refund API against the original `payment_intents.razorpay_payment_id`, and writes a reversing `ledger_entries` group that nets the session to zero. It is idempotent on the session id, so a double tap, a retry, and a duplicate `refund.processed` webhook all converge on one refund. If Razorpay's call fails, the session still cancels (the athlete is never trapped in a state they already left) and the refund is left pending for retry and admin visibility rather than silently lost. This is the ONLY self-serve refund in v2, and it stays that way precisely because it needs no judgement.
 
+### `cancel-session-refund`, as built (AT-60)
+
+Migration `0026_session_request_cancel_refund.sql` plus `supabase/functions/cancel-session-refund/index.ts`. The client contract lives in `API-MAPPING.md`'s sessions section; what follows is the money reasoning.
+
+**Order of operations.** The session is cancelled BEFORE Razorpay is called, and stays cancelled whatever Razorpay does. Ordering it the other way would mean a provider outage traps the athlete in the exact state this amendment exists to let them leave. Every non-error response therefore reports a successful cancellation; `refund_status` carries the money outcome separately.
+
+**The reversing group.** Two legs, for a session cancelled from `requested` at a total of 1000:
+
+```
+debit  platform            1000.00   money leaves platform custody
+credit user <payer>        1000.00   returned to the athlete
+```
+
+This mirrors the capture convention (`debit platform` is the clearing account as the source of a movement, credits name the destinations) pointed outward instead of inward. FR-35's "nets the session to zero" is checkable literally: for `domain='session'` and that `entity_id`, `sum(credits) - sum(debits) = 0`. It was zero before, because a session accrues nothing at capture (`finalize-session-payment.ts`: the coach is credited only at completion), and a balanced group keeps it zero. There is deliberately no fee leg to reverse, which is the real content of "the platform retains no fee": the coach never accepted, the session was never completed, so no fee was ever accrued to give back.
+
+**How a pending refund is represented, and why.** A `refunds` row with `status='pending'` (`SCHEMA.md` has the columns). The two rejected alternatives, recorded because the choice is load bearing:
+
+- A `payment_intents.status` value such as `refund_pending`. That enum describes one CHARGE's lifecycle. A pending refund is a second, later obligation against that charge with its own attempt count, its own failure reason, and its own provider id, and overloading the charge's status leaves the retry path nowhere to record why the last attempt failed and no key to dedupe Razorpay's refund id against.
+- A ledger tag. Rejected outright: `ledger_entries` is the record of money that HAS moved. A pending refund is money that has NOT moved. Writing it there puts a liability into the table every platform balance is summed from, which is the second balance representation this document forbids, and it could never be corrected because `ledger_entries` is INSERT-only at the grant level.
+
+A transfers-style row was chosen because `transfers` already models exactly this object pointed the other way, and because it makes the admin queue FR-35 requires a single indexed query (`refunds where status <> 'processed'`, covered by `idx_refunds_status_created`) rather than a scan across enums. `payment_intents.status` still becomes `refunded`, because that IS a fact about the charge, but only `settle_refund` sets it, so a pending refund never claims the money went back.
+
+**Convergence.** `settle_refund(refund_id, razorpay_refund_id)` is the single atomic settle step: it locks the row, returns unchanged if already `processed`, otherwise writes the reversing group, flips the row, and sets `payment_intents.status='refunded'`. Both the synchronous path and `refund.processed` call it, which is what makes a duplicate webhook plus the synchronous path land on exactly one refund record and exactly one ledger group. It is `security definer`, granted to `service_role` only: it asserts that money moved, which no client may ever assert.
+
+**Double-refund safety.** A first attempt is guarded by the unique index. A RETRY (a row already `pending`) first asks Razorpay what refunds exist against that payment and settles against an existing one rather than issuing a second, covering the case where a prior call succeeded but its response was lost. If Razorpay succeeds but `settle_refund` then fails, the refund is NOT retried; the row keeps its provider id and the reason, and the webhook settles it on arrival.
+
+**Not yet exercised against live Razorpay.** As of this writing the project has no session rows at all, so no genuinely cancellable `requested` session with a captured payment exists, and none was manufactured to force a live refund. Everything above was verified against the remote database inside rolled back transactions, and both deployed functions were probed for boot and auth rejection. The first real refund is the outstanding validation.
+
 **`admin-order-refund`** (the function PRD-04's open question resolves as a new function, distinct from `admin-order-advance`) handles everything else, and everything else is a judgement call: a cancelled `accepted` session, a no-show, a quality complaint, a commerce return. There is no shopper-initiated or coach-initiated refund flow in this phase.
 
 1. Admin submits a refund amount from the Order Detail refund panel, which renders `BillSummary` showing original total, previously refunded, this refund, and remaining refundable, per PRD-04 FR-25.
 2. The edge function re-derives "remaining refundable" server side as `orders.total - sum(prior ledger_entries debits tagged as refunds for this order)`, rejecting if the requested amount exceeds it (FR-24), never trusting the admin client's displayed number.
 3. Calls Razorpay's refund API against the original `payment_intents.razorpay_payment_id`.
 4. On the synchronous success response, writes a `ledger_entries` group reversing the appropriate portion of the original capture group (debit the account that was credited, credit back toward `platform`/the payer), and updates `payment_intents.status` to `refunded` or `partially_refunded`.
-5. The `refund.processed` webhook event is still handled (idempotently, same `webhook_events` dedupe) as the final confirmation, matching the "webhook is the source of truth" principle even though the initiating call already got a synchronous response, since Razorpay's synchronous response confirms the refund was *accepted*, not that it fully *settled*.
+5. The `refund.processed` webhook event is still handled (idempotently, same `webhook_events` dedupe) as the final confirmation, matching the "webhook is the source of truth" principle even though the initiating call already got a synchronous response, since Razorpay's synchronous response confirms the refund was *accepted*, not that it fully *settled*. That handler shipped in AT-60 and is shared: it resolves an event to one `refunds` row by `razorpay_refund_id`, then by payment intent, then by creating a row if the refund was issued outside this system (a dashboard refund), and calls `settle_refund` in every case. `admin-order-refund` should reuse the same `refunds` row and `settle_refund` rather than introducing a parallel record, with the one difference that a partial refund must set `partially_refunded` on the intent instead of `refunded`.
 
 ## Ledger as source of truth, restated for payments
 

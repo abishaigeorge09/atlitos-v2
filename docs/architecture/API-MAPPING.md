@@ -44,7 +44,9 @@ Every function in v1's `services/api.ts` contract (`PLAN-2-3-api-contract-and-ll
 
 ## sessions
 
-State machine: `requested` to (`accepted` or `declined`); `accepted` to (`completed` or `cancelled` or `rescheduled`); `completed` to `rated`. Every transition below is one `SECURITY DEFINER` RPC, `session_transition(session_id, action, ...)`, that checks caller identity and current status before writing, raising `INVALID_TRANSITION` (409) otherwise. `SLOT_TAKEN` on reschedule comes from the same partial unique index described in `SCHEMA.md`.
+State machine: `requested` to (`accepted` or `declined` or `cancelled`); `accepted` to (`completed` or `cancelled` or `rescheduled`); `completed` to `rated`. Every transition below is one `SECURITY DEFINER` RPC, `session_transition(session_id, action, ...)`, that checks caller identity and current status before writing, raising `INVALID_TRANSITION` (409) otherwise. `SLOT_TAKEN` on reschedule comes from the same partial unique index described in `SCHEMA.md`.
+
+The `requested` to `cancelled` edge was added 2026-07-19 by founder-approved PRD amendment (PRD-02 FR-19 amended, FR-34, FR-35; PRD-01 FR-25, FR-26), in `0026_session_request_cancel_refund.sql`. It is athlete only and carries an automatic full refund; see the `cancel-session-refund` section below.
 
 | v1 fn | v1 route | v2 lane | Function / RPC | Note |
 |---|---|---|---|---|
@@ -54,7 +56,8 @@ State machine: `requested` to (`accepted` or `declined`); `accepted` to (`comple
 | `accept` | POST `/sessions/:id/accept` | RPC | `session_transition(id, 'accept')` | caller must be `coach_id`; `requested` to `accepted` only |
 | `decline` | POST `/sessions/:id/decline` | RPC | `session_transition(id, 'decline', reason)` | caller must be `coach_id` |
 | `complete` | POST `/sessions/:id/complete` | Edge Function | `complete-session` | wraps `session_transition(id, 'complete')` and writes the earnings accrual; clients call THIS, not the bare RPC, see below |
-| `cancel` | POST `/sessions/:id/cancel` | RPC | `session_transition(id, 'cancel', reason)` | caller must be `coach_id` or `player_id`; only from `accepted`; reason required (`REASON_REQUIRED`); rejected once the session has started (`SESSION_STARTED`) |
+| `cancel` (from `accepted`) | POST `/sessions/:id/cancel` | RPC | `session_transition(id, 'cancel', reason)` | caller must be `coach_id` or `player_id`; reason required (`REASON_REQUIRED`); rejected once the session has started (`SESSION_STARTED`); NO automatic refund |
+| `cancel` (from `requested`) | POST `/sessions/:id/cancel` | Edge Function | `cancel-session-refund` | athlete only (a coach gets `FORBIDDEN` and declines instead); no reason required; refunds in full automatically; clients call THIS, not the bare RPC, see below |
 | `reschedule` | POST `/sessions/:id/reschedule` | RPC | `session_transition(id, 'reschedule', null, date, slot)` | re-checks the unique index, raises `SLOT_TAKEN` on conflict |
 | `rate` | POST `/sessions/:id/rate` | RPC | `rate_session(id, rating, remarks)` | caller must be `player_id`; only from `completed`; second call raises `ALREADY_RATED` |
 
@@ -80,6 +83,29 @@ Error codes: `VALIDATION` 400, `UNAUTHENTICATED` 401, `FORBIDDEN` 403 (not the a
 It uses two Supabase clients on purpose. `session_transition` is `security definer` and reads `auth.uid()`, so it is called through an anon-key client carrying the coach's bearer token, which is what enforces coach identity, `accepted` to `completed`, and `TOO_EARLY`. The ledger group is then written by the service-role client, per CLAUDE.md. Under the service-role key `auth.uid()` is null and the RPC would reject outright.
 
 **Track C, binding**: the coach session detail screen must call `complete-session`, never `session_transition(id, 'complete')` directly. The RPC is still granted to `authenticated` (Track A's AT-37 shipped it that way and this story does not re-grant it), so calling it directly would complete the session without ever crediting the coach. `complete-session` carries a repair path for exactly that case (an already `completed` session with no accrual gets one written on a later call), but the repair is a safety net, not the contract.
+
+### `cancel-session-refund`, as built (AT-60)
+
+`POST { session_id }` with the **athlete's** own JWT, `verify_jwt` true. Requirements: PRD-02 FR-19 (amended 2026-07-19), FR-34, FR-35; PRD-01 FR-25, FR-26.
+
+Response `{ session_id, status, refund_status, refund_amount, outcome }`:
+
+| `outcome` | `refund_status` | Meaning |
+|---|---|---|
+| `cancelled_and_refunded` | `processed` | Cancelled, Razorpay accepted the refund, reversing ledger group written |
+| `cancelled_refund_pending` | `pending` | Cancelled, but the refund has not settled. Retryable by calling again; visible to admin |
+| `cancelled_without_refund` | `not_applicable` | Cancelled, no captured payment existed to refund |
+| `already_refunded` | `processed` | A prior call (or the webhook) already refunded this session |
+
+`status` is always `cancelled` on a 2xx. Every non-error outcome means the cancellation succeeded, which is the point: FR-35 requires that a payment provider failure never leaves the athlete holding a `requested` session they have already cancelled. The UI must therefore treat any 2xx as "cancelled" and use `refund_status` only to choose between "refunded" and "refund on its way".
+
+Error codes: `VALIDATION` 400, `UNAUTHENTICATED` 401, `FORBIDDEN` 403 (the caller is not the booking athlete, including a coach attempting this edge), `NOT_FOUND` 404, `INVALID_TRANSITION` 409 (the session is not `requested`, for example the coach accepted or declined first), `INTERNAL` 500. The first five are `session_transition`'s own codes, relayed rather than flattened. Note that `RAZORPAY_ERROR` and `ROUTE_UNAVAILABLE` are deliberately NOT reachable here: a Razorpay failure is reported as `cancelled_refund_pending` with a 200, not as an error.
+
+Same two-client split as `complete-session`: `session_transition(id, 'cancel')` runs under the athlete's bearer token so the RPC enforces "only the booking athlete" and "only from `requested`", and the refund's ledger group is written by `settle_refund` under the service role.
+
+Idempotency is threefold: `session_transition` refuses a second cancel with `INVALID_TRANSITION`; the unique index `refunds (domain, entity_id)` refuses a second refund row for one session; and `settle_refund` returns unchanged on an already-`processed` row, so the synchronous path and a duplicate `refund.processed` webhook converge on exactly one refund record and exactly one ledger group.
+
+**Track D, binding**: the athlete session detail screen must call `cancel-session-refund` when the session is `requested`, and the bare `session_transition(id, 'cancel', reason)` RPC when it is `accepted`. The RPC is granted to `authenticated`, so calling it directly on a `requested` session would cancel without ever refunding. The function carries a resume path (an already-cancelled session belonging to this athlete whose refund never settled gets retried on a later call), but the resume is a safety net, not the contract. The two cancels must also not share copy: PRD-01 FR-26 requires the `requested` case read as a self-serve exit with a full refund, and the `accepted` case as cancelling a commitment, with no refund promised.
 
 ### `book-session`, as built (AT-40)
 
@@ -206,7 +232,8 @@ PLAN.md's edge function roster includes several functions v1 never had a mock fo
 | Function | Called by | Note |
 |---|---|---|
 | `razorpay-create-order` | `book-session`, `book-court`, `checkout`, `donate` (each calls this internally, not exposed as its own client-facing endpoint) | single shared helper that creates the Razorpay order with `notes: {domain, entity_id}`, see `PAYMENTS.md` |
-| `razorpay-webhook` | Razorpay servers, not a client | confirms payment/capture, writes `ledger_entries`, advances the domain entity out of its "awaiting payment" implicit state |
+| `razorpay-webhook` | Razorpay servers, not a client | confirms payment/capture, writes `ledger_entries`, advances the domain entity out of its "awaiting payment" implicit state. Handles `payment.captured`, `payment.failed`, and (AT-60) `refund.processed`, the last by resolving the event to one `refunds` row and calling `settle_refund`, which no-ops if already settled |
+| `cancel-session-refund` | athlete session detail, when the session is `requested` | AT-60. Cancels an unanswered request and refunds it in full, automatically. Contract and error codes in the sessions section above |
 | `razorpay-route-onboard` | coach Payout Account Setup, `portal-court` Payout Account | starts Route linked-account KYC hand-off. Built AT-42. `POST { owner_type: 'coach' \| 'court_partner', venue_id? }` with the caller's own JWT (`verify_jwt` true), `venue_id` required for `court_partner`. Returns `{ payout_account_id, owner_type, owner_id, razorpay_account_id, status, onboarding_url, created }`. Errors `VALIDATION` 400, `UNAUTHENTICATED` 401, `FORBIDDEN` 403, `NOT_FOUND` 404, `RAZORPAY_ERROR` 502, `ROUTE_UNAVAILABLE` 503, `INTERNAL` 500. Idempotent on `(owner_type, owner_id)`: an existing `razorpay_account_id` makes the call a status poll (`created: false`), never a second sub-merchant. Sole writer of `payout_accounts`, service role only. Route is not yet enabled on the test merchant account, see `PAYMENTS.md` |
 | `razorpay-route-transfer` | coach Transfer screen, admin never | creates a Route transfer, writes `transfers` + a balancing `ledger_entries` group |
 | `stream-webhook` | Cloudflare Stream, not a client | flips a clip from `processing` to `ready` when transcode completes, see `VIDEO.md` |

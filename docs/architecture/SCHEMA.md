@@ -18,7 +18,8 @@ Source of truth for every table in the Supabase Postgres schema. One domain per 
 |---|---|---|
 | `app_role` | `player`, `coach`, `court_partner`, `court_staff`, `upa`, `admin`, `moderator` | `guest` is never persisted, it is the absence of a session (or a Supabase anonymous auth session with zero `user_roles` rows); `moderator` added in `0001_identity.sql` for moderation/audit RLS (audit log, feature flags, verification review, support tickets), distinct from `admin` |
 | `sport` | `football`, `cricket`, `badminton`, `tennis` | extend by adding a value, never a second enum |
-| `session_status` | `requested`, `accepted`, `declined`, `completed`, `cancelled`, `rescheduled`, `rated` | machine: `requested` to (`accepted` or `declined`); `accepted` to (`completed` or `cancelled` or `rescheduled`); `completed` to `rated` |
+| `session_status` | `requested`, `accepted`, `declined`, `completed`, `cancelled`, `rescheduled`, `rated` | machine: `requested` to (`accepted` or `declined` or `cancelled`); `accepted` to (`completed` or `cancelled` or `rescheduled`); `completed` to `rated`. The `requested` to `cancelled` edge (added 2026-07-19, `0026`) is athlete only and auto-refunds; a coach disposing of an unanswered request uses `declined`, which stays distinct |
+| `refund_status` | `pending`, `processed`, `failed` | `refunds.status`. Added 2026-07-19 (`0026`) |
 | `session_frequency` | `one_time`, `weekly`, `monthly` | |
 | `coach_status` | `pending_review`, `verified`, `rejected` | mirrors the linked `verification_requests` row, updated only by the approval RPC |
 | `venue_status` | `pending`, `verified`, `rejected` | same pattern as `coach_status` |
@@ -857,6 +858,29 @@ Constraints: `UNIQUE(owner_type, owner_id)`.
 | `created_at` | `timestamptz` | |
 
 Indexes: `idx_transfers_payout_account_id` on `payout_account_id`.
+
+### `refunds`
+One refund attempt against one captured charge. Added 2026-07-19 in `0026_session_request_cancel_refund.sql` for PRD-02 FR-35. Deliberately shaped like `transfers`: an outbound money movement with a provider id, a status that starts optimistic and is confirmed by webhook, and a pointer to the ledger group written when it settles.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `uuid` | PK |
+| `payment_intent_id` | `uuid` | not null, references `payment_intents(id)` on delete restrict |
+| `domain` | `payment_domain` | not null |
+| `entity_id` | `uuid` | not null, the session/booking/order this refund reverses |
+| `amount` | `numeric(12,2)` | not null, `> 0` |
+| `razorpay_refund_id` | `text` | nullable until the provider call succeeds |
+| `status` | `refund_status` | not null default `pending` |
+| `failure_reason` | `text` | nullable, why the last attempt failed; cleared on success |
+| `attempts` | `integer` | not null default 0 |
+| `ledger_entry_group_id` | `uuid` | nullable, set only when the refund settles |
+| `created_at` / `updated_at` | `timestamptz` | not null default now() |
+
+Indexes: `refunds_one_per_entity` UNIQUE on `(domain, entity_id)`, which is the idempotency gate (one refund per session in this flow); `refunds_razorpay_refund_id_key` UNIQUE partial on `razorpay_refund_id WHERE not null`, the webhook's dedupe key; `idx_refunds_status_created` partial on `(status, created_at) WHERE status <> 'processed'`, the admin queue of outstanding refunds; `idx_refunds_payment_intent_id`.
+
+RLS: no client writes at all (money row, per CLAUDE.md's financial invariant). Select for `has_role('admin')`, and for the payer of the underlying `payment_intents` row so the app can show "refund on its way".
+
+**A pending refund lives here, not in `payment_intents.status` and not in `ledger_entries`.** `payment_intents.status` describes one charge's lifecycle and has nowhere to record a failure reason or an attempt count; `ledger_entries` records money that has already moved, and a refund that has not been issued has not moved, so writing one there would create the second balance representation `PAYMENTS.md` forbids, in a table that is INSERT-only and cannot be corrected. `payment_intents.status` still flips to `refunded`, set by `settle_refund` only when the refund actually settles.
 
 ### `webhook_events`
 Idempotency ledger for `razorpay-webhook`, detailed in `PAYMENTS.md`.
