@@ -30,3 +30,17 @@ Unblock, either:
 1. Founder taps Dismiss then picks the 8091 Atlitos server once, or
 2. Stop the synth Metro server on 8081 so Atlitos is the only candidate, or
 3. Grant the terminal Accessibility and Screen Recording in System Settings, Privacy and Security, THEN RESTART THE TERMINAL (a grant does not apply to an already-running process; screencapture still failed after the grant for this reason). cliclick is installed and would then drive the simulator unattended.
+
+## RESOLVED: Atlitos running natively on iOS (2026-07-19, 08:48 IST)
+
+ios-sim-atlitos-running-native.png: the real splash screen rendering in the native dev build on the iPhone 17 simulator. No Expo Go, no react-native-web.
+
+Final fix, simpler than everything attempted before it: the expo-dev-client binds to Metro on port 8081 by default and ignores a --url launch argument once a redbox is showing. The synth project held 8081, so Atlitos on 8091 was unreachable. Founder authorised stopping synth's Metro; Atlitos's Metro was then started on 8081 and the dev client connected on its own with no deep link and no tap.
+
+Durable rule for this machine: run the Atlitos dev server on 8081 and make sure no other Expo project holds it. To restart synth later, run npx expo start in that project on a non-default port.
+
+Working sequence to reproduce from cold:
+1. `cd apps/mobile && npx expo run:ios` (rebuild only when native deps change; re-apply patches/expo-modules-jsi-swift62.patch.txt first)
+2. `npx expo start --dev-client --port 8081`
+3. `xcrun simctl launch <udid> com.synthorgtech.atlitos-mobile`
+4. `xcrun simctl io <udid> screenshot out.png`
