@@ -59,6 +59,8 @@ const DEMO_USERS = [
   { email: 'player@atlitos.dev', name: 'Demo Player', roles: [] },
   { email: 'partner@atlitos.dev', name: 'Demo Court Partner', roles: ['court_partner'] },
   { email: 'admin@atlitos.dev', name: 'Demo Admin', roles: ['admin'] },
+  { email: 'coach1@atlitos.dev', name: 'Demo Coach Cricket', roles: ['coach'] },
+  { email: 'coach2@atlitos.dev', name: 'Demo Coach Tennis', roles: ['coach'] },
 ];
 
 async function findUserByEmail(email) {
