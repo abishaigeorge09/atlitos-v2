@@ -208,7 +208,11 @@ Keys in use at launch: `sessions.platform_fee_flat`, `courts.platform_fee_flat` 
 
 ## Refunds
 
-`admin-order-refund` (the function PRD-04's open question resolves as a new function, distinct from `admin-order-advance`) is the only refund path in v2; there is no shopper-initiated or coach-initiated refund flow in this phase.
+There are exactly two refund paths in v2, and the distinction is deliberate: one requires human judgement, one provably does not.
+
+**`cancel-session-refund` (added 2026-07-19, PRD-02 FR-35).** Automatic, no admin step, for one case only: an athlete cancels a session still in `requested`, before the coach ever answered. No service was rendered and nobody is owed a split, so the full captured amount goes back and the platform retains no fee. The function transitions the session, calls Razorpay's refund API against the original `payment_intents.razorpay_payment_id`, and writes a reversing `ledger_entries` group that nets the session to zero. It is idempotent on the session id, so a double tap, a retry, and a duplicate `refund.processed` webhook all converge on one refund. If Razorpay's call fails, the session still cancels (the athlete is never trapped in a state they already left) and the refund is left pending for retry and admin visibility rather than silently lost. This is the ONLY self-serve refund in v2, and it stays that way precisely because it needs no judgement.
+
+**`admin-order-refund`** (the function PRD-04's open question resolves as a new function, distinct from `admin-order-advance`) handles everything else, and everything else is a judgement call: a cancelled `accepted` session, a no-show, a quality complaint, a commerce return. There is no shopper-initiated or coach-initiated refund flow in this phase.
 
 1. Admin submits a refund amount from the Order Detail refund panel, which renders `BillSummary` showing original total, previously refunded, this refund, and remaining refundable, per PRD-04 FR-25.
 2. The edge function re-derives "remaining refundable" server side as `orders.total - sum(prior ledger_entries debits tagged as refunds for this order)`, rejecting if the requested amount exceeds it (FR-24), never trusting the admin client's displayed number.

@@ -98,7 +98,9 @@ Numbered for Jira story reference as `PRD-02 FR-n`.
 - FR-16: A coach can cancel an `accepted` session before it starts; cancellation follows the same terminal state and copy pattern as court booking cancellation.
 - FR-17: A coach can propose a reschedule (new date and slot) on an `accepted` session; the RPC re-checks slot availability and returns `SLOT_TAKEN` if conflicted, otherwise transitions to `rescheduled` and updates date/slot atomically.
 - FR-18: Only the athlete can rate a `completed` session; the coach view never exposes a rate action (asymmetry from courts, which are self-rated by the booker only, is intentional and consistent).
-- FR-19: The full session state machine is: `requested` to (`accepted` or `declined`); `accepted` to (`completed` or `cancelled` or `rescheduled`); `completed` to `rated`. Any other transition attempt returns `INVALID_TRANSITION` from the RPC, never a client-only guard.
+- FR-19: The full session state machine is: `requested` to (`accepted` or `declined` or `cancelled`); `accepted` to (`completed` or `cancelled` or `rescheduled`); `completed` to `rated`. Any other transition attempt returns `INVALID_TRANSITION` from the RPC, never a client-only guard.
+
+  **Amended 2026-07-19 (founder decision).** The original machine had no `requested` to `cancelled` edge, which stranded an athlete who booked and changed their mind: payment is captured at booking, so they were locked in until the coach happened to respond, with no self-serve exit. That is the first-experience failure most likely to cost trust, so the edge is now in scope. See FR-34 and FR-35 for who may take it and what happens to the money.
 
 **Roster**
 - FR-20: The Trainees list includes every athlete with at least one session row against this coach, regardless of session status, deduplicated by athlete.
@@ -123,6 +125,10 @@ Numbered for Jira story reference as `PRD-02 FR-n`.
 **Analytics**
 - FR-32: Coach Analytics computes sessions per month, hours coached, earnings trend, and average rating trend entirely from existing session, ledger, and rating rows; no new tracked metric is introduced.
 - FR-33: If a coach has fewer than 3 completed sessions total, Analytics shows the empty/insufficient-data state instead of a populated chart with one or two data points.
+
+**Cancelling an unanswered request (added 2026-07-19, see the FR-19 amendment)**
+- FR-34: The athlete who booked a session may cancel it while it is still `requested`, before the coach has accepted or declined, without a reason and without coach involvement. The coach's request list simply stops showing it. A coach may not take this edge; a coach rejecting an unanswered request is `declined` (FR-14), which is a different thing and stays distinct in reporting.
+- FR-35: Cancelling a `requested` session whose payment was captured refunds the athlete in full, automatically, with no admin step. The refund is issued server side by an edge function, writes a reversing `ledger_entries` group that returns the platform to a net zero position for that session, and is idempotent: a repeated cancel or a duplicate refund webhook never refunds twice. Full refund with no fee retained is deliberate, because the coach never accepted and no service was rendered, so there is nothing to split. If the refund call to the payment provider fails, the session still cancels and the refund is retried; the athlete is never left holding a `requested` session they have already cancelled, and the outstanding refund is visible to admin.
 
 ## 5. Data touched
 
@@ -196,7 +202,7 @@ Coach earnings originate from athlete session payments (PRD-03 owns the athlete-
 - Coach subscription tiers, paid promotion, or boosted search placement.
 - AI generated coach insights, churn risk prediction, or schedule optimization narratives (flagged `LLM_FUTURE`, not built).
 - Coach-side session type editing that retroactively changes the price of an already accepted or completed session; price is locked at booking time.
-- In-app dispute or refund flows for coaching sessions beyond the standard cancel action; disputes are handled by admin out of app in v1.
+- In-app dispute or refund flows for coaching sessions, with ONE carve-out added 2026-07-19: the automatic full refund on cancelling an unanswered `requested` session (FR-35). That case is unambiguous, since the coach never accepted and no service was rendered, so it needs no judgement and therefore no dispute process. Every other refund situation (a cancelled `accepted` session, a no-show, a quality complaint) still has no in-app flow and is handled by admin out of app in v1, because those DO require judgement about who is owed what.
 - Video call or in-app session delivery; sessions are logistics and payment coordination only, not a video conferencing surface.
 - Coach identity/KYC verification beyond certificate upload and admin review; formal government ID KYC is a Razorpay Route onboarding concern (P3/P8 in PLAN.md), not a coach app screen this PRD builds beyond the hand-off point.
 - Blocking specific calendar dates independent of declining/cancelling individual sessions (no standalone "day off" toggle in v1).
