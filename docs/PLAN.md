@@ -68,3 +68,7 @@ Every phase: pnpm turbo typecheck/build green, Vercel preview URLs live, RLS adv
 3. Supabase project via MCP (confirm cost with founder if >$0)
 4. Jira ATL project + epics via Atlassian MCP
 5. Browser session with founder for Razorpay test + Cloudflare (his credentials, my driving)
+
+## Verification gap noted 2026-07-19
+
+Through the P2 gate, the mobile app was only ever exercised via Expo web (react-native-web) against the deployed backend, never on a simulator or device. Founder flagged this. From P3 onward, every phase's integrator must run the consumer app on the iOS simulator (Expo Go, iPhone 17 sim available locally) and capture at least one screenshot per phase-touched mobile screen from the simulator, not from web. react-native-web silently papers over native-only issues (gestures, safe areas, native modules such as react-native-razorpay, keyboard behaviour), so web-only evidence is not sufficient for a mobile gate.
