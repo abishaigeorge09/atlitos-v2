@@ -34,6 +34,14 @@ export function serviceRoleClient(): SupabaseClient {
 
 export interface AuthenticatedUser {
   id: string;
+  /**
+   * The caller's GoTrue email, when the account has one (phone-OTP signups
+   * may not). razorpay-route-onboard needs it: Razorpay's Accounts API
+   * requires an email on the linked account, and taking it from the
+   * validated session rather than the request body keeps a client from
+   * onboarding a sub-merchant under someone else's address.
+   */
+  email?: string;
 }
 
 /**
@@ -71,5 +79,5 @@ export async function getAuthenticatedUser(
     );
   }
 
-  return { id: data.user.id };
+  return { id: data.user.id, email: data.user.email ?? undefined };
 }

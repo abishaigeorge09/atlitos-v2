@@ -48,4 +48,11 @@ const STATUS_BY_CODE: Record<string, number> = {
   INVALID_TRANSITION: 409,
   PRICE_MISMATCH: 409,
   INTERNAL: 500,
+  // Razorpay-facing codes (AT-42 Route onboarding, AT-43 transfers).
+  // RAZORPAY_ERROR is a bad gateway: their API rejected or failed a call we
+  // consider well-formed. ROUTE_UNAVAILABLE is the narrower, actionable case
+  // where Route itself is not enabled on the merchant account, which is a
+  // founder dashboard action rather than anything a retry can fix.
+  RAZORPAY_ERROR: 502,
+  ROUTE_UNAVAILABLE: 503,
 };

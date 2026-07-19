@@ -12,6 +12,7 @@
 import { AppError } from "./app-error.ts";
 
 const RAZORPAY_API_BASE = "https://api.razorpay.com/v1";
+const RAZORPAY_API_BASE_V2 = "https://api.razorpay.com/v2";
 
 function requiredEnv(name: string): string {
   const value = Deno.env.get(name);
@@ -169,4 +170,260 @@ export async function verifyPaymentSignature(
 /** The public key id, safe to return to the client for opening the checkout sheet. */
 export function razorpayKeyId(): string {
   return requiredEnv("RAZORPAY_KEY_ID");
+}
+
+/**
+ * Razorpay puts the webhook event id in the `x-razorpay-event-id` HEADER, not
+ * in the JSON body (the body carries entity/account_id/event/payload). That
+ * header is what `webhook_events.id` must be keyed on for the insert-before-
+ * side-effect idempotency gate to actually deduplicate retries. This was the
+ * P2 lesson learned the hard way in razorpay-webhook; it is a helper here so
+ * AT-43's transfer.processed/transfer.failed handling cannot repeat it.
+ * Falls back to the body's `id` only if the header is absent.
+ */
+export function webhookEventId(
+  req: Request,
+  parsedBody?: { id?: string },
+): string | null {
+  return req.headers.get("x-razorpay-event-id") ?? parsedBody?.id ?? null;
+}
+
+// ============================================================================
+// Route: linked (sub-merchant) accounts
+//
+// PAYMENTS.md "Route: linked accounts and transfers". Razorpay's current
+// onboarding surface is the v2 Accounts API plus a per-product configuration:
+//
+//   POST /v2/accounts                      -> create the linked account
+//   GET  /v2/accounts/:id                  -> poll its status
+//   POST /v2/accounts/:id/products         -> request the `route` product
+//   GET  /v2/accounts/:id/products/:pid    -> poll activation + hosted link
+//
+// Onboarding is a two-step handshake because an account exists before it is
+// entitled to anything: the product configuration is what actually starts
+// KYC, and its response is what carries the hosted onboarding URL the coach
+// or partner is handed off to. Everything below shares `razorpayRequest`
+// with the order path above, so AT-43's `POST /v1/transfers` needs no second
+// client, just another call site.
+// ============================================================================
+
+/** Shared authenticated JSON call. `path` is absolute from the version root. */
+export async function razorpayRequest<T>(
+  method: "GET" | "POST" | "PATCH",
+  path: string,
+  body?: unknown,
+  version: "v1" | "v2" = "v1",
+): Promise<T> {
+  const base = version === "v2" ? RAZORPAY_API_BASE_V2 : RAZORPAY_API_BASE;
+  const response = await fetch(`${base}${path}`, {
+    method,
+    headers: {
+      Authorization: basicAuthHeader(),
+      "Content-Type": "application/json",
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+
+  const text = await response.text();
+  if (!response.ok) {
+    throw routeApiError(method, path, response.status, text);
+  }
+  return (text ? JSON.parse(text) : {}) as T;
+}
+
+/**
+ * Turns a Razorpay error body into the right AppError. The distinction that
+ * matters operationally: if Route is simply not enabled on this merchant
+ * account (the expected state on a fresh test account until the founder
+ * enables it in the Razorpay dashboard), that is `ROUTE_UNAVAILABLE` and no
+ * amount of retrying or client-side handling fixes it. Everything else is a
+ * generic `RAZORPAY_ERROR` 502. The upstream description is preserved
+ * verbatim in the message either way, because the exact wording is the only
+ * thing that tells the founder what to switch on.
+ */
+function routeApiError(
+  method: string,
+  path: string,
+  status: number,
+  rawBody: string,
+): AppError {
+  let description = rawBody;
+  let upstreamCode = "";
+  try {
+    const parsed = JSON.parse(rawBody) as {
+      error?: { code?: string; description?: string };
+    };
+    description = parsed.error?.description ?? rawBody;
+    upstreamCode = parsed.error?.code ?? "";
+  } catch {
+    // Non-JSON body (HTML error page, empty). Keep the raw text.
+  }
+
+  const haystack = `${upstreamCode} ${description}`.toLowerCase();
+  const notEntitled =
+    status === 401 ||
+    status === 403 ||
+    /not\s+(enabled|activated|allowed|authori[sz]ed)/.test(haystack) ||
+    /(feature|product|route|marketplace).*(not\s+(enabled|available|activated)|unauthori[sz]ed)/
+      .test(haystack) ||
+    /merchant\s+is\s+not\s+/.test(haystack);
+
+  if (notEntitled) {
+    return new AppError(
+      "ROUTE_UNAVAILABLE",
+      `Razorpay Route is not enabled on this account. ${method} ${path} returned ${status}: ${description}`,
+      503,
+    );
+  }
+
+  return new AppError(
+    "RAZORPAY_ERROR",
+    `Razorpay ${method} ${path} failed (${status}): ${description}`,
+    502,
+  );
+}
+
+/** `payout_accounts.status` (0010_payments_core.sql's enum). */
+export type PayoutAccountStatus =
+  | "not_started"
+  | "pending"
+  | "active"
+  | "needs_attention"
+  | "failed";
+
+export interface RazorpayLinkedAccount {
+  id: string;
+  type: "standard" | "route";
+  /** created | activated | needs_clarification | under_review | suspended */
+  status?: string;
+  email?: string;
+  legal_business_name?: string;
+  activated_at?: number;
+}
+
+export interface RazorpayProductConfiguration {
+  id: string;
+  product_name: string;
+  /**
+   * requested | under_review | needs_clarification | activated | rejected.
+   * This, not the account's own `status`, is the field that reflects how far
+   * KYC has actually progressed for the Route product specifically.
+   */
+  activation_status?: string;
+  requirements?: unknown[];
+  /**
+   * Razorpay returns the hosted onboarding hand-off here on accounts that
+   * have hosted onboarding provisioned. Both spellings are read because the
+   * field name differs across Razorpay's own documented samples and cannot
+   * be pinned down against a live account until Route is enabled.
+   */
+  onboarding_url?: string;
+  hosted_onboarding_url?: string;
+}
+
+export interface CreateLinkedAccountParams {
+  email: string;
+  phone?: string;
+  legalBusinessName: string;
+  /** Razorpay's business_type; individual is correct for a solo coach. */
+  businessType: string;
+  contactName: string;
+  /** Echoed back unmodified; carries our owner_type/owner_id for support. */
+  notes: Record<string, string>;
+}
+
+export async function createLinkedAccount(
+  params: CreateLinkedAccountParams,
+): Promise<RazorpayLinkedAccount> {
+  return await razorpayRequest<RazorpayLinkedAccount>(
+    "POST",
+    "/accounts",
+    {
+      email: params.email,
+      phone: params.phone,
+      type: "route",
+      legal_business_name: params.legalBusinessName,
+      business_type: params.businessType,
+      contact_name: params.contactName,
+      notes: params.notes,
+    },
+    "v2",
+  );
+}
+
+export async function fetchLinkedAccount(
+  accountId: string,
+): Promise<RazorpayLinkedAccount> {
+  return await razorpayRequest<RazorpayLinkedAccount>(
+    "GET",
+    `/accounts/${accountId}`,
+    undefined,
+    "v2",
+  );
+}
+
+/**
+ * Requests the `route` product on a linked account. This is the call that
+ * actually starts KYC and yields the hosted onboarding hand-off; creating
+ * the account alone does not.
+ */
+export async function requestRouteProduct(
+  accountId: string,
+): Promise<RazorpayProductConfiguration> {
+  return await razorpayRequest<RazorpayProductConfiguration>(
+    "POST",
+    `/accounts/${accountId}/products`,
+    { product_name: "route", tnc_accepted: true },
+    "v2",
+  );
+}
+
+export async function fetchRouteProduct(
+  accountId: string,
+): Promise<RazorpayProductConfiguration | null> {
+  const result = await razorpayRequest<
+    { items?: RazorpayProductConfiguration[] } | RazorpayProductConfiguration[]
+  >("GET", `/accounts/${accountId}/products`, undefined, "v2");
+
+  const items = Array.isArray(result) ? result : (result.items ?? []);
+  return items.find((item) => item.product_name === "route") ?? items[0] ?? null;
+}
+
+/**
+ * Maps Razorpay's linked-account and product-configuration states onto our
+ * `payout_account_status` enum. The product's `activation_status` wins when
+ * present because it is the Route-specific signal; the account's own status
+ * is the fallback for the window between account creation and the product
+ * request. `not_started` is deliberately never returned here: it means "we
+ * have not called Razorpay at all", which only the caller knows.
+ */
+export function mapPayoutAccountStatus(
+  account: RazorpayLinkedAccount | null,
+  product: RazorpayProductConfiguration | null,
+): PayoutAccountStatus {
+  const signal = (product?.activation_status ?? account?.status ?? "")
+    .toLowerCase();
+
+  switch (signal) {
+    case "activated":
+      return "active";
+    case "needs_clarification":
+      return "needs_attention";
+    case "rejected":
+    case "suspended":
+      return "failed";
+    case "created":
+    case "requested":
+    case "under_review":
+      return "pending";
+    default:
+      return "pending";
+  }
+}
+
+/** The hosted KYC link to hand the coach or partner off to, if Razorpay gave one. */
+export function hostedOnboardingUrl(
+  product: RazorpayProductConfiguration | null,
+): string | null {
+  return product?.onboarding_url ?? product?.hosted_onboarding_url ?? null;
 }
