@@ -53,9 +53,21 @@ State machine: `requested` to (`accepted` or `declined`); `accepted` to (`comple
 | `get` | GET `/sessions/:id` | PostgREST | `sessions` select single | same RLS as `list` |
 | `accept` | POST `/sessions/:id/accept` | RPC | `session_transition(id, 'accept')` | caller must be `coach_id`; `requested` to `accepted` only |
 | `decline` | POST `/sessions/:id/decline` | RPC | `session_transition(id, 'decline', reason)` | caller must be `coach_id` |
-| `cancel` | POST `/sessions/:id/cancel` | RPC | `session_transition(id, 'cancel')` | caller must be `coach_id` or `player_id`; only from `accepted` |
-| `reschedule` | POST `/sessions/:id/reschedule` | RPC | `session_transition(id, 'reschedule', date, slot)` | re-checks the unique index, raises `SLOT_TAKEN` on conflict |
+| `complete` | POST `/sessions/:id/complete` | RPC | `session_transition(id, 'complete')` | caller must be `coach_id`; only from `accepted`, and only once the scheduled end time has passed, else `TOO_EARLY` (PRD-02 FR-15, server gated) |
+| `cancel` | POST `/sessions/:id/cancel` | RPC | `session_transition(id, 'cancel', reason)` | caller must be `coach_id` or `player_id`; only from `accepted`; reason required (`REASON_REQUIRED`); rejected once the session has started (`SESSION_STARTED`) |
+| `reschedule` | POST `/sessions/:id/reschedule` | RPC | `session_transition(id, 'reschedule', null, date, slot)` | re-checks the unique index, raises `SLOT_TAKEN` on conflict |
 | `rate` | POST `/sessions/:id/rate` | RPC | `rate_session(id, rating, remarks)` | caller must be `player_id`; only from `completed`; second call raises `ALREADY_RATED` |
+
+Shipped in `0021_session_state_machine.sql`. Exact signatures:
+
+- `session_transition(p_session_id uuid, p_action text, p_reason text default null, p_new_date date default null, p_new_slot_start time default null) returns public.sessions`
+- `rate_session(p_session_id uuid, p_rating smallint, p_remarks text default null) returns public.sessions`
+
+Error codes `packages/api` maps: `UNAUTHENTICATED`, `NOT_FOUND`, `FORBIDDEN`, `INVALID_TRANSITION`, `VALIDATION`, `REASON_REQUIRED`, `TOO_EARLY`, `SESSION_STARTED`, `SLOT_TAKEN`, `ALREADY_RATED`.
+
+Two behaviours the tables above do not make obvious. **Reschedule inserts a new row** at the new date/slot in `accepted`, carrying the original's money columns and `payment_intent_id`, and marks the original `rescheduled` as a tombstone; the RPC returns the NEW row, so a caller must not assume the id it passed in is the id it gets back. This mirrors `court_booking_transition`. **`rate_session` also refreshes `coach_profiles.rating`/`rating_count`** in the same transaction, recomputed from `sessions` rather than incremented, so a replay cannot double count; it does this through a transaction-local `app.rating_pipeline` GUC that `lock_coach_profile_admin_fields` now honours alongside `has_role('admin')`.
+
+**No ledger write happens in these RPCs**, despite PRD-02 FR-15 describing completion as triggering the earnings accrual. Per CLAUDE.md, ledger writes live only in edge functions under the service role; AT-41's function calls `session_transition(id, 'complete')` and writes the balanced group itself. Same resolution `0009_courts.sql` already made for courts.
 
 ## courts
 

@@ -103,7 +103,7 @@ create policy coach_availability_windows_write_own on public.coach_availability_
 -- sessions carries price, platform_fee, total, and a status that gates an
 -- earnings ledger write, so the only writers are the book-session edge
 -- function (service_role, bypasses RLS) and the SECURITY DEFINER RPCs
--- session_transition / rate_session (0020_coaching_rpcs.sql), which run with
+-- session_transition / rate_session (0021_session_state_machine.sql), which run with
 -- their owner's privileges and re-check caller identity and current state
 -- themselves. Exactly the court_bookings shape from 0009_courts.sql.
 -- ============================================================================
@@ -130,7 +130,7 @@ create policy sessions_select_admin on public.sessions
 revoke insert, update, delete on public.sessions from anon, authenticated;
 
 -- ============================================================================
--- get_session_participants: used by 0021_chat.sql to enforce PRD-02 FR-30
+-- session_exists_between: used by 0022_chat.sql to enforce PRD-02 FR-30
 -- ("a chat thread exists only if a session has ever existed between the two
 -- users") without granting the chat layer any read of session rows. Declared
 -- here rather than in the chat migration because it is a coaching-domain
