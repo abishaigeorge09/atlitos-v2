@@ -192,6 +192,13 @@ Shipped in `0019_coaching_rls.sql` (`session_types`, `coach_availability_windows
 
 Realtime broadcast on `chat_messages` respects the same `SELECT` policy: Supabase Realtime authorizes each subscriber's channel against RLS, so a thread's messages never reach a socket that is not one of the two participants.
 
+Shipped in `0022_chat.sql`. Specifics worth knowing:
+
+- The FR-30 gate is `session_links_pair(context_id, participant_a, participant_b)` inside the thread `INSERT` policy's `WITH CHECK`, a `SECURITY DEFINER` boolean over `sessions`. It is stricter than "a session exists between them": `context_id` must itself be one of their sessions. A hand-rolled PostgREST insert from a modified client fails with 42501 exactly as the UI would have prevented, verified against the remote database.
+- `INSERT` is restricted to `context_type = 'coaching'`. The `clutch_creator` branch is added when the Clutch domain lands; leaving it out means the failure mode is locked shut rather than "any authenticated user opens a thread with any stranger by sending a different `context_type`".
+- Neither chat table is permissive-OR in the leaky sense: each has a single `SELECT` policy whose `USING` contains the participant `OR` internally, and there is no public policy to be combined with. An unscoped `select * from chat_threads` correctly returns only the caller's own threads. This is the exception to the coaching-domain warning above, not a contradiction of it.
+- `UPDATE` and `DELETE` are revoked at the grant level on both tables, on top of having no policy: messages are immutable and `last_message_at` belongs to the `chat_messages_touch_thread` trigger.
+
 ### notifications
 
 | Table | `SELECT` | `INSERT`/`UPDATE`/`DELETE` |

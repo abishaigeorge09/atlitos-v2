@@ -726,6 +726,8 @@ Indexes: `idx_chat_threads_participant_a` on `participant_a`, `idx_chat_threads_
 
 Indexes: `idx_chat_messages_thread_id` on `(thread_id, created_at)`. Realtime is enabled on this table via `supabase_realtime` publication.
 
+Both chat tables ship in `0022_chat.sql`, which also adds `text` a non-empty `CHECK`, the `chat_messages_touch_thread` trigger maintaining `chat_threads.last_message_at`, and the publication entry. `chat_threads` is deliberately not published: the thread list gets its liveness from an unfiltered `chat_messages` subscription, which RLS already scopes to the caller's own threads. `context_type` accepts `clutch_creator` at the constraint level per this doc, but the INSERT policy accepts only `coaching` until the Clutch domain exists, so the second value is currently reachable only by `service_role`.
+
 ---
 
 ## Domain: notifications
