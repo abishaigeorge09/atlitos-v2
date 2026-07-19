@@ -16,8 +16,17 @@ export interface CoachCardProps {
   rating: number;
   sport: string;
   experienceYears: number;
-  priceFrom: number;
-  distanceKm: number;
+  /** Undefined when the coach has no active session type priced yet
+   * (freshly verified profile); the price row is omitted rather than
+   * showing a misleading "From ₹0". Phase 3 coaching-slice addition,
+   * backward compatible with every existing caller (mirrors CourtCard's
+   * own optional `distanceKm`, same reasoning). */
+  priceFrom?: number;
+  /** `coach_profiles` carries no lat/lng (SCHEMA.md), unlike `venues`, so
+   * this is genuinely never computable the way CourtCard's is; falls back
+   * to rendering `city` as plain text instead of a distance. */
+  distanceKm?: number;
+  city?: string;
   onPress?: () => void;
   className?: string;
 }
@@ -30,6 +39,7 @@ function CoachCard({
   experienceYears,
   priceFrom,
   distanceKm,
+  city,
   onPress,
   className,
 }: CoachCardProps) {
@@ -65,15 +75,23 @@ function CoachCard({
         </Text>
 
         <View className="flex-row items-center justify-between pt-xs">
-          <Text className="font-mono-semibold text-sm text-accent">
-            From {formatINR(priceFrom)}
-          </Text>
+          {priceFrom !== undefined ? (
+            <Text className="font-mono-semibold text-sm text-accent">
+              From {formatINR(priceFrom)}
+            </Text>
+          ) : (
+            <Text className="font-sans text-sm text-text-tertiary">Pricing coming soon</Text>
+          )}
           <View className="flex-row items-center gap-xs">
             {/* Icon can stay textTertiary (icons only need the 3:1 non-text
                 minimum), but the distance text sits on bg-card and needs
                 text-secondary to clear AA in dark mode. */}
             <MapPin size={14} strokeWidth={1.75} color={colors.textTertiary} />
-            <Text className="font-mono text-xs text-text-secondary">{distanceKm} km</Text>
+            {distanceKm !== undefined ? (
+              <Text className="font-mono text-xs text-text-secondary">{distanceKm} km</Text>
+            ) : (
+              <Text className="font-sans text-xs text-text-secondary">{city}</Text>
+            )}
           </View>
         </View>
       </View>

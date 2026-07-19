@@ -9,6 +9,12 @@ const ROUTE_TO_TAB: Record<string, BottomNavTab> = {
   trainings: 'trainings',
   clutch: 'clutch',
   courts: 'courts',
+  // Not a bottom tab of its own (no BottomNav button navigates here
+  // directly, reached via a "book a coach" CTA from Home/Trainings, see
+  // (tabs)/coaching/_layout.tsx); mapped to `trainings` purely so the tab
+  // bar highlights the closest concept while an athlete is browsing
+  // coaches/sessions instead of falling back to `home`.
+  coaching: 'trainings',
 };
 
 // `expo-router` vendors its own copy of react-navigation's bottom-tabs types
