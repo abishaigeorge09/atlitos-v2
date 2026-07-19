@@ -53,7 +53,7 @@ State machine: `requested` to (`accepted` or `declined`); `accepted` to (`comple
 | `get` | GET `/sessions/:id` | PostgREST | `sessions` select single | same RLS as `list` |
 | `accept` | POST `/sessions/:id/accept` | RPC | `session_transition(id, 'accept')` | caller must be `coach_id`; `requested` to `accepted` only |
 | `decline` | POST `/sessions/:id/decline` | RPC | `session_transition(id, 'decline', reason)` | caller must be `coach_id` |
-| `complete` | POST `/sessions/:id/complete` | RPC | `session_transition(id, 'complete')` | caller must be `coach_id`; only from `accepted`, and only once the scheduled end time has passed, else `TOO_EARLY` (PRD-02 FR-15, server gated) |
+| `complete` | POST `/sessions/:id/complete` | Edge Function | `complete-session` | wraps `session_transition(id, 'complete')` and writes the earnings accrual; clients call THIS, not the bare RPC, see below |
 | `cancel` | POST `/sessions/:id/cancel` | RPC | `session_transition(id, 'cancel', reason)` | caller must be `coach_id` or `player_id`; only from `accepted`; reason required (`REASON_REQUIRED`); rejected once the session has started (`SESSION_STARTED`) |
 | `reschedule` | POST `/sessions/:id/reschedule` | RPC | `session_transition(id, 'reschedule', null, date, slot)` | re-checks the unique index, raises `SLOT_TAKEN` on conflict |
 | `rate` | POST `/sessions/:id/rate` | RPC | `rate_session(id, rating, remarks)` | caller must be `player_id`; only from `completed`; second call raises `ALREADY_RATED` |
@@ -68,6 +68,18 @@ Error codes `packages/api` maps: `UNAUTHENTICATED`, `NOT_FOUND`, `FORBIDDEN`, `I
 Two behaviours the tables above do not make obvious. **Reschedule inserts a new row** at the new date/slot in `accepted`, carrying the original's money columns and `payment_intent_id`, and marks the original `rescheduled` as a tombstone; the RPC returns the NEW row, so a caller must not assume the id it passed in is the id it gets back. This mirrors `court_booking_transition`. **`rate_session` also refreshes `coach_profiles.rating`/`rating_count`** in the same transaction, recomputed from `sessions` rather than incremented, so a replay cannot double count; it does this through a transaction-local `app.rating_pipeline` GUC that `lock_coach_profile_admin_fields` now honours alongside `has_role('admin')`.
 
 **No ledger write happens in these RPCs**, despite PRD-02 FR-15 describing completion as triggering the earnings accrual. Per CLAUDE.md, ledger writes live only in edge functions under the service role; AT-41's function calls `session_transition(id, 'complete')` and writes the balanced group itself. Same resolution `0009_courts.sql` already made for courts.
+
+### `complete-session`, as built (AT-41)
+
+`POST { session_id }` with the **coach's** own JWT, `verify_jwt` true. Requirements: PRD-02 FR-15, FR-25.
+
+Response `{ session_id, status, outcome, accrual? }` where `outcome` is `accrued` or `already_accrued`, and `accrual` is `{ entry_group_id, gross, platform_fee, coach_payable }`.
+
+Error codes: `VALIDATION` 400, `UNAUTHENTICATED` 401, `FORBIDDEN` 403 (not the assigned coach), `NOT_FOUND` 404, `INVALID_TRANSITION` 409, `TOO_EARLY` 409 (scheduled end time not reached), `PAYMENT_NOT_CAPTURED` 409, `INTERNAL` 500. The first six are `session_transition`'s own codes, relayed rather than flattened.
+
+It uses two Supabase clients on purpose. `session_transition` is `security definer` and reads `auth.uid()`, so it is called through an anon-key client carrying the coach's bearer token, which is what enforces coach identity, `accepted` to `completed`, and `TOO_EARLY`. The ledger group is then written by the service-role client, per CLAUDE.md. Under the service-role key `auth.uid()` is null and the RPC would reject outright.
+
+**Track C, binding**: the coach session detail screen must call `complete-session`, never `session_transition(id, 'complete')` directly. The RPC is still granted to `authenticated` (Track A's AT-37 shipped it that way and this story does not re-grant it), so calling it directly would complete the session without ever crediting the coach. `complete-session` carries a repair path for exactly that case (an already `completed` session with no accrual gets one written on a later call), but the repair is a safety net, not the contract.
 
 ### `book-session`, as built (AT-40)
 
