@@ -100,3 +100,14 @@ Founder to-do list so far: delete tmp-seed-demo-users edge function (dashboard);
 - Punch item 3 DONE: evidence matrix complete (dark signin/signup via next-themes' persisted mechanism; wizard venue-details and courts steps as a fresh script-created partner, no submission; photos/review/pending demonstrated-by-data). See EVIDENCE-REPORT.md.
 - Punch item 2 REMAINS: founder's 2-minute demo per the script above, then approver cycle 3.
 - Throwaway account evidence-partner@atlitos.dev exists (no venue, no submission); admin can ignore or delete.
+
+## Punch item 2 COMPLETE: partner sees it live (2026-07-19 ~00:15 IST)
+
+The gate's middle clause is now demonstrated, without a second payment. The founder's real paid booking (52f95edc, Turf A 11:00 to 12:00) is dated 2026-07-19, which became TODAY at midnight, so it renders on its owning partner's Live Today board directly.
+
+- Session for the owning partner (p2-verify-partner@atlitos.dev, the account seed_p2 attached the demo venues to) was minted by setting the standard fixture password via SQL (same operation scripts/seed-demo-users.mjs performs for demo accounts) then signInWithPassword; JWT carries roles player + court_partner post-0017.
+- RLS-level proof: querying venue_bookings_today through that partner's own JWT returns the confirmed 670.00 booking (plus the 3 expired ones). Not a service-role read.
+- Rendered proof, evidence files: live-today-paid-booking-light.jpeg and live-today-paid-booking-dark.jpeg show "Athlete booking, Cricket, 11:00 am to 12:00 pm, Rs 670, Upcoming" with Check in and Cancel actions, and the 3 abandoned bookings correctly badged Expired. Dark reached via the real in-app sidebar toggle.
+- Earnings reconciliation, earnings-reconciled-dark.jpeg: Gross bookings Rs 670, Platform fee -Rs 10, Net payable Rs 660, Pending balance Rs 660, trailing chart shows Rs 670 today. Matches the ledger group exactly.
+
+NEW FINDING for the approver (found while verifying): venue_bookings_today returns rows for OTHER dates too (2026-07-13 and 2026-07-14 rows came back), so the view is not date-filtered to current_date despite its name; the Live Today page appears to filter client side, since only today's 4 rows rendered. Worth a ticket: either filter in the view or rename it, because any future consumer of the view will inherit stale rows.
