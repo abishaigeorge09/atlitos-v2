@@ -24,11 +24,11 @@ The gate is met when all of the following are true on the deployed stack:
 - [ ] AT-39 Chat schema, RLS, and Realtime publication
 
 ### Track B: payments and Route (opus)
-- [ ] AT-40 book-session edge function with server re-pricing and SLOT_TAKEN
-- [ ] AT-41 Session completion earnings accrual: ledger write on complete
+- [x] AT-40 book-session edge function with server re-pricing and SLOT_TAKEN
+- [x] AT-41 Session completion earnings accrual: ledger write on complete
 - [ ] AT-42 razorpay-route-onboard edge function and payout account status sync
 - [ ] AT-43 razorpay-route-transfer edge function and transfer webhook handling
-- [ ] AT-44 Ledger derived coach balance RPCs: wallet and transactions
+- [x] AT-44 Ledger derived coach balance RPCs: wallet and transactions
 
 ### Track C: mobile coach (sonnet)
 - [ ] AT-45 Coach verification status screen and Trainings gating
@@ -77,6 +77,14 @@ Track A first (AT-35 gates everything; AT-36 and AT-38 follow it; AT-37 needs AT
 - **Expiry sweep**: `court_booking_expire_payment` still has no scheduled sweep wired (AT-26). Coaching sessions create the same class of stale `pending_payment` rows via `book-session`. Deliberately not cut as a P3 story since it is operational rather than PRD-traceable, but if the gate walkthrough accumulates stale session holds, wire one sweep covering both domains rather than two.
 - **Realtime verification** (AT-32) is now formally owned by AT-59.
 - Everything else in PHASE-2-STATUS.md's advisory list stays open against AT-4 and the P8 hardening gate: `auth_rls_initplan` (56) and `multiple_permissive_policies` (19) WARNs, `venue_bookings_today` not date-filtered (AT-25), resubmission RPC decision (AT-27), fixture password hygiene (AT-29), missing onboarding evidence (AT-30, AT-31), the sizing-token gap for 44pt tap targets, and the admin bundle size warning.
+
+## Track B handoff notes (AT-40, AT-41, AT-44 done)
+
+1. **Coaches complete sessions through `complete-session`, not `session_transition(id, 'complete')`.** Track C's AT-47 is bound by this. The RPC is still granted to `authenticated`, so calling it directly completes the session and silently skips the coach's earnings accrual. `complete-session` carries a repair path (an already completed, unaccrued session gets its accrual written on a later call) but that is a safety net, not the contract.
+2. **Sessions price differently from courts.** The platform fee is carved out of the coach's price, so `sessions.total = sessions.price` and the athlete sees no separate fee row. Courts remain additive with subtotal, GST, and fee rows (PRD-01 FR-31). Track D's BillSummary for AT-53 must not invent a session fee row. SCHEMA.md records the reasoning.
+3. **One shared capture gate.** `_shared/finalize-payment.ts` owns the idempotency UPDATE and dispatches by `payment_intents.domain`; `razorpay-webhook` and `verify-payment` call only it. Adding commerce or donations means one branch plus one `finalize-<domain>-payment.ts`, never a second gate.
+4. **AT-43 should reuse `get_coach_wallet_balance()`** for its server side balance re-check rather than reimplementing the sum, so the number the coach was shown and the number the transfer validates against cannot differ.
+5. **Sessions inherit the courts expiry sweep gap.** `book-session` releases its own slot when Razorpay fails, via `session_abandon_unpaid`, but an athlete who abandons the checkout sheet still leaves a `requested` session holding a slot with no captured payment. Same class of debt as AT-26; one sweep covering both domains is still the right fix.
 
 ## What the founder must do
 

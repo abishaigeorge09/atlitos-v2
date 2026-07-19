@@ -970,4 +970,6 @@ PLAN.md calls out `UNIQUE(court_id, date, slot_start)` as the mechanism that res
 
 ## The double-entry ledger, summarized
 
+The read path is `get_coach_wallet_balance()` and `get_my_transactions(kind?, limit?, offset?)` (`0025_wallet_and_transactions_rpcs.sql`, AT-44), both `security definer`, both scoped by `auth.uid()`, both deriving every figure at call time from `ledger_entries` and `payment_intents`. No screen sums money client side and no table anywhere gained a balance column.
+
 `ledger_entries` is insert-only and every economic event writes a balanced group (see the worked example above). This gives three properties the product requires: a coach's or partner's balance is always `sum(credits) - sum(debits)` computed live, never a value that can drift from reality; a refund or a payout failure is a new reversing group, never a mutation of history, so `audit_log` and `ledger_entries` together form a complete replayable record; and every screen that shows money (`Earnings`, `My Impact`, admin's `Order Detail` refund panel) reads the same table through a different filter, so there is exactly one place a money bug could live.

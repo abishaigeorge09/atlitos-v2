@@ -184,10 +184,20 @@ Client wiring lives in `apps/portal-court/src/lib/onboarding.ts`, one typed modu
 | v1 fn | v1 route | v2 lane | Function / RPC | Note |
 |---|---|---|---|---|
 | `coachWallet` | GET `/wallet` | RPC | `get_coach_wallet_balance()` | sums `ledger_entries` for `account_type='coach', account_ref=auth.uid()`; `403 NOT_COACH` if no coach role |
-| `transactions` | GET `/transactions` | RPC | `get_my_transactions(kind?)` | unions sessions, court_bookings, orders, and donations into one reverse-chronological feed shaped like v1's `Transaction`; a plain PostgREST select cannot do this because it spans four source tables |
+| `transactions` | GET `/transactions` | RPC | `get_my_transactions(kind?, limit?, offset?)` | one reverse-chronological feed shaped like v1's `Transaction`, unioning the caller's own `payment_intents` (charges) with their own `ledger_entries` (earnings and payouts); a plain PostgREST select cannot do this because it spans two sources with different shapes |
 | `notifs.list` | GET `/notifications` | PostgREST | `notifications` select | RLS `user_id = auth.uid()` |
 | `notifs.markRead` | POST `/notifications/:id/read` | PostgREST | `notifications` update, sets `read_at` | own-row RLS |
 | `help.submitTicket` | POST `/support/tickets` | PostgREST | `support_tickets` insert | own-row RLS, returned row id is the v1 `ticketId` |
+
+### wallet and transactions, as built (AT-44)
+
+Both shipped in `0025_wallet_and_transactions_rpcs.sql`, both `security definer`, `stable`, granted to `authenticated` only, and both scoped exclusively by `auth.uid()`. Neither takes an owner id parameter, because a parameter is something a client can lie about, and a definer function bypasses the `ledger_entries_select_own` RLS policy that would otherwise be the backstop.
+
+`get_coach_wallet_balance()` returns one row `{ balance, lifetime_earned, lifetime_transferred, this_month }`. `balance` is `sum(credits) - sum(debits)` over `account_type='coach' AND account_ref=auth.uid()`, which is what the coach may transfer out today; `this_month` counts credits since the start of the current calendar month in Asia/Kolkata, the same timezone `session_transition` uses. Raises `NOT_COACH` (403) when the caller has no `coach_profiles` row, so "not a coach" and "a coach with zero earnings" stay distinguishable. Nothing is stored: every number is computed at call time.
+
+`get_my_transactions(p_kind, p_limit, p_offset)` returns `{ id, kind, domain, entity_id, amount, direction, status, description, occurred_at }`. `kind` is `charge` (a `payment_intents` row the caller paid for), `earning` (a ledger credit to their coach or court partner account), or `payout` (a ledger debit, a transfer out). `direction` is from the caller's point of view, `in` or `out`, deliberately not the ledger's debit/credit convention. `p_kind` matches either a `kind` value or a `payment_domain` value (`session`, `court`, `commerce`, `donation`); null returns everything. `p_limit` is clamped to 1..200.
+
+**Deviation from the AT-44 ticket, recorded.** The ticket describes `get_my_transactions` as unioning `sessions`, `court_bookings`, `orders`, and `donations`. Two of those tables do not exist yet, and unioning domain tables would force an edit to this function every time a domain ships. `payment_intents` already carries `domain`, `entity_id`, `amount`, `status`, and `created_at` for every domain including the unbuilt ones, so commerce and donations will appear in this feed with no change here. The binding constraint, that every figure is derived and no stored balance column exists anywhere, holds either way.
 
 ## Edge functions not in the v1 contract
 
