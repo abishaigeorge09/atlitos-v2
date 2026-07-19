@@ -9,24 +9,27 @@
 //      side effect; a `23505` unique violation means this exact event was
 //      already processed, acknowledge and stop.
 //   3. Branch on `event.event`; only `payment.captured` and
-//      `payment.failed` are implemented in this phase (session/commerce/
-//      donation domains, and refund.processed/transfer.* events, do not
-//      exist yet — SCHEMA.md's phase sequencing, PHASE-1-STATUS.md's
-//      handoff notes).
+//      `payment.failed` are implemented in this phase (commerce/donation
+//      domains, and refund.processed/transfer.* events, do not exist yet —
+//      SCHEMA.md's phase sequencing, PHASE-1-STATUS.md's handoff notes).
+//      The `session` domain joined `court` in AT-40 and needs no new branch
+//      here, because the domain fan-out lives behind the shared gate.
 //   4. Always return 200 once the event is durably recorded, even for
 //      event types this phase does not act on, so Razorpay does not retry
 //      forever on an event this platform intentionally ignores.
 //
 // `handlePaymentCaptured`'s actual finalize step (flip payment_intents,
-// transition the booking, write the ledger group) lives in
-// `_shared/finalize-court-booking-payment.ts`, shared verbatim with
-// verify-payment so the two entry points can never process the same
-// capture differently.
+// dispatch on payment_intents.domain, transition the domain row, write the
+// ledger group) lives in `_shared/finalize-payment.ts`, shared verbatim with
+// verify-payment so the two entry points can never process the same capture
+// differently. As of AT-40 that gate covers both the `court` and `session`
+// domains; neither entry point knows or cares which, it just calls
+// `finalizePaymentCaptured` and the gate routes by domain.
 
 import { corsHeaders } from "../_shared/cors.ts";
 import { serviceRoleClient } from "../_shared/supabase.ts";
 import { verifyWebhookSignature } from "../_shared/razorpay.ts";
-import { finalizeCourtBookingPaymentCaptured } from "../_shared/finalize-court-booking-payment.ts";
+import { finalizePaymentCaptured } from "../_shared/finalize-payment.ts";
 
 interface RazorpayPaymentEntity {
   id: string;
@@ -120,7 +123,7 @@ Deno.serve(async (req) => {
       case "payment.captured": {
         const payment = event.payload.payment?.entity;
         if (payment) {
-          await finalizeCourtBookingPaymentCaptured(supabase, {
+          await finalizePaymentCaptured(supabase, {
             razorpayOrderId: payment.order_id,
             razorpayPaymentId: payment.id,
           });

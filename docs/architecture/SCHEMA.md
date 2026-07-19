@@ -206,6 +206,10 @@ The booking record and the state machine PLAN.md calls out for RPC enforcement.
 Constraints: `UNIQUE (coach_id, date, slot_start) WHERE status NOT IN ('declined', 'cancelled')` — the same concurrency guard PLAN.md specifies for courts, applied to coaching per PRD-02 FR-24; a partial index so a declined or cancelled session frees the slot for a new request. Shipped as `sessions_coach_date_slot_unique` in `0018_coaching.sql`.
 
 Unlike `court_bookings` after `0011_courts_payment_state.sql`, `session_status` has no `pending_payment`/`expired` pair: a session's first persisted state is `requested` (PRD-01 FR-24), so `book-session` inserts the row already holding its slot through the partial index above.
+
+**Money columns, as built by AT-40.** The platform fee is carved OUT of the coach's list price, it is not added on top of it, so `total` (what the athlete is charged) equals `price`, and `platform_fee` is the platform's cut of that same amount. This follows the worked ledger example below ("a session priced at 1000 with a 100 platform fee" debits `platform` 1000 and credits `coach` 900), and PRD-01 FR-31 asks for a separate platform fee row in the `BillSummary` only for courts, never for sessions. Courts are the other convention: there `total = subtotal + gst + platform_fee`, the fee is genuinely additive, and the athlete sees all three rows. The two domains differ deliberately; do not "fix" one to match the other.
+
+Because a session has no `pending_payment` state, a `requested` session whose Razorpay order could never be created would squat its slot forever. `session_abandon_unpaid(p_session_id uuid)` (`0024_session_abandon_unpaid.sql`, `security definer`, granted to `service_role` only) is the release valve `book-court` gets from `court_booking_expire_payment`: it moves `requested` to `cancelled` with a fixed reason, refuses if any `captured` payment_intent exists for that session, and frees the slot because `cancelled` is excluded from the partial unique index.
 Indexes: `idx_sessions_coach_id_status` on `(coach_id, status)`, `idx_sessions_player_id` on `player_id`.
 
 ---

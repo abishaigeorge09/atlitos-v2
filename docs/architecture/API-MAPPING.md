@@ -48,7 +48,7 @@ State machine: `requested` to (`accepted` or `declined`); `accepted` to (`comple
 
 | v1 fn | v1 route | v2 lane | Function / RPC | Note |
 |---|---|---|---|---|
-| `book` | POST `/sessions/book` | Edge Function | `book-session` | creates `payment_intents` + `sessions` (`requested`) in one transaction, re-prices server side (`PRICE_MISMATCH`), returns a Razorpay order for the client to open |
+| `book` | POST `/sessions/book` | Edge Function | `book-session` | creates `payment_intents` + `sessions` (`requested`), re-prices server side (`PRICE_MISMATCH`), returns a Razorpay order for the client to open |
 | `list` | GET `/sessions` | PostgREST | `sessions` select, joined to `users`/`coach_profiles` for hydrated names | RLS `coach_id = auth.uid() OR player_id = auth.uid()` |
 | `get` | GET `/sessions/:id` | PostgREST | `sessions` select single | same RLS as `list` |
 | `accept` | POST `/sessions/:id/accept` | RPC | `session_transition(id, 'accept')` | caller must be `coach_id`; `requested` to `accepted` only |
@@ -68,6 +68,24 @@ Error codes `packages/api` maps: `UNAUTHENTICATED`, `NOT_FOUND`, `FORBIDDEN`, `I
 Two behaviours the tables above do not make obvious. **Reschedule inserts a new row** at the new date/slot in `accepted`, carrying the original's money columns and `payment_intent_id`, and marks the original `rescheduled` as a tombstone; the RPC returns the NEW row, so a caller must not assume the id it passed in is the id it gets back. This mirrors `court_booking_transition`. **`rate_session` also refreshes `coach_profiles.rating`/`rating_count`** in the same transaction, recomputed from `sessions` rather than incremented, so a replay cannot double count; it does this through a transaction-local `app.rating_pipeline` GUC that `lock_coach_profile_admin_fields` now honours alongside `has_role('admin')`.
 
 **No ledger write happens in these RPCs**, despite PRD-02 FR-15 describing completion as triggering the earnings accrual. Per CLAUDE.md, ledger writes live only in edge functions under the service role; AT-41's function calls `session_transition(id, 'complete')` and writes the balanced group itself. Same resolution `0009_courts.sql` already made for courts.
+
+### `book-session`, as built (AT-40)
+
+`POST` with the athlete's own JWT, `verify_jwt` true.
+
+Request `{ session_type_id, frequency, date, slot_start, focus_area?, location?, expected_total }`. `slot_end` is not accepted from the client; it is derived from `session_types.duration_minutes`, so a client cannot buy a two hour slot at a one hour price.
+
+Response `{ session_id, status, razorpay_order_id, key_id, amount (paise), currency, bill: { price, platform_fee, total } }`. `status` is always `requested`; nothing in this response means the payment succeeded.
+
+Error codes: `VALIDATION` 400, `UNAUTHENTICATED` 401, `NOT_FOUND` 404 (session type missing, inactive, or its coach not `verified`), `SLOT_TAKEN` 409, `PRICE_MISMATCH` 409, `RAZORPAY_ERROR` 502, `INTERNAL` 500.
+
+`SLOT_TAKEN` covers three distinct rejections deliberately, because they are one thing to the athlete ("you cannot have this slot"): the slot falls outside every `coach_availability_windows` row for that weekday, the slot is already held per `get_coach_busy_slots`, or the insert lost the race on `sessions_coach_date_slot_unique` (`23505`). Only the third is authoritative; the first two are optimistic pre-checks that narrow the window without closing it.
+
+`PRICE_MISMATCH` compares `expected_total` against the server derived `total`, which is `session_types.price` (the fee is carved out of it, see SCHEMA.md). The client's number is never charged, and no session row or Razorpay order exists when this fires.
+
+**Capture is finalized by `_shared/finalize-payment.ts`, not here.** That module is the single gate both `razorpay-webhook` and `verify-payment` call; it owns the `update payment_intents ... where status = 'created'` idempotency check and then dispatches on `payment_intents.domain` to `finalize-court-booking-payment.ts` or `finalize-session-payment.ts`. Neither entry point knows which domain it is finalizing. Adding `commerce`/`donation` later means one new branch plus one new file, never a second copy of the gate.
+
+`verify-payment` responds `{ domain, entity_id, booking_id, session_id, status, outcome }`, where `booking_id` and `session_id` are domain-named aliases of `entity_id` (the other is null) so a court-only or session-only caller need not switch on `domain`. `outcome` is `captured` or `already_processed`.
 
 ## courts
 

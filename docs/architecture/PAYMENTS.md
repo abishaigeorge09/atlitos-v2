@@ -68,6 +68,24 @@ The `notes` object is the contract every domain function relies on: `domain` tel
 5. Return the Razorpay order id and key to the client, which opens `react-native-razorpay`'s checkout sheet.
 6. The client does **not** mark anything confirmed on its own return from the checkout sheet; it polls `sessions`/`court_bookings` by id (or subscribes via Realtime) until `payment_intents.status` (joined) reaches `captured`, per PRD-01 section 6's rule that a failed/abandoned payment never appears confirmed.
 
+**`book-session` as built (AT-40).** Same five steps, with the session-specific facts spelled out because they differ from courts in two places.
+
+First, pricing. For sessions the platform fee is carved OUT of `session_types.price` rather than added on top: `sessions.total = sessions.price`, and `sessions.platform_fee` is the platform's cut of that same rupee amount. SCHEMA.md's worked ledger example is the authority (1000 priced, 100 fee, platform debited 1000, coach credited 900), and PRD-01 FR-31 asks for a separate platform fee row in the `BillSummary` only for courts. Courts remain additive (`total = subtotal + gst + platform_fee`). The client sends `expected_total`, the server derives `total` from `session_types` plus the active `sessions.platform_fee_flat` row, and any difference is `PRICE_MISMATCH` with no row and no order created.
+
+Second, there is no `pending_payment` hold. The session is inserted directly as `requested`, which is what holds the slot through `sessions_coach_date_slot_unique`. If the Razorpay call then fails, `book-session` calls `session_abandon_unpaid` (a `service_role`-only definer RPC, `0024`) to move the row to `cancelled` and free the slot, rather than updating a status column itself. That RPC refuses to release any session that already has a `captured` intent, so a Razorpay timeout that actually succeeded upstream cannot free a paid slot.
+
+**The shared finalize gate.** As of AT-40 the capture path is one module, `_shared/finalize-payment.ts`, called by both `razorpay-webhook` and `verify-payment` and by nothing else:
+
+```
+finalizePaymentCaptured           <- owns the idempotency UPDATE and the domain dispatch
+  |- finalizeCourtBookingCaptured (_shared/finalize-court-booking-payment.ts)
+  |- finalizeSessionCaptured      (_shared/finalize-session-payment.ts)
+```
+
+The gate flips `payment_intents` to `captured` with a single `where status = 'created'` UPDATE and only then hands the intent to a domain handler, so exactly one caller can ever reach a handler for a given charge; the loser returns `already_processed`. Previously the gate lived inside the court-named helper, which meant adding sessions would have forced either a second copy of it or a court-named function quietly handling sessions.
+
+The session handler writes **no** ledger group. A session has no status transition owed at capture time, and the coach has not earned anything yet: the session has not happened and can still be declined or cancelled. The accrual is written at completion by AT-41's `complete-session`, per this document's Route section. The captured funds sit in the platform's Razorpay account with no ledger attribution until then, which is exactly the "platform holds funds and releases them later" model the on-demand transfer design depends on.
+
 ### `checkout`
 
 Same shape, with two additions: it re-fetches live stock for every `order_items` line and rejects the whole checkout with `OUT_OF_STOCK` (identifying the offending lines) if any line is unavailable, and it folds the optional `donationRoundup` amount into the single Razorpay order rather than creating a second charge, per PRD-07 FR-16/FR-17. The `orders` row itself is **not** created at this step, only after the webhook confirms capture (see below), so `placed` never exists without a paid intent behind it.

@@ -1,32 +1,23 @@
 // ATLITOS v2 — supabase/functions/_shared/finalize-court-booking-payment.ts
 //
-// The one place "a court booking's payment was captured" gets finalized:
-// flip payment_intents to captured, transition the booking pending_payment
-// -> confirmed via RPC, write the balanced ledger_entries group. Both
-// razorpay-webhook (server push) and verify-payment (client-callback
-// fallback, PAYMENTS.md's "so the demo works without a public webhook URL")
-// call this exact function, so the two paths cannot drift into different
-// ledger-writing logic and so whichever one runs first is a no-op for
-// whichever runs second (see the guarded update below).
+// The `court` domain's leg of the shared capture gate in
+// finalize-payment.ts: transition the booking pending_payment -> confirmed
+// via RPC, then write the balanced ledger_entries group.
+//
+// AT-40 refactor: this file used to own the idempotency gate (the
+// `update payment_intents ... where status = 'created'` optimistic update)
+// as well as the court-specific work, which meant adding the sessions domain
+// would have meant either a second copy of that gate or a court-named helper
+// quietly handling sessions. The gate now lives in finalize-payment.ts and
+// dispatches here; this function is only ever called with an intent that was
+// just flipped to `captured` by that gate, so it still runs exactly once per
+// charge, and both razorpay-webhook and verify-payment still reach it through
+// exactly one code path.
 
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { AppError } from "./app-error.ts";
 import { round2 } from "./fee-config.ts";
-
-export type FinalizeOutcome = "captured" | "already_processed";
-
-export interface FinalizeResult {
-  outcome: FinalizeOutcome;
-  bookingId: string;
-  bookingStatus: string;
-}
-
-interface PaymentIntentRow {
-  id: string;
-  domain: string;
-  entity_id: string | null;
-  status: string;
-}
+import type { CapturedIntent, FinalizeResult } from "./finalize-payment.ts";
 
 interface CourtBookingRow {
   id: string;
@@ -38,98 +29,11 @@ interface CourtBookingRow {
   total: number;
 }
 
-/**
- * Idempotency gate: this UPDATE only ever succeeds (returns a row) for the
- * caller that wins the race, because it is a single atomic SQL statement
- * guarded by `where status = 'created'`. If razorpay-webhook and
- * verify-payment both fire for the same order (fully expected in this
- * demo, since verify-payment is a fallback, not a replacement), the second
- * caller's UPDATE matches zero rows and this function returns
- * `already_processed` without writing a second ledger group or attempting a
- * second (now invalid) pending_payment -> confirmed transition.
- */
-export async function finalizeCourtBookingPaymentCaptured(
+export async function finalizeCourtBookingCaptured(
   supabase: SupabaseClient,
-  params: { razorpayOrderId: string; razorpayPaymentId: string },
+  intent: CapturedIntent,
 ): Promise<FinalizeResult> {
-  const { data: updatedIntents, error: intentUpdateError } = await supabase
-    .from("payment_intents")
-    .update({ status: "captured", razorpay_payment_id: params.razorpayPaymentId })
-    .eq("razorpay_order_id", params.razorpayOrderId)
-    .eq("status", "created")
-    .select("id, domain, entity_id, status")
-    .returns<PaymentIntentRow[]>();
-
-  if (intentUpdateError) {
-    throw new AppError(
-      "INTERNAL",
-      `Failed to update payment_intents: ${intentUpdateError.message}`,
-      500,
-    );
-  }
-
-  if (!updatedIntents || updatedIntents.length === 0) {
-    // Either no such payment_intent exists at all, or it was already
-    // captured by the other finalization path. Look it up read-only to
-    // distinguish "not found" (a real problem) from "already processed"
-    // (expected, idempotent, not an error).
-    const { data: existing, error: lookupError } = await supabase
-      .from("payment_intents")
-      .select("id, domain, entity_id, status")
-      .eq("razorpay_order_id", params.razorpayOrderId)
-      .maybeSingle<PaymentIntentRow>();
-
-    if (lookupError) {
-      throw new AppError(
-        "INTERNAL",
-        `Failed to look up payment_intents: ${lookupError.message}`,
-        500,
-      );
-    }
-
-    if (!existing) {
-      throw new AppError(
-        "NOT_FOUND",
-        `No payment_intent for razorpay_order_id ${params.razorpayOrderId}.`,
-        404,
-      );
-    }
-
-    if (existing.domain !== "court" || !existing.entity_id) {
-      throw new AppError(
-        "INTERNAL",
-        `payment_intent ${existing.id} is not a court booking intent.`,
-        500,
-      );
-    }
-
-    const { data: booking } = await supabase
-      .from("court_bookings")
-      .select("id, status")
-      .eq("id", existing.entity_id)
-      .maybeSingle<{ id: string; status: string }>();
-
-    return {
-      outcome: "already_processed",
-      bookingId: existing.entity_id,
-      bookingStatus: booking?.status ?? "confirmed",
-    };
-  }
-
-  const intent = updatedIntents[0];
-
-  if (intent.domain !== "court" || !intent.entity_id) {
-    // Only the courts domain is wired end to end in this phase (sessions,
-    // commerce, donation tables do not exist yet). Acknowledge without
-    // erroring rather than pretending an unimplemented domain was handled.
-    return {
-      outcome: "captured",
-      bookingId: intent.entity_id ?? "",
-      bookingStatus: "n/a",
-    };
-  }
-
-  const bookingId = intent.entity_id;
+  const bookingId = intent.entity_id as string;
 
   const { data: bookingRpcResult, error: transitionError } = await supabase
     .rpc("court_booking_confirm_payment", {
@@ -218,7 +122,22 @@ export async function finalizeCourtBookingPaymentCaptured(
 
   return {
     outcome: "captured",
-    bookingId,
-    bookingStatus: booking.status,
+    domain: "court",
+    entityId: bookingId,
+    entityStatus: booking.status,
   };
+}
+
+/** Read-only status probe for the already-processed branch of the gate. */
+export async function describeCourtBooking(
+  supabase: SupabaseClient,
+  bookingId: string,
+): Promise<string> {
+  const { data } = await supabase
+    .from("court_bookings")
+    .select("status")
+    .eq("id", bookingId)
+    .maybeSingle<{ status: string }>();
+
+  return data?.status ?? "confirmed";
 }

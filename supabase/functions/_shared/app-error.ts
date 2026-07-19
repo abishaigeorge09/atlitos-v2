@@ -47,6 +47,15 @@ const STATUS_BY_CODE: Record<string, number> = {
   ALREADY_PROCESSED: 200,
   INVALID_TRANSITION: 409,
   PRICE_MISMATCH: 409,
+  // Coaching state machine codes raised by session_transition (0021), so an
+  // edge function relaying that RPC's error surfaces the same code the RPC
+  // named instead of flattening everything to a 400.
+  TOO_EARLY: 409,
+  SESSION_STARTED: 409,
+  // AT-44: the caller asked for a coach wallet but holds no coach role.
+  NOT_COACH: 403,
+  // AT-41: a session reached completion with no captured payment behind it.
+  PAYMENT_NOT_CAPTURED: 409,
   INTERNAL: 500,
   // Razorpay-facing codes (AT-42 Route onboarding, AT-43 transfers).
   // RAZORPAY_ERROR is a bad gateway: their API rejected or failed a call we

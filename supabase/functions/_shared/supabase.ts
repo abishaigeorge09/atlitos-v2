@@ -51,24 +51,32 @@ export interface AuthenticatedUser {
  * `UNAUTHENTICATED` (401) if the header is missing or the session is
  * invalid/expired.
  */
-export async function getAuthenticatedUser(
-  req: Request,
-): Promise<AuthenticatedUser> {
+/**
+ * An anon-key client carrying the caller's own bearer token, so PostgREST and
+ * every `security definer` RPC see the caller's real `auth.uid()` and RLS
+ * applies to them normally. AT-41's complete-session needs this: only the
+ * assigned coach may call `session_transition(..., 'complete')`, and that RPC
+ * reads `auth.uid()`, which is null under the service-role key. The service
+ * role is still what writes the ledger afterwards; the two clients are used
+ * for the two halves deliberately, never interchangeably.
+ */
+export function userScopedClient(req: Request): SupabaseClient {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) {
-    throw new AppError(
-      "UNAUTHENTICATED",
-      "Missing Authorization header.",
-      401,
-    );
+    throw new AppError("UNAUTHENTICATED", "Missing Authorization header.", 401);
   }
-
   const url = requiredEnv("SUPABASE_URL");
   const anonKey = requiredEnv("SUPABASE_ANON_KEY");
-  const userClient = createClient(url, anonKey, {
+  return createClient(url, anonKey, {
     global: { headers: { Authorization: authHeader } },
     auth: { persistSession: false, autoRefreshToken: false },
   });
+}
+
+export async function getAuthenticatedUser(
+  req: Request,
+): Promise<AuthenticatedUser> {
+  const userClient = userScopedClient(req);
 
   const { data, error } = await userClient.auth.getUser();
   if (error || !data.user) {

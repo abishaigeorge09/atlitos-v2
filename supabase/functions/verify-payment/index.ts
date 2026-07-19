@@ -10,8 +10,8 @@
 // documented proof that the returned payment_id genuinely belongs to that
 // order and was signed by Razorpay, not a client assertion. Finalization
 // itself (flip payment_intents, transition the booking, write the ledger
-// group) is byte-for-byte the same `finalizeCourtBookingPaymentCaptured`
-// call razorpay-webhook makes, guarded by the same `status = 'created'`
+// group) is byte-for-byte the same `finalizePaymentCaptured` call
+// razorpay-webhook makes, guarded by the same `status = 'created'`
 // optimistic update, so whichever of the two paths (this one, or a real
 // webhook delivery) arrives first performs the write and the other is a
 // no-op `already_processed` — idempotent with the webhook path, not a race
@@ -22,7 +22,7 @@ import { jsonResponse, withErrorHandling } from "../_shared/http.ts";
 import { AppError } from "../_shared/app-error.ts";
 import { getAuthenticatedUser, serviceRoleClient } from "../_shared/supabase.ts";
 import { verifyPaymentSignature } from "../_shared/razorpay.ts";
-import { finalizeCourtBookingPaymentCaptured } from "../_shared/finalize-court-booking-payment.ts";
+import { finalizePaymentCaptured } from "../_shared/finalize-payment.ts";
 
 interface VerifyPaymentRequestBody {
   razorpay_order_id: string;
@@ -115,14 +115,21 @@ Deno.serve((req) =>
       );
     }
 
-    const result = await finalizeCourtBookingPaymentCaptured(supabase, {
+    const result = await finalizePaymentCaptured(supabase, {
       razorpayOrderId: body.razorpay_order_id,
       razorpayPaymentId: body.razorpay_payment_id,
     });
 
+    // Domain-neutral fields plus the two domain-named aliases, so a caller
+    // that only ever books courts (portal-court) and one that only ever
+    // books sessions (the athlete app) can each read the id they expect
+    // without either having to switch on `domain`.
     return jsonResponse({
-      booking_id: result.bookingId,
-      status: result.bookingStatus,
+      domain: result.domain,
+      entity_id: result.entityId,
+      booking_id: result.domain === "court" ? result.entityId : null,
+      session_id: result.domain === "session" ? result.entityId : null,
+      status: result.entityStatus,
       outcome: result.outcome,
     });
   })
