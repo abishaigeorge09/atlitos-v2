@@ -1,0 +1,18 @@
+--- /tmp/jsdate.bak	2026-07-19 20:15:24
++++ node_modules/.pnpm/expo-modules-jsi@57.0.3_react-native@0.86.0_@babel+core@7.29.7_@react-native+metro-config@0.8_ybivwzubafblatgapnyb4ajxtm/node_modules/expo-modules-jsi/apple/Sources/ExpoModulesJSI/Coding/JavaScriptCodable+Date.swift	2026-07-19 20:15:24
+@@ -50,7 +50,7 @@
+ /// faithful to `new Date(number)`; the `Date`/string branches pass an already-clipped `getTime()` through.
+ @usableFromInline
+ func dateFromMilliseconds(_ milliseconds: Double) throws -> Date {
+-  guard milliseconds.isFinite, abs(milliseconds) <= maxJavaScriptDateMilliseconds else {
++  guard milliseconds.isFinite, milliseconds.magnitude <= maxJavaScriptDateMilliseconds else {
+     throw InvalidDateException()
+   }
+   return Date(timeIntervalSince1970: milliseconds.rounded(.towardZero) / 1000.0)
+
+# Context: Xcode 26.3 / Swift 6.2.4 rejects `abs(milliseconds)` here as
+# "type of expression is ambiguous without a type annotation", breaking
+# `expo run:ios` at the ExpoModulesJSI target. expo-modules-jsi 57.0.3 is the
+# newest release in the 57.x line, so there is no upgrade to take.
+# `.magnitude` is the identical operation with an unambiguous type.
+# Apply with pnpm patch, or re-apply manually after a fresh install.
