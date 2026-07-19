@@ -176,7 +176,7 @@ Indexes: `idx_session_types_coach_id` on `coach_id`.
 | `effective_from` | `date` | not null default current_date |
 | `created_at` | `timestamptz` | |
 
-Constraints: no two windows for the same `coach_id` and `day_of_week` may overlap, enforced with a `btree_gist` `EXCLUDE` constraint on `(coach_id WITH =, day_of_week WITH =, tsrange(start_time, end_time) WITH &&)`.
+Constraints: no two windows for the same `coach_id` and `day_of_week` may overlap, enforced with a `btree_gist` `EXCLUDE` constraint on `(coach_id WITH =, day_of_week WITH =, public.timerange(start_time, end_time, '[)') WITH &&)` (`0018_coaching.sql`). This doc previously said `tsrange`; that does not type-check over `time` columns, and `public.timerange` is the custom range type `0009_courts.sql` already defined for exactly this reason. `effective_from` is deliberately not part of the exclusion key, so editing availability (PRD-02 FR-23) is an `UPDATE` in place, not a second superseding row.
 Indexes: `idx_coach_availability_coach_id` on `coach_id`.
 
 ### `sessions`
@@ -203,7 +203,9 @@ The booking record and the state machine PLAN.md calls out for RPC enforcement.
 | `decline_reason`, `cancellation_reason` | `text` | nullable |
 | `created_at`, `updated_at` | `timestamptz` | |
 
-Constraints: `UNIQUE (coach_id, date, slot_start) WHERE status NOT IN ('declined', 'cancelled')` — the same concurrency guard PLAN.md specifies for courts, applied to coaching per PRD-02 FR-24; a partial index so a declined or cancelled session frees the slot for a new request.
+Constraints: `UNIQUE (coach_id, date, slot_start) WHERE status NOT IN ('declined', 'cancelled')` — the same concurrency guard PLAN.md specifies for courts, applied to coaching per PRD-02 FR-24; a partial index so a declined or cancelled session frees the slot for a new request. Shipped as `sessions_coach_date_slot_unique` in `0018_coaching.sql`.
+
+Unlike `court_bookings` after `0011_courts_payment_state.sql`, `session_status` has no `pending_payment`/`expired` pair: a session's first persisted state is `requested` (PRD-01 FR-24), so `book-session` inserts the row already holding its slot through the partial index above.
 Indexes: `idx_sessions_coach_id_status` on `(coach_id, status)`, `idx_sessions_player_id` on `player_id`.
 
 ---
