@@ -29,6 +29,13 @@ export type ApiErrorCode =
   | 'INVALID_TRANSITION'
   | 'NOT_COMPLETED'
   | 'ALREADY_RATED'
+  // session_transition('cancel'|'complete', ...) (0021_session_state_machine.sql):
+  // TOO_EARLY guards complete-session's "scheduled end time not reached",
+  // SESSION_STARTED guards cancel once the session has begun.
+  | 'TOO_EARLY'
+  | 'SESSION_STARTED'
+  // book-session's Razorpay order creation failed server side (API-MAPPING.md)
+  | 'RAZORPAY_ERROR'
   // court_booking_transition('cancel', ...)/(0009_courts.sql) requires a
   // non-empty p_reason
   | 'REASON_REQUIRED'
@@ -52,6 +59,10 @@ export type ApiErrorCode =
   | 'MIN_AMOUNT'
   // coach
   | 'NOT_COACH'
+  // payouts (razorpay-route-onboard/-transfer; see PAYMENTS.md), added by
+  // Track C (AT-50) for the coach payout setup and transfer screens
+  | 'ROUTE_UNAVAILABLE'
+  | 'PAYMENT_NOT_CAPTURED'
   // generic
   | 'INTERNAL';
 

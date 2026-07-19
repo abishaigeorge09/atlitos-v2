@@ -150,6 +150,8 @@ export interface Session {
   paymentIntentId?: string;
   rating?: number;
   remarks?: string;
+  declineReason?: string;
+  cancellationReason?: string;
   // hydrated display fields (server joins these)
   coachName?: string;
   playerName?: string;

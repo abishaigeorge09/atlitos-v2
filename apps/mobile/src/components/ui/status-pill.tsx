@@ -13,7 +13,11 @@ export type Status =
   | 'delivered'
   | 'shipped'
   | 'noShow'
-  | 'expired';
+  | 'expired'
+  | 'requested'
+  | 'accepted'
+  | 'declined'
+  | 'rated';
 
 interface StatusConfig {
   label: string;
@@ -42,6 +46,13 @@ const STATUS_CONFIG: Record<Status, StatusConfig> = {
   shipped: { label: 'Shipped', bgClass: 'bg-info-tint', textClass: 'text-info' },
   noShow: { label: 'No show', bgClass: 'bg-danger-tint', textClass: 'text-danger' },
   expired: { label: 'Expired', bgClass: 'bg-danger-tint', textClass: 'text-danger' },
+  // Sessions (session_status, 0018_coaching.sql): requested/accepted/
+  // declined/rated are the coaching-specific machine values that have no
+  // court_booking_status equivalent above.
+  requested: { label: 'Requested', bgClass: 'bg-warning-tint', textClass: 'text-warning' },
+  accepted: { label: 'Accepted', bgClass: 'bg-success-tint', textClass: 'text-success' },
+  declined: { label: 'Declined', bgClass: 'bg-danger-tint', textClass: 'text-danger' },
+  rated: { label: 'Rated', bgClass: 'bg-success-tint', textClass: 'text-success' },
 };
 
 export interface StatusPillProps {

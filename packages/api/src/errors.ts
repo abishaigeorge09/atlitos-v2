@@ -54,6 +54,8 @@ export function mapPostgrestError(error: { message: string; code?: string }): Ap
       "REASON_REQUIRED",
       "SLOT_TAKEN",
       "NOT_COACH",
+      "TOO_EARLY",
+      "SESSION_STARTED",
     ];
     const code = known.find((candidate) => candidate === prefix);
     if (code) {
