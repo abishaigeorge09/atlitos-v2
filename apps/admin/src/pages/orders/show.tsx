@@ -1,6 +1,6 @@
 import type { Db, OrderStatus } from "@atlitos/types";
 import { BillSummary } from "@atlitos/ui-web";
-import { AlertTriangle, ArrowLeft, CircleCheck, Truck } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CircleCheck, MapPin, Truck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -55,7 +55,7 @@ export function OrderShow() {
     const { data: orderData, error: orderError } = await supabaseClient
       .from("orders")
       .select(
-        "id,order_number,user_id,address_id,subtotal,delivery_charges,gst_and_others,donation_roundup,total,status,payment_intent_id,created_at,updated_at",
+        "id,order_number,user_id,address_id,ship_to_line1,ship_to_line2,ship_to_city,ship_to_state,ship_to_pincode,subtotal,delivery_charges,gst_and_others,donation_roundup,total,status,payment_intent_id,created_at,updated_at",
       )
       .eq("id", id)
       .maybeSingle();
@@ -247,6 +247,38 @@ export function OrderShow() {
             ))}
           </tbody>
         </table>
+      </Card>
+
+      {/* FR-21 delivery address. Read from the order's own ship_to_* snapshot
+       * (0038, AT-72), never the address_id join: that row is editable and
+       * ON DELETE SET NULL, so joining it would let a shopper's later address
+       * edit rewrite where a dispatched parcel says it is going. */}
+      <Card>
+        <p
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: "var(--color-text-tertiary)",
+            margin: "0 0 var(--space-md)",
+          }}
+        >
+          Delivery address
+        </p>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: "var(--space-sm)" }}>
+          <MapPin size={18} strokeWidth={1.75} color="var(--color-text-secondary)" />
+          <div>
+            <p style={{ fontSize: 14, fontWeight: 600, margin: 0 }}>
+              {order.ship_to_line1}
+              {order.ship_to_line2 ? `, ${order.ship_to_line2}` : ""}
+            </p>
+            <p style={{ fontSize: 13, color: "var(--color-text-secondary)", margin: "var(--space-xs) 0 0" }}>
+              {order.ship_to_city}, {order.ship_to_state}
+            </p>
+            <Mono style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>{order.ship_to_pincode}</Mono>
+          </div>
+        </div>
       </Card>
 
       {/* FR-21 money breakdown, through the shared BillSummary */}

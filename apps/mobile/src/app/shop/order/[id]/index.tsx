@@ -183,8 +183,10 @@ export default function OrderDetailScreen() {
           ))}
         </View>
 
-        {order.address ? (
-          <View
+        {/* The address AS SHIPPED, from the order's own ship_to_* snapshot.
+         * Never the addresses join: that row is editable and deletable, and
+         * a past order must not change where it says it went (FR-30). */}
+        <View
             style={{
               borderRadius: radii.xl,
               borderWidth: 1,
@@ -199,17 +201,16 @@ export default function OrderDetailScreen() {
               <MapPin size={18} strokeWidth={1.75} color={colors.textSecondary} />
               <View style={{ flex: 1 }}>
                 <Text style={[textStyle('callout'), { color: colors.text }]}>
-                  {order.address.line1}
-                  {order.address.line2 ? `, ${order.address.line2}` : ''}
+                  {order.shipTo.line1}
+                  {order.shipTo.line2 ? `, ${order.shipTo.line2}` : ''}
                 </Text>
                 <Text style={[textStyle('caption'), { color: colors.textSecondary }]}>
-                  {order.address.city}, {order.address.state}
+                  {order.shipTo.city}, {order.shipTo.state}
                 </Text>
-                <Text style={[textStyle('numericSm'), { color: colors.textSecondary }]}>{order.address.pincode}</Text>
+                <Text style={[textStyle('numericSm'), { color: colors.textSecondary }]}>{order.shipTo.pincode}</Text>
               </View>
             </View>
           </View>
-        ) : null}
 
         {/* FR-25's recap, through the shared BillSummary. Read only, so the
          * donation row is passed with no toggle handler of consequence; it is

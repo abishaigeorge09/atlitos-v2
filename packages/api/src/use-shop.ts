@@ -176,6 +176,21 @@ export interface OrderFeedbackRecord {
   createdAt: string;
 }
 
+/** The delivery address AS SHIPPED, read from the `orders.ship_to_*` snapshot
+ * columns written once by `place_order_from_draft` (0038, AT-72). Never the
+ * `addresses` foreign key join: that row stays editable and deletable, so
+ * joining it lets a later address edit retroactively rewrite where a past
+ * order went, which is the same bug class the item price snapshot forbids.
+ * `orders.address_id` survives only as "which saved address was picked", for
+ * Reorder and support, and nothing renders from it. */
+export interface OrderShipTo {
+  line1: string;
+  line2: string | null;
+  city: string;
+  state: string;
+  pincode: string;
+}
+
 export interface OrderDetail {
   id: string;
   orderNumber: string;
@@ -184,7 +199,7 @@ export interface OrderDetail {
   /** Read straight off the `orders` row's stored money columns, never
    * recomputed against current prices (PRD-07 FR-25). */
   bill: OrderBill;
-  address: AddressRecord | null;
+  shipTo: OrderShipTo;
   items: OrderItemLine[];
   timeline: OrderTimelineEntry[];
   feedback: OrderFeedbackRecord | null;
@@ -868,15 +883,11 @@ export function useShop(client: AtlitosClient) {
         gst_and_others: number;
         donation_roundup: number;
         total: number;
-        addresses: {
-          id: string;
-          line1: string;
-          line2: string | null;
-          city: string;
-          state: string;
-          pincode: string;
-          is_default: boolean;
-        } | null;
+        ship_to_line1: string;
+        ship_to_line2: string | null;
+        ship_to_city: string;
+        ship_to_state: string;
+        ship_to_pincode: string;
         order_items: {
           id: string;
           product_title_snapshot: string;
@@ -898,7 +909,7 @@ export function useShop(client: AtlitosClient) {
         .from("orders")
         .select(
           `id, order_number, status, created_at, subtotal, delivery_charges, gst_and_others, donation_roundup, total,
-           addresses ( id, line1, line2, city, state, pincode, is_default ),
+           ship_to_line1, ship_to_line2, ship_to_city, ship_to_state, ship_to_pincode,
            order_items ( id, product_title_snapshot, variant_label_snapshot, qty, unit_price ),
            order_timeline ( id, status, note, location, created_at ),
            order_feedback ( id, rating, remarks, created_at )`,
@@ -923,17 +934,13 @@ export function useShop(client: AtlitosClient) {
           donationRoundup: data.donation_roundup,
           total: data.total,
         },
-        address: data.addresses
-          ? {
-              id: data.addresses.id,
-              line1: data.addresses.line1,
-              line2: data.addresses.line2,
-              city: data.addresses.city,
-              state: data.addresses.state,
-              pincode: data.addresses.pincode,
-              isDefault: data.addresses.is_default,
-            }
-          : null,
+        shipTo: {
+          line1: data.ship_to_line1,
+          line2: data.ship_to_line2,
+          city: data.ship_to_city,
+          state: data.ship_to_state,
+          pincode: data.ship_to_pincode,
+        },
         items: (data.order_items ?? []).map((item) => ({
           id: item.id,
           title: item.product_title_snapshot,

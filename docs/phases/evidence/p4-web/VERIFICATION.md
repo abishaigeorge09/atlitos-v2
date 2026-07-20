@@ -220,7 +220,34 @@ Remaining WARN classes are the carried forward P2/P3 debt (`auth_allow_anonymous
 
 ## Findings, ranked by severity
 
-### F1. HIGH. Order Detail renders the LIVE address, defeating the `ship_to_*` snapshot.
+### F1. HIGH. RESOLVED. Order Detail renders the LIVE address, defeating the `ship_to_*` snapshot.
+
+**Resolved 2026-07-20.** `getOrder` now selects
+`ship_to_line1, ship_to_line2, ship_to_city, ship_to_state, ship_to_pincode` and drops the
+`addresses ( ... )` join entirely. `OrderDetail.address: AddressRecord | null` became
+`OrderDetail.shipTo: OrderShipTo`, non nullable, since the snapshot columns are `not null` and
+cannot be nulled by an address delete. `apps/mobile/src/app/shop/order/[id]/index.tsx` renders
+`order.shipTo.*`, and the block is no longer conditional, so the deleted address case shows the
+address it actually shipped to instead of vanishing. My Orders never rendered an address, so it
+needed no change.
+
+Proof, run against `syzzfgaudpifwvbpycyi`. Order `#ATL00006` (`47f313f4`), address
+`c8971c75`. Edited the live address to "99 Regression Road, Unit 9, Mysuru, 570001", then read both
+sides of the same order row:
+
+| source | line1 | city | pincode |
+| --- | --- | --- | --- |
+| live `addresses` join, what the OLD code rendered | 99 Regression Road | Mysuru | 570001 |
+| `orders.ship_to_*`, what the NEW code renders | 12 Verification Lane | Bengaluru | 560001 |
+
+The new `getOrder` column list returns the original snapshot while the live row says something else,
+which is exactly the divergence the old join collapsed. Address `c8971c75` restored to
+"12 Verification Lane, Flat 3, Bengaluru, 560001" and re-read to confirm.
+
+`grep -rn ship_to_ apps packages` now returns app code in both `apps/admin` and `apps/mobile`, not
+just types and migrations. `pnpm turbo typecheck build lint` green, 24/24.
+
+Original finding, for the record:
 
 The database half is correct and I verified it directly: I edited address
 `c8971c75-5b0f-4a8f-824f-3b90857fdfd0` to "77 Snapshot Test Road, Mysuru, 570001" and all three
@@ -263,7 +290,15 @@ this track verified is backend and API level.
 
 `docs/phases/evidence/p4-web/` therefore contains this document and no screenshots.
 
-### F3. MEDIUM. The admin Order Detail shows no delivery address at all.
+### F3. MEDIUM. RESOLVED. The admin Order Detail shows no delivery address at all.
+
+**Resolved 2026-07-20.** `apps/admin/src/pages/orders/show.tsx` now selects the five `ship_to_*`
+columns and renders a Delivery address card between Items and Bill, with a lucide `MapPin`, tokened
+spacing and colors, and the pincode in `Mono`. It reads the snapshot, not `address_id`, for the same
+reason the shopper screen does. `address_id` stays in the select as the "which saved address was
+picked" support field and is not rendered.
+
+Original finding, for the record:
 
 `apps/admin/src/pages/orders/show.tsx` line 58 selects `address_id` but never selects or renders any
 address field, snapshot or joined. An admin advancing a parcel to `shipped` cannot see where it is
@@ -298,5 +333,7 @@ documentation drift only; the code path is correct and was exercised with the re
 - Order `#ATL00008` `d20cff4c` created and advanced to `shipped`, with its balanced ledger group.
 - Address `c8971c75` was edited for the F1 snapshot test and **restored** to "12 Verification Lane,
   Bengaluru, 560001".
+- Address `c8971c75` was edited a second time for the F1 fix proof (2026-07-20) and **restored**
+  again to "12 Verification Lane, Flat 3, Bengaluru, 560001", confirmed by re-read.
 - Variant `30000000-...-0004` **restored to raw stock 1** so the AT-87 probe is re-runnable as seeded.
 - All reservations opened by these probes were released; `held_qty` on the probe variant is 0.
