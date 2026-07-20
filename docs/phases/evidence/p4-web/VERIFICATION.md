@@ -275,7 +275,19 @@ a small, contained change in `getOrder` plus the render block.
 
 Reproduction: edit the default address in the address book, then open any past order.
 
-### F2. HIGH. The web UI drive could not be run, so gate clause 1 is unverified and clause 7's light and dark evidence does not exist.
+### F2. HIGH. RESOLVED (Journeys A to D and F). The web UI drive could not be run, so gate clause 1 is unverified and clause 7's light and dark evidence does not exist.
+
+**Resolved 2026-07-20**, except Journey E's payment step. A browser was selected
+and the drive was run: see `README.md` in this directory for the 42 captures,
+light and dark, and for the four specific proofs (the zero roundup case both
+ways, the `ship_to_*` snapshot surviving an address edit, clean OUT_OF_STOCK
+copy, and per variant availability on the PDP). Drivers are committed as
+`scripts/verify-shopper-ui*.mjs`.
+
+Still open: a completed Razorpay payment, and therefore Order Success and order
+feedback, which need card details typed into the Razorpay sheet by the founder.
+
+Original finding, for the record:
 
 Four Chrome browsers are connected to this account. The browser tool requires the **user** to choose
 which one, and a subagent has no channel to ask. The documented failure mode of guessing is that
