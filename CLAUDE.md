@@ -21,6 +21,18 @@ Agents are spun up fresh per phase and have no memory beyond what is written in 
 - **Concise, benefit-led microcopy.** Say what it does for the user, briefly. No filler.
 - **lucide icon names only** wherever icons are referenced in code or docs. No other icon library, no custom glyphs standing in for a lucide equivalent.
 
+## Scope every query by owner. RLS is not scoping.
+
+This codebase has been bitten three separate times by the same shape, so it is a rule now, not advice: **Postgres RLS policies are permissive-OR.** A table with both an owner policy and a public policy (`venues`, and any table that gains a public browse policy later) returns OTHER PEOPLE'S ROWS to an unscoped `select`. RLS is a security floor, not a scoping mechanism.
+
+Every read of such a table must carry its own explicit filter, typically `.eq("partner_user_id", user.id)` or the equivalent ownership join. That applies to app code, to seed scripts, and to test harnesses. The three incidents:
+
+1. `0014` venue-media storage policies: an unqualified `name` inside a join bound to `venues.name`, denying every partner upload. Fixed in `0016`.
+2. The portal-court venue picker, the FR-7 dashboard gate, and four onboarding queries: all showed or counted other partners' venues. Fixed across `55523e4` and `bb1b329`.
+3. `scripts/verify-realtime.mjs`'s own isolation test: picked a venue owned by someone else, which would have made the cross-partner assertion pass vacuously. Fixed in AT-62.
+
+Note the third one especially: a test written against an unscoped query does not fail, it passes for the wrong reason. When you write an isolation assertion, assert that the two parties' ids actually differ before trusting the result.
+
 ## Tokens only
 
 Every color, spacing, radius, typography, and motion value in every app resolves through `packages/theme` (mobile) or the portal's HSL CSS var token set (web, shadcn pattern). No hardcoded hex, no arbitrary Tailwind literals, no inline pixel values that bypass the spacing scale. If a value you need does not exist as a token, add it to `packages/theme` (or the portal's token file) first, then use it. Never hardcode around it.
