@@ -2,7 +2,7 @@ import { cn } from '@/lib/utils';
 import * as Haptics from 'expo-haptics';
 import { formatINR } from '@atlitos/theme';
 import { Heart, Minus, Package, Plus, ShoppingCart } from 'lucide-react-native';
-import { Image, Pressable, View } from 'react-native';
+import { Image, Pressable, StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
@@ -66,15 +66,28 @@ function ProductCard({
   );
 
   return (
-    <Pressable
-      onPress={onPress}
+    // Pressable overlay card, see docs/design/DESIGN-LANGUAGE.md. The card is a
+    // plain View; the card level press is an absolutely filled Pressable
+    // sibling that sits under the wishlist heart, the Add to cart button and
+    // the quantity stepper, so no action control is ever a descendant of
+    // another pressable.
+    <View
       className={cn(
-        'overflow-hidden rounded-xl border border-border bg-card active:opacity-90',
+        'overflow-hidden rounded-xl border border-border bg-card',
         isRow ? 'flex-row' : 'flex-col',
         className,
       )}
     >
-      <View className={cn('relative', isRow ? 'h-24 w-24' : 'w-full')}>
+      {onPress ? (
+        <Pressable
+          onPress={onPress}
+          accessibilityRole="button"
+          accessibilityLabel={title}
+          style={StyleSheet.absoluteFill}
+        />
+      ) : null}
+
+      <View pointerEvents="none" className={cn(isRow ? 'h-24 w-24' : 'w-full')}>
         {imageUri ? (
           <Image
             source={{ uri: imageUri }}
@@ -92,33 +105,42 @@ function ProductCard({
             <Package size={isRow ? 24 : 32} strokeWidth={1.75} color={colors.textTertiary} />
           </View>
         )}
-        {variant === 'grid' ? (
-          <Pressable
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {
-                // Haptics unavailable, not fatal.
-              });
-              onToggleWishlist?.();
-            }}
-            accessibilityRole="button"
-            className="absolute right-xs top-xs h-11 w-11 items-center justify-center rounded-pill bg-surface"
-          >
-            <Heart
-              size={18}
-              strokeWidth={1.75}
-              color={wishlisted ? colors.danger : colors.textSecondary}
-              fill={wishlisted ? colors.danger : 'transparent'}
-            />
-          </Pressable>
-        ) : null}
       </View>
 
-      <View className={cn('gap-sm p-lg', isRow && 'flex-1 justify-center')}>
-        <Text className="font-sans-medium text-sm text-text" numberOfLines={2}>
-          {title}
-        </Text>
+      {variant === 'grid' ? (
+        <Pressable
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {
+              // Haptics unavailable, not fatal.
+            });
+            onToggleWishlist?.();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={wishlisted ? 'Remove from wishlist' : 'Save to wishlist'}
+          style={{ zIndex: 1 }}
+          className="absolute right-xs top-xs h-11 w-11 items-center justify-center rounded-pill bg-surface"
+        >
+          <Heart
+            size={18}
+            strokeWidth={1.75}
+            color={wishlisted ? colors.danger : colors.textSecondary}
+            fill={wishlisted ? colors.danger : 'transparent'}
+          />
+        </Pressable>
+      ) : null}
 
-        {priceBlock}
+      <View
+        pointerEvents="box-none"
+        style={{ zIndex: 1 }}
+        className={cn('gap-sm p-lg', isRow && 'flex-1 justify-center')}
+      >
+        <View pointerEvents="none" className="gap-sm">
+          <Text className="font-sans-medium text-sm text-text" numberOfLines={2}>
+            {title}
+          </Text>
+
+          {priceBlock}
+        </View>
 
         {variant === 'grid' ? (
           <Button variant="ghost" size="sm" className="border border-border-strong" onPress={onAddToCart}>
@@ -141,7 +163,9 @@ function ProductCard({
             >
               <Minus size={16} strokeWidth={1.75} color={colors.text} />
             </Pressable>
-            <Text className="font-mono-semibold min-w-6 text-center text-base text-text">{quantity}</Text>
+            <View pointerEvents="none">
+              <Text className="font-mono-semibold min-w-6 text-center text-base text-text">{quantity}</Text>
+            </View>
             <Pressable
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {
@@ -157,7 +181,7 @@ function ProductCard({
           </View>
         ) : null}
       </View>
-    </Pressable>
+    </View>
   );
 }
 

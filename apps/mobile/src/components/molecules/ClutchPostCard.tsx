@@ -3,7 +3,7 @@ import { useThemeColors } from '@/theme/use-theme-colors';
 import type { Clip } from '@atlitos/types';
 import * as Haptics from 'expo-haptics';
 import { Heart, MessageCircle, Share2 } from 'lucide-react-native';
-import { Image, Pressable, View } from 'react-native';
+import { Image, Pressable, StyleSheet, View } from 'react-native';
 
 /**
  * SPEC #23. Two variants: `feed` (full video card with engagement rail, per
@@ -59,28 +59,39 @@ export function ClutchPostCard({ clip, variant = 'feed', onLike, onComment, onSh
   }
 
   return (
-    <Pressable
-      onPress={onOpen}
-      role="button"
-      className="overflow-hidden rounded-md bg-text"
-      style={{ width: '100%', aspectRatio: 9 / 16 }}
-    >
+    // Pressable overlay card, see docs/design/DESIGN-LANGUAGE.md. The card is a
+    // plain View. The open-the-clip press is an absolutely filled Pressable
+    // sibling rendered before the caption and the engagement rail, so the View
+    // all comments link and the like, comment and share buttons are siblings of
+    // it rather than nested buttons.
+    <View className="overflow-hidden rounded-md bg-text" style={{ width: '100%', aspectRatio: 9 / 16 }}>
       {clip.thumbUrl ? (
-        <Image source={{ uri: clip.thumbUrl }} className="absolute inset-0 h-full w-full" resizeMode="cover" />
+        <View pointerEvents="none" className="absolute inset-0">
+          <Image source={{ uri: clip.thumbUrl }} className="h-full w-full" resizeMode="cover" />
+        </View>
       ) : null}
 
-      <View className="absolute inset-x-0 bottom-0 gap-xs p-md" style={{ right: 64 }}>
-        <View className="flex-row items-center gap-sm">
-          <Text className="font-sans-semibold text-text-inverse">{clip.channel}</Text>
-          <Text className="text-xs text-text-inverse opacity-80">{timeAgo(clip.createdAt)}</Text>
+      <Pressable
+        onPress={onOpen}
+        role="button"
+        accessibilityLabel={`Open clip by ${clip.channel}`}
+        style={StyleSheet.absoluteFill}
+      />
+
+      <View pointerEvents="box-none" className="absolute inset-x-0 bottom-0 gap-xs p-md" style={{ right: 64, zIndex: 1 }}>
+        <View pointerEvents="none" className="gap-xs">
+          <View className="flex-row items-center gap-sm">
+            <Text className="font-sans-semibold text-text-inverse">{clip.channel}</Text>
+            <Text className="text-xs text-text-inverse opacity-80">{timeAgo(clip.createdAt)}</Text>
+          </View>
+          {clip.topComment ? (
+            <Text className="text-xs text-text-inverse opacity-90" numberOfLines={1}>
+              {clip.topComment.username}: {clip.topComment.text}
+            </Text>
+          ) : null}
         </View>
-        {clip.topComment ? (
-          <Text className="text-xs text-text-inverse opacity-90" numberOfLines={1}>
-            {clip.topComment.username}: {clip.topComment.text}
-          </Text>
-        ) : null}
         {clip.commentCount > 0 ? (
-          <Pressable onPress={onComment} hitSlop={8}>
+          <Pressable onPress={onComment} role="button" hitSlop={8} className="min-h-11 justify-center">
             <Text className="text-xs text-text-inverse opacity-75">
               View all {clip.commentCount} comments
             </Text>
@@ -88,7 +99,7 @@ export function ClutchPostCard({ clip, variant = 'feed', onLike, onComment, onSh
         ) : null}
       </View>
 
-      <View className="absolute bottom-md right-md items-center gap-lg">
+      <View pointerEvents="box-none" style={{ zIndex: 1 }} className="absolute bottom-md right-md items-center gap-lg">
         <Pressable onPress={handleLike} role="button" className="min-h-11 min-w-11 items-center justify-center gap-xs">
           <Heart
             size={24}
@@ -107,7 +118,7 @@ export function ClutchPostCard({ clip, variant = 'feed', onLike, onComment, onSh
           <Text className="text-xs text-text-inverse">Share</Text>
         </Pressable>
       </View>
-    </Pressable>
+    </View>
   );
 }
 

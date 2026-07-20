@@ -195,6 +195,22 @@ Lucide only, everywhere, always. No emoji, ever, as an icon substitute (this is 
 - **Money surfaces**: every screen touching money renders a `BillSummary` component (line items in `body`/`callout`, totals in `numericLg` mono), never a bare number. This mirrors the biased-approver's hard rule and is a design requirement, not just a build one. On mobile this is `apps/mobile/src/components/molecules/BillSummary.tsx`; on the web portals it is `@atlitos/ui-web`'s `BillSummary` (added in the Courts vertical slice pass), same rows-plus-total shape, expressed as vanilla CSS reading the same token set instead of nativewind classNames.
 - **Portals (court, life, admin)**: shadcn/ui component bones, same token values expressed as HSL CSS variables (see `packages/theme/src/index.ts` `hslVar`/`toCssVars` helpers), warm-light default with a dark toggle. GMV's sidebar-dashboard structure, not GMV's pink/cyan palette.
 
+## Interactive cards: the pressable overlay pattern
+
+**Never nest a `Pressable` (or any `Touchable*`) inside another one.** Under react-native-web a pressable carrying `role`/`accessibilityRole="button"` renders a real `<button>`, so a card that wraps its own secondary actions emits `Console Error: <button> cannot contain a nested <button>`, which is invalid HTML and a hydration error. On native there is no warning at all, so the same mistake fails silently: the tap target semantics are ambiguous and screen readers announce one control containing another. This shape was found in five components at once (ClutchPostCard, ProductCard, WishlistGrid, SessionCard, CourtCard), so it is a rule now, not advice.
+
+A card that is itself tappable AND carries its own action controls (a wishlist heart, Accept and Decline, Add to cart, a like or share rail) is built like this:
+
+1. The card container is a plain `View`. It never takes `onPress` and never carries a button role.
+2. The card level press is a `Pressable` with `style={StyleSheet.absoluteFill}`, `accessibilityRole="button"` and a meaningful `accessibilityLabel`, rendered as the **first** child so every later sibling paints and hit tests above it. Render it conditionally, so a card with no `onPress` gets no overlay and no spurious button.
+3. Purely presentational subtrees (images, titles, price blocks, info rows) are wrapped in a `View` with `pointerEvents="none"`, so taps anywhere over them fall through to the overlay and the whole card stays tappable.
+4. Layout wrappers that contain action controls get `pointerEvents="box-none"` plus `style={{ zIndex: 1 }}`. `box-none` makes the wrapper itself transparent to touches while its children stay interactive; the `zIndex` guarantees the controls sit above the absolutely positioned overlay rather than under it.
+5. Action controls are therefore **siblings** of the overlay, never descendants. Each keeps its own `accessibilityRole="button"`, its own label, and the 44pt minimum tap target (`min-h-11 min-w-11`, or `hitSlop` where the visual affordance is deliberately smaller).
+
+Consequence to accept: the container can no longer carry `active:opacity-90`, because the pressed state now lives on a transparent overlay. Losing card level press feedback is the correct trade for valid HTML and unambiguous hit resolution. If a card needs press feedback, put it on the overlay, not on the container.
+
+The one sanctioned exception is the modal backdrop idiom (`ConfirmSheet`, `LoginGateModal`, and the variant pickers): a roleless backdrop `Pressable` wrapping a roleless `Pressable` that calls `event.stopPropagation()` to swallow sheet taps. Neither carries a button role, so neither renders a `<button>`, and the nesting is what makes dismiss-on-backdrop work. Do not add `accessibilityRole="button"` to either of those.
+
 ## Voice and copy rules
 
 - No emojis, anywhere, ever, including in placeholder copy, commit-adjacent user-facing strings, and empty states. Use a lucide icon instead.

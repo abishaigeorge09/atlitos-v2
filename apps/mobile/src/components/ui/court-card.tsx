@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils';
 import { formatINR } from '@atlitos/theme';
 import { LandPlot, MapPin } from 'lucide-react-native';
-import { Image, Pressable, View } from 'react-native';
+import { Image, Pressable, StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
@@ -41,22 +41,34 @@ function CourtCard({
   const colors = useThemeColors();
 
   return (
-    <Pressable
-      onPress={onPress}
-      className={cn('overflow-hidden rounded-xl border border-border bg-card active:opacity-90', className)}
-    >
-      {imageUri ? (
-        <Image source={{ uri: imageUri }} className="h-36 w-full rounded-t-xl" resizeMode="cover" />
-      ) : (
-        <View className="h-36 w-full items-center justify-center rounded-t-xl bg-surface-muted">
-          <LandPlot size={32} strokeWidth={1.75} color={colors.textTertiary} />
-        </View>
-      )}
+    // Pressable overlay card, see docs/design/DESIGN-LANGUAGE.md. The card is a
+    // plain View so Book is a sibling of the card level press target, not a
+    // button nested inside another button.
+    <View className={cn('overflow-hidden rounded-xl border border-border bg-card', className)}>
+      {onPress ? (
+        <Pressable
+          onPress={onPress}
+          accessibilityRole="button"
+          accessibilityLabel={name}
+          style={StyleSheet.absoluteFill}
+        />
+      ) : null}
 
-      <View className="gap-sm p-lg">
-        <Text className="font-sans-semibold text-lg text-text">{name}</Text>
+      <View pointerEvents="none">
+        {imageUri ? (
+          <Image source={{ uri: imageUri }} className="h-36 w-full rounded-t-xl" resizeMode="cover" />
+        ) : (
+          <View className="h-36 w-full items-center justify-center rounded-t-xl bg-surface-muted">
+            <LandPlot size={32} strokeWidth={1.75} color={colors.textTertiary} />
+          </View>
+        )}
+      </View>
 
-        <View className="flex-row items-center gap-xs">
+      <View pointerEvents="box-none" style={{ zIndex: 1 }} className="gap-sm p-lg">
+        <View pointerEvents="none" className="gap-sm">
+          <Text className="font-sans-semibold text-lg text-text">{name}</Text>
+
+          <View className="flex-row items-center gap-xs">
           <MapPin size={14} strokeWidth={1.75} color={colors.textTertiary} />
           <Text className="flex-1 font-sans text-sm text-text-secondary" numberOfLines={1}>
             {location}
@@ -64,20 +76,23 @@ function CourtCard({
           {distanceKm !== undefined ? (
             <Text className="font-mono text-xs text-text-secondary">{distanceKm.toFixed(1)} km</Text>
           ) : null}
+          </View>
         </View>
 
-        <View className="flex-row items-center justify-between pt-xs">
-          <Text className="font-mono-semibold text-base text-text">
-            {formatINR(pricePerHour)}
-            <Text className="font-sans text-sm text-text-secondary">/hour</Text>
-          </Text>
+        <View pointerEvents="box-none" className="flex-row items-center justify-between pt-xs">
+          <View pointerEvents="none">
+            <Text className="font-mono-semibold text-base text-text">
+              {formatINR(pricePerHour)}
+              <Text className="font-sans text-sm text-text-secondary">/hour</Text>
+            </Text>
+          </View>
 
           <Button variant="primary" size="sm" onPress={onBookPress}>
             <Text>Book</Text>
           </Button>
         </View>
       </View>
-    </Pressable>
+    </View>
   );
 }
 

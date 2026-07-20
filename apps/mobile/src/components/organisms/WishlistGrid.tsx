@@ -4,7 +4,7 @@ import { useThemeColors } from '@/theme/use-theme-colors';
 import { formatINR, radii, spacing } from '@atlitos/theme';
 import * as Haptics from 'expo-haptics';
 import { Heart } from 'lucide-react-native';
-import { FlatList, Image, Pressable, Text, View } from 'react-native';
+import { FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 export interface WishlistProductItem {
   kind: 'product';
@@ -59,12 +59,11 @@ export function WishlistGrid({ variant, items, numColumns = 2 }: WishlistGridPro
       columnWrapperStyle={numColumns > 1 ? { gap: spacing.md } : undefined}
       contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}
       renderItem={({ item }) => (
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            item.onPress();
-          }}
+        // Pressable overlay card, see docs/design/DESIGN-LANGUAGE.md. The card
+        // is a plain View so the remove heart and the Move to cart / Fund this
+        // buttons are siblings of the card level press target, not descendants
+        // of it.
+        <View
           style={{
             flex: 1,
             gap: spacing.sm,
@@ -75,8 +74,31 @@ export function WishlistGrid({ variant, items, numColumns = 2 }: WishlistGridPro
             padding: spacing.md,
           }}
         >
-          <View style={{ borderRadius: radii.md, backgroundColor: colors.surfaceMuted, aspectRatio: 1, overflow: 'hidden' }}>
-            {item.imageUrl ? <Image source={{ uri: item.imageUrl }} style={{ flex: 1 }} /> : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={item.title}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              item.onPress();
+            }}
+            style={StyleSheet.absoluteFill}
+          />
+
+          <View
+            pointerEvents="box-none"
+            style={{
+              zIndex: 1,
+              borderRadius: radii.md,
+              backgroundColor: colors.surfaceMuted,
+              aspectRatio: 1,
+              overflow: 'hidden',
+            }}
+          >
+            {item.imageUrl ? (
+              <View pointerEvents="none" style={{ flex: 1 }}>
+                <Image source={{ uri: item.imageUrl }} style={{ flex: 1 }} />
+              </View>
+            ) : null}
             {variant === 'product' ? (
               <Pressable
                 accessibilityRole="button"
@@ -103,16 +125,18 @@ export function WishlistGrid({ variant, items, numColumns = 2 }: WishlistGridPro
             ) : null}
           </View>
 
-          <Text style={[textStyle('callout'), { color: colors.text }]} numberOfLines={2}>
-            {item.title}
-          </Text>
+          <View pointerEvents="none">
+            <Text style={[textStyle('callout'), { color: colors.text }]} numberOfLines={2}>
+              {item.title}
+            </Text>
+          </View>
 
           {variant === 'product' ? (
             <ProductActions item={item as WishlistProductItem} />
           ) : (
             <UpaProgress item={item as WishlistUpaItem} />
           )}
-        </Pressable>
+        </View>
       )}
     />
   );
@@ -126,13 +150,15 @@ function ProductActions({ item }: { item: WishlistProductItem }) {
   const soldOut = item.availableStock !== undefined && item.availableStock === 0;
 
   return (
-    <View style={{ gap: spacing.xs }}>
-      <Text style={[textStyle('numericBase'), { color: colors.text }]}>{formatINR(item.price)}</Text>
-      {item.availableStock !== undefined ? (
-        <Text style={[textStyle('numericSm'), { color: soldOut ? colors.danger : colors.textSecondary }]}>
-          {soldOut ? 'Out of stock' : `${item.availableStock} in stock`}
-        </Text>
-      ) : null}
+    <View pointerEvents="box-none" style={{ zIndex: 1, gap: spacing.xs }}>
+      <View pointerEvents="none" style={{ gap: spacing.xs }}>
+        <Text style={[textStyle('numericBase'), { color: colors.text }]}>{formatINR(item.price)}</Text>
+        {item.availableStock !== undefined ? (
+          <Text style={[textStyle('numericSm'), { color: soldOut ? colors.danger : colors.textSecondary }]}>
+            {soldOut ? 'Out of stock' : `${item.availableStock} in stock`}
+          </Text>
+        ) : null}
+      </View>
       {item.onMoveToCart ? (
         <Button size="sm" disabled={soldOut} onPress={item.onMoveToCart}>
           <Text style={[textStyle('label'), { color: colors.inkOnAccent }]}>Move to cart</Text>
@@ -147,13 +173,15 @@ function UpaProgress({ item }: { item: WishlistUpaItem }) {
   const pct = item.cost > 0 ? Math.min(1, item.fundedAmount / item.cost) : 0;
 
   return (
-    <View style={{ gap: spacing.xs }}>
-      <View style={{ height: 6, borderRadius: radii.pill, backgroundColor: colors.surfaceMuted, overflow: 'hidden' }}>
-        <View style={{ height: 6, width: `${pct * 100}%`, backgroundColor: colors.accent }} />
+    <View pointerEvents="box-none" style={{ zIndex: 1, gap: spacing.xs }}>
+      <View pointerEvents="none" style={{ gap: spacing.xs }}>
+        <View style={{ height: 6, borderRadius: radii.pill, backgroundColor: colors.surfaceMuted, overflow: 'hidden' }}>
+          <View style={{ height: 6, width: `${pct * 100}%`, backgroundColor: colors.accent }} />
+        </View>
+        <Text style={[textStyle('numericSm'), { color: colors.textSecondary }]}>
+          {formatINR(item.fundedAmount)} of {formatINR(item.cost)}
+        </Text>
       </View>
-      <Text style={[textStyle('numericSm'), { color: colors.textSecondary }]}>
-        {formatINR(item.fundedAmount)} of {formatINR(item.cost)}
-      </Text>
       <Button size="sm" onPress={item.onFund}>
         <Text style={[textStyle('label'), { color: colors.inkOnAccent }]}>Fund this</Text>
       </Button>

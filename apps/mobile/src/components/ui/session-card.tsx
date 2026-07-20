@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils';
 import { Calendar, MapPin, Target } from 'lucide-react-native';
-import { Pressable, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
@@ -52,28 +52,39 @@ function SessionCard({
   className,
 }: SessionCardProps) {
   return (
-    <Pressable
-      onPress={onPress}
-      disabled={!onPress}
+    // Pressable overlay card, see docs/design/DESIGN-LANGUAGE.md. The card is a
+    // plain View so the request variant's Accept and Decline buttons are
+    // siblings of the card level press target, not nested inside it. Tapping
+    // Accept therefore cannot also open the session.
+    <View
       className={cn(
-        'gap-md rounded-xl border border-border bg-card p-lg active:opacity-90',
+        'gap-md rounded-xl border border-border bg-card p-lg',
         variant === 'history' && 'opacity-80',
         className,
       )}
     >
-      <View className="flex-row items-center justify-between">
+      {onPress ? (
+        <Pressable
+          onPress={onPress}
+          accessibilityRole="button"
+          accessibilityLabel={`${personName}, ${date}, ${timeSlot}`}
+          style={StyleSheet.absoluteFill}
+        />
+      ) : null}
+
+      <View pointerEvents="none" className="flex-row items-center justify-between">
         <Text className="font-sans-semibold text-lg text-text">{personName}</Text>
         <Text className="font-mono text-sm text-text-secondary">{sessionType}</Text>
       </View>
 
-      <View className="gap-xs">
+      <View pointerEvents="none" className="gap-xs">
         <InfoRow icon={Calendar} text={`${date}, ${timeSlot}`} />
         <InfoRow icon={Target} text={focusArea} />
         <InfoRow icon={MapPin} text={location} />
       </View>
 
       {variant === 'request' ? (
-        <View className="flex-row gap-sm pt-xs">
+        <View pointerEvents="box-none" style={{ zIndex: 1 }} className="flex-row gap-sm pt-xs">
           <Button variant="primary" size="sm" className="flex-1" onPress={onAccept}>
             <Text>Accept</Text>
           </Button>
@@ -82,7 +93,7 @@ function SessionCard({
           </Button>
         </View>
       ) : null}
-    </Pressable>
+    </View>
   );
 }
 
