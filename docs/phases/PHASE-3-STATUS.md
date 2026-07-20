@@ -6,9 +6,28 @@ Gate (docs/PLAN.md P3, AMENDED 2026-07-20): "v1 Journeys 2+3 with test payments,
 
 Planned 2026-07-19. Stories AT-35 through AT-64 (five were added mid-phase by verification findings: AT-60 the FR-19 cancel and refund, AT-61 the transition bypass, AT-62 the Realtime publication gap, AT-63 the coach discovery RLS defect, AT-64 the Alert.alert no-op).
 
-## Gate: REJECTED cycle 1 (2026-07-20), cycle-2 punch list in progress
+## Gate: APPROVED cycle 2 (2026-07-20)
 
-The gate is met when all of the following are true on the deployed stack:
+Rejected cycle 1, approved cycle 2 on the same day, no escalation. What the
+approver actually verified, so P4 does not have to re-derive it:
+
+- **Session 99384050** (`99384050-a82c-461a-a930-e08a3e934936`) rated against a
+  captured payment intent, coach side and athlete side agreeing.
+- **Ledger group 3ef7ac3f balanced**: 1000 platform debit, 990 coach credit,
+  10 platform fee credit. Sums to zero, fee carved out of the coach's price as
+  SCHEMA.md specifies, not added on top.
+- **Session 43c52265** (`43c52265-2fa8-493a-8807-6db2e36a7ec9`) refunded.
+  `refunds` row `rfnd_TFhrCu5zWLRuzd`, status processed, amount 1000.00,
+  attempts 1, reversing ledger group f627e3fd. One refund, one reversal, no
+  duplicate on the webhook.
+- **Six ledger groups total, all balanced, one per entity, no double accrual.**
+  The idempotency guard on complete and on refund both held.
+- **Coach wallet 990.00 agrees across three independent readings**: the raw
+  `ledger_entries` rows, `get_coach_wallet_balance()` called under the coach's
+  own JWT, and the rendered earnings screen. The number the coach sees is the
+  number the ledger holds.
+
+The gate clauses, all met on the deployed stack:
 
 1. PRD-01 Journey 2 end to end: browse coaches, book a session with a real Razorpay test payment, session lands in `requested`, chat with the coach, coach accepts, session completes, athlete rates once and a second attempt is rejected.
 2. PRD-02 Journey C, as far as the account permits (amended 2026-07-20): coach earnings balance derived from `ledger_entries` and correct; the Route onboarding and transfer functions built, deployed, and shown to handle the real API's not-entitled response honestly rather than faking success; the transfer path's ledger and `transfers` writes exercised in a rolled back transaction so the maths is proven without live money. DEFERRED TO P8: payout account reaching `active` and a live transfer landing. Tracked as a P8 hardening item; must run before any real money moves.
@@ -62,6 +81,13 @@ The gate is met when all of the following are true on the deployed stack:
 ### Track G: verification (opus and sonnet)
 - [x] AT-58 Verify native Razorpay checkout on the iOS simulator — native checkout VERIFIED end to end (docs/phases/evidence/p3-native/). Screen-level native coverage deferred to P8; the checkout FAILURE path is still unverified, see the deferral section.
 - [x] AT-59 Prove Realtime instant push for chat messages and session transitions
+
+### Track H: added mid-phase by verification findings (opus)
+- [x] AT-60 Athlete cancels an unanswered session request, with automatic full refund
+- [x] AT-61 Close the money-consequential transition bypass in session_transition
+- [x] AT-62 Add court_bookings and sessions to the Realtime publication (root cause of AT-32)
+- [x] AT-63 Coach discovery RLS defect: coach_profiles had no non-owner select policy
+- [ ] AT-64 Alert.alert is a no-op on react-native-web. NOT DONE, deferred to P8, see the open defects section. Left open on the board deliberately.
 
 ## Deferred to P8: the live Route transfer (gate clause 2)
 
@@ -122,6 +148,48 @@ README. The next phase's agents read this file, not those.
 - **`tmp-seed-demo-users` is still ACTIVE and JWT-callable** on the project, a
   temporary seeding function left deployed since P2. Needs dashboard access to
   delete. Founder action.
+- **Real app screens do not follow the system dark preference on web.**
+  `apps/mobile/src/theme/use-theme-colors.ts` resolves nativewind's
+  `useColorScheme()`. On a fresh hard load of any real route on Expo web, the
+  screen renders light even when the OS reports `prefers-color-scheme: dark`,
+  while `dev/gallery`'s own toggle resolves the same system signal as dark
+  correctly. So the system-follow path is broken for real routes and works only
+  in the dev-only gallery. DESIGN-LANGUAGE.md says dark is first class, not an
+  inverted afterthought; today it silently is not, on web. Either an
+  initial-render/hydration mismatch sticking to a light default, or two
+  different resolution paths. Not chased in P3 because the ask was to produce
+  dark evidence, not to fix theme resolution. Home: P8, alongside the other
+  theming and native-surface debt. Found in
+  docs/phases/evidence/p3-web-cycle2/README.md.
+
+### New advisories from cycle 2
+
+- **Nested Pressables in the coach request preview.**
+  `apps/mobile/src/app/(tabs)/trainings/index.tsx:240` renders `SessionCard`
+  with `variant="request"`, which puts the card's Accept and Decline pressables
+  inside the card's own pressable. React DOM raises a nesting error on web, and
+  natively the hit resolution between outer card tap and inner action tap is
+  ambiguous rather than merely noisy. Both actions are money-consequential
+  (accept holds a slot against a captured payment, decline is on the refund
+  path), so an ambiguous tap is not cosmetic. Home: P8, or sooner if a coach
+  track reopens this screen.
+- **The cancelled session detail screen does not surface the refund to the
+  athlete who is owed it** (PRD-02 FR-35). The screen shows the cancellation
+  state and generic refund status copy but no refund amount and no distinct
+  processed-refund line, so an athlete owed 1000.00 has no in-app confirmation
+  that the money is coming back. The data exists: the `refunds` row and the
+  reversing ledger group are both written and were verified this cycle. This is
+  a rendering gap, not a money gap. Pre-existing, not introduced by cycle 2.
+  Home: P4 Commerce, since P4 touches the same athlete-facing money surfaces and
+  BillSummary anyway; escalate to P8 if P4 cannot absorb it.
+- **Stale `requested` sessions hold slots against unpaid `created` intents.**
+  Live instances on the project right now: sessions `4a64c535` and `4ee5bca9`.
+  An athlete who abandons the checkout sheet leaves a `requested` session
+  occupying a coach's slot with no captured payment, and nothing sweeps it. This
+  is the AT-26 expiry sweep debt, which was scoped to courts and now
+  demonstrably covers sessions too. Do not build a second sweep; widen AT-26 to
+  cover both domains. Home: AT-26. Note for P4: commerce orders will make this
+  three domains, see the handoff notes.
 
 ## Carried-forward advisory debt that touches P3
 
@@ -143,4 +211,126 @@ README. The next phase's agents read this file, not those.
 
 - **Razorpay Route test-mode sub-merchant onboarding. CONFIRMED BLOCKED, and now the only thing standing between AT-42 and a working payout account.** Verified against the live `rzp_test` credentials during AT-42: `POST https://api.razorpay.com/v2/accounts` returns HTTP 400 `{"error":{"code":"BAD_REQUEST_ERROR","description":"Route feature not enabled for the merchant","source":"business","step":"linked_account_create"}}`. Route must be enabled on the test merchant account in the Razorpay dashboard (Settings, then request the Route product) before any linked account can be created. `razorpay-route-onboard` is built, deployed, and correct; it surfaces this as `503 ROUTE_UNAVAILABLE` with the upstream description passed through, and it was deliberately not stubbed to fake success. AT-43 (transfers) inherits the same blocker, and the gate's "visible Route transfer" clause cannot be met until this is done.
 - **Simulator payment testing.** AT-58 needs a real test-card payment through the native checkout sheet on the simulator. Agents do not enter card details. Either the founder performs the payment, or he grants the terminal Accessibility and Screen Recording permissions so the simulator can be driven for everything up to the card entry step.
-- **Open questions from PRD-02 section 9** that P3 builds past on assumption: the coaching platform fee rate (item 1, assumed to mirror courts via a `sessions.platform_fee_flat` fee_config row), the cancel and reschedule notice window (item 3, assumed none in v1), Route transfer minimums and any transfer fee (item 5, assumed zero so the BillSummary fee row may be omitted), and the analytics insufficient-data threshold (item 6, assumed 3 completed sessions).
+- **Four open questions from PRD-02 section 9. P3 shipped on assumptions, and
+  the assumptions are now live in the product and in real ledger rows.** Each
+  one below is a decision the founder still owes; until then the stated
+  assumption is what athletes and coaches actually experience. Correcting any of
+  them is a config or migration change, not a rebuild, but the first two change
+  money already accrued.
+
+  1. **Coaching platform fee rate** (section 9 item 1). ASSUMED: mirrors courts,
+     via a `sessions.platform_fee_flat` row in `fee_config`. Live consequence:
+     the verified ledger group carved 10 off a 1000 session, so the coach
+     received 990. If the real rate is a percentage rather than a flat amount,
+     or a different number, every accrual written from here forward is wrong
+     until the `fee_config` row is corrected.
+  2. **Cancel and reschedule notice window** (item 3). ASSUMED: none in v1. Live
+     consequence: an athlete can cancel a `requested` session at any time and
+     receive a full automatic refund, including minutes before the slot. A coach
+     can hold a slot and lose it with no notice protection.
+  3. **Route transfer minimums and any transfer fee** (item 5). ASSUMED: zero,
+     so the transfer BillSummary omits a fee row entirely. Unexercised so far
+     because Route is not enabled; if Razorpay charges per transfer or enforces a
+     minimum, the transfer screen understates the cost and the fee row has to be
+     added back before any real payout.
+  4. **Analytics insufficient-data threshold** (item 6). ASSUMED: 3 completed
+     sessions, kept as a single named constant so it is a one-line change. Live
+     consequence: a coach with 2 completed sessions sees the empty state rather
+     than a chart. Lowest stakes of the four.
+
+## HANDOFF NOTES for the P4 Commerce planner
+
+You start cold. This section is the only memory you have of P3. Read it before
+cutting stories.
+
+### What you inherit that already works
+
+Do not rebuild any of this. It is deployed, exercised against real money in test
+mode, and verified by the approver at the P3 gate.
+
+- **Payment intents.** `payment_intents` carries a `domain` column and is the
+  single record of an in-flight charge across every domain. Commerce adds a
+  value to that column; it does not add a table.
+- **The shared finalize gate.** `supabase/functions/_shared/finalize-payment.ts`
+  owns the idempotency UPDATE and dispatches by `payment_intents.domain`. Both
+  `verify-payment` (the client callback, the reliable path) and
+  `razorpay-webhook` (the backup, which can lag on retry backoff) call only it.
+  There is exactly ONE capture gate in this system and adding a domain must not
+  create a second.
+- **The webhook, with its header fix.** Razorpay puts the event id in the
+  `x-razorpay-event-id` HEADER, not the body. Reading `event.id` yields
+  undefined and violates the `webhook_events` not-null primary key on every
+  delivery. This is fixed and dedupe runs through `webhook_events`. Any new
+  commerce webhook event you handle inherits the same rule.
+- **The double-entry ledger.** `ledger_entries` in balanced groups, one group per
+  money event, verified balanced six times over at this gate. There is no
+  denormalized balance column anywhere and you must not add one. Balances are
+  always derived by summing entries.
+- **`BillSummary`.** The one shared price-breakdown component. Every screen that
+  shows a money total uses it. Commerce carts and checkout use it too; do not
+  hand-roll a cart total.
+- **The state-machine RPC pattern.** Money-bearing entities transition through a
+  SECURITY DEFINER Postgres RPC that raises `INVALID_TRANSITION` on an illegal
+  edge and checks caller identity inside the function. Money-consequential
+  transitions are service-role only (AT-61), so the edge function is the sole
+  path. Orders get the same shape: an `order_transition` RPC, not client code
+  setting a status field.
+
+### The CLAUDE.md permissive-OR rule, and why it exists
+
+Postgres RLS policies are permissive-OR. A table carrying both an owner policy
+and a public browse policy returns OTHER PEOPLE'S ROWS to an unscoped select.
+RLS is a security floor, not a scoping mechanism. Every read of such a table
+carries its own explicit ownership filter, in app code, in seed scripts, and in
+test harnesses.
+
+This has bitten the codebase four times now, and P3 supplied two of them:
+`sessions` is readable by both coach and player, so every role-specific list
+filters by `coach_id` or `player_id` explicitly; and AT-63 was the inverse
+failure, where `coach_profiles` had NO non-owner select policy, so an EXISTS
+subquery against it was always false and coach discovery into booking was dead
+for every real athlete until nine minutes before the cycle-1 evidence was
+captured. Commerce is the highest-risk surface yet for this, because a product
+catalog is public-browse by definition while orders are strictly owner-scoped,
+and they will sit next to each other in the same queries. Also note the P2
+lesson: a test written against an unscoped query does not fail, it passes for the
+wrong reason. Assert that two parties' ids actually differ before trusting an
+isolation result.
+
+### Clients never write money rows
+
+Restating because it is the one rule the approver blocks on with no exceptions.
+No client-side insert or update against `payment_intents`, `ledger_entries`,
+`payout_accounts`, `transfers`, `refunds`, or any status field on a money-bearing
+row. Ledger writes happen only in edge functions under the service role. The
+price shown client side is always re-validated server side at the point of
+charge, preserving `PRICE_MISMATCH`. A client-supplied amount is never final.
+
+### Specific traps P4 will hit
+
+1. **Commerce orders are a THIRD domain in `finalize-payment.ts`, alongside
+   court and session.** The dispatch already has two branches that work; yours
+   must follow the same shape, one branch plus one `finalize-order-payment.ts`.
+   Do not fork the gate, do not add a parallel capture path for carts because
+   carts feel different, and do not let the webhook and the client callback
+   diverge into two implementations. That divergence is the failure mode this
+   design exists to prevent.
+2. **The AT-26 expiry sweep now owes three domains.** It was cut for courts,
+   P3 proved sessions have the identical stale-hold problem (two live instances,
+   `4a64c535` and `4ee5bca9`), and commerce adds abandoned carts holding stock
+   against unpaid `created` intents. Still no sweep is wired. Widen AT-26 to
+   cover all three; do not cut a third separate sweep story.
+3. **Route is not enabled on the merchant account, so no seller payouts can be
+   proven in P4.** `POST /v2/accounts` returns "Route feature not enabled for the
+   merchant" and `POST /v1/transfers` returns a bare 404 because the endpoint is
+   not routed at all for a non-Route merchant. Both classify as
+   `ROUTE_UNAVAILABLE` 503. If P4 scope includes paying a seller, that leg cannot
+   reach a verified state this phase; build it, make it fail honestly, and defer
+   the live proof to P8 exactly as P3 did for coach payouts. Do not stub it to
+   fake success, and do not plan a gate clause that depends on it.
+4. **Sessions price differently from courts, and commerce is a third pricing
+   shape.** Sessions carve the platform fee out of the coach's price, so
+   `sessions.total = sessions.price` and the athlete sees no fee row. Courts are
+   additive with subtotal, GST, and fee rows. Decide commerce's shape explicitly
+   and record it in SCHEMA.md before building BillSummary against it, rather than
+   copying whichever neighbour you read first.
