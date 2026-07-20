@@ -56,6 +56,11 @@ export function mapPostgrestError(error: { message: string; code?: string }): Ap
       "NOT_COACH",
       "TOO_EARLY",
       "SESSION_STARTED",
+      // AT-61: the bare RPC refusing a money-consequential action. Listed so
+      // it surfaces as itself rather than collapsing to INTERNAL, which is
+      // what makes a regressed call site visible instead of looking like a
+      // server fault.
+      "USE_EDGE_FUNCTION",
     ];
     const code = known.find((candidate) => candidate === prefix);
     if (code) {

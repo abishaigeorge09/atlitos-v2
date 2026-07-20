@@ -34,6 +34,15 @@ export type ApiErrorCode =
   // SESSION_STARTED guards cancel once the session has begun.
   | 'TOO_EARLY'
   | 'SESSION_STARTED'
+  // session_transition (0027_session_transition_service_role_gate.sql, AT-61):
+  // the action is money-consequential and its money half lives in an edge
+  // function, so the bare RPC refuses it. Raised for 'complete' from any
+  // state, and for 'cancel' when the session is still `requested`. NOT a
+  // permission failure: the caller may well be the right party, but the entry
+  // point is wrong, so the fix is to call complete-session /
+  // cancel-session-refund, never to hide the button. Client code should never
+  // surface this to a user; seeing it means a call site regressed to the RPC.
+  | 'USE_EDGE_FUNCTION'
   // book-session's Razorpay order creation failed server side (API-MAPPING.md)
   | 'RAZORPAY_ERROR'
   // court_booking_transition('cancel', ...)/(0009_courts.sql) requires a

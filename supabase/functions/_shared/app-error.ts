@@ -52,6 +52,11 @@ const STATUS_BY_CODE: Record<string, number> = {
   // named instead of flattening everything to a 400.
   TOO_EARLY: 409,
   SESSION_STARTED: 409,
+  // AT-61 (0027): session_transition refusing a money-consequential action to
+  // a non-service-role caller. 500, not 4xx: the edge functions call the
+  // service_role-only internal entry point, so if one of them ever sees this
+  // the server is misconfigured, not the client misbehaving.
+  USE_EDGE_FUNCTION: 500,
   // AT-44: the caller asked for a coach wallet but holds no coach role.
   NOT_COACH: 403,
   // AT-41: a session reached completion with no captured payment behind it.

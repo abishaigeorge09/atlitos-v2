@@ -12,12 +12,15 @@
 //
 // Order of operations, and every step of it is deliberate:
 //
-//   1. `session_transition(session_id, 'cancel')` called with the ATHLETE's
-//      own JWT, exactly as complete-session calls it with the coach's. The
-//      RPC is what enforces "only the booking athlete" and "only from
-//      requested"; this function adds no second opinion about who may cancel
-//      what. Under the service-role key auth.uid() is null and the RPC would
-//      reject, which is why two clients are used here.
+//   1. `session_transition_internal(actor, session_id, 'cancel')` called with
+//      the SERVICE-ROLE client (AT-61, 0027), exactly as complete-session
+//      calls it. The RPC is what enforces "only the booking athlete" and
+//      "only from requested"; this function adds no second opinion about who
+//      may cancel what. The actor is `getAuthenticatedUser()`'s id, validated
+//      against GoTrue, never read from the request body. Before 0027 this ran
+//      under the athlete's own JWT; it moved to the service role because
+//      `session_transition` is now closed to `authenticated` callers for a
+//      cancel from `requested`, which is what makes the refund unskippable.
 //   2. THE SESSION IS CANCELLED BEFORE RAZORPAY IS CALLED, and stays
 //      cancelled whatever Razorpay does. FR-35 is explicit: "the athlete is
 //      never left holding a `requested` session they have already cancelled".
@@ -51,7 +54,6 @@ import { AppError, appErrorFromPostgrestMessage } from "../_shared/app-error.ts"
 import {
   getAuthenticatedUser,
   serviceRoleClient,
-  userScopedClient,
 } from "../_shared/supabase.ts";
 import { razorpayRequest } from "../_shared/razorpay.ts";
 
@@ -122,14 +124,21 @@ Deno.serve((req) =>
 
     const body = parseRequestBody(await request.json().catch(() => null));
     const user = await getAuthenticatedUser(request);
-    const asAthlete = userScopedClient(request);
     const supabase = serviceRoleClient();
 
     // ------------------------------------------------------------------
-    // 1. Cancel, as the athlete. The RPC owns identity and the machine.
+    // 1. Cancel, under the SERVICE ROLE via the internal entry point
+    //    (AT-61, 0027). `session_transition('cancel')` now refuses an
+    //    `authenticated` caller with USE_EDGE_FUNCTION when the session is
+    //    `requested`, so this function is the only path to that cancellation
+    //    and FR-35's refund cannot be skipped. The RPC still owns identity
+    //    (athlete only) and the machine; the actor arrives as `p_actor_id`
+    //    because auth.uid() is null under the service-role key, and it comes
+    //    from getAuthenticatedUser's GoTrue-validated token, never the body.
     // ------------------------------------------------------------------
-    const { data: transitioned, error: transitionError } = await asAthlete
-      .rpc("session_transition", {
+    const { data: transitioned, error: transitionError } = await supabase
+      .rpc("session_transition_internal", {
+        p_actor_id: user.id,
         p_session_id: body.session_id,
         p_action: "cancel",
       })

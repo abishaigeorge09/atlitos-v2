@@ -7,13 +7,15 @@
 // way that event may happen, because it is the only place that does both
 // halves of it atomically enough to matter:
 //
-//   1. `session_transition(session_id, 'complete')` called with the COACH's
-//      own JWT (an anon-key client carrying their bearer token, not the
-//      service-role client). That RPC is `security definer` and reads
-//      `auth.uid()`, so it is what enforces "only the assigned coach", "only
-//      from accepted", and "only after the scheduled end time" (TOO_EARLY).
-//      Under the service-role key `auth.uid()` is null and the RPC would
-//      reject outright, which is why two clients are used here, deliberately.
+//   1. `session_transition_internal(actor, session_id, 'complete')` called
+//      with the SERVICE-ROLE client (AT-61, 0027). That RPC is `security
+//      definer` and enforces "only the assigned coach", "only from accepted",
+//      and "only after the scheduled end time" (TOO_EARLY) against the actor
+//      it is handed. The actor is `getAuthenticatedUser()`'s id, validated
+//      against GoTrue, never read from the request body. Before 0027 this ran
+//      under the coach's own JWT; it moved to the service role because
+//      `session_transition` is now closed to `authenticated` callers for this
+//      action, which is what makes step 2 unskippable.
 //   2. The balanced `ledger_entries` group, written by the SERVICE-ROLE
 //      client, per CLAUDE.md: "ledger writes happen only in edge functions
 //      running under the service role".
@@ -33,20 +35,20 @@
 // **Idempotency, three layers deep**, because AT-41 requires that a second
 // complete call cannot double credit:
 //
-//   a. `session_transition` itself refuses a second 'complete' with
-//      INVALID_TRANSITION, since the session is no longer `accepted`.
+//   a. the RPC itself refuses a second 'complete' with INVALID_TRANSITION,
+//      since the session is no longer `accepted`.
 //   b. Before writing, this function checks for an existing coach-credit
 //      ledger row for this session id and returns `already_accrued` if one
 //      exists. This is what makes the backfill path in (c) safe.
 //   c. If the transition fails but the session is ALREADY `completed` and has
-//      no accrual, the accrual is written anyway. That closes the one real
-//      gap in this design: `session_transition` is granted to `authenticated`,
-//      so a client could in principle call the RPC directly and complete a
-//      session without ever reaching this function, leaving the coach
-//      uncredited. Calling complete-session afterwards repairs it rather than
-//      failing with INVALID_TRANSITION and silently losing the coach's money.
-//      Track C's coach session detail screen must still call THIS function,
-//      not the bare RPC; the repair path is a safety net, not the contract.
+//      no accrual, the accrual is written anyway. This used to close a real
+//      gap: `session_transition` was granted to `authenticated`, so a client
+//      could complete a session without ever reaching this function, leaving
+//      the coach uncredited. AT-61 (0027) closed that gap at the source, so
+//      the path now only covers rows completed BEFORE 0027 and the case where
+//      a previous run of this function died between the transition and the
+//      ledger write. Kept, because both are real and both lose the coach's
+//      money if unrepaired.
 //
 // The fee is snapshotted on `sessions.platform_fee` at booking time (AT-40),
 // so an admin editing `fee_config` between booking and completion cannot
@@ -63,7 +65,6 @@ import { AppError, appErrorFromPostgrestMessage } from "../_shared/app-error.ts"
 import {
   getAuthenticatedUser,
   serviceRoleClient,
-  userScopedClient,
 } from "../_shared/supabase.ts";
 import { getActiveFeeConfig, round2 } from "../_shared/fee-config.ts";
 
@@ -125,14 +126,21 @@ Deno.serve((req) =>
 
     const body = parseRequestBody(await request.json().catch(() => null));
     const user = await getAuthenticatedUser(request);
-    const asCoach = userScopedClient(request);
     const supabase = serviceRoleClient();
 
-    // Run the state machine as the coach. Everything this RPC enforces
-    // (coach identity, accepted -> completed, TOO_EARLY) stays the database's
-    // job; this function adds no second opinion about who may complete what.
-    const { data: transitioned, error: transitionError } = await asCoach
-      .rpc("session_transition", {
+    // Run the state machine under the SERVICE ROLE, via the internal entry
+    // point (AT-61, 0027). `session_transition('complete')` now refuses every
+    // `authenticated` caller with USE_EDGE_FUNCTION, so that this function is
+    // the only path to a completed session and the accrual below cannot be
+    // skipped. The coach's identity is still what the RPC enforces; it just
+    // arrives as `p_actor_id` rather than `auth.uid()`, because auth.uid() is
+    // null under the service-role key. `user.id` comes from
+    // getAuthenticatedUser, which validates the bearer token against GoTrue
+    // rather than trusting anything in the request body, so this is the same
+    // identity the user-scoped client would have presented.
+    const { data: transitioned, error: transitionError } = await supabase
+      .rpc("session_transition_internal", {
+        p_actor_id: user.id,
         p_session_id: body.session_id,
         p_action: "complete",
       })
