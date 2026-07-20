@@ -1,4 +1,5 @@
 import type {
+  ApiError,
   AvailabilityWindow,
   CoachProfile,
   Session,
@@ -399,6 +400,47 @@ export function useCoaching(client: AtlitosClient) {
       const hydrated = await hydrateSessions(client, [data as unknown as SessionRow]);
       return hydrated[0]!;
     },
+
+    /** PRD-02 FR-19 amendment (2026-07-19), FR-34, FR-35 / PRD-01 FR-26
+     * (AT-60). The athlete's self-serve exit from a session still
+     * `requested`, before the coach has answered: full automatic refund,
+     * no coach involvement. `session_transition` (the `authenticated`
+     * RPC above) now refuses this exact edge with `USE_EDGE_FUNCTION`
+     * (migration 0027, AT-61), because it is the one transition that also
+     * has to move money; the `cancel-session-refund` edge function is the
+     * only path that can complete it. It always returns 2xx once the
+     * session itself is cancelled (the function cancels before ever
+     * calling Razorpay, so a provider outage cannot trap the athlete), and
+     * separates that fact from the money outcome via `refund_status`:
+     * `processed` (refunded), `pending` (cancelled, refund still in
+     * flight, never say "refunded" for this one), or `not_applicable`
+     * (nothing was captured to refund). Callers must key UI copy off
+     * `refund_status`, never assume `processed` just because the call
+     * succeeded. */
+    async cancelRequestedSession(sessionId: string): Promise<CancelRequestedSessionResult> {
+      const { data, error } = await client.functions.invoke("cancel-session-refund", {
+        body: { session_id: sessionId },
+      });
+      if (error) throw await mapEdgeFunctionError(error);
+
+      const body = data as {
+        session_id: string;
+        status: SessionStatus;
+        refund_status: "processed" | "pending" | "not_applicable";
+      };
+
+      const session = await this.getSession(body.session_id);
+      if (!session) {
+        const notFound: ApiError = {
+          code: "INTERNAL",
+          message: "The session was cancelled but could not be reloaded.",
+          status: 500,
+        };
+        throw notFound;
+      }
+
+      return { session, refundStatus: body.refund_status };
+    },
   };
 }
 
@@ -446,6 +488,14 @@ export interface VerifySessionPaymentResult {
   sessionId: string;
   status: SessionStatus;
   outcome: "captured" | "already_processed";
+}
+
+/** See `cancelRequestedSession` above: `refundStatus` is the money outcome,
+ * kept separate from cancellation, which has already happened by the time
+ * this resolves. */
+export interface CancelRequestedSessionResult {
+  session: Session;
+  refundStatus: "processed" | "pending" | "not_applicable";
 }
 
 export interface SessionTransitionInput {

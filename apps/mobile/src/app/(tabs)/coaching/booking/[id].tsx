@@ -44,13 +44,20 @@ function addDaysISO(iso: string, days: number): string {
  * client-side status write) and `SESSION_TRANSITIONS`/`canTransition`
  * (`@atlitos/types`) gating which action can even render.
  *
- * KNOWN PRD GAP (documented, not fixed here): `SESSION_TRANSITIONS.requested`
- * only allows `accepted`/`declined`, there is no `requested -> cancelled`
- * edge (PRD-02 FR-19 does not specify one). An athlete who has booked but
- * not yet been accepted has no way to back out of a session from this app;
- * this screen shows an explanatory note instead of a cancel button for that
- * state rather than inventing a transition the RPC would reject with
- * `INVALID_TRANSITION`.
+ * `requested` state cancel (AT-60, PRD-02 FR-19 amendment/FR-34/FR-35,
+ * PRD-01 FR-26): this is a SEPARATE action from the `accepted`/`rescheduled`
+ * cancel above, deliberately not folded into `canCancel`/`SESSION_TRANSITIONS`.
+ * That map still reflects what the plain `session_transition` RPC allows,
+ * and `session_transition` now refuses `requested -> cancelled` for an
+ * `authenticated` caller with `USE_EDGE_FUNCTION` (migration 0027, AT-61):
+ * only `cancel-session-refund` can complete it, because it also has to
+ * issue FR-35's automatic full refund. Gating this from `SESSION_TRANSITIONS`
+ * would also light up an identical looking button on the coach's session
+ * detail screen, which FR-34 explicitly forbids ("a coach may not take this
+ * edge"). The two cancel paths read differently on purpose per FR-26: this
+ * one is a self-serve exit before the coach has answered, refunded in full
+ * automatically; the other is cancelling a commitment the coach already
+ * made, with no automatic refund in v1.
  */
 export default function SessionDetailScreen() {
   const colors = useThemeColors();
@@ -62,6 +69,7 @@ export default function SessionDetailScreen() {
   const [error, setError] = useState<ApiError | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const [cancellingRequest, setCancellingRequest] = useState(false);
 
   const [reschedOpen, setReschedOpen] = useState(false);
   const [reschedDate, setReschedDate] = useState(todayISO());
@@ -142,6 +150,48 @@ export default function SessionDetailScreen() {
       setActionError((err as ApiError).message);
     } finally {
       setCancelling(false);
+    }
+  }
+
+  // FR-34/FR-35 (AT-60): cancelling a still requested session, before the
+  // coach has answered. Distinct confirm copy from confirmCancel above, per
+  // FR-26, since this path refunds in full automatically and needs no coach
+  // involvement.
+  function confirmCancelRequest() {
+    if (!session) return;
+    Alert.alert(
+      'Cancel this request',
+      'The coach has not responded yet. Cancelling now refunds your payment in full, automatically.',
+      [
+        { text: 'Keep request', style: 'cancel' },
+        { text: 'Cancel request', style: 'destructive', onPress: () => void handleCancelRequest() },
+      ],
+    );
+  }
+
+  async function handleCancelRequest() {
+    if (!session) return;
+    setCancellingRequest(true);
+    setActionError(null);
+    try {
+      const result = await coaching.cancelRequestedSession(session.id);
+      setSession(result.session);
+      // refund_status is the only honest source for whether the money has
+      // actually moved yet; a successful call here only means the request
+      // was cancelled, never that the refund completed (task brief, FR-35's
+      // "never left holding a session they have already cancelled" applies
+      // to cancellation, not to the refund's own timing).
+      if (result.refundStatus === 'processed') {
+        Alert.alert('Request cancelled', 'Your full refund has been processed.');
+      } else if (result.refundStatus === 'pending') {
+        Alert.alert('Request cancelled', 'Your full refund is on its way. It can take a few days to reach your account.');
+      } else {
+        Alert.alert('Request cancelled', 'Your request has been cancelled.');
+      }
+    } catch (err) {
+      setActionError((err as ApiError).message);
+    } finally {
+      setCancellingRequest(false);
     }
   }
 
@@ -288,9 +338,16 @@ export default function SessionDetailScreen() {
         {actionError ? <Text style={[textStyle('caption'), { color: colors.danger }]}>{actionError}</Text> : null}
 
         {session.status === 'requested' ? (
-          <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
-            Waiting for the coach to accept. You can't cancel until then.
-          </Text>
+          <View style={{ gap: spacing.sm }}>
+            <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
+              Waiting for the coach to accept. You can cancel now and get a full refund, since the coach has not
+              responded yet.
+            </Text>
+            <Button variant="ghost" tone="danger" loading={cancellingRequest} onPress={confirmCancelRequest}>
+              <XCircle size={16} strokeWidth={1.75} color={colors.danger} />
+              <Text style={{ color: colors.danger }}>Cancel request</Text>
+            </Button>
+          </View>
         ) : null}
 
         {/* Chat lives at Track E's shared route, reachable by both roles.
