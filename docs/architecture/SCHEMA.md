@@ -180,6 +180,14 @@ Indexes: `idx_session_types_coach_id` on `coach_id`.
 Constraints: no two windows for the same `coach_id` and `day_of_week` may overlap, enforced with a `btree_gist` `EXCLUDE` constraint on `(coach_id WITH =, day_of_week WITH =, public.timerange(start_time, end_time, '[)') WITH &&)` (`0018_coaching.sql`). This doc previously said `tsrange`; that does not type-check over `time` columns, and `public.timerange` is the custom range type `0009_courts.sql` already defined for exactly this reason. `effective_from` is deliberately not part of the exclusion key, so editing availability (PRD-02 FR-23) is an `UPDATE` in place, not a second superseding row.
 Indexes: `idx_coach_availability_coach_id` on `coach_id`.
 
+### `is_verified_coach(uuid)` (`0030_verified_coach_discovery_rls.sql`, AT-63)
+
+`is_verified_coach(_coach_id uuid) returns boolean`, `security definer`, `stable`, `search_path = public`, granted to `anon` and `authenticated`. Returns whether that user has a `coach_profiles` row with `status = 'verified'`.
+
+It exists because the public discovery policies on `session_types` and `coach_availability_windows` need to ask that question, and a subquery inside an RLS policy is evaluated under the **caller's** privileges: `0019_coaching_rls.sql` wrote the check as an inline `EXISTS` over `coach_profiles`, which is itself RLS-protected with no policy for `anon` or for a non-owner `authenticated` user, so the check was false for every athlete and both policies denied every row. See RLS.md's "Discovery policies must not subquery a table the caller cannot read" for the full account.
+
+This is the same pattern as `session_exists_between` and `session_links_pair`: a definer boolean that lets a policy ask about a table the caller has no read on, without granting that read. `coach_profiles` itself deliberately gains no public `SELECT` policy; its public column surface remains the `coach_profiles_public` view.
+
 ### `sessions`
 The booking record and the state machine PLAN.md calls out for RPC enforcement.
 
