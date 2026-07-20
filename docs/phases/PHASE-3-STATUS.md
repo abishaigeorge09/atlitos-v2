@@ -29,7 +29,7 @@ The gate is met when all of the following are true on the deployed stack:
 - [x] AT-40 book-session edge function with server re-pricing and SLOT_TAKEN
 - [x] AT-41 Session completion earnings accrual: ledger write on complete
 - [ ] AT-42 razorpay-route-onboard edge function and payout account status sync
-- [ ] AT-43 razorpay-route-transfer edge function and transfer webhook handling
+- [x] AT-43 razorpay-route-transfer edge function and transfer webhook handling
 - [x] AT-44 Ledger derived coach balance RPCs: wallet and transactions
 
 ### Track C: mobile coach (sonnet)
@@ -57,6 +57,17 @@ The gate is met when all of the following are true on the deployed stack:
 - [ ] AT-58 Verify native Razorpay checkout on the iOS simulator
 - [ ] AT-59 Prove Realtime instant push for chat messages and session transitions
 
+## Deferred to P8: the live Route transfer (gate clause 2)
+
+AT-43 is built, deployed, and verified as far as the merchant account permits. What remains unproven, precisely, so P8 does not have to re-derive it:
+
+- **Nothing has ever been transferred.** `record_transfer`'s success path has never run behind a real provider acceptance. Every assertion about it comes from rolled back transactions against the remote database, not from money moving.
+- **No `transfer.processed` or `transfer.failed` event has ever been received from Razorpay.** Their handlers and the RPCs behind them were exercised directly and are idempotent, but the wire format has never been observed. Razorpay's real transfer entity field names are unconfirmed, specifically which spelling of the failure reason it sends (`failure_reason` or `error_description`, both read defensively) and whether `recipient` carries the linked account id in the shape `resolveTransferRow` matches on.
+- **The `payout_accounts.status = 'active'` state has never been reached legitimately.** AT-42's onboarding create path still cannot run, so `active` has only ever existed as a probe fixture that was removed.
+- **Two distinct not-entitled responses are now known** and both classify as `ROUTE_UNAVAILABLE` 503. `POST /v2/accounts` says "Route feature not enabled for the merchant"; `POST /v1/transfers` says "The requested URL was not found on the server." because the endpoint is not routed at all on a non-Route merchant. Details and the classifier's scoping rule are in PAYMENTS.md.
+
+P8 owes: enable Route on the merchant account, onboard a coach to `active`, run one real transfer end to end, and confirm the two webhook events against real deliveries. No real money may move before that runs.
+
 ## Dependency order
 
 Track A first (AT-35 gates everything; AT-36 and AT-38 follow it; AT-37 needs AT-35 and AT-36; AT-39 needs AT-35). Track B next (AT-40 needs AT-35; AT-41 needs AT-37; AT-42 is independent; AT-43 needs AT-42, AT-41, AT-44). Tracks C, D, and E build on A and B in parallel. Track F runs last, seed after the RPCs exist and the copy pass after all screens land. Track G verifies at the end.
@@ -69,7 +80,9 @@ Track A first (AT-35 gates everything; AT-36 and AT-38 follow it; AT-37 needs AT
 4. **The auth hook needs `supabase_auth_admin` grants on any table it reads**, separately from registering the hook in the dashboard.
 5. **Storage policies that join a table must qualify `objects.name`** inside the subquery, or the joined table's own `name` column silently shadows it and denies every write.
 6. **Mobile is verified on the iOS simulator from this phase onward, not Expo web.** react-native-web silently papers over gestures, safe areas, keyboard behaviour, and native modules. The native Razorpay checkout has never been exercised; P2's payment went through the web wrapper. See docs/phases/evidence/p3-simulator/README.md for the dev build state, the Metro port 8081 contention with the concurrently running synth project, and the expo-modules-jsi Swift 6.2 patch that must be re-applied after any fresh install.
-7. **Realtime instant push has never been observed** (advisory AT-32). Rendered state a day later proves persistence, not push. P3 proves it for both chat and session transitions.
+7. **A provider can refuse the same way in two different wordings.** Razorpay signals "Route is not enabled" as a business error on `/v2/accounts` but as a bare "requested URL was not found" on `/v1/transfers`, because the endpoint is not routed at all for a non-Route merchant. AT-43's first deployed version misclassified the second as a generic 502. Probe the exact endpoint you will call, with the real credentials, before trusting an error classifier written against a sibling endpoint.
+8. **The local `supabase` CLI account cannot link this project** (`supabase link` returns "your account does not have the necessary privileges"), so edge functions are deployed through the Supabase MCP `deploy_edge_function` with the file set supplied inline. Deploy with the entrypoint at `<function-name>/index.ts` and shared modules at `_shared/*.ts` so the repo's `../_shared/...` imports resolve unchanged; a flat bundle forces rewritten import paths and silently diverges the deployed source from the repo.
+9. **Realtime instant push has never been observed** (advisory AT-32). Rendered state a day later proves persistence, not push. P3 proves it for both chat and session transitions.
 8. **Agents never enter card details or passwords in a browser.** Use script-minted sessions with cookie or localStorage injection built from a `signInWithPassword` call.
 
 ## Carried-forward advisory debt that touches P3

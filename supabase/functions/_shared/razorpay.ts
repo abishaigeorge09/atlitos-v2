@@ -260,13 +260,41 @@ function routeApiError(
   }
 
   const haystack = `${upstreamCode} ${description}`.toLowerCase();
+
+  // Razorpay signals "Route is not enabled here" in TWO different shapes, and
+  // AT-43 found the second one the hard way. Both captured 2026-07-20 against
+  // the live `rzp_test` credentials, on an account whose ordinary APIs work
+  // (`GET /v1/orders` returns 200):
+  //
+  //   POST /v2/accounts  -> 400 {"code":"BAD_REQUEST_ERROR","description":
+  //     "Route feature not enabled for the merchant","source":"business",
+  //     "step":"linked_account_create"}
+  //   POST /v1/transfers -> 400 {"code":"BAD_REQUEST_ERROR","description":
+  //     "The requested URL was not found on the server.","source":"internal",
+  //     "step":"NA"}
+  //
+  // The onboarding endpoint says so in words. The transfers endpoint is not
+  // ROUTED AT ALL on a non-Route merchant, so it answers as though it does
+  // not exist, with no mention of Route anywhere in the body. Classifying
+  // that as a generic RAZORPAY_ERROR 502 would tell the founder "Razorpay had
+  // a problem" when the truth is "this account is not entitled to this API",
+  // which is a different action (enable Route) and a different urgency.
+  //
+  // The URL-not-found clause is therefore deliberately scoped to the Route
+  // paths. On any other path, a 404-shaped body means this repo is calling an
+  // endpoint that genuinely does not exist, which is our bug and must stay a
+  // loud 502 rather than being excused as an entitlement gap.
+  const isRoutePath = /^\/(transfers|accounts)/.test(path);
+  const urlNotFound = /requested url was not found/.test(haystack);
+
   const notEntitled =
     status === 401 ||
     status === 403 ||
     /not\s+(enabled|activated|allowed|authori[sz]ed)/.test(haystack) ||
     /(feature|product|route|marketplace).*(not\s+(enabled|available|activated)|unauthori[sz]ed)/
       .test(haystack) ||
-    /merchant\s+is\s+not\s+/.test(haystack);
+    /merchant\s+is\s+not\s+/.test(haystack) ||
+    (isRoutePath && urlNotFound);
 
   if (notEntitled) {
     return new AppError(

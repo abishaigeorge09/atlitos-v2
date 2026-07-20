@@ -8,10 +8,11 @@
 //   2. Idempotency: insert the event id into `webhook_events` before any
 //      side effect; a `23505` unique violation means this exact event was
 //      already processed, acknowledge and stop.
-//   3. Branch on `event.event`: `payment.captured`, `payment.failed`, and as
-//      of AT-60 `refund.processed` (commerce/donation domains and transfer.*
-//      events do not exist yet — SCHEMA.md's phase sequencing,
-//      PHASE-1-STATUS.md's handoff notes).
+//   3. Branch on `event.event`: `payment.captured`, `payment.failed`,
+//      `refund.processed` (AT-60), and `transfer.processed` /
+//      `transfer.failed` (AT-43). Commerce and donation domain events do not
+//      exist yet — SCHEMA.md's phase sequencing, PHASE-1-STATUS.md's
+//      handoff notes.
 //      The `session` domain joined `court` in AT-40 and needs no new branch
 //      here, because the domain fan-out lives behind the shared gate.
 //   4. Always return 200 once the event is durably recorded, even for
@@ -45,6 +46,18 @@ interface RazorpayRefundEntity {
   status: string;
 }
 
+interface RazorpayTransferEntity {
+  id: string;
+  /** The linked account the money went to: `payout_accounts.razorpay_account_id`. */
+  recipient: string;
+  /** Paise. */
+  amount: number;
+  status: string;
+  /** Present on failures, spelling varies across Razorpay's own samples. */
+  failure_reason?: string;
+  error_description?: string;
+}
+
 interface RazorpayWebhookEvent {
   // Razorpay does NOT put the event id in the JSON body; it arrives in the
   // x-razorpay-event-id request header. Body has entity/account_id/event/
@@ -55,6 +68,7 @@ interface RazorpayWebhookEvent {
   payload: {
     payment?: { entity: RazorpayPaymentEntity };
     refund?: { entity: RazorpayRefundEntity };
+    transfer?: { entity: RazorpayTransferEntity };
   };
 }
 
@@ -161,6 +175,136 @@ async function handleRefundProcessed(
   }
 }
 
+/**
+ * Resolves a Razorpay transfer entity to our `transfers` row id, mirroring
+ * `handleRefundProcessed`'s lookup ladder (AT-60), because the same two
+ * things are true of transfers: the row we expect usually exists, and
+ * occasionally it does not.
+ *
+ *   1. By `razorpay_transfer_id`. The normal case, including every duplicate
+ *      delivery of an event whose transfer we already recorded.
+ *   2. Not found, and `reconcile` is set: the transfer exists at Razorpay but
+ *      not here. The realistic cause is razorpay-route-transfer's step 4
+ *      failing after Razorpay accepted the transfer at step 3, so money moved
+ *      with no ledger row. `record_transfer` creates the row and the debit
+ *      group from the provider's own numbers, which is the ONLY honest
+ *      resolution: the money really did leave, so the ledger must say so.
+ *      `record_transfer` is itself idempotent on `razorpay_transfer_id`, so
+ *      this cannot double-debit.
+ *
+ * `reconcile` is deliberately false for `transfer.failed`. If we hold no
+ * record of a transfer and Razorpay says it failed, then nothing left the
+ * platform and nothing was ever debited here; manufacturing a debit and an
+ * immediate reversing credit would add two ledger groups describing money
+ * that never moved.
+ */
+async function resolveTransferRow(
+  supabase: ReturnType<typeof serviceRoleClient>,
+  transfer: RazorpayTransferEntity,
+  reconcile: boolean,
+): Promise<string | null> {
+  const { data: existing } = await supabase
+    .from("transfers")
+    .select("id")
+    .eq("razorpay_transfer_id", transfer.id)
+    .maybeSingle<{ id: string }>();
+
+  if (existing) return existing.id;
+  if (!reconcile) return null;
+
+  const { data: account } = await supabase
+    .from("payout_accounts")
+    .select("id")
+    .eq("razorpay_account_id", transfer.recipient)
+    .maybeSingle<{ id: string }>();
+
+  if (!account) {
+    console.error(
+      `razorpay-webhook: transfer ${transfer.id} names recipient ${transfer.recipient}, which matches no payout account; cannot attribute the ledger group.`,
+    );
+    return null;
+  }
+
+  const { data: recorded, error: recordError } = await supabase.rpc(
+    "record_transfer",
+    {
+      p_payout_account_id: account.id,
+      // Razorpay's own amount, in paise, not one we assumed.
+      p_amount: transfer.amount / 100,
+      p_razorpay_transfer_id: transfer.id,
+    },
+  ).maybeSingle<{ id: string }>();
+
+  if (recordError || !recorded) {
+    console.error(
+      `razorpay-webhook: could not reconcile unrecorded transfer ${transfer.id}:`,
+      recordError?.message,
+    );
+    return null;
+  }
+  return recorded.id;
+}
+
+/**
+ * `transfer.processed`. Terminal success. No ledger movement: the debit group
+ * was written when the money left, and Razorpay confirming settlement does
+ * not move it again. `settle_transfer` returns an already-`paid` row
+ * unchanged, so this is safe to run twice even setting aside the
+ * `webhook_events` gate.
+ */
+async function handleTransferProcessed(
+  supabase: ReturnType<typeof serviceRoleClient>,
+  transfer: RazorpayTransferEntity,
+): Promise<void> {
+  const transferRowId = await resolveTransferRow(supabase, transfer, true);
+  if (!transferRowId) return;
+
+  const { error } = await supabase.rpc("settle_transfer", {
+    p_transfer_id: transferRowId,
+    p_razorpay_transfer_id: transfer.id,
+  });
+
+  if (error) {
+    console.error(
+      `razorpay-webhook: settle_transfer failed for transfer row ${transferRowId} (${transfer.id}):`,
+      error.message,
+    );
+  }
+}
+
+/**
+ * `transfer.failed`. The asynchronous failure case, and the one that DOES
+ * move the ledger: `record_transfer` already debited the coach when the
+ * transfer was accepted, so a later failure has to give it back.
+ * `fail_transfer` writes the reversing credit group and flips the row, and is
+ * a no-op on a row that already carries a reversal group.
+ */
+async function handleTransferFailed(
+  supabase: ReturnType<typeof serviceRoleClient>,
+  transfer: RazorpayTransferEntity,
+): Promise<void> {
+  const transferRowId = await resolveTransferRow(supabase, transfer, false);
+  if (!transferRowId) {
+    console.error(
+      `razorpay-webhook: transfer.failed for unrecorded transfer ${transfer.id}; nothing was debited here, so nothing is reversed.`,
+    );
+    return;
+  }
+
+  const { error } = await supabase.rpc("fail_transfer", {
+    p_transfer_id: transferRowId,
+    p_razorpay_transfer_id: transfer.id,
+    p_reason: transfer.failure_reason ?? transfer.error_description ?? null,
+  });
+
+  if (error) {
+    console.error(
+      `razorpay-webhook: fail_transfer failed for transfer row ${transferRowId} (${transfer.id}):`,
+      error.message,
+    );
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -262,10 +406,31 @@ Deno.serve(async (req) => {
         }
         break;
       }
+      case "transfer.processed": {
+        // AT-43, PRD-02 FR-28. Terminal confirmation that a transfer this
+        // platform initiated actually settled into the coach's linked
+        // account. Idempotent through the webhook_events gate above AND
+        // through settle_transfer's own already-paid short circuit.
+        const transfer = event.payload.transfer?.entity;
+        if (transfer) {
+          await handleTransferProcessed(supabase, transfer);
+        }
+        break;
+      }
+      case "transfer.failed": {
+        // AT-43, PRD-02 FR-29's asynchronous half. A synchronous rejection
+        // never wrote a ledger row, so there is nothing to undo; this event
+        // means the transfer WAS accepted and debited and then failed, so
+        // fail_transfer writes the reversing credit group.
+        const transfer = event.payload.transfer?.entity;
+        if (transfer) {
+          await handleTransferFailed(supabase, transfer);
+        }
+        break;
+      }
       default:
-        // transfer.processed / transfer.failed are named in PAYMENTS.md but
-        // Route transfers are not built in this pass; unrecognized or
-        // unimplemented event types are acknowledged, not errored, matching
+        // Unrecognized or not-yet-implemented event types (commerce and
+        // donation domains) are acknowledged, not errored, matching
         // PAYMENTS.md's blueprint.
         break;
     }

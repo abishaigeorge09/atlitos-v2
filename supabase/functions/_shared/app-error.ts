@@ -69,4 +69,9 @@ const STATUS_BY_CODE: Record<string, number> = {
   // founder dashboard action rather than anything a retry can fix.
   RAZORPAY_ERROR: 502,
   ROUTE_UNAVAILABLE: 503,
+  // AT-43 (0028), PRD-02 FR-27 and FR-29. Both are 409 rather than 400: the
+  // request was well formed, the account's state or the ledger's state
+  // refused it, and both are conditions the coach can resolve and retry.
+  PAYOUT_ACCOUNT_NOT_ACTIVE: 409,
+  INSUFFICIENT_BALANCE: 409,
 };
