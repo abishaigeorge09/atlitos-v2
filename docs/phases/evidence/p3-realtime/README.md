@@ -164,7 +164,165 @@ once it exists, the same way this script proved it for chat, rather than
 assuming the RLS policy behaves the same way under Realtime's evaluation
 that it does under PostgREST's.
 
-## What this script did not test
+---
+
+# AT-62 update: the gap above is now fixed and proven
+
+Everything above is AT-59's record and is left intact as the diagnosis. This
+section is AT-62, which built the fix.
+
+Migration: `supabase/migrations/0029_realtime_courts_sessions.sql` (0028 was
+left free for a concurrent AT-43 agent). Applied to the remote project via the
+Supabase MCP and committed as a file. It publishes `public.court_bookings` and
+`public.sessions`, guarded per table with the same `pg_publication_tables`
+existence check `0022_chat.sql` uses, so re-running is a no-op.
+
+```sql
+select schemaname, tablename from pg_publication_tables where pubname = 'supabase_realtime' order by 1,2;
+```
+
+```json
+[{"schemaname":"public","tablename":"chat_messages"},
+ {"schemaname":"public","tablename":"court_bookings"},
+ {"schemaname":"public","tablename":"sessions"}]
+```
+
+## RLS review, done before publishing
+
+Both tables' `SELECT` policies were reviewed first, on the principle that
+publishing a leaky table converts a query bug into a live broadcast. **Both
+passed and were left unchanged**; the full reasoning is in `0029`'s header and
+in `docs/architecture/RLS.md`. In short: every non-admin disjunct in both
+policies is anchored to the row's own owner (`v.partner_user_id = auth.uid()`,
+an accepted `venue_staff` membership, `user_id`/`coach_id`/`player_id` =
+`auth.uid()`), the admin disjuncts widen by role rather than by row, and
+neither table carries a public discovery policy that could combine with the
+owner policy the way the P2 venue-picker bug did.
+
+**One real gap was found and fixed in the same migration**, though not in a
+`SELECT` policy: `court_bookings` never had the grant-level
+`revoke insert, update, delete ... from anon, authenticated` that `0019` gives
+`sessions`. It was inert (no write policy exists, so RLS denied writes anyway)
+but it is the missing second layer on a money-bearing table, and it matters
+more once the table is published, because a stray client write on a published
+table fans out to every subscribed partner socket. `0029` adds it.
+
+## REPLICA IDENTITY decision: DEFAULT, deliberately
+
+Both tables are left at `REPLICA IDENTITY DEFAULT`. The reasoning turns on the
+fact that the Live Today board's two headline behaviours, check ins and
+cancellations, are **UPDATEs, not INSERTs and not DELETEs**
+(`court_booking_check_in` sets `checked_in_at`; `court_booking_transition` sets
+`status = 'cancelled'`). Under DEFAULT, an UPDATE still ships the complete new
+tuple, so both the client's `court_id=in.(...)` filter and the policy's
+`is_court_partner_or_staff(court_id)` check evaluate against real values.
+
+`FULL` was considered and rejected: it buys a populated `old_record` (the board
+refetches through `venue_bookings_today` and never reads `payload.old`) and
+RLS-checkable DELETE events (there is no hard-delete path, and after 0029 not
+even a DELETE grant), while writing every column of every old row into the WAL,
+including `subtotal`/`gst`/`platform_fee`/`total` and walk-in PII. Cost with no
+benefit. If a hard delete is ever introduced, revisit this: DELETE events on a
+DEFAULT-identity table carry only the primary key, cannot be RLS-checked, and
+are silently dropped, which is the safe direction to fail but easy to
+misdiagnose as another dead publication.
+
+This decision is verified rather than argued: the UPDATE half of Part 3 exists
+to prove it.
+
+## Results, measured against the live project
+
+`scripts/verify-realtime.mjs` was **extended**, not replaced or duplicated.
+Parts 3 and 4 are new. Every write goes through a real product path
+(`book-court` walk-in variant, `court_booking_check_in`, `session_transition`)
+under a real user's JWT. There are no raw inserts and no service-role writes
+anywhere in the file, so nothing needed to be rolled back.
+
+```
+--- Part 3 (AT-62): court_bookings INSERT + UPDATE push, and cross partner isolation ---
+partner A = partner@atlitos.dev, venue "Onboarding Demo Turf" (579899a2-...), 1 active court
+partner B = p2-verify-partner@atlitos.dev, venue "Gachibowli Box Cricket Turf" (a0000000-...)
+A subscribed to live-today-579899a2-... (event "*", filter court_id=in.(...))
+A received postgres_changes INSERT for booking 1bef55c0-... after 1688.3 ms
+A checked in booking 1bef55c0-... via court_booking_check_in (an UPDATE, not an INSERT)
+A received postgres_changes UPDATE after 527.8 ms; payload.new.checked_in_at = 2026-07-20T06:04:09Z
+
+cross partner isolation, targeted probe (B on A's exact channel+filter): 0 events (expected 0)
+cross partner isolation, unfiltered probe (B, project wide):             0 events (expected 0)
+
+--- Part 4 (AT-62): sessions UPDATE push (coach), and non party isolation ---
+session ae9f0a03-... is 'requested', driving session_transition action 'accept'
+coach1 received postgres_changes UPDATE after 737.5 ms
+non party isolation (sessions, unfiltered): 0 events (expected 0)
+```
+
+A second run reported INSERT 1567.9 ms, UPDATE 421.3 ms, all isolation probes
+0, and exit code 0.
+
+**On the INSERT number:** 1688 ms is measured from before the `book-court`
+invocation, so it includes the entire edge function round trip (re-pricing, the
+booking insert, the synthetic payment intent, and the three-leg ledger write),
+not just Realtime propagation. It is the honest end-to-end number a partner
+experiences after confirming a walk in. The UPDATE figure, 421 to 528 ms
+through a single fast RPC, is the cleaner measure of Realtime propagation
+itself, and it lines up with chat's 500 to 620 ms.
+
+**Verdict: PRD-03 FR-15 is now true.** The Live Today board's
+`realtimeConnected` indicator no longer reports a connection to a stream that
+cannot deliver, and the three copy strings claiming real time updates
+(`page.tsx` twice, `live-today/page.tsx` once) are now accurate rather than
+false.
+
+**Verdict: cross-partner isolation holds.** This was the security-critical
+assertion. Partner B actively targeted partner A's exact channel name and
+`court_id` filter, and separately subscribed to every `court_bookings` change
+project-wide, and received nothing from either. `court_bookings` carries money
+columns and walk-in PII, so a scoping defect here would have been a live
+cross-tenant broadcast rather than a query bug.
+
+This was worth proving for courts rather than generalising from AT-59's chat
+result: `chat_messages`' policies use only `auth.uid()`, whereas
+`court_bookings_select` depends on `has_role('court_partner')`, which reads
+`app_metadata.roles` out of the JWT. Realtime evaluates policies in its own
+connection context, and a `has_role()` that returned false there would have
+failed closed, delivering nothing to the legitimate partner and looking exactly
+like another dead publication. Part 3 rules that out in both directions: the
+owning partner does receive, and the other partner does not.
+
+## A harness bug worth recording
+
+The first run of Part 3 failed, and the cause is the P2 venue-picker defect
+reproduced exactly. `findPartnerVenue` initially read
+`from("venues").eq("status","verified")` without an owner filter, and handed
+partner A a venue owned by partner B, because `venues` carries a public
+"verified venues are readable by anyone" `SELECT` policy alongside the owner
+policy and policies combine with OR. That made the cross-partner assertion
+vacuous (both partners pointed at one venue) and made `book-court` fail its own
+ownership check, which is the only reason it was caught.
+
+RLS.md's durable lesson restated, and it caught out this script the same way it
+caught out the P2 UI: **RLS on `venues` is an authorization ceiling, not
+scoping.** Every query carries its own owner filter. The fix is
+`.eq("partner_user_id", partnerUserId)`, and the script now also asserts
+outright that A's and B's venue ids differ, so this failure mode can never
+again degrade silently into a passing but meaningless isolation result.
+
+## What AT-62 still did not test
+
+- Payment capture's own Realtime push (AT-32's literal wording) still is not
+  directly exercised: `payment_intents` remains unpublished, and deliberately
+  so, nothing subscribes to it. What P2 actually wanted from that phrase, the
+  partner board reacting the instant a booking appears, is now proven above.
+- The `court_bookings` DELETE path is untested because there is none, by
+  design. See the replica identity section for what to re-verify if that
+  changes.
+- No mobile client subscribes to `sessions` yet; Part 4 proves the publish side
+  and RLS scoping are ready for PRD-02 FR-12, not that any shipped UI consumes
+  it.
+
+---
+
+## What this script did not test (AT-59's original list)
 
 - Session status transitions (`sessions.status` changing on completion,
   cancellation, etc.) are not on any Realtime publication either (same

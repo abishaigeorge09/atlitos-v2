@@ -62,7 +62,7 @@ Project key `AT` (not `ATL`). AT-13 through AT-21, AT-23, AT-24 transitioned to 
 - AT-29 rotate or document fixture passwords, clean up evidence-partner@atlitos.dev (AT-4)
 - AT-30 onboarding photos/review/pending screens lack rendered evidence (AT-4)
 - AT-31 onboarding wizard light mode captures missing (AT-4)
-- AT-32 Realtime instant push verification in P3 (AT-11)
+- AT-32 Realtime instant push verification in P3 (AT-11) — **ROOT CAUSE FOUND AND FIXED.** AT-59 diagnosed it and AT-62 fixed it. This advisory was never a verification gap in the sense it was written; it was a real, shipped defect. `public.court_bookings` was never added to the `supabase_realtime` publication, not by `0009_courts.sql` which created the table nor by anything since, so the partner Live Today board had a correct `postgres_changes` subscription pointed at a table Postgres was never told to replicate. There was no publish side. The board's socket reached SUBSCRIBED, set its `realtimeConnected` indicator true, and received nothing, forever, which is exactly why P2 could only ever demonstrate the booking as rendered state a day later. It was never a client bug or a timing flake. Three shipped copy strings in `apps/portal-court` claimed real time updates and were false for the whole of P2. `0029_realtime_courts_sessions.sql` publishes `court_bookings` and `sessions` (after an RLS review, and with `court_bookings`' missing write revoke added), and `scripts/verify-realtime.mjs` Parts 3 and 4 now prove INSERT and UPDATE push to the owning partner and zero cross-partner leakage against the live project. Evidence: `docs/phases/evidence/p3-realtime/README.md`.
 - AT-33 courts list location UX on web (AT-4)
 - AT-34 court detail hero oversized at desktop widths (AT-4)
 

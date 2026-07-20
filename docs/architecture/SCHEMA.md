@@ -731,6 +731,20 @@ Indexes: `idx_chat_threads_participant_a` on `participant_a`, `idx_chat_threads_
 
 Indexes: `idx_chat_messages_thread_id` on `(thread_id, created_at)`. Realtime is enabled on this table via `supabase_realtime` publication.
 
+### Realtime publication membership
+
+The `supabase_realtime` publication contains exactly three tables, and membership is deliberate rather than incidental:
+
+| Table | Added by | Consumer |
+|---|---|---|
+| `chat_messages` | `0022_chat.sql` | `packages/api/src/use-chat.ts` (`subscribeToThread`, `subscribeToInbox`) |
+| `court_bookings` | `0029_realtime_courts_sessions.sql` | `apps/portal-court` Live Today board (PRD-03 FR-15) |
+| `sessions` | `0029_realtime_courts_sessions.sql` | coach accept/decline push (PRD-02 FR-12) |
+
+`court_bookings` and `sessions` were missing until 0029, which is the root cause of advisory AT-32: the Live Today board subscribed correctly to a table that was never replicated, so no event could ever arrive. Adding a table here is a security decision, not a performance one, because Realtime evaluates each table's `SELECT` policy per subscriber before delivering a row; publish nothing without the RLS review 0029's header performs.
+
+Both new tables are left at `REPLICA IDENTITY DEFAULT`. Check ins and cancellations are `UPDATE`s and DEFAULT ships the full new tuple, which is all the client filters and RLS policies need; there is no hard-delete path on either table, and `FULL` would push old-row money columns and walk-in PII into the WAL for no consumer. If a hard delete is ever added, revisit this: `DELETE` events on a DEFAULT-identity table carry only the primary key, cannot be RLS-checked, and are silently dropped.
+
 Both chat tables ship in `0022_chat.sql`, which also adds `text` a non-empty `CHECK`, the `chat_messages_touch_thread` trigger maintaining `chat_threads.last_message_at`, and the publication entry. `chat_threads` is deliberately not published: the thread list gets its liveness from an unfiltered `chat_messages` subscription, which RLS already scopes to the caller's own threads. `context_type` accepts `clutch_creator` at the constraint level per this doc, but the INSERT policy accepts only `coaching` until the Clutch domain exists, so the second value is currently reachable only by `service_role`.
 
 ---

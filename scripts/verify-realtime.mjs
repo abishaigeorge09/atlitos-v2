@@ -29,12 +29,44 @@
 //      actually exercises that claim against a live socket instead of
 //      trusting the comment.
 //   4. Checks whether public.court_bookings (migration 0009_courts.sql, P2
-//      era) is in the supabase_realtime publication at all. It is not (see
+//      era) is in the supabase_realtime publication at all. It was not (see
 //      docs/phases/evidence/p3-realtime/README.md for the query and
 //      result), which is the real, mechanical reason P2 never observed an
 //      instant push on the partner Live Today board: there was no publish
 //      side to push from, no client bug, no timing flake. This script
 //      reports that plainly rather than working around it.
+//
+// EXTENDED BY AT-62 (Parts 3 and 4 below), which fixed that root cause in
+// supabase/migrations/0029_realtime_courts_sessions.sql by publishing
+// public.court_bookings and public.sessions. AT-59 could only report the gap;
+// this script now proves the fix:
+//
+//   Part 3 (court_bookings): the owning partner subscribes with the EXACT
+//     channel/filter shape apps/portal-court's live-today/page.tsx uses
+//     (channel `live-today-${venueId}`, event "*", filter
+//     `court_id=in.(...)`), then a walk-in is booked through the real
+//     book-court edge function (INSERT) and checked in through the real
+//     court_booking_check_in RPC (UPDATE). Both latencies are measured.
+//     The UPDATE half matters most: check ins and cancellations are UPDATEs,
+//     not INSERTs, and 0029 deliberately left REPLICA IDENTITY at DEFAULT, so
+//     this is the empirical proof that a DEFAULT-identity UPDATE still carries
+//     a full enough new tuple for both the client's court_id filter and the
+//     SELECT policy's is_court_partner_or_staff(court_id) check to pass.
+//
+//   Part 4 (sessions): the same, for a coach receiving a session transition,
+//     driven through the real session_transition RPC.
+//
+//   Cross-party isolation, the security-critical assertion in both parts: a
+//     DIFFERENT partner (p2-verify-partner, who owns different venues) and a
+//     non-party user must receive ZERO events, on both a guessed same-shape
+//     channel AND a completely unfiltered subscription. court_bookings carries
+//     money columns and walk-in PII, so publishing it would turn any scoping
+//     defect in its SELECT policy into a live cross-tenant broadcast. That is
+//     the thing this script exists to rule out.
+//
+// Every write in Parts 3 and 4 goes through a real product path (book-court,
+// court_booking_check_in, session_transition) under a real user's JWT. There
+// are no raw inserts and no service-role writes anywhere in this file.
 //
 // Fixture data: this run creates ONE real sessions row (via the real
 // book-session edge function, not raw SQL, so session_exists_between /
@@ -71,6 +103,12 @@ const PLAYER_EMAIL = "player@atlitos.dev"; // user A, thread participant
 const COACH1_EMAIL = "coach1@atlitos.dev"; // user B, thread participant
 const COACH2_EMAIL = "coach2@atlitos.dev"; // user C, NOT a participant in A/B's thread
 const BATTING_BASICS_PRICE = 1000;
+
+// AT-62 Part 3/4 fixtures.
+const PARTNER_A_EMAIL = "partner@atlitos.dev"; // owns "Onboarding Demo Turf"
+const PARTNER_B_EMAIL = "p2-verify-partner@atlitos.dev"; // owns the seed_p2 venues, NOT A's
+const REALTIME_DEADLINE_MS = 10000;
+const SETTLE_MS = 2000; // see the wait(2000) rationale in Part 1
 
 function newClient() {
   return createClient(SUPABASE_URL, ANON_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
@@ -234,6 +272,119 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// ===========================================================================
+// AT-62 helpers (Parts 3 and 4)
+// ===========================================================================
+
+/** Waits until `getCount()` is non-zero or the deadline passes. Returns true
+ * if something arrived. */
+async function waitForEvent(getCount, deadlineMs = REALTIME_DEADLINE_MS) {
+  const deadline = Date.now() + deadlineMs;
+  while (getCount() === 0 && Date.now() < deadline) {
+    await wait(25);
+  }
+  return getCount() > 0;
+}
+
+/** Generic postgres_changes subscription helper. `opts` is passed straight
+ * through to .on(), so callers spell out the exact shape the app uses rather
+ * than having it constructed for them. */
+function subscribeRaw(client, channelName, opts, onEvent) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(
+      () => reject(new Error(`[verify-realtime] channel ${channelName} never reached SUBSCRIBED`)),
+      15000,
+    );
+    const channel = client
+      .channel(channelName)
+      .on("postgres_changes", opts, (payload) => onEvent(payload))
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          clearTimeout(timeout);
+          resolve(channel);
+        }
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          clearTimeout(timeout);
+          reject(new Error(`[verify-realtime] channel ${channelName} status ${status}`));
+        }
+      });
+  });
+}
+
+/** Subscribes EXACTLY the way apps/portal-court/src/app/dashboard/live-today/
+ * page.tsx does: channel `live-today-${venueId}`, event "*" on
+ * public.court_bookings, filter `court_id=in.(<ids>)`. Not an approximation. */
+function subscribeLiveTodayLikeApp(client, venueId, courtIds, onEvent) {
+  return subscribeRaw(
+    client,
+    `live-today-${venueId}`,
+    {
+      event: "*",
+      schema: "public",
+      table: "court_bookings",
+      filter: `court_id=in.(${courtIds.join(",")})`,
+    },
+    onEvent,
+  );
+}
+
+/** Finds a partner's OWN verified venue and its active courts, read through
+ * RLS with the partner's own JWT (the same reads the portal does).
+ *
+ * The `.eq("partner_user_id", partnerUserId)` filter is load bearing and must
+ * not be removed. `venues` carries a public "verified venues are readable by
+ * anyone" SELECT policy alongside the owner policy, and policies combine with
+ * OR, so an unscoped `select * from venues` returns EVERY verified venue in
+ * the project, not the caller's. An earlier draft of this function omitted the
+ * filter and silently handed partner A a venue owned by partner B, which made
+ * the cross-partner isolation assertion below meaningless (both "partners"
+ * were pointed at the same venue) and made book-court fail its own ownership
+ * check. That is the P2 venue-picker defect reproduced exactly, and RLS.md's
+ * durable lesson restated: RLS here is an authorization ceiling, not scoping,
+ * so every query carries its own owner filter. */
+async function findPartnerVenue(partnerClient, partnerUserId, email) {
+  const { data: venues, error: venueError } = await partnerClient
+    .from("venues")
+    .select("id, name")
+    .eq("partner_user_id", partnerUserId)
+    .eq("status", "verified")
+    .order("created_at", { ascending: true });
+  if (venueError) throw new Error(`[verify-realtime] venue lookup failed for ${email}: ${venueError.message}`);
+  if (!venues || venues.length === 0) throw new Error(`[verify-realtime] ${email} owns no verified venue`);
+
+  for (const venue of venues) {
+    const { data: courts, error: courtError } = await partnerClient
+      .from("courts")
+      .select("id, name")
+      .eq("venue_id", venue.id)
+      .eq("active", true);
+    if (courtError) throw new Error(`[verify-realtime] court lookup failed: ${courtError.message}`);
+    if (courts && courts.length > 0) {
+      return { venueId: venue.id, venueName: venue.name, courts };
+    }
+  }
+  throw new Error(`[verify-realtime] ${email} has no verified venue with an active court`);
+}
+
+/** Finds the first free slot for a court, today if possible (the Live Today
+ * board is a today view), otherwise within the next 7 days. The realtime
+ * filter is on court_id only, so a later date still proves push; today is
+ * preferred purely for fidelity to the board. */
+async function findFreeSlot(partnerClient, courtId) {
+  for (let i = 0; i <= 7; i++) {
+    const date = new Date(Date.now() + i * 86400000).toISOString().split("T")[0];
+    const { data: slots, error } = await partnerClient.rpc("get_court_available_slots", {
+      p_court_id: courtId,
+      p_date: date,
+    });
+    if (error) throw new Error(`[verify-realtime] get_court_available_slots failed: ${error.message}`);
+    if (slots && slots.length > 0) {
+      return { date, slot: slots[0] };
+    }
+  }
+  throw new Error(`[verify-realtime] no free slot found for court ${courtId} in the next 7 days`);
+}
+
 async function checkCourtBookingsPublication(anyClient) {
   // No client-side way to read pg_publication_tables (system catalog, not
   // exposed via PostgREST/RLS); this project's ground truth for AT-59 comes
@@ -358,6 +509,184 @@ async function main() {
   player.client.removeChannel(aThreadChannel2);
 
   // ---------------------------------------------------------------------
+  // Part 3 (AT-62): court_bookings push + cross-partner isolation
+  // ---------------------------------------------------------------------
+  console.log("\n--- Part 3 (AT-62): court_bookings INSERT + UPDATE push, and cross partner isolation ---");
+
+  const partnerA = await signIn(PARTNER_A_EMAIL);
+  const partnerB = await signIn(PARTNER_B_EMAIL);
+  const venueA = await findPartnerVenue(partnerA.client, partnerA.userId, PARTNER_A_EMAIL);
+  const venueB = await findPartnerVenue(partnerB.client, partnerB.userId, PARTNER_B_EMAIL);
+  if (venueA.venueId === venueB.venueId) {
+    throw new Error("[verify-realtime] partner A and B resolved to the SAME venue; the cross partner assertion would be vacuous. Check the owner filter in findPartnerVenue.");
+  }
+  const courtIdsA = venueA.courts.map((c) => c.id);
+  console.log(`[verify-realtime] partner A = ${PARTNER_A_EMAIL}, venue "${venueA.venueName}" (${venueA.venueId}), ${courtIdsA.length} active court(s)`);
+  console.log(`[verify-realtime] partner B = ${PARTNER_B_EMAIL}, venue "${venueB.venueName}" (${venueB.venueId}) — a DIFFERENT venue, must receive nothing`);
+
+  // A subscribes exactly as the Live Today board does.
+  const aBookingEvents = [];
+  const aLiveChannel = await subscribeLiveTodayLikeApp(partnerA.client, venueA.venueId, courtIdsA, (payload) => {
+    aBookingEvents.push({ payload, receivedAt: process.hrtime.bigint() });
+  });
+  console.log(`[verify-realtime] A subscribed to live-today-${venueA.venueId} (event "*", filter court_id=in.(...))`);
+
+  // B, a different partner, probes two ways:
+  //   (a) the same channel name AND the same court_id filter as A, i.e. B
+  //       actively targets A's courts. Only RLS can stop this.
+  const bTargetedEvents = [];
+  const bTargetedChannel = await subscribeRaw(
+    partnerB.client,
+    `live-today-${venueA.venueId}`,
+    { event: "*", schema: "public", table: "court_bookings", filter: `court_id=in.(${courtIdsA.join(",")})` },
+    (payload) => bTargetedEvents.push(payload),
+  );
+  //   (b) completely unfiltered: every change on court_bookings, project wide.
+  const bUnfilteredEvents = [];
+  const bUnfilteredChannel = await subscribeRaw(
+    partnerB.client,
+    "court-bookings-unfiltered-probe",
+    { event: "*", schema: "public", table: "court_bookings" },
+    (payload) => bUnfilteredEvents.push(payload),
+  );
+  console.log("[verify-realtime] B subscribed twice: A's exact channel+filter (targeted probe) and an unfiltered project wide probe\n");
+
+  await wait(SETTLE_MS);
+
+  // --- 3a: INSERT, via the real book-court walk-in path ---
+  const court = venueA.courts[0];
+  const { date: walkInDate, slot } = await findFreeSlot(partnerA.client, court.id);
+  console.log(`[verify-realtime] booking a real walk in on "${court.name}" ${walkInDate} ${slot.slot_start} via the book-court edge function`);
+
+  const insertSentAt = process.hrtime.bigint();
+  const { error: walkInError } = await partnerA.client.functions.invoke("book-court", {
+    body: {
+      court_id: court.id,
+      date: walkInDate,
+      slot_start: slot.slot_start,
+      slot_end: slot.slot_end,
+      booking_source: "walk_in",
+      walk_in_name: "AT-62 realtime probe",
+    },
+  });
+  if (walkInError) throw new Error(`[verify-realtime] book-court walk in failed: ${walkInError.message ?? JSON.stringify(walkInError)}`);
+
+  const gotInsert = await waitForEvent(() => aBookingEvents.filter((e) => e.payload.eventType === "INSERT").length);
+  let insertLatencyMs = null;
+  let bookingId = null;
+  if (gotInsert) {
+    const evt = aBookingEvents.find((e) => e.payload.eventType === "INSERT");
+    insertLatencyMs = Number(evt.receivedAt - insertSentAt) / 1e6;
+    bookingId = evt.payload.new.id;
+    console.log(`[verify-realtime] A received postgres_changes INSERT for booking ${bookingId} after ${insertLatencyMs.toFixed(1)} ms`);
+  } else {
+    console.log(`[verify-realtime] A received NO INSERT within ${REALTIME_DEADLINE_MS} ms.`);
+  }
+
+  // --- 3b: UPDATE, via the real check-in RPC. This is the half that the
+  // REPLICA IDENTITY DEFAULT decision in 0029 rests on. ---
+  let updateLatencyMs = null;
+  let updateCarriedCheckIn = false;
+  if (bookingId) {
+    const beforeUpdateCount = aBookingEvents.filter((e) => e.payload.eventType === "UPDATE").length;
+    const updateSentAt = process.hrtime.bigint();
+    const { error: checkInError } = await partnerA.client.rpc("court_booking_check_in", { p_booking_id: bookingId });
+    if (checkInError) throw new Error(`[verify-realtime] court_booking_check_in failed: ${checkInError.message}`);
+    console.log(`[verify-realtime] A checked in booking ${bookingId} via court_booking_check_in (an UPDATE, not an INSERT)`);
+
+    const gotUpdate = await waitForEvent(
+      () => aBookingEvents.filter((e) => e.payload.eventType === "UPDATE").length - beforeUpdateCount,
+    );
+    if (gotUpdate) {
+      const evt = aBookingEvents.filter((e) => e.payload.eventType === "UPDATE")[beforeUpdateCount];
+      updateLatencyMs = Number(evt.receivedAt - updateSentAt) / 1e6;
+      updateCarriedCheckIn = Boolean(evt.payload.new?.checked_in_at);
+      console.log(`[verify-realtime] A received postgres_changes UPDATE after ${updateLatencyMs.toFixed(1)} ms; payload.new.checked_in_at = ${evt.payload.new?.checked_in_at ?? "null"}`);
+      console.log(`[verify-realtime] REPLICA IDENTITY DEFAULT check: the UPDATE payload's new record ${updateCarriedCheckIn ? "DID" : "did NOT"} carry the full row (checked_in_at populated), which is what the court_id filter and the RLS policy both need.`);
+    } else {
+      console.log(`[verify-realtime] A received NO UPDATE within ${REALTIME_DEADLINE_MS} ms.`);
+    }
+  }
+
+  // give B's probes a fair further window past A's receipt
+  await wait(3000);
+
+  console.log(`\n[verify-realtime] cross partner isolation, targeted probe (B on A's exact channel+filter): B received ${bTargetedEvents.length} event(s) (expected 0)`);
+  console.log(`[verify-realtime] cross partner isolation, unfiltered probe (B, project wide): B received ${bUnfilteredEvents.length} event(s) (expected 0)`);
+
+  partnerA.client.removeChannel(aLiveChannel);
+  partnerB.client.removeChannel(bTargetedChannel);
+  partnerB.client.removeChannel(bUnfilteredChannel);
+
+  // ---------------------------------------------------------------------
+  // Part 4 (AT-62): sessions push + non-party isolation
+  // ---------------------------------------------------------------------
+  console.log("\n--- Part 4 (AT-62): sessions UPDATE push (coach), and non party isolation ---");
+
+  // The coach subscribes scoped to their own sessions, the shape a coach
+  // dashboard would use.
+  const coachSessionEvents = [];
+  const coachSessionChannel = await subscribeRaw(
+    coach1.client,
+    `sessions:coach:${coach1.userId}`,
+    { event: "*", schema: "public", table: "sessions", filter: `coach_id=eq.${coach1.userId}` },
+    (payload) => coachSessionEvents.push({ payload, receivedAt: process.hrtime.bigint() }),
+  );
+  console.log(`[verify-realtime] coach1 subscribed to sessions filtered coach_id=eq.${coach1.userId}`);
+
+  // A non-party (partner A: not the coach, not the player) probes unfiltered.
+  const nonPartySessionEvents = [];
+  const nonPartySessionChannel = await subscribeRaw(
+    partnerA.client,
+    "sessions-unfiltered-probe",
+    { event: "*", schema: "public", table: "sessions" },
+    (payload) => nonPartySessionEvents.push(payload),
+  );
+  console.log(`[verify-realtime] non party (${PARTNER_A_EMAIL}) subscribed unfiltered to sessions\n`);
+
+  await wait(SETTLE_MS);
+
+  // Drive a real transition through session_transition. Which action depends
+  // on the fixture session's current status, so re-running this script is
+  // idempotent rather than failing with INVALID_TRANSITION on the second run.
+  const { data: sessionRow, error: sessionReadError } = await coach1.client
+    .from("sessions")
+    .select("id, status")
+    .eq("id", sessionId)
+    .single();
+  if (sessionReadError) throw new Error(`[verify-realtime] session read failed: ${sessionReadError.message}`);
+
+  const transitionArgs =
+    sessionRow.status === "requested"
+      ? { p_session_id: sessionId, p_action: "accept" }
+      : {
+          p_session_id: sessionId,
+          p_action: "reschedule",
+          p_new_date: new Date(Date.now() + 3 * 86400000).toISOString().split("T")[0],
+          p_new_slot_start: "11:00",
+        };
+  console.log(`[verify-realtime] session ${sessionId} is '${sessionRow.status}', driving session_transition action '${transitionArgs.p_action}'`);
+
+  const sessionSentAt = process.hrtime.bigint();
+  const { error: transitionError } = await coach1.client.rpc("session_transition", transitionArgs);
+  if (transitionError) throw new Error(`[verify-realtime] session_transition failed: ${transitionError.message}`);
+
+  const gotSession = await waitForEvent(() => coachSessionEvents.length);
+  let sessionLatencyMs = null;
+  if (gotSession) {
+    sessionLatencyMs = Number(coachSessionEvents[0].receivedAt - sessionSentAt) / 1e6;
+    console.log(`[verify-realtime] coach1 received postgres_changes ${coachSessionEvents[0].payload.eventType} for session ${sessionId} after ${sessionLatencyMs.toFixed(1)} ms`);
+  } else {
+    console.log(`[verify-realtime] coach1 received NOTHING for the session transition within ${REALTIME_DEADLINE_MS} ms.`);
+  }
+
+  await wait(3000);
+  console.log(`\n[verify-realtime] non party isolation (sessions, unfiltered): received ${nonPartySessionEvents.length} event(s) (expected 0)`);
+
+  coach1.client.removeChannel(coachSessionChannel);
+  partnerA.client.removeChannel(nonPartySessionChannel);
+
+  // ---------------------------------------------------------------------
   // Summary
   // ---------------------------------------------------------------------
   console.log("\n=== AT-59 SUMMARY ===");
@@ -366,12 +695,31 @@ async function main() {
   console.log(`Trial 2 latency: ${latencyMs2 === null ? "NO PUSH (timed out)" : latencyMs2.toFixed(1) + " ms"}`);
   console.log(`RLS isolation (same channel name, non-participant C): ${cLeakReceived.length === 0 ? "PASS, 0 events leaked" : "FAIL, " + cLeakReceived.length + " event(s) leaked"}`);
   console.log(`RLS isolation (unfiltered chat:inbox, non-participant C): ${cInboxReceived.length === 0 ? "PASS, 0 events leaked" : "FAIL, " + cInboxReceived.length + " event(s) leaked"}`);
-  console.log("court_bookings in supabase_realtime publication: NO (verified via Supabase MCP execute_sql against pg_publication_tables, see docs/phases/evidence/p3-realtime/README.md). This is why P2 never observed an instant push on the partner Live Today board: court_bookings was never added to the publication in 0009_courts.sql or anywhere since, so there is no Realtime event stream for a court booking to push through at all. A client bug or a timing flake was never the cause. Fix: a migration adding `alter publication supabase_realtime add table public.court_bookings;` guarded the same way 0022_chat.sql guards chat_messages (a pg_publication_tables existence check first), plus RLS review on court_bookings for who should receive that stream (likely the venue's partner/staff only, not the booking player broadcast-wide).");
 
-  const overallPush = latencyMs !== null || latencyMs2 !== null;
-  console.log(`\nOverall verdict for chat: Realtime instant push is ${overallPush ? "PROVEN" : "NOT PROVEN"}. RLS scoping is ${cLeakReceived.length === 0 && cInboxReceived.length === 0 ? "PROVEN SAFE" : "A SECURITY FINDING"}.`);
+  console.log("\n=== AT-62 SUMMARY (court_bookings and sessions) ===");
+  console.log("court_bookings/sessions in supabase_realtime publication: YES, as of supabase/migrations/0029_realtime_courts_sessions.sql. Before 0029 neither was published (only chat_messages was), which is the mechanical root cause of advisory AT-32 that AT-59 identified: the Live Today board's subscription was correct all along, but Postgres was never told to replicate the table, so there was no publish side to push from.");
+  console.log(`Channel/filter tested: client.channel('live-today-${venueA.venueId}').on('postgres_changes', { event: '*', schema: 'public', table: 'court_bookings', filter: 'court_id=in.(...)' }) — the exact call in apps/portal-court/src/app/dashboard/live-today/page.tsx.`);
+  console.log(`court_bookings INSERT (real walk in via book-court): ${insertLatencyMs === null ? "NO PUSH (timed out)" : insertLatencyMs.toFixed(1) + " ms"}`);
+  console.log(`court_bookings UPDATE (real check in via court_booking_check_in): ${updateLatencyMs === null ? "NO PUSH (timed out)" : updateLatencyMs.toFixed(1) + " ms"}`);
+  console.log(`REPLICA IDENTITY DEFAULT sufficient for UPDATE delivery: ${updateCarriedCheckIn ? "YES, payload.new carried the full row" : "NOT CONFIRMED"}`);
+  console.log(`Cross partner isolation, targeted (B on A's exact channel+filter): ${bTargetedEvents.length === 0 ? "PASS, 0 events leaked" : "FAIL, " + bTargetedEvents.length + " event(s) leaked"}`);
+  console.log(`Cross partner isolation, unfiltered (B, project wide): ${bUnfilteredEvents.length === 0 ? "PASS, 0 events leaked" : "FAIL, " + bUnfilteredEvents.length + " event(s) leaked"}`);
+  console.log(`sessions UPDATE push to the coach (via session_transition): ${sessionLatencyMs === null ? "NO PUSH (timed out)" : sessionLatencyMs.toFixed(1) + " ms"}`);
+  console.log(`Non party isolation (sessions, unfiltered): ${nonPartySessionEvents.length === 0 ? "PASS, 0 events leaked" : "FAIL, " + nonPartySessionEvents.length + " event(s) leaked"}`);
 
-  process.exit(overallPush && cLeakReceived.length === 0 && cInboxReceived.length === 0 ? 0 : 1);
+  const chatPush = latencyMs !== null || latencyMs2 !== null;
+  const chatIsolated = cLeakReceived.length === 0 && cInboxReceived.length === 0;
+  const courtPush = insertLatencyMs !== null && updateLatencyMs !== null;
+  const courtIsolated = bTargetedEvents.length === 0 && bUnfilteredEvents.length === 0;
+  const sessionPush = sessionLatencyMs !== null;
+  const sessionIsolated = nonPartySessionEvents.length === 0;
+
+  console.log(`\nOverall verdict for chat: Realtime instant push is ${chatPush ? "PROVEN" : "NOT PROVEN"}. RLS scoping is ${chatIsolated ? "PROVEN SAFE" : "A SECURITY FINDING"}.`);
+  console.log(`Overall verdict for court_bookings: instant push (INSERT and UPDATE) is ${courtPush ? "PROVEN" : "NOT PROVEN"}. Cross partner RLS scoping is ${courtIsolated ? "PROVEN SAFE" : "A SECURITY FINDING"}.`);
+  console.log(`Overall verdict for sessions: instant push is ${sessionPush ? "PROVEN" : "NOT PROVEN"}. Non party RLS scoping is ${sessionIsolated ? "PROVEN SAFE" : "A SECURITY FINDING"}.`);
+
+  const allGood = chatPush && chatIsolated && courtPush && courtIsolated && sessionPush && sessionIsolated;
+  process.exit(allGood ? 0 : 1);
 }
 
 main().catch((err) => {
