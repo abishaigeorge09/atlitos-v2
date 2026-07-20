@@ -5,9 +5,12 @@
 //
 // This script signs in as fixture coach users with the anon key and drives
 // the real schema writes for coaching:
-//   1. Upsert session_types (coach offerings with duration and price)
-//   2. Insert coach_availability_windows covering the next 7 days
-//   3. Detect coaching accounts and report what was seeded
+//   1. Complete public.users onboarding (city/state/sports) via the
+//      complete_player_setup RPC, the same path player-setup/[step].tsx
+//      calls, so seeded coaches clear needsOnboarding() (AT-56)
+//   2. Upsert session_types (coach offerings with duration and price)
+//   3. Insert coach_availability_windows covering the next 7 days
+//   4. Detect coaching accounts and report what was seeded
 //
 // Deliberate design: NO service role key used anywhere. Account creation
 // for new coach fixtures needs service role (run scripts/seed-demo-users.mjs
@@ -80,6 +83,32 @@ async function signIn(client, email) {
   } catch (e) {
     return null;
   }
+}
+
+// AT-56 fix: this script used to go straight to session_types/availability
+// writes and never touched public.users, so a freshly created coach account
+// (name from the signup trigger, city/state left null) sailed straight past
+// needsOnboarding()'s check (session-store.ts: `me != null && !me.city`) and
+// got stuck on the role-select screen forever, no matter what role_grants or
+// coach_profiles rows existed. The real, only client path that clears that
+// gate is the complete_player_setup RPC (supabase/migrations/0004_player_and
+// _coach_setup_rpc.sql): it writes sports + avatar_url + city + state onto
+// public.users for auth.uid(). Call it here, same as the player-setup wizard
+// does, instead of ever touching public.users directly. Idempotent: the RPC
+// is a plain UPDATE, safe to re-run every seed pass.
+async function ensureOnboardingComplete(client, coach) {
+  const { error } = await client.rpc('complete_player_setup', {
+    p_sports: [coach.sport],
+    p_avatar_url: null,
+    p_city: coach.city,
+    p_state: coach.state,
+  });
+
+  if (error) {
+    throw new Error(`[seed-coaching-fixtures] failed to complete onboarding via complete_player_setup: ${error.message}`);
+  }
+
+  console.log(`[seed-coaching-fixtures]   onboarding complete (city='${coach.city}', state='${coach.state}', sports=[${coach.sport}])`);
 }
 
 async function ensureSessionTypes(client, coachId, sessionTypes) {
@@ -208,6 +237,10 @@ async function seedCoach(coach) {
   }
 
   console.log(`[seed-coaching-fixtures]   signed in as ${user.id}`);
+
+  // AT-56: complete public.users (city/state/sports) through the real RPC
+  // before anything else, so this account clears needsOnboarding().
+  await ensureOnboardingComplete(client, coach);
 
   // Seed session types
   const { seeded: sessionTypesSeeded, error: stError } = await ensureSessionTypes(client, user.id, coach.sessionTypes);
