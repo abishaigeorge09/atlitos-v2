@@ -346,7 +346,12 @@ export default function CoachSetupStepScreen() {
 
           {stepIndex === 4 ? (
             <View style={{ gap: spacing.md }}>
-              <Text style={[textStyle('h2'), { color: colors.text }]}>Session types and pricing.</Text>
+              <View style={{ gap: spacing.xs }}>
+                <Text style={[textStyle('h2'), { color: colors.text }]}>Session types and pricing.</Text>
+                <Text style={[textStyle('body'), { color: colors.textSecondary }]}>
+                  Athletes will pay the price you set. You will receive it after our platform fee is deducted.
+                </Text>
+              </View>
               {draft.sessionTypes.map((sessionType, index) => (
                 <View
                   key={index}
@@ -381,7 +386,7 @@ export default function CoachSetupStepScreen() {
                     />
                     <Input
                       containerClassName="flex-1"
-                      label="Price (INR)"
+                      label="Session fee (INR)"
                       type="pincode"
                       value={sessionType.price}
                       onChangeText={(price) => updateSessionType(index, { price })}

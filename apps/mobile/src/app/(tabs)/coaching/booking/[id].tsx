@@ -123,7 +123,7 @@ export default function SessionDetailScreen() {
     if (!session) return;
     Alert.alert(
       'Cancel this session',
-      'Are you sure you want to cancel? This time will be released for other athletes.',
+      'The coach has accepted this session. If you cancel now, the time will be released but your payment is not automatically refunded.',
       [
         { text: 'Keep session', style: 'cancel' },
         { text: 'Cancel session', style: 'destructive', onPress: () => void handleCancel() },
