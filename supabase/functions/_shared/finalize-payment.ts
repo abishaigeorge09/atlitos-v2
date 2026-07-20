@@ -14,8 +14,9 @@
 //                                     UPDATE and the payment_domain dispatch
 //     |- finalizeCourtBookingCaptured   (finalize-court-booking-payment.ts)
 //     |- finalizeSessionCaptured        (finalize-session-payment.ts)
+//     |- finalizeOrderCaptured          (finalize-order-payment.ts, AT-72)
 //
-// Adding a domain (commerce, donation) means adding one branch here plus one
+// Adding a domain (donation) means adding one branch here plus one
 // finalize-<domain>-payment.ts, never a second copy of the gate. The gate is
 // deliberately domain-agnostic: it flips the intent, and only then hands a
 // captured intent to the domain handler, so no domain handler can ever be
@@ -31,6 +32,10 @@ import {
   describeSession,
   finalizeSessionCaptured,
 } from "./finalize-session-payment.ts";
+import {
+  describeOrder,
+  finalizeOrderCaptured,
+} from "./finalize-order-payment.ts";
 
 export type FinalizeOutcome = "captured" | "already_processed";
 
@@ -89,10 +94,24 @@ export async function finalizePaymentCaptured(
 
   const intent = updatedIntents[0];
 
+  // COMMERCE RUNS BEFORE THE NULL entity_id CHECK, DELIBERATELY (AT-72).
+  // Courts and sessions hand this gate an entity that already exists, so a
+  // null entity_id for them means something is wrong. Commerce is the domain
+  // whose entity row is created BY the handler: PAYMENTS.md keeps the `orders`
+  // row until capture on purpose, "so `placed` never exists without a paid
+  // intent behind it", and place_order_from_draft writes entity_id back in the
+  // same transaction as the order. A null entity_id here is therefore the
+  // NORMAL first-delivery case for commerce, and short circuiting on it (which
+  // is what this gate did while commerce was unbuilt) would acknowledge the
+  // capture and never create the order.
+  if (intent.domain === "commerce") {
+    return await finalizeOrderCaptured(supabase, intent);
+  }
+
   if (!intent.entity_id) {
-    // Domains whose row is created by the webhook itself (commerce,
-    // donation) are not built in this phase. Acknowledge the capture rather
-    // than pretending an unimplemented domain was handled.
+    // Domains whose row is created by the webhook itself (donation) are not
+    // built in this phase. Acknowledge the capture rather than pretending an
+    // unimplemented domain was handled.
     return {
       outcome: "captured",
       domain: intent.domain,
@@ -156,6 +175,8 @@ async function describeAlreadyProcessed(
       entityStatus = await describeCourtBooking(supabase, existing.entity_id);
     } else if (existing.domain === "session") {
       entityStatus = await describeSession(supabase, existing.entity_id);
+    } else if (existing.domain === "commerce") {
+      entityStatus = await describeOrder(supabase, existing.entity_id);
     }
   }
 

@@ -12,6 +12,10 @@ import { Shell } from "./layout/Shell";
 import { BookingsList } from "./pages/bookings/list";
 import { FeeConfigList } from "./pages/fee-config/list";
 import { LoginPage } from "./pages/login";
+import { OrderShow } from "./pages/orders/show";
+import { OrdersList } from "./pages/orders/list";
+import { ProductShow } from "./pages/products/show";
+import { ProductsList } from "./pages/products/list";
 import { UsersList } from "./pages/users/list";
 import { VenueShow } from "./pages/venues/show";
 import { VenuesList } from "./pages/venues/list";
@@ -39,6 +43,18 @@ export function App() {
             list: "/venues",
             show: "/venues/show/:id",
             meta: { label: "Venues" },
+          },
+          {
+            name: "products",
+            list: "/products",
+            show: "/products/show/:id",
+            meta: { label: "Catalog" },
+          },
+          {
+            name: "orders",
+            list: "/orders",
+            show: "/orders/show/:id",
+            meta: { label: "Orders" },
           },
           {
             name: "fee_config",
@@ -77,6 +93,10 @@ export function App() {
             <Route path="/verification/show/:id" element={<VerificationShow />} />
             <Route path="/venues" element={<VenuesList />} />
             <Route path="/venues/show/:id" element={<VenueShow />} />
+            <Route path="/products" element={<ProductsList />} />
+            <Route path="/products/show/:id" element={<ProductShow />} />
+            <Route path="/orders" element={<OrdersList />} />
+            <Route path="/orders/show/:id" element={<OrderShow />} />
             <Route path="/fee-config" element={<FeeConfigList />} />
             <Route path="/bookings" element={<BookingsList />} />
             <Route path="/users" element={<UsersList />} />

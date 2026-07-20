@@ -10,9 +10,11 @@
 //      already processed, acknowledge and stop.
 //   3. Branch on `event.event`: `payment.captured`, `payment.failed`,
 //      `refund.processed` (AT-60), and `transfer.processed` /
-//      `transfer.failed` (AT-43). Commerce and donation domain events do not
-//      exist yet — SCHEMA.md's phase sequencing, PHASE-1-STATUS.md's
-//      handoff notes.
+//      `transfer.failed` (AT-43). The `commerce` domain joined in AT-72 and
+//      AT-73: `payment.captured` needs no new branch here (the fan-out lives
+//      behind the shared gate), but `payment.failed` does, because commerce is
+//      the only domain holding stock reservations that must be released.
+//      Donation domain events still do not exist.
 //      The `session` domain joined `court` in AT-40 and needs no new branch
 //      here, because the domain fan-out lives behind the shared gate.
 //   4. Always return 200 once the event is durably recorded, even for
@@ -74,6 +76,71 @@ interface RazorpayWebhookEvent {
 
 function plainResponse(body: string, status: number): Response {
   return new Response(body, { status, headers: corsHeaders });
+}
+
+/**
+ * `payment.failed`. Flips the intent, and for commerce RELEASES the stock
+ * reservation (AT-73, PHASE-4-STATUS.md D2 exit 2, PRD-07 FR-22).
+ *
+ * Courts and sessions need nothing beyond the status flip: their domain row
+ * already exists and simply never renders as confirmed, and the AT-26 sweep
+ * retires it later. Commerce is different, and this is the whole reason the
+ * reservation table exists: units are HELD against this intent right now, and
+ * leaving them held until the TTL lapses removes sellable stock from the
+ * catalog for fifteen minutes because somebody's card was declined.
+ *
+ * `release_reservation` touches product_variants not at all, because nothing
+ * was ever decremented. That asymmetry with consume is the entire benefit of
+ * the design: there is no "add it back" step to get wrong. It is also
+ * idempotent, so a redelivered failure, and a failure arriving after
+ * `checkout`'s own Razorpay catch already released, both land on the same
+ * state.
+ *
+ * The order of operations matters slightly: the reservation is released even
+ * if the intent was already `failed` (checkout's catch path sets it), because
+ * the two writes are independent and only one of them frees inventory.
+ */
+async function handlePaymentFailed(
+  supabase: ReturnType<typeof serviceRoleClient>,
+  payment: RazorpayPaymentEntity,
+): Promise<void> {
+  const { data: intent } = await supabase
+    .from("payment_intents")
+    .select("id, domain, status")
+    .eq("razorpay_order_id", payment.order_id)
+    .maybeSingle<{ id: string; domain: string; status: string }>();
+
+  if (!intent) {
+    console.error(
+      `razorpay-webhook: payment.failed for unknown razorpay order ${payment.order_id}.`,
+    );
+    return;
+  }
+
+  // Never overwrite a captured or refunded charge with `failed`. Razorpay can
+  // deliver a failed attempt after a later successful one on the same order.
+  if (intent.status === "created") {
+    await supabase
+      .from("payment_intents")
+      .update({ status: "failed" })
+      .eq("id", intent.id)
+      .eq("status", "created");
+  }
+
+  if (intent.domain !== "commerce") return;
+  if (intent.status === "captured" || intent.status === "refunded") return;
+
+  const { error: releaseError } = await supabase.rpc("release_reservation", {
+    p_payment_intent_id: intent.id,
+    p_reason: "payment.failed",
+  });
+
+  if (releaseError) {
+    console.error(
+      `razorpay-webhook: release_reservation failed for intent ${intent.id}:`,
+      releaseError.message,
+    );
+  }
 }
 
 /**
@@ -385,11 +452,7 @@ Deno.serve(async (req) => {
       case "payment.failed": {
         const payment = event.payload.payment?.entity;
         if (payment) {
-          await supabase
-            .from("payment_intents")
-            .update({ status: "failed" })
-            .eq("razorpay_order_id", payment.order_id)
-            .eq("status", "created");
+          await handlePaymentFailed(supabase, payment);
         }
         break;
       }

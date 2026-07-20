@@ -140,10 +140,40 @@ Migrations `0031` through `0037` are applied to `syzzfgaudpifwvbpycyi`. `pnpm tu
 2. *The Jira project key is `AT`, not `ATL`.* CLAUDE.md's "Jira ticket transition duty" section says `ATL`; the only atlitos project on the site is `AT` (id 10066). Worth correcting in CLAUDE.md. Related: the `AT` board has no **In Review** status, only Backlog, Selected for Development, In Progress and Done, so CLAUDE.md's instruction to move a finished ticket to In Review cannot be followed literally. AT-65 through AT-70 are left **In Progress** with an implementation-note comment on each, for the integrator and phase-close agent to move to Done.
 
 ### Track B: payments (opus)
-- [ ] AT-71 `checkout` edge function: re-price, reserve, `PRICE_MISMATCH`, `OUT_OF_STOCK` (PRD-07 FR-16, FR-17, FR-18, FR-19, FR-20)
-- [ ] AT-72 `finalize-order-payment.ts` as the third branch of the shared gate (PRD-07 FR-21, FR-22, FR-23)
-- [ ] AT-73 Commerce failure and late capture paths: release, and auto refund when stock is gone (PRD-07 FR-22)
-- [ ] AT-26 (widened, not new) Unified expiry sweep across courts, sessions, and commerce
+- [x] AT-71 `checkout` edge function: re-price, reserve, `PRICE_MISMATCH`, `OUT_OF_STOCK` (PRD-07 FR-16, FR-17, FR-18, FR-19, FR-20)
+- [x] AT-72 `finalize-order-payment.ts` as the third branch of the shared gate (PRD-07 FR-21, FR-22, FR-23) — `0038`, plus the `orders` address snapshot Track A flagged
+- [x] AT-73 Commerce failure and late capture paths: release, and auto refund when stock is gone (PRD-07 FR-22)
+- [x] AT-26 (widened, not new) Unified expiry sweep across courts, sessions, and commerce — scheduled and observed to have run
+
+#### Track B build notes, for Tracks C, D and F
+
+Migration `0038_order_placement_and_expiry_sweep.sql` is applied to `syzzfgaudpifwvbpycyi`. `checkout` (new), `verify-payment` and `razorpay-webhook` are deployed. `pnpm turbo typecheck` green.
+
+**What Track C must call, and what it must render.**
+
+- `POST /functions/v1/checkout` with the shopper's own JWT: `{ items: [{product_variant_id, qty}], address_id, donation_roundup: boolean, subtotal?, delivery_charges?, gst_and_others?, total? }`. Returns `{ payment_intent_id, razorpay_order_id, key_id, amount (paise), currency, bill }`, where `bill` carries the five `BillSummary` rows already rounded. Errors: `NO_ADDRESS` 400/404, `PRICE_MISMATCH` 409, `OUT_OF_STOCK` 409 naming every offending variant id, `RAZORPAY_ERROR` 502.
+- **`donation_roundup` is a BOOLEAN, the FR-16 checkbox, not an amount.** The amount is derived server side and comes back in `bill.donation_roundup`. A client that sends a number instead is accepted for compatibility, but the number is verified against the server's own derivation and a wrong one is `PRICE_MISMATCH`. The roundup row CHANGES as the cart changes and must be suppressed entirely when the amount is zero, never rendered as 0.00.
+- The checkout screen should send the bill it displayed so FR-19 actually has something to catch. Every figure sent is compared, not just the total.
+- `verify-payment` now returns `order_id` alongside `booking_id` and `session_id`. That is the first moment the order id exists, and PRD-07 FR-23 gates Order Success on it. Do not route to Order Success on the Razorpay sheet's own success callback.
+- **Order Detail renders `orders.ship_to_line1` ... `ship_to_pincode`, never the `address_id` join.** See below.
+- The cart is cleared by `place_order_from_draft` in the same transaction as the order, so the cart query simply comes back empty after a successful capture. Do not clear it client side.
+
+**The address snapshot, which changes two things Track A wrote down.** `orders` gained `ship_to_line1`, `ship_to_line2`, `ship_to_city`, `ship_to_state`, `ship_to_pincode`, written once at order creation. `address_id` is now nullable with `ON DELETE SET NULL` and is only "which saved address was picked". Consequently `0036`'s guard no longer raises `ADDRESS_ON_PAST_ORDER`: deleting an address that only `delivered` or `cancelled` orders used now SUCCEEDS, which is what a shopper expects from FR-30. `ADDRESS_IN_USE` for in flight orders is unchanged (AC-F3 still holds). Track D's admin Order Detail should read the snapshot too.
+
+**Proofs run against the live project through the DEPLOYED functions, with a real player JWT, not argued.** The driver is `scripts/verify-commerce-payments.mjs`.
+
+- *Two real captured commerce orders, both balanced.* `#ATL00006` (`47f313f4`), group `9cdbfec9`: debit platform 1230.00, credit platform 1230.00, TWO legs, zero donation legs, imbalance 0.00. `#ATL00007` (`c4c8fcca`), group `a3d6a0f4`: debit 1230.00, credit 1228.82 revenue plus credit 1.18 roundup, THREE legs, imbalance 0.00.
+- *The zero roundup edge, which is the one the founder called out.* `#ATL00006` was 1000 subtotal + 50 delivery + 180 GST = 1230.00, already a multiple of 10, with the roundup box CHECKED. The derived roundup was 0.00 and NO donation leg was written. AT-86 should re-run this shape, since it is the edge that produces the empty leg.
+- *Three exits, all exercised.* Consumed: both orders, stock 5 to 4 on each variant, reservations `consumed`. Released: the Razorpay call was made to fail for real with an over maximum amount, and the reservation came back `released` with reason `razorpay order creation failed at checkout`, intent `failed`, raw stock untouched at 5, availability restored. `release_reservation` was separately driven with the exact `payment.failed` reason `handlePaymentFailed` passes: 1 row released on the first call, 0 on the second (idempotent), raw stock 1 before and after, availability 0 while held and 1 after. Swept: the AT-26 cron job.
+- *Idempotency of the commerce leg.* Each capture was delivered twice through `verify-payment`. The second returned `already_processed` with the same order id, and no second order, no second timeline row and no second ledger group exist.
+- *The address snapshot.* With both orders placed, the saved address was edited to a different street, city and pincode. Both orders continued to report `12 Verification Lane, Bengaluru, 560001` while the address book reported the new value.
+- *AT-26 observed to have run.* `cron.job_run_details` runid 1, `expire-stale-holds`, `succeeded`, 2026-07-20 10:45:00. Sessions `4a64c535` and `4ee5bca9` are `cancelled` with reason "Payment was not started. This booking was released." and `updated_at` 10:45:00.041626, matching that run. Gate clause 6 is satisfied by the sweep running, not by hand.
+
+**Not reached, and it cannot be by construction.** The AT-73 automatic refund on a late capture needs a capture arriving more than 15 minutes after a checkout whose stock sold out in between. Its two halves are individually proven (`consume_reservation` raises `OUT_OF_STOCK` and rolls back, per Track A's probe; `settle_refund` is AT-60's exercised path) but the branch itself has never run end to end. Same class as AT-43's Route note. Also not reached: a Razorpay delivered `payment.failed` event, since the webhook secret is set in the project and cannot be forged locally; the commerce branch calls the same `release_reservation` proven above.
+
+**Fixtures left behind, deliberately.** Four products described `AT-71 verification fixture` are set `active = false`, so they appear in no shopper facing surface (the availability view filters on `products.active`). They cannot be deleted, because `order_items` and `stock_reservations` reference their variants and those rows ARE the evidence above. AT-83's seed catalog should ignore them.
+
+**One thing the founder should see.** The Supabase CLI credentials on this machine can no longer deploy or even list edge functions (`403`, "your account does not have the necessary privileges"), and Docker is not installed, so both CLI deploy paths are closed. Everything in this pass was deployed through the Supabase MCP instead, which works. Worth fixing before an integrator needs `supabase functions deploy`.
 
 ### Track C: mobile shop (sonnet)
 - [ ] AT-74 Category Browse with search and Recommended Gears rail (PRD-07 FR-1, FR-2, FR-3, FR-31, FR-32)

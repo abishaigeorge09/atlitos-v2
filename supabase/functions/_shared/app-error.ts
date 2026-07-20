@@ -61,6 +61,25 @@ const STATUS_BY_CODE: Record<string, number> = {
   NOT_COACH: 403,
   // AT-41: a session reached completion with no captured payment behind it.
   PAYMENT_NOT_CAPTURED: 409,
+  // Commerce (AT-71, AT-72). OUT_OF_STOCK is raised by both
+  // reserve_stock_for_checkout (before Razorpay, the ordinary refusal) and
+  // consume_reservation (the late capture), and 409 is right for both: the
+  // request was well formed and the inventory refused it.
+  OUT_OF_STOCK: 409,
+  // reserve_stock_for_checkout, when an intent already holds a reservation.
+  // Never shopper facing; it means checkout retried without a fresh intent.
+  ALREADY_RESERVED: 409,
+  // consume_reservation, when a capture arrives for an intent that reserved
+  // nothing. 500 rather than 4xx: checkout and finalize disagree, which is a
+  // server problem, not a client one.
+  NO_RESERVATION: 500,
+  // place_order_from_draft (0038), when a capture arrives for an intent that
+  // carries no priced bill. Same reasoning as NO_RESERVATION.
+  NO_DRAFT: 500,
+  // PRD-07 FR-14. Checkout without a usable saved address.
+  NO_ADDRESS: 400,
+  // 0036/0038's address delete guard: an order still on the way uses it.
+  ADDRESS_IN_USE: 409,
   INTERNAL: 500,
   // Razorpay-facing codes (AT-42 Route onboarding, AT-43 transfers).
   // RAZORPAY_ERROR is a bad gateway: their API rejected or failed a call we
@@ -74,4 +93,13 @@ const STATUS_BY_CODE: Record<string, number> = {
   // refused it, and both are conditions the coach can resolve and retry.
   PAYOUT_ACCOUNT_NOT_ACTIVE: 409,
   INSUFFICIENT_BALANCE: 409,
+  // AT-81 (0039): admin catalog RPC refusals, relayed by apps/admin.
+  // MEDIA_REQUIRED is a 400 (the request was incomplete); SKU_TAKEN and
+  // VARIANT_IN_USE are 409s (well formed, refused by the catalog's state).
+  MEDIA_REQUIRED: 400,
+  SKU_TAKEN: 409,
+  VARIANT_IN_USE: 409,
+  // AT-82: admin-order-advance refusing to relay `placed -> cancelled`
+  // because the refund path it would owe the shopper is not a P4 story.
+  CANCEL_NOT_AVAILABLE: 409,
 };

@@ -325,7 +325,17 @@ export interface OrderRow {
   id: UUID;
   order_number: string; // "#ATL00001"
   user_id: UUID;
-  address_id: UUID;
+  // Which saved address was picked, for Reorder and support only. Nullable
+  // since 0038 (ON DELETE SET NULL). NEVER render the delivery address from
+  // this join: read the ship_to_* snapshot below. A shopper editing a saved
+  // address must not rewrite where a past order went, which is the same
+  // "snapshot, do not recompute" rule order_items already applies to prices.
+  address_id: UUID | null;
+  ship_to_line1: string;
+  ship_to_line2: string | null;
+  ship_to_city: string;
+  ship_to_state: string;
+  ship_to_pincode: string;
   subtotal: number;
   delivery_charges: number;
   gst_and_others: number;
