@@ -4,9 +4,9 @@ Gate (docs/PLAN.md P3, AMENDED 2026-07-20): "v1 Journeys 2+3 with test payments,
 
 **Why clause 2 changed.** Razorpay Route is not enabled on the test merchant account; the live API returns 400 "Route feature not enabled for the merchant". Enabling it needs account activation work the founder is not doing yet, and live transfers are required for production regardless, so the live transfer is DEFERRED to P8 hardening rather than blocking the six remaining phases. This is a deferral with a named home, not a quiet drop: no real money may move until it runs.
 
-Planned 2026-07-19. Stories AT-35 through AT-59, all Backlog.
+Planned 2026-07-19. Stories AT-35 through AT-64 (five were added mid-phase by verification findings: AT-60 the FR-19 cancel and refund, AT-61 the transition bypass, AT-62 the Realtime publication gap, AT-63 the coach discovery RLS defect, AT-64 the Alert.alert no-op).
 
-## Gate: NOT STARTED
+## Gate: REJECTED cycle 1 (2026-07-20), cycle-2 punch list in progress
 
 The gate is met when all of the following are true on the deployed stack:
 
@@ -25,43 +25,43 @@ The gate is met when all of the following are true on the deployed stack:
 ## Deliverables owed, by track
 
 ### Track A: schema, RLS, RPC (opus)
-- [ ] AT-35 Coaching schema migration: session_types, availability windows, sessions
-- [ ] AT-36 Coaching RLS policies for sessions, session types, and availability
-- [ ] AT-37 session_transition and rate_session RPCs (full state machine)
-- [ ] AT-38 Slot engine read path: get_coach_busy_slots RPC
-- [ ] AT-39 Chat schema, RLS, and Realtime publication
+- [x] AT-35 Coaching schema migration: session_types, availability windows, sessions
+- [x] AT-36 Coaching RLS policies for sessions, session types, and availability
+- [x] AT-37 session_transition and rate_session RPCs (full state machine)
+- [x] AT-38 Slot engine read path: get_coach_busy_slots RPC
+- [x] AT-39 Chat schema, RLS, and Realtime publication
 
 ### Track B: payments and Route (opus)
 - [x] AT-40 book-session edge function with server re-pricing and SLOT_TAKEN
 - [x] AT-41 Session completion earnings accrual: ledger write on complete
-- [ ] AT-42 razorpay-route-onboard edge function and payout account status sync
+- [x] AT-42 razorpay-route-onboard edge function and payout account status sync
 - [x] AT-43 razorpay-route-transfer edge function and transfer webhook handling
 - [x] AT-44 Ledger derived coach balance RPCs: wallet and transactions
 
 ### Track C: mobile coach (sonnet)
-- [ ] AT-45 Coach verification status screen and Trainings gating
-- [ ] AT-46 Coach Stats dashboard and session requests accept or decline
-- [ ] AT-47 Coach session detail with complete, cancel, and reschedule
-- [ ] AT-48 Trainees roster list and trainee detail
-- [ ] AT-49 Coach availability window editor
-- [ ] AT-50 Coach earnings, payout account setup, and transfer screens
-- [ ] AT-51 Coach analytics readouts with insufficient data state
+- [x] AT-45 Coach verification status screen and Trainings gating
+- [x] AT-46 Coach Stats dashboard and session requests accept or decline
+- [x] AT-47 Coach session detail with complete, cancel, and reschedule
+- [x] AT-48 Trainees roster list and trainee detail
+- [x] AT-49 Coach availability window editor
+- [x] AT-50 Coach earnings, payout account setup, and transfer screens
+- [x] AT-51 Coach analytics readouts with insufficient data state
 
 ### Track D: mobile athlete (sonnet)
-- [ ] AT-52 Coach discovery list and coach profile with real availability
-- [ ] AT-53 Athlete session booking flow with BillSummary and Razorpay checkout
-- [ ] AT-54 Athlete session management: cancel, reschedule, rate, and Trainings stat tiles
+- [x] AT-52 Coach discovery list and coach profile with real availability
+- [x] AT-53 Athlete session booking flow with BillSummary and Razorpay checkout
+- [x] AT-54 Athlete session management: cancel, reschedule, rate, and Trainings stat tiles
 
 ### Track E: chat (sonnet)
-- [ ] AT-55 Realtime chat thread list and thread screen, both role entry points
+- [x] AT-55 Realtime chat thread list and thread screen, both role entry points
 
 ### Track F: fixtures and copy (haiku)
-- [ ] AT-56 Coaching seed data and fixtures for the P3 gate
-- [ ] AT-57 House style copy pass across all P3 coaching and chat screens
+- [x] AT-56 Coaching seed data and fixtures for the P3 gate
+- [x] AT-57 House style copy pass across all P3 coaching and chat screens
 
 ### Track G: verification (opus and sonnet)
-- [ ] AT-58 Verify native Razorpay checkout on the iOS simulator
-- [ ] AT-59 Prove Realtime instant push for chat messages and session transitions
+- [x] AT-58 Verify native Razorpay checkout on the iOS simulator — native checkout VERIFIED end to end (docs/phases/evidence/p3-native/). Screen-level native coverage deferred to P8; the checkout FAILURE path is still unverified, see the deferral section.
+- [x] AT-59 Prove Realtime instant push for chat messages and session transitions
 
 ## Deferred to P8: the live Route transfer (gate clause 2)
 
@@ -90,6 +90,38 @@ Track A first (AT-35 gates everything; AT-36 and AT-38 follow it; AT-37 needs AT
 8. **The local `supabase` CLI account cannot link this project** (`supabase link` returns "your account does not have the necessary privileges"), so edge functions are deployed through the Supabase MCP `deploy_edge_function` with the file set supplied inline. Deploy with the entrypoint at `<function-name>/index.ts` and shared modules at `_shared/*.ts` so the repo's `../_shared/...` imports resolve unchanged; a flat bundle forces rewritten import paths and silently diverges the deployed source from the repo.
 9. **Realtime instant push has never been observed** (advisory AT-32). Rendered state a day later proves persistence, not push. P3 proves it for both chat and session transitions.
 8. **Agents never enter card details or passwords in a browser.** Use script-minted sessions with cookie or localStorage injection built from a `signInWithPassword` call.
+
+## Open defects raised in P3, with deferral homes
+
+These were found during P3 verification and must not live only in an evidence
+README. The next phase's agents read this file, not those.
+
+- **AT-64: `Alert.alert` is inert on react-native-web**, so every
+  confirm-before-destructive-action is a no-op there. Ten call sites across
+  three files, and every one guards a money-consequential action (cancel a
+  session, cancel a booking, initiate a transfer). Found by P3 web verification
+  when the athlete cancel button issued zero network requests. It is expected
+  to work natively and is UNVERIFIED there, because native screen coverage is
+  blocked. So this path is currently unproven on BOTH platforms. Home: P8, or
+  sooner if web becomes a supported target. This is also the flaw in P3's own
+  clause 4 amendment, which counted only `Platform.OS` branches and
+  `.web`/`.native` splits and missed the category of RN APIs that silently
+  no-op under react-native-web.
+- **Native Razorpay checkout failure path unverified.** The wrapper maps both a
+  user-dismissed sheet and a genuine payment failure to
+  `RazorpayCheckoutCancelledError`, assuming the library rejects with
+  `{ code, description }`. Only the SUCCESS path has ever run. If the
+  assumption is wrong, a declined card tells the user they cancelled. Home: P8,
+  or the next time the simulator is driven; settling it costs two taps
+  (dismiss a sheet, then fail a payment) and the harness already printed raw
+  thrown objects so the shapes can be compared.
+- **TypeScript version skew**: `apps/mobile` declares `~6.0.3` against a `^5.x`
+  monorepo, so `pnpm run typecheck` and a bare `npx tsc` resolve different
+  compilers and disagree. Papered over with `types: ["node"]` in 8b114c6; the
+  skew itself is untouched. Home: P8.
+- **`tmp-seed-demo-users` is still ACTIVE and JWT-callable** on the project, a
+  temporary seeding function left deployed since P2. Needs dashboard access to
+  delete. Founder action.
 
 ## Carried-forward advisory debt that touches P3
 
