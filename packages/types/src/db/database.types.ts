@@ -978,6 +978,92 @@ export type Database = {
           },
         ]
       }
+      order_drafts: {
+        Row: {
+          address_id: string | null
+          created_at: string
+          delivery_charges: number
+          donation_roundup: number
+          gst_and_others: number
+          id: string
+          lines: Json
+          payment_intent_id: string
+          ship_to_city: string
+          ship_to_line1: string
+          ship_to_line2: string | null
+          ship_to_pincode: string
+          ship_to_state: string
+          subtotal: number
+          total: number
+          user_id: string
+        }
+        Insert: {
+          address_id?: string | null
+          created_at?: string
+          delivery_charges?: number
+          donation_roundup?: number
+          gst_and_others?: number
+          id?: string
+          lines: Json
+          payment_intent_id: string
+          ship_to_city: string
+          ship_to_line1: string
+          ship_to_line2?: string | null
+          ship_to_pincode: string
+          ship_to_state: string
+          subtotal: number
+          total: number
+          user_id: string
+        }
+        Update: {
+          address_id?: string | null
+          created_at?: string
+          delivery_charges?: number
+          donation_roundup?: number
+          gst_and_others?: number
+          id?: string
+          lines?: Json
+          payment_intent_id?: string
+          ship_to_city?: string
+          ship_to_line1?: string
+          ship_to_line2?: string | null
+          ship_to_pincode?: string
+          ship_to_state?: string
+          subtotal?: number
+          total?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_drafts_address_id_fkey"
+            columns: ["address_id"]
+            isOneToOne: false
+            referencedRelation: "addresses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_drafts_payment_intent_id_fkey"
+            columns: ["payment_intent_id"]
+            isOneToOne: true
+            referencedRelation: "payment_intents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_drafts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_drafts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       order_feedback: {
         Row: {
           created_at: string
@@ -1119,7 +1205,7 @@ export type Database = {
       }
       orders: {
         Row: {
-          address_id: string
+          address_id: string | null
           created_at: string
           delivery_charges: number
           donation_roundup: number
@@ -1127,6 +1213,11 @@ export type Database = {
           id: string
           order_number: string
           payment_intent_id: string | null
+          ship_to_city: string
+          ship_to_line1: string
+          ship_to_line2: string | null
+          ship_to_pincode: string
+          ship_to_state: string
           status: Database["public"]["Enums"]["order_status"]
           subtotal: number
           total: number
@@ -1134,7 +1225,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          address_id: string
+          address_id?: string | null
           created_at?: string
           delivery_charges?: number
           donation_roundup?: number
@@ -1142,6 +1233,11 @@ export type Database = {
           id?: string
           order_number?: string
           payment_intent_id?: string | null
+          ship_to_city: string
+          ship_to_line1: string
+          ship_to_line2?: string | null
+          ship_to_pincode: string
+          ship_to_state: string
           status?: Database["public"]["Enums"]["order_status"]
           subtotal: number
           total: number
@@ -1149,7 +1245,7 @@ export type Database = {
           user_id: string
         }
         Update: {
-          address_id?: string
+          address_id?: string | null
           created_at?: string
           delivery_charges?: number
           donation_roundup?: number
@@ -1157,6 +1253,11 @@ export type Database = {
           id?: string
           order_number?: string
           payment_intent_id?: string | null
+          ship_to_city?: string
+          ship_to_line1?: string
+          ship_to_line2?: string | null
+          ship_to_pincode?: string
+          ship_to_state?: string
           status?: Database["public"]["Enums"]["order_status"]
           subtotal?: number
           total?: number
@@ -1446,6 +1547,13 @@ export type Database = {
             columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "shopper_categories"
             referencedColumns: ["id"]
           },
         ]
@@ -2263,6 +2371,27 @@ export type Database = {
         }
         Relationships: []
       }
+      shopper_categories: {
+        Row: {
+          created_at: string | null
+          id: string | null
+          name: string | null
+          slug: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string | null
+          name?: string | null
+          slug?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string | null
+          name?: string | null
+          slug?: string | null
+        }
+        Relationships: []
+      }
       venue_bookings_today: {
         Row: {
           booking_source: Database["public"]["Enums"]["booking_source"] | null
@@ -2371,6 +2500,26 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      admin_adjust_variant_stock: {
+        Args: { p_id: string; p_new_stock: number; p_reason: string }
+        Returns: {
+          color: string | null
+          created_at: string
+          id: string
+          price_override: number | null
+          product_id: string
+          size: string | null
+          sku: string
+          stock: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "product_variants"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       admin_approve_verification_request: {
         Args: { p_request_id: string }
         Returns: {
@@ -2391,6 +2540,62 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      admin_create_product: {
+        Args: {
+          p_base_price: number
+          p_category_id: string
+          p_description: string
+          p_media: Json
+          p_sport?: Database["public"]["Enums"]["sport"]
+          p_title: string
+        }
+        Returns: {
+          active: boolean
+          base_price: number
+          category_id: string | null
+          created_at: string
+          description: string | null
+          id: string
+          recommended_rank: number | null
+          sport: Database["public"]["Enums"]["sport"] | null
+          title: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "products"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      admin_create_variant: {
+        Args: {
+          p_color?: string
+          p_price_override?: number
+          p_product_id: string
+          p_size?: string
+          p_sku: string
+          p_stock?: number
+        }
+        Returns: {
+          color: string | null
+          created_at: string
+          id: string
+          price_override: number | null
+          product_id: string
+          size: string | null
+          sku: string
+          stock: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "product_variants"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      admin_delete_variant: { Args: { p_id: string }; Returns: undefined }
       admin_reject_verification_request: {
         Args: { p_reason: string; p_request_id: string }
         Returns: {
@@ -2411,6 +2616,44 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      admin_set_product_active: {
+        Args: { p_active: boolean; p_id: string }
+        Returns: {
+          active: boolean
+          base_price: number
+          category_id: string | null
+          created_at: string
+          description: string | null
+          id: string
+          recommended_rank: number | null
+          sport: Database["public"]["Enums"]["sport"] | null
+          title: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "products"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      admin_set_product_media: {
+        Args: { p_media: Json; p_product_id: string }
+        Returns: {
+          created_at: string
+          id: string
+          is_primary: boolean
+          position: number
+          product_id: string
+          storage_path: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "product_media"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       admin_update_fee_config: {
         Args: { p_id: string; p_note: string; p_value: number }
         Returns: {
@@ -2428,6 +2671,78 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      admin_update_product: {
+        Args: {
+          p_base_price: number
+          p_category_id: string
+          p_description: string
+          p_id: string
+          p_sport?: Database["public"]["Enums"]["sport"]
+          p_title: string
+        }
+        Returns: {
+          active: boolean
+          base_price: number
+          category_id: string | null
+          created_at: string
+          description: string | null
+          id: string
+          recommended_rank: number | null
+          sport: Database["public"]["Enums"]["sport"] | null
+          title: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "products"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      admin_update_variant: {
+        Args: {
+          p_color?: string
+          p_id: string
+          p_price_override?: number
+          p_size?: string
+          p_sku: string
+        }
+        Returns: {
+          color: string | null
+          created_at: string
+          id: string
+          price_override: number | null
+          product_id: string
+          size: string | null
+          sku: string
+          stock: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "product_variants"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      admin_variant_stock: {
+        Args: { p_product_id?: string }
+        Returns: {
+          available_stock: number
+          color: string
+          held_qty: number
+          price_override: number
+          product_id: string
+          product_variant_id: string
+          raw_stock: number
+          size: string
+          sku: string
+        }[]
+      }
+      audit_changed_fields: {
+        Args: { p_after: Json; p_before: Json }
+        Returns: Json
       }
       complete_player_setup: {
         Args: {
@@ -2597,6 +2912,7 @@ export type Database = {
         }
       }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
+      expire_stale_holds: { Args: never; Returns: Json }
       fail_transfer: {
         Args: {
           p_razorpay_transfer_id?: string
@@ -2696,7 +3012,7 @@ export type Database = {
           p_to_status: Database["public"]["Enums"]["order_status"]
         }
         Returns: {
-          address_id: string
+          address_id: string | null
           created_at: string
           delivery_charges: number
           donation_roundup: number
@@ -2704,6 +3020,40 @@ export type Database = {
           id: string
           order_number: string
           payment_intent_id: string | null
+          ship_to_city: string
+          ship_to_line1: string
+          ship_to_line2: string | null
+          ship_to_pincode: string
+          ship_to_state: string
+          status: Database["public"]["Enums"]["order_status"]
+          subtotal: number
+          total: number
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      place_order_from_draft: {
+        Args: { p_payment_intent_id: string }
+        Returns: {
+          address_id: string | null
+          created_at: string
+          delivery_charges: number
+          donation_roundup: number
+          gst_and_others: number
+          id: string
+          order_number: string
+          payment_intent_id: string | null
+          ship_to_city: string
+          ship_to_line1: string
+          ship_to_line2: string | null
+          ship_to_pincode: string
+          ship_to_state: string
           status: Database["public"]["Enums"]["order_status"]
           subtotal: number
           total: number
@@ -3017,6 +3367,7 @@ export type Database = {
         Args: { p_product_id: string }
         Returns: boolean
       }
+      unpaid_hold_ttl: { Args: never; Returns: string }
       update_cart_item: {
         Args: { p_qty: number; p_variant_id: string }
         Returns: Database["public"]["CompositeTypes"]["cart_mutation_result"]
@@ -3324,3 +3675,4 @@ export const Constants = {
     },
   },
 } as const
+

@@ -480,10 +480,26 @@ export function useShop(client: AtlitosClient) {
       return (data ?? []).map((row) => mapProductRow(client, row));
     },
 
+    /** Category chips. Reads `shopper_categories`, never `categories` directly:
+     * a category with no active product renders a chip that leads to an empty
+     * grid. Found in the P4 evidence pass, where a fixture category surfaced to
+     * shoppers because categories carry no `active` column of their own. */
     async listCategories(): Promise<{ id: string; name: string; slug: string }[]> {
-      const { data, error } = await client.from("categories").select("id, name, slug").order("name");
+      const { data, error } = await client
+        .from("shopper_categories")
+        .select("id, name, slug")
+        .order("name");
       if (error) throw mapPostgrestError(error);
-      return data ?? [];
+      // Postgres views generate every column as nullable even where the
+      // underlying `categories` columns are `not null`, the same typegen
+      // quirk `AvailabilityQueryRow` above absorbs. Narrow it here rather
+      // than asserting it away, so a genuinely null row is dropped instead
+      // of rendering a chip with an undefined slug that routes nowhere.
+      return (data ?? []).flatMap((row) =>
+        row.id !== null && row.name !== null && row.slug !== null
+          ? [{ id: row.id, name: row.name, slug: row.slug }]
+          : [],
+      );
     },
 
     /** PDP read. PRD-07 FR-4: every variant with its own price and its own
