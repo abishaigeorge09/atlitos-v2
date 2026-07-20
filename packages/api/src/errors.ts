@@ -61,10 +61,50 @@ export function mapPostgrestError(error: { message: string; code?: string }): Ap
       // what makes a regressed call site visible instead of looking like a
       // server fault.
       "USE_EDGE_FUNCTION",
+      // Commerce (P4). Every one of these is raised by a migration as
+      // `raise exception 'CODE: message'` and every one drives real UI, so
+      // leaving them off this list is not cosmetic: an unlisted prefix falls
+      // through to INTERNAL carrying the raw Postgres string, which is
+      // exactly what PRD-07 FR-30 and AT-78 forbid showing a shopper.
+      // Verified against the live project: add_to_cart raises
+      // "OUT_OF_STOCK: ..." (P0001) and the 0036 delete guard raises
+      // "ADDRESS_IN_USE: ..." / "ADDRESS_ON_PAST_ORDER: ...".
+      "OUT_OF_STOCK",
+      "ADDRESS_IN_USE",
+      "ADDRESS_ON_PAST_ORDER",
+      "PINCODE_INVALID",
+      "ALREADY_RESERVED",
+      "NO_RESERVATION",
+      "NO_ADDRESS",
     ];
+    // Codes whose meaning is "well formed request, current state refuses it",
+    // matching the statuses `supabase/functions/_shared/app-error.ts` assigns
+    // the same codes, so a caller sees one status for a given code whether it
+    // arrived from an RPC or from an edge function.
+    const conflictCodes: ApiErrorCode[] = [
+      "OUT_OF_STOCK",
+      "ADDRESS_IN_USE",
+      "ADDRESS_ON_PAST_ORDER",
+      "ALREADY_RESERVED",
+      "SLOT_TAKEN",
+      "INVALID_TRANSITION",
+      "ALREADY_RATED",
+      "TOO_EARLY",
+      "SESSION_STARTED",
+    ];
+
     const code = known.find((candidate) => candidate === prefix);
     if (code) {
-      const status = code === "UNAUTHENTICATED" ? 401 : code === "FORBIDDEN" ? 403 : 400;
+      const status =
+        code === "UNAUTHENTICATED"
+          ? 401
+          : code === "FORBIDDEN"
+            ? 403
+            : code === "NO_RESERVATION"
+              ? 500
+              : conflictCodes.includes(code)
+                ? 409
+                : 400;
       return { code, message: rest || error.message, status };
     }
   }

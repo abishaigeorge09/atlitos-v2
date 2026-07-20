@@ -81,6 +81,10 @@ export type ApiErrorCode =
   // consume_reservation, when a capture arrives for an intent that never
   // reserved anything. Indicates the checkout and finalize paths disagree.
   | 'NO_RESERVATION'
+  // place_order_from_draft (0038), when a capture arrives for an intent that
+  // carries no priced bill. Means the charge was not created by the `checkout`
+  // edge function, so there is nothing to turn into an order.
+  | 'NO_DRAFT'
   // clutch
   | 'TOO_LARGE'
   | 'BAD_FORMAT'

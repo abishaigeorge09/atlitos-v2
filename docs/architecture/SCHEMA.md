@@ -446,13 +446,24 @@ Indexes: `idx_cart_items_user_id` on `user_id`.
 | `id` | `uuid` | PK |
 | `order_number` | `text` | not null, unique, generated as `'#ATL' || lpad(nextval('order_number_seq')::text, 5, '0')` |
 | `user_id` | `uuid` | not null, references `users(id)` |
-| `address_id` | `uuid` | not null, references `addresses(id)` |
+| `address_id` | `uuid` | nullable since `0038`, references `addresses(id)` `ON DELETE SET NULL` |
+| `ship_to_line1` | `text` | not null (`0038`) |
+| `ship_to_line2` | `text` | nullable (`0038`) |
+| `ship_to_city` | `text` | not null (`0038`) |
+| `ship_to_state` | `text` | not null (`0038`) |
+| `ship_to_pincode` | `text` | not null, `CHECK (~ '^[0-9]{6}$')` (`0038`) |
 | `subtotal`, `delivery_charges`, `gst_and_others`, `donation_roundup`, `total` | `numeric(12,2)` | not null |
 | `status` | `order_status` | not null default `placed` |
 | `payment_intent_id` | `uuid` | nullable, references `payment_intents(id)` |
 | `created_at`, `updated_at` | `timestamptz` | |
 
 Indexes: `idx_orders_user_id` on `user_id`, `idx_orders_status` on `status`.
+
+**The `ship_to_*` columns are the delivery address, not the `address_id` join.** `0038_order_placement_and_expiry_sweep.sql` (AT-72) added them because a live foreign key made the shipping address the one part of an order that a later edit could silently rewrite, which is the same bug class D4 already forbids for prices. They are written once by `place_order_from_draft` and never updated. Order Detail renders these; `address_id` survives only as "which saved address was picked", for a Reorder affordance and for support, and nothing may render from it.
+
+Verified 2026-07-20: with orders `#ATL00006` and `#ATL00007` placed, the saved address was edited to a different street, city and pincode; both orders continued to report the address they actually shipped to while the address book reported the new one.
+
+Consequence for `0036`'s delete guard, updated in the same migration: `ADDRESS_ON_PAST_ORDER` is no longer raised. Deleting an address a `delivered` or `cancelled` order used now succeeds and nulls the FK, because the order keeps its own snapshot and loses nothing. `ADDRESS_IN_USE` is unchanged for orders still on the way (PRD-07 FR-30, AC-F3).
 
 ### `order_items`
 
@@ -553,9 +564,46 @@ Recorded here because it is why `orders` has the money columns it has.
 
 There is no platform fee on a commerce bill because **Atlitos is the seller of record for v1 gear**. There is no counterparty to split with, so a platform fee would be a fee the platform charges itself. That is why `orders` carries five money columns and no `platform_fee`, unlike `sessions` and `court_bookings`.
 
-`orders` enforces `CHECK (total = subtotal + delivery_charges + gst_and_others + donation_roundup)`, so a bad edge-function computation is a write failure rather than a wrong number a shopper is charged. The three configurable rows derive from `fee_config` keys `commerce.delivery_flat`, `commerce.gst_percent` and `commerce.donation_roundup_flat`.
+`orders` enforces `CHECK (total = subtotal + delivery_charges + gst_and_others + donation_roundup)`, so a bad edge-function computation is a write failure rather than a wrong number a shopper is charged. The three configurable rows derive from `fee_config` keys `commerce.delivery_flat`, `commerce.gst_percent` and `commerce.donation_roundup_multiple`, all seeded by `0038` (50.00 flat, 0.18, 10.00).
 
-**Known gap: `orders.address_id` has no snapshot.** `order_items` freezes the product title, variant label and unit price at order time (FR-25), but the shipping address is a live foreign key. Two consequences: a shopper editing a saved address retroactively changes what a past order appears to have shipped to, and an address can never be deleted once any order references it, because `address_id` is `NOT NULL` with no `ON DELETE` action. `0036`'s trigger turns the second into a clear `ADDRESS_IN_USE` / `ADDRESS_ON_PAST_ORDER` message rather than a raw foreign key error, but it does not close the gap. The fix is to snapshot the address onto the order the way `order_items` already snapshots its fields, making `address_id` nullable with `ON DELETE SET NULL`. That is a schema change beyond PRD-07 FR-30's scope, so it is flagged for the founder in PHASE-4-STATUS.md rather than taken unilaterally.
+**`donation_roundup` is DERIVED, not a flat config figure**, per the founder decision of 2026-07-20 recorded in PHASE-4-STATUS.md. It replaces the planned `commerce.donation_roundup_flat`. The `checkout` edge function computes `ceil(preRoundupTotal / m) * m - preRoundupTotal` where `m` is `commerce.donation_roundup_multiple`, on the total AFTER delivery and GST, in integer paise so the rounding cannot drift. Two consequences that are easy to get wrong:
+
+- Delivery is added BEFORE the roundup is derived. Rounding first and then adding delivery produces a total that is not a multiple of anything.
+- **The roundup is ZERO whenever the total already lands on a multiple**, and in that case NO donation ledger leg is written at all. A `0.00` leg would balance while recording a donation that did not happen, and every later query looking for roundup rupees would have to filter it back out. Verified 2026-07-20: order `#ATL00006` (1000 + 50 + 180 = 1230, already a multiple of 10) has a two leg group with zero donation legs and imbalance `0.00`; order `#ATL00007` (999 + 50 + 179.82 = 1228.82, roundup 1.18, total 1230.00) has the three leg group with one donation leg, also imbalance `0.00`.
+
+**Closed in `0038` (AT-72): `orders.address_id` had no snapshot.** Track A flagged it and could not take it; Track B did, because Track B owns the order insert. See the `ship_to_*` note under the `orders` table above for the columns and the proof. The gap was the same bug class D4 already forbids for prices, so leaving it open would have meant `order_items` freezing the price while the address it shipped to stayed editable.
+
+### `order_drafts`
+
+Added by `0038` (AT-72). The server priced bill, parked between `checkout` and capture.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `uuid` | PK |
+| `payment_intent_id` | `uuid` | not null, unique, references `payment_intents(id)` `ON DELETE CASCADE` |
+| `user_id` | `uuid` | not null, references `users(id)` |
+| `address_id` | `uuid` | nullable, references `addresses(id)` `ON DELETE SET NULL` |
+| `ship_to_line1`, `ship_to_line2`, `ship_to_city`, `ship_to_state`, `ship_to_pincode` | `text` | the address snapshot, copied onto the order |
+| `subtotal`, `delivery_charges`, `gst_and_others`, `donation_roundup`, `total` | `numeric(12,2)` | not null, same `total = sum of rows` CHECK the orders table carries |
+| `lines` | `jsonb` | `[{product_variant_id, qty, unit_price, product_title_snapshot, variant_label_snapshot}]` |
+| `created_at` | `timestamptz` | |
+
+**Why it exists.** PAYMENTS.md keeps the `orders` row until capture on purpose, "so `placed` never exists without a paid intent behind it". But the bill is priced at checkout time and D4 forbids recomputing it later: a price edit between the checkout sheet opening and the webhook arriving must not change what the shopper is charged, and the roundup in particular is derived from a cart that no longer exists by then. So the priced bill has to be parked somewhere between the two moments, and this is that somewhere. Rejected alternatives: stashing it on `payment_intents` (one amount column, no room for lines), and recomputing at capture (D4 forbids it, and it would reintroduce `PRICE_MISMATCH`'s failure mode after the money landed).
+
+RLS enabled, no policies, grants withdrawn from `anon` and `authenticated`: the same two lock pattern as `stock_reservations` and `webhook_events`. A client that could edit a draft could edit the price it is about to be charged.
+
+| RPC | Grant | What it does |
+|---|---|---|
+| `place_order_from_draft(p_payment_intent_id)` | `service_role` only | Calls `consume_reservation`, inserts `orders` (with the address snapshot), `order_items` from `lines`, the first `order_timeline` row, clears the purchased lines from the shopper's cart, and sets `payment_intents.entity_id` to the new order. ONE transaction, which is PRD-07 FR-21 literally. Idempotent: an intent that already has an order returns it untouched. Raises `NO_DRAFT` if the charge was not created by `checkout`, and propagates `consume_reservation`'s `OUT_OF_STOCK` on a late capture, which rolls the whole thing back so no order row is created. Writes no ledger row; the balanced group is written by `_shared/finalize-order-payment.ts` under the service role, matching the court handler. |
+
+### The unified expiry sweep (AT-26, `0038`)
+
+| Function | Grant | What it does |
+|---|---|---|
+| `unpaid_hold_ttl()` | public | How long an unpaid hold survives, defined as `stock_reservation_ttl()` so all three domains cannot drift apart. |
+| `expire_stale_holds()` | `service_role` only | Courts (`pending_payment` past the TTL, via `court_booking_expire_payment`), sessions (`requested` whose payment intent is still `created` past the TTL and which have no captured intent, via `session_abandon_unpaid`), and commerce (`release_expired_stock_reservations`, Track A's seam). Returns a per domain count so a sweep that ran and did nothing is distinguishable from one that never ran. Per row failures are counted, not fatal, so one refusing booking cannot stop the other two domains being swept. |
+
+Scheduled with `pg_cron` as job `expire-stale-holds`, `*/5 * * * *`. A session in `requested` is deliberately NOT stale on age alone: a paid session sits there legitimately for days waiting for a coach to answer, so the query keys on the payment intent instead. Verified 2026-07-20: the first scheduled run at 10:45:00 cancelled sessions `4a64c535` and `4ee5bca9`, the two live stale rows P3 left behind, by running rather than by hand (`cron.job_run_details` runid 1, `sessions.updated_at` 10:45:00.041626).
 
 ---
 

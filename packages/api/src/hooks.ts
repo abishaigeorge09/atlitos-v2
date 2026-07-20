@@ -681,17 +681,12 @@ function mapCourtBookingRpcRow(row: CourtBookingRpcRow): CourtBooking {
   };
 }
 
-// TODO(P4): shop. PostgREST reads + RPC (add_to_cart, update_cart_item) +
-// Edge Function `checkout`. See API-MAPPING.md "shop".
-export function useShop(_client: AtlitosClient) {
-  throw new Error("useShop is not implemented yet, see API-MAPPING.md shop");
-}
-
-// TODO(P4): wishlist. RPC `toggle_product_wishlist` + PostgREST list. See
-// API-MAPPING.md "wishlist (gear)".
-export function useWishlist(_client: AtlitosClient) {
-  throw new Error("useWishlist is not implemented yet, see API-MAPPING.md wishlist");
-}
+// P4: shop and wishlist (gear) are implemented in `use-shop.ts` (AT-74 to
+// AT-80, Track C), which owns both `useShop` and `useWishlist` and re-exports
+// them from the package root. The placeholders that used to stand here were
+// removed rather than left beside the real implementations, because
+// `index.ts` re-exports both files and two exports of the same name would
+// collide. See API-MAPPING.md "shop" and "wishlist (gear)".
 
 // TODO(P5): clutch. PostgREST reads + Edge Function `stream-upload-url` +
 // RPC (toggle_clip_like, toggle_follow). See API-MAPPING.md "clutch".

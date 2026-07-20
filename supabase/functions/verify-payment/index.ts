@@ -129,6 +129,9 @@ Deno.serve((req) =>
       entity_id: result.entityId,
       booking_id: result.domain === "court" ? result.entityId : null,
       session_id: result.domain === "session" ? result.entityId : null,
+      // AT-72. Commerce's entity is created BY the gate, so this is the first
+      // moment the order id exists; PRD-07 FR-23 gates Order Success on it.
+      order_id: result.domain === "commerce" && result.entityId ? result.entityId : null,
       status: result.entityStatus,
       outcome: result.outcome,
     });
