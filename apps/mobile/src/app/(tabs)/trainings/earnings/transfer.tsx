@@ -38,7 +38,6 @@ export default function CoachTransferScreen() {
   const [state, setState] = useState<ScreenState>('loading');
   const [balance, setBalance] = useState(0);
   const [accountActive, setAccountActive] = useState(false);
-  const [error, setError] = useState<ApiError | null>(null);
 
   const [amountInput, setAmountInput] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
@@ -49,7 +48,6 @@ export default function CoachTransferScreen() {
 
   const load = useCallback(async () => {
     setState('loading');
-    setError(null);
     try {
       const [wallet, account] = await Promise.all([
         coachEarnings.getWalletBalance(),
@@ -58,8 +56,7 @@ export default function CoachTransferScreen() {
       setBalance(wallet.balance);
       setAccountActive(account.status === 'active');
       setState('populated');
-    } catch (err) {
-      setError(err as ApiError);
+    } catch {
       setState('error');
     }
   }, []);

@@ -10,7 +10,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { TextField } from '@/components/organisms/_shared';
 import { AppBar } from '@/components/ui/app-bar';
 import { Button } from '@/components/ui/button';
-import { Chip } from '@/components/ui/chip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
 import { supabase } from '@/lib/supabase';

@@ -10,7 +10,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LoginGateModal } from '@/components/organisms/LoginGateModal';
 import { EmptyState } from '@/components/organisms/EmptyState';
 import { Avatar } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
 import { supabase } from '@/lib/supabase';
@@ -188,8 +187,6 @@ function relativeTimestamp(iso: string): string {
 }
 
 function ThreadRow({ thread, onPress }: { thread: ChatThread; onPress: () => void }) {
-  const colors = useThemeColors();
-
   return (
     <Pressable
       onPress={onPress}

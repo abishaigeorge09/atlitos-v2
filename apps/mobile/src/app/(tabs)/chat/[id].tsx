@@ -13,7 +13,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
-import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
 
 type ScreenState = 'loading' | 'populated' | 'error';
