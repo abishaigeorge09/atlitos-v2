@@ -491,6 +491,72 @@ Indexes: `idx_order_timeline_order_id` on `order_id`.
 | `remarks` | `text` | nullable |
 | `created_at` | `timestamptz` | |
 
+### `stock_reservations`
+
+Added by `0033_stock_reservations.sql` (AT-67), implementing `PHASE-4-STATUS.md` decision D2. Not in this doc's original commerce set, because the oversell hazard it closes only became concrete when commerce was planned.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `uuid` | PK |
+| `payment_intent_id` | `uuid` | not null, references `payment_intents(id)` on delete cascade |
+| `product_variant_id` | `uuid` | not null, references `product_variants(id)` |
+| `qty` | `int` | not null, `CHECK (qty > 0)` |
+| `status` | `stock_reservation_status` | not null default `held` |
+| `expires_at` | `timestamptz` | not null, set to `now() + stock_reservation_ttl()` (15 minutes) |
+| `release_reason` | `text` | nullable, why the hold ended without a sale |
+| `created_at`, `updated_at` | `timestamptz` | |
+
+Constraints: `UNIQUE(payment_intent_id, product_variant_id)`.
+Indexes: partial `idx_stock_reservations_held_by_variant` on `(product_variant_id, expires_at) WHERE status = 'held'` (the hot path is summing live holds per variant), `idx_stock_reservations_payment_intent` on `payment_intent_id`.
+
+**Why a table and not a `reserved` counter column on `product_variants`.** A counter cannot expire. Releasing one correctly requires knowing which in-flight intent owns how much, which is a table with a TTL wearing a disguise. The table also makes the abandonment sweep trivially correct and gives the phase approver something to count.
+
+**`product_variants.stock` is RAW inventory and stays that way.** It is the number of units Atlitos physically has, and it is decremented exactly once, at capture, inside `consume_reservation`. It is deliberately not touched while a checkout is in flight, so every admin stock readout (PRD-04 FR-13, FR-17) stays truthful under traffic.
+
+Written only by three `security definer` RPCs, all granted to `service_role` **only** (`0033`):
+
+| RPC | Exit | What it does |
+|---|---|---|
+| `reserve_stock_for_checkout(p_payment_intent_id, p_lines jsonb)` | (entry) | Locks every `product_variants` row in the order `FOR UPDATE` in ascending id order so a lock-order deadlock is impossible, re-derives available per line through the shared view, raises `OUT_OF_STOCK` naming every offending line, inserts the `held` rows. All lines or none. Called by `checkout` before Razorpay. |
+| `consume_reservation(p_payment_intent_id)` | paid | Applies the guarded `UPDATE product_variants SET stock = stock - qty WHERE stock >= qty` and flips `held` to `consumed`, in the SAME transaction as the `orders`/`order_items` inserts (PRD-07 FR-21). Idempotent on redelivery. Accepts already-`released` rows so a late capture can re-attempt the decrement per D2. |
+| `release_reservation(p_payment_intent_id, p_reason)` | failed | Flips `held` to `released` and touches `product_variants` not at all, because nothing was decremented. Idempotent. |
+| `release_expired_stock_reservations()` | abandoned | Set-based sweep of every `held` row past its TTL. This is the seam AT-26's unified `pg_cron` job calls; it is not scheduled by `0033`. |
+
+**The guarded decrement is safe under concurrency, and this was proven rather than assumed.** Under READ COMMITTED, a second transaction whose `UPDATE` meets a row the first has locked blocks, then re-fetches the committed row and re-evaluates the `WHERE` against the new version (EvalPlanQual). With stock 1 and two captures each wanting 1, the winner writes 0 and the loser's re-evaluated `stock >= qty` is false, so its row is not updated, the row count check fails, and it raises `OUT_OF_STOCK` with its whole transaction rolled back (no order row, and the caller issues an automatic refund via AT-60's machinery). A two-connection probe against the live project confirmed exactly this: final stock 0, never -1, `CHECK (stock >= 0)` never fired. See PHASE-4-STATUS.md.
+
+### `product_variant_availability` (view)
+
+**The one definition of available stock in the system.** Added by `0033`.
+
+```
+available_stock = product_variants.stock
+                - sum(stock_reservations.qty) where status = 'held' and expires_at > now()
+```
+
+Columns: `product_variant_id`, `product_id`, `sku`, `size`, `color`, `effective_price` (`coalesce(price_override, base_price)`), `stock` (raw), `held_qty`, `available_stock`.
+
+Every shopper-facing stock read (PDP, cart, checkout) and every reservation RPC reads **through this view**, and `variant_available_stock(uuid)` is its scalar form, itself a select from the view. Nothing re-derives the subtraction. This is deliberate: if the PDP and the checkout each carried their own copy, they would drift, and the shopper-visible symptom would be a checkout failing on a line the product page called in stock. If you need available stock somewhere new, read the view.
+
+The view joins `products` on `active` and so contains no rows for a deactivated product's variants, which every consumer reads as zero available. It is intentionally `security definer`; the reasoning, and why `security_invoker = true` would silently oversell, is in `RLS.md`.
+
+---
+
+## The commerce bill is a third pricing shape (PHASE-4-STATUS.md D1)
+
+Recorded here because it is why `orders` has the money columns it has.
+
+| Domain | Shape | Platform fee row |
+|---|---|---|
+| courts | additive: subtotal + GST + platform fee | yes, shown |
+| sessions | carve-out: the fee comes out of the coach's price | no row at all |
+| **commerce** | **additive: subtotal + delivery + GST + optional donation roundup** | **none, and no fee is taken** |
+
+There is no platform fee on a commerce bill because **Atlitos is the seller of record for v1 gear**. There is no counterparty to split with, so a platform fee would be a fee the platform charges itself. That is why `orders` carries five money columns and no `platform_fee`, unlike `sessions` and `court_bookings`.
+
+`orders` enforces `CHECK (total = subtotal + delivery_charges + gst_and_others + donation_roundup)`, so a bad edge-function computation is a write failure rather than a wrong number a shopper is charged. The three configurable rows derive from `fee_config` keys `commerce.delivery_flat`, `commerce.gst_percent` and `commerce.donation_roundup_flat`.
+
+**Known gap: `orders.address_id` has no snapshot.** `order_items` freezes the product title, variant label and unit price at order time (FR-25), but the shipping address is a live foreign key. Two consequences: a shopper editing a saved address retroactively changes what a past order appears to have shipped to, and an address can never be deleted once any order references it, because `address_id` is `NOT NULL` with no `ON DELETE` action. `0036`'s trigger turns the second into a clear `ADDRESS_IN_USE` / `ADDRESS_ON_PAST_ORDER` message rather than a raw foreign key error, but it does not close the gap. The fix is to snapshot the address onto the order the way `order_items` already snapshots its fields, making `address_id` nullable with `ON DELETE SET NULL`. That is a schema change beyond PRD-07 FR-30's scope, so it is flagged for the founder in PHASE-4-STATUS.md rather than taken unilaterally.
+
 ---
 
 ## Domain: clutch

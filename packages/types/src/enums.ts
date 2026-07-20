@@ -55,6 +55,19 @@ export type CourtBookingStatus = (typeof COURT_BOOKING_STATUSES)[number];
 export const ORDER_STATUSES = ['placed', 'shipped', 'in_transit', 'delivered', 'cancelled'] as const;
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
+// Stock reservation lifecycle (0033_stock_reservations.sql, PHASE-4-STATUS.md
+// D2). Not a state machine an RPC guards with INVALID_TRANSITION: `held` is
+// the only starting state and the other two are its terminal exits, one per
+// way a checkout can end.
+//   held     -> consumed  capture succeeded, stock decremented in the same
+//                         transaction as the order insert
+//   held     -> released  payment failed, or the TTL passed and the sweep
+//                         reclaimed it; product_variants.stock never moved
+// A `consumed` row is never reverted here; unwinding a captured payment is a
+// refund, not a release.
+export const STOCK_RESERVATION_STATUSES = ['held', 'consumed', 'released'] as const;
+export type StockReservationStatus = (typeof STOCK_RESERVATION_STATUSES)[number];
+
 export const CLIP_STATUSES = ['uploading', 'processing', 'ready', 'published', 'rejected', 'removed'] as const;
 export type ClipStatus = (typeof CLIP_STATUSES)[number];
 

@@ -108,12 +108,36 @@ Consistent with the founder's standing instruction and P3's measured amendment.
 ## Deliverables owed, by track
 
 ### Track A: schema, RLS, inventory (opus)
-- [ ] AT-65 Commerce schema migration: categories, products, media, variants, wishlist, cart, orders, items, timeline, feedback (PRD-07 FR-1, FR-4, FR-8, FR-25, FR-27)
-- [ ] AT-66 Commerce RLS policies, public catalog beside owner scoped orders (PRD-07 FR-1, FR-7, FR-8, FR-27, FR-28)
-- [ ] AT-67 Stock reservation: `stock_reservations`, reserve, consume, release, available stock expression (PRD-07 FR-9, FR-18, FR-20, FR-21)
-- [ ] AT-68 Cart and wishlist RPCs with server side stock revalidation (PRD-07 FR-6, FR-9, FR-10, FR-29)
-- [ ] AT-69 `order_transition` RPC and `order_timeline`, service role gated (PRD-07 FR-24, PRD-04 FR-22)
-- [ ] AT-70 Address delete guard trigger for in flight orders (PRD-07 FR-30)
+- [x] AT-65 Commerce schema migration: categories, products, media, variants, wishlist, cart, orders, items, timeline, feedback (PRD-07 FR-1, FR-4, FR-8, FR-25, FR-27) — `0031_commerce.sql`
+- [x] AT-66 Commerce RLS policies, public catalog beside owner scoped orders (PRD-07 FR-1, FR-7, FR-8, FR-27, FR-28) — `0032_commerce_rls.sql`
+- [x] AT-67 Stock reservation: `stock_reservations`, reserve, consume, release, available stock expression (PRD-07 FR-9, FR-18, FR-20, FR-21) — `0033_stock_reservations.sql`
+- [x] AT-68 Cart and wishlist RPCs with server side stock revalidation (PRD-07 FR-6, FR-9, FR-10, FR-29) — `0034_cart_wishlist_rpcs.sql`
+- [x] AT-69 `order_transition` RPC and `order_timeline`, service role gated (PRD-07 FR-24, PRD-04 FR-22) — `0035_order_state_machine.sql`
+- [x] AT-70 Address delete guard trigger for in flight orders (PRD-07 FR-30) — `0036_address_delete_guard.sql`
+- [x] Advisor follow up on the above — `0037_commerce_advisor_fixes.sql`
+
+#### Track A build notes, for Tracks B through F
+
+Migrations `0031` through `0037` are applied to `syzzfgaudpifwvbpycyi`. `pnpm turbo typecheck` green, 12/12. All verification fixtures were removed afterwards; the commerce tables are empty and await AT-83's seed catalog.
+
+**What Track B must call, and how.** All four reservation RPCs plus `order_transition` are `service_role` only, so they are unreachable from an edge function using the caller's JWT. `reserve_stock_for_checkout(intent_id, '[{"product_variant_id":..., "qty":...}]'::jsonb)` before Razorpay; `consume_reservation(intent_id)` in the SAME transaction as the `orders` and `order_items` inserts; `release_reservation(intent_id, reason)` on failure; `release_expired_stock_reservations()` is the commerce arm AT-26 wires into `expire_stale_holds()`, and it is deliberately not scheduled by `0033`.
+
+**What Track C and D must read.** Never `product_variants.stock` for a shopper-facing number. Read `product_variant_availability` (view) or `variant_available_stock(uuid)`. Raw `stock` is correct only for PRD-04's admin inventory readouts. Cart writes go through `add_to_cart`/`update_cart_item`, which return `capped`, `requested_qty` and `available_stock` for the FR-9 notice and the FR-12 block; the direct upsert path is closed by both policy and grant. Every read of an owner scoped table carries its own `.eq("user_id", user.id)`, per the contract now recorded in RLS.md.
+
+**Proofs run against the live project, not argued.**
+
+- *Oversell, gate clause 4.* Two competing `held` claims were staged on a variant with raw stock 1, then two captures were fired **simultaneously on two separate connections**, the first holding its row lock open for 6 seconds so they genuinely overlapped. Exactly one won: stock went 1 to 0, the winner's reservation became `consumed`, and the loser blocked, re-evaluated the guard after the winner committed, and raised `OUT_OF_STOCK` with its transaction rolled back (its reservation still `held`, so the caller can refund per D2). Final stock 0, never -1; `CHECK (stock >= 0)` never fired. Separately, `reserve_stock_for_checkout` refused a second reservation on the last unit outright, so in the ordinary path the refusal happens **before** Razorpay is ever called, which is what clause 4 asks for.
+- *RLS isolation, non-vacuously.* The two shoppers' ids were asserted to differ before the result was trusted (the AT-62 lesson). `dc6b14da...` saw only its own cart line, order, order item and timeline row; `58756043...` saw only its own, and the row ids returned differed. Zero cross-visibility either way. `anon` gets the catalog and the availability view, and a hard permission error on `cart_items` and `stock_reservations`.
+- *The shared expression.* With 3 units held against raw stock 10, the view reported `held_qty` 3 and `available_stock` 7, the scalar function agreed, `available = raw - held` held exactly, and the TTL was exactly `00:15:00`.
+- *Three exits, all exercised.* Consumed (above); released on payment failure with raw stock untouched; swept on abandonment, where an expired hold was **already** excluded from availability before the sweep ran, so correctness does not depend on cron latency. The sweep then made the row's status honest.
+- *State machine.* `placed` to `delivered` rejected with `INVALID_TRANSITION`, `placed` to `shipped` accepted and wrote one timeline row with actor and location, cancel from `shipped` rejected. `order_transition`, direct cart insert, and feedback on a non-delivered order were each refused to `authenticated`. Deleting an address on a `shipped` order raised `ADDRESS_IN_USE` (AC-F3).
+
+**A real bug the concurrency probe caught**, worth recording because it would not have shown up in any single-threaded test: `consume_reservation` originally locked its reservation group with `SELECT count(*) ... FOR UPDATE`, which Postgres rejects outright ("FOR UPDATE is not allowed with aggregate functions"). The lock is now its own statement, ordered by id, with the count taken after. Writing the probe was what surfaced it.
+
+**Two things the founder should see.**
+
+1. *`orders.address_id` has no snapshot.* `order_items` freezes title, variant label and unit price (FR-25), but the shipping address is a live foreign key, so editing a saved address retroactively changes what a past order appears to have shipped to, and an address can never be deleted once any order references it. `0036` makes the second case explainable (`ADDRESS_ON_PAST_ORDER`) rather than a raw foreign key error, but the fix is to snapshot the address onto the order and make `address_id` nullable with `ON DELETE SET NULL`. That is a schema change beyond FR-30's scope, so it is flagged rather than taken. Not reachable in the P4 gate.
+2. *The Jira project key is `AT`, not `ATL`.* CLAUDE.md's "Jira ticket transition duty" section says `ATL`; the only atlitos project on the site is `AT` (id 10066). Worth correcting in CLAUDE.md. Related: the `AT` board has no **In Review** status, only Backlog, Selected for Development, In Progress and Done, so CLAUDE.md's instruction to move a finished ticket to In Review cannot be followed literally. AT-65 through AT-70 are left **In Progress** with an implementation-note comment on each, for the integrator and phase-close agent to move to Done.
 
 ### Track B: payments (opus)
 - [ ] AT-71 `checkout` edge function: re-price, reserve, `PRICE_MISMATCH`, `OUT_OF_STOCK` (PRD-07 FR-16, FR-17, FR-18, FR-19, FR-20)

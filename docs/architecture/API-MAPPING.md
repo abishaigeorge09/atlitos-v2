@@ -177,7 +177,22 @@ Client wiring lives in `apps/portal-court/src/lib/onboarding.ts`, one typed modu
 | `checkout` | POST `/orders/checkout` | Edge Function | `checkout` | re-fetches prices and stock for every line, recomputes the bill, rejects `PRICE_MISMATCH` or `OUT_OF_STOCK`, decrements stock and creates the `orders`/`order_items` rows atomically on Razorpay success (via `razorpay-webhook`) |
 | `orders` | GET `/orders` | PostgREST | `orders` select | RLS `user_id = auth.uid()` |
 | `order` | GET `/orders/:id` | PostgREST | `orders` select single joined `order_items`, `order_timeline` | same RLS |
-| addresses | GET/POST `/me/addresses` | PostgREST | `addresses` select / insert | `PINCODE_INVALID` raised by a `BEFORE INSERT` trigger validating the `CHECK` pattern, caught and mapped client side |
+| addresses | GET/POST `/me/addresses` | PostgREST | `addresses` select / insert | `PINCODE_INVALID` raised by a `BEFORE INSERT` trigger validating the `CHECK` pattern, caught and mapped client side. `DELETE` additionally passes the `0036` guard, raising `ADDRESS_IN_USE` (in-flight order, PRD-07 FR-30) or `ADDRESS_ON_PAST_ORDER` |
+
+**As built in P4 Track A (AT-65 through AT-70), additions to the rows above.**
+
+| Lane | Name | Callable by | Note |
+|---|---|---|---|
+| View | `product_variant_availability` | `anon`, `authenticated` | **The one definition of available stock.** Every shopper-facing stock read (PDP FR-4, cart FR-9, checkout FR-18) selects from this, never from `product_variants.stock`, which is raw inventory. Columns in `SCHEMA.md` |
+| RPC | `variant_available_stock(uuid)` | `anon`, `authenticated` | Scalar form of the view, itself a select from it |
+| RPC | `add_to_cart(p_variant_id, p_qty)` | `authenticated` | Additive. Returns `cart_mutation_result` (`qty`, `requested_qty`, `available_stock`, `capped`). Caps rather than raising when the request exceeds available, because FR-9 requires both the notice and the capped line to persist and an exception would roll the cap back. Raises `OUT_OF_STOCK` only when available is zero (nothing to cap to), `NOT_FOUND` for a delisted product, `UNAUTHENTICATED` for the FR-7 guest gate |
+| RPC | `update_cart_item(p_variant_id, p_qty)` | `authenticated` | Absolute set, same result shape and same capping rule. Refuses `qty <= 0`; removal is the direct own-row `DELETE` (FR-10) |
+| RPC | `toggle_product_wishlist(p_product_id)` | `authenticated` | Atomic insert-or-delete in one CTE statement, avoiding the read-then-write race a client toggle would otherwise introduce. Returns `true` if now wishlisted (FR-6) |
+| RPC | `reserve_stock_for_checkout(p_payment_intent_id, p_lines jsonb)` | `service_role` | Called by `checkout` before Razorpay. Locks variants `FOR UPDATE` in id order, raises `OUT_OF_STOCK` naming every offending line, `ALREADY_RESERVED` on a repeat intent. All lines or none |
+| RPC | `consume_reservation(p_payment_intent_id)` | `service_role` | Called by `finalize-order-payment.ts` in the same transaction as the order inserts (FR-21). Guarded decrement, idempotent on webhook redelivery, raises `OUT_OF_STOCK` on the late-capture loss path (caller then refunds via AT-60), `NO_RESERVATION` if the intent never reserved |
+| RPC | `release_reservation(p_payment_intent_id, p_reason)` | `service_role` | Payment failure exit. Touches `product_variants` not at all |
+| RPC | `release_expired_stock_reservations()` | `service_role` | Abandonment sweep, the commerce arm AT-26 calls. Not scheduled by `0033` |
+| RPC | `order_transition(p_order_id, p_to_status, p_actor_id, p_note, p_location)` | `service_role` | The whole order machine. Raises `INVALID_TRANSITION` on any skip or illegal edge, writes one `order_timeline` row in the same transaction. `service_role` only per AT-61's rule, so `admin-order-advance` is the sole path and the shopper app never writes a transition (FR-24) |
 
 ## wishlist (gear)
 

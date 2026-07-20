@@ -60,6 +60,27 @@ export type ApiErrorCode =
   | 'OUT_OF_STOCK'
   | 'PINCODE_INVALID'
   | 'NO_ADDRESS'
+  // addresses_block_delete_in_use trigger (0036_address_delete_guard.sql,
+  // AT-70). PRD-07 FR-30 / AC-F3: the address is on an order that has not been
+  // delivered or cancelled, so deleting it would orphan a parcel in flight.
+  // AT-78's Address Book renders this inline beside the address, never as a
+  // toast and never as the raw Postgres message.
+  | 'ADDRESS_IN_USE'
+  // Same trigger, the case FR-30 does not specify: every referencing order is
+  // delivered or cancelled, but orders.address_id is a NOT NULL foreign key
+  // with no snapshot, so the address cannot be removed without destroying what
+  // a past order shipped to. Recorded as a known gap in SCHEMA.md with the
+  // proposed fix (snapshot the address onto the order, as order_items already
+  // snapshots title and price). Not reachable in the P4 gate.
+  | 'ADDRESS_ON_PAST_ORDER'
+  // reserve_stock_for_checkout (0033_stock_reservations.sql). The checkout
+  // edge function tried to reserve against a payment intent that already holds
+  // a reservation. Never a shopper-facing message; seeing it means checkout
+  // retried without minting a fresh intent.
+  | 'ALREADY_RESERVED'
+  // consume_reservation, when a capture arrives for an intent that never
+  // reserved anything. Indicates the checkout and finalize paths disagree.
+  | 'NO_RESERVATION'
   // clutch
   | 'TOO_LARGE'
   | 'BAD_FORMAT'

@@ -129,7 +129,7 @@ Each row states the policy in plain terms; the actual SQL is one `create policy`
 |---|---|---|
 | `users` | own row; any authenticated user may also read the public-facing subset (name, avatar_url, channel_name) of a coach/creator/UPA's row via the view `public_profiles`, never the base table cross-user | own row only, `INSERT` is trigger-only (on `auth.users` insert, `handle_new_user()` also seeds a default `player` `user_roles` row) |
 | `user_roles` | own rows; admin reads all | no `authenticated` write at all; every role grant happens through a `SECURITY DEFINER` path (the signup trigger for the initial `player` role, a future verification-approval RPC, venue staff acceptance) so a user can never grant themselves `admin` or `coach` by a direct insert |
-| `addresses` | own rows | own rows, `DELETE` blocked by a trigger if referenced by a non-`delivered`/non-`cancelled` order (PRD-07 FR-30); that trigger ships with the commerce domain migration once `orders` exists, not in `0001_identity.sql` |
+| `addresses` | own rows | own rows, `DELETE` blocked by a trigger if referenced by a non-`delivered`/non-`cancelled` order (PRD-07 FR-30). **Shipped in `0036_address_delete_guard.sql` (AT-70)**, as this row anticipated, now that `orders` exists. The trigger raises `ADDRESS_IN_USE` for an in-flight order (FR-30, AC-F3, rendered inline by the Address Book) and `ADDRESS_ON_PAST_ORDER` when only delivered/cancelled orders reference it. The second case is not in FR-30 and is blocked only because `orders.address_id` is `NOT NULL` with no snapshot, so the delete would fail on the foreign key anyway; the trigger turns a raw Postgres error into an explainable one. See SCHEMA.md's "known gap" note for the proper fix |
 | `athlete_sports` (new, `0001_identity.sql`) | own rows; admin reads all | own rows, full CRUD |
 
 ### coaching
@@ -186,6 +186,42 @@ Neither policy was rewritten. Re-creating a correct policy to demonstrate that i
 | `product_wishlist_items`, `cart_items` | own rows | own rows (`cart_items` writes for add/update go through `add_to_cart`/`update_cart_item` RPCs for the stock re-check, `DELETE` is a direct own-row policy since removal needs no stock check) |
 | `orders`, `order_items`, `order_timeline` | own orders (`user_id = auth.uid()`); admin reads all | **no** `authenticated` write on any of the three; `checkout` edge function inserts, `admin-order-advance`/`admin-order-refund` edge functions and RPCs (admin-only) write timeline/status |
 | `order_feedback` | own row | own row `INSERT` only, once (`UNIQUE(order_id)` plus a policy requiring the order's `status = 'delivered'`), no `UPDATE`/`DELETE` |
+| `stock_reservations` | **nobody**; RLS enabled with zero policies and grants revoked from `anon`/`authenticated` outright | `service_role` only, and only through the three RPCs in `SCHEMA.md` |
+
+**As built in `0032_commerce_rls.sql` (AT-66), with three clarifications to the rows above.**
+
+1. **`categories` has no `active` column**, so "active = true" has no referent there. `SCHEMA.md` gives that table three columns and no flag. Categories are public reference content with no per-user data, the same class as `drills` and `roadmap_stages` in the guest read surface, so `categories_select_public` is a plain `using (true)`. `product_media` and `product_variants` do gate on `active`, via an `EXISTS` through `products`.
+
+2. **`cart_items` gets no `INSERT` or `UPDATE` policy at all, and those verbs are revoked.** The row above says "own rows"; as built, only `SELECT` and `DELETE` are own-row policies. If a client could reach the table with a PostgREST upsert, PRD-07 FR-9's stock revalidation would be decorative, since the cap would live in the UI and nowhere else. `add_to_cart` and `update_cart_item` are therefore the only write paths, which is also what PHASE-4-STATUS.md trap 3 requires. `DELETE` stays direct because removal needs no stock check (FR-10).
+
+3. **`orders`, `order_items` and `order_timeline` are enforced twice**: no write policy for `authenticated`, *and* `INSERT`/`UPDATE`/`DELETE` revoked from `anon` and `authenticated` at the grant level, following the `0010_payments_core.sql` pattern. A future migration that accidentally adds a permissive policy still cannot produce a client write.
+
+**`product_variants` write, and the one distinction that matters.** Admin stock adjustment (PRD-04 FR-17) writes `product_variants.stock` directly and that is legitimate: raw stock is an inventory fact an admin owns, not a money column and not a state machine. What nothing client-side may do is decrement it *as part of a sale*; that is `consume_reservation`'s job under `service_role`. `authenticated` keeps its catalog DML grants because the admin app authenticates as `authenticated` with an admin role claim, and the `*_write_admin` policies are what gate it. `anon` has catalog DML revoked outright.
+
+**`order_transition` is `service_role` only** (`0035_order_state_machine.sql`), applying AT-61's rule: a transition whose money half lives in an edge function does not belong to `authenticated`. Advancement must also write an `audit_log` row (PRD-04 FR-23) that `authenticated` cannot write, and cancellation is refund adjacent. Unlike sessions there is no `authenticated`-facing wrapper at all, because no order transition is both non-money and client initiated. The shopper app only reads the timeline (PRD-07 FR-24).
+
+#### Permissive-OR in commerce: the highest risk configuration so far
+
+This is the fourth domain to carry the shape CLAUDE.md records incidents for, and the first where a **public** table and an **owner scoped** table sit inside the same joined query on the same screen.
+
+- Public browse, returns everyone's rows by design: `categories`, `products`, `product_media`, `product_variants`
+- Owner scoped, must return only the caller's: `cart_items`, `product_wishlist_items`, `orders`, `order_items`, `order_timeline`, `order_feedback`, `addresses`
+
+The failure mode is not that the catalog is public; that is intended. It is a cart or checkout query joining the two families that carries a filter on the **catalog** side only, leaving the owner scoped side unfiltered. It does not error. It silently returns other shoppers' rows.
+
+**App code contract, required not advisory.** Every read of an owner scoped table above carries its own explicit `.eq("user_id", user.id)` in the query itself, regardless of what RLS would have done, in `apps/*`, in `packages/api`, in `supabase/seed`, and in every test harness. Reach `order_items` and `order_timeline` **through** an owner-filtered order id, never by a bare select on the child table. RLS here is an authorization ceiling, not a scoping mechanism.
+
+**Verified as built, non-vacuously (AT-66).** Two distinct real users were asserted to have different ids *before* the assertion was trusted, per P2's corollary and the AT-62 lesson. Each then ran the same unscoped `select` as `authenticated`: shopper A saw only A's cart line, order, order item and timeline row; shopper B saw only B's, and the row ids returned differed between them. Both saw the public catalog, and neither saw the deactivated product. `anon` browses the catalog and the availability view and is refused `cart_items` and `stock_reservations` at the grant level, which surfaces as a hard permission error rather than a silently empty result.
+
+#### The commerce entries in the P4 advisor diff, and which are deliberate
+
+`security_definer_view` **ERROR on `product_variant_availability`** is intentional. The view must read `stock_reservations`, which no client may read. With `security_invoker = true` the caller's own RLS would apply to that join, the reservation side would return zero rows for every client, `held_qty` would silently compute as 0, and the view would report **raw** stock while claiming to report available. That failure is invisible and it oversells. The definer view is the safe choice, and it reproduces the catalog's `products.active` predicate itself so bypassing RLS widens nothing. It joins `public_profiles` and `coach_profiles_public`, which carry the same lint for the same reason.
+
+`rls_enabled_no_policy` **INFO on `stock_reservations`** is intentional and is the fail-closed end state, matching `webhook_events` since `0010`.
+
+The `*_security_definer_function_executable` **WARN**s on `add_to_cart`, `update_cart_item`, `toggle_product_wishlist` and `variant_available_stock` are intentional: these are the client-facing commerce RPCs, being callable over `/rest/v1/rpc` is the point, and each re-checks `auth.uid()` internally.
+
+Two findings in the diff were **not** intentional and were closed by `0037_commerce_advisor_fixes.sql`: `block_delete_address_in_use()` was RPC-callable by `anon`/`authenticated` despite being a trigger function (execute revoked), and `stock_reservation_ttl()` had a mutable `search_path` (pinned).
 
 ### clutch
 

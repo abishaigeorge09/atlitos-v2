@@ -34,6 +34,7 @@ import type {
   SessionFrequency,
   SessionStatus,
   Sport,
+  StockReservationStatus,
   TicketStatus,
   TransferStatus,
   UpaStatus,
@@ -363,6 +364,56 @@ export interface OrderFeedbackRow {
   rating: number;
   remarks: string | null;
   created_at: ISODateTime;
+}
+
+// One row per (payment intent, variant), written by
+// reserve_stock_for_checkout before Razorpay is called and resolved by exactly
+// one of consume_reservation / release_reservation. See PHASE-4-STATUS.md D2.
+//
+// No client ever reads this table: its grants are withdrawn from anon and
+// authenticated entirely, and it has no RLS policy. It is typed here because
+// the checkout and finalize edge functions (service role) handle these rows.
+export interface StockReservationRow {
+  id: UUID;
+  payment_intent_id: UUID;
+  product_variant_id: UUID;
+  qty: number;
+  status: StockReservationStatus;
+  expires_at: ISODateTime;
+  release_reason: string | null;
+  created_at: ISODateTime;
+  updated_at: ISODateTime;
+}
+
+// The `product_variant_availability` view, which is the ONE definition of
+// available stock in the system (raw stock minus held, unexpired
+// reservations). Every shopper-facing stock read goes through it. Never
+// recompute this subtraction client side from `stock`; a ProductVariantRow's
+// `stock` column is RAW inventory and is not what a shopper may buy.
+export interface ProductVariantAvailabilityRow {
+  product_variant_id: UUID;
+  product_id: UUID;
+  sku: string;
+  size: string | null;
+  color: string | null;
+  effective_price: number;
+  stock: number;
+  held_qty: number;
+  available_stock: number;
+}
+
+// Return shape of add_to_cart / update_cart_item (0034). `capped` is true when
+// the requested quantity exceeded available stock and the line was written at
+// `available_stock` instead. PRD-07 FR-9 requires the shopper be told, and
+// FR-12 requires Proceed To Buy stay blocked until they resolve it, so this
+// flag drives real UI and is not diagnostic.
+export interface CartMutationResult {
+  cart_item_id: UUID;
+  product_variant_id: UUID;
+  qty: number;
+  requested_qty: number;
+  available_stock: number;
+  capped: boolean;
 }
 
 // ---- clutch -------------------------------------------------------------
