@@ -1,6 +1,8 @@
 # Phase 3 Status: Coaching + Chat + Payouts
 
-Gate (docs/PLAN.md P3): "v1 Journeys 2+3 with test payments + visible Route transfer." Epics AT-5 (Coaching Engine), AT-11 (Payments and Ledger), AT-12 (Chat and Notifications), AT-3 (Athlete Core).
+Gate (docs/PLAN.md P3, AMENDED 2026-07-20): "v1 Journeys 2+3 with test payments, and Route transfer proven as far as the account permits." Epics AT-5 (Coaching Engine), AT-11 (Payments and Ledger), AT-12 (Chat and Notifications), AT-3 (Athlete Core).
+
+**Why clause 2 changed.** Razorpay Route is not enabled on the test merchant account; the live API returns 400 "Route feature not enabled for the merchant". Enabling it needs account activation work the founder is not doing yet, and live transfers are required for production regardless, so the live transfer is DEFERRED to P8 hardening rather than blocking the six remaining phases. This is a deferral with a named home, not a quiet drop: no real money may move until it runs.
 
 Planned 2026-07-19. Stories AT-35 through AT-59, all Backlog.
 
@@ -9,7 +11,7 @@ Planned 2026-07-19. Stories AT-35 through AT-59, all Backlog.
 The gate is met when all of the following are true on the deployed stack:
 
 1. PRD-01 Journey 2 end to end: browse coaches, book a session with a real Razorpay test payment, session lands in `requested`, chat with the coach, coach accepts, session completes, athlete rates once and a second attempt is rejected.
-2. PRD-02 Journey C end to end: coach earnings balance derived from `ledger_entries`, Route payout account reaches `active`, and a transfer is initiated and visibly lands as a `transfers` row plus a balancing ledger group.
+2. PRD-02 Journey C, as far as the account permits (amended 2026-07-20): coach earnings balance derived from `ledger_entries` and correct; the Route onboarding and transfer functions built, deployed, and shown to handle the real API's not-entitled response honestly rather than faking success; the transfer path's ledger and `transfers` writes exercised in a rolled back transaction so the maths is proven without live money. DEFERRED TO P8: payout account reaching `active` and a live transfer landing. Tracked as a P8 hardening item; must run before any real money moves.
 3. PRD-01 Journey 3's coaching-adjacent legs hold (the commerce legs are P4; this phase owes the court booking and payments ledger portions already shipped in P2 plus the session charge appearing in the unified payments ledger).
 4. Evidence captured from the iOS simulator, not Expo web, for every phase-touched mobile screen, per docs/PLAN.md "Verification gap noted 2026-07-19".
 5. `pnpm turbo typecheck build lint` green, RLS advisor run, biased approver APPROVE.
