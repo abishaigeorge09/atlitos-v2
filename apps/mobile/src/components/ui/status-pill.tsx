@@ -12,6 +12,8 @@ export type Status =
   | 'rescheduled'
   | 'delivered'
   | 'shipped'
+  | 'inTransit'
+  | 'placed'
   | 'noShow'
   | 'expired'
   | 'requested'
@@ -44,6 +46,13 @@ const STATUS_CONFIG: Record<Status, StatusConfig> = {
   rescheduled: { label: 'Rescheduled', bgClass: 'bg-warning-tint', textClass: 'text-warning' },
   delivered: { label: 'Delivered', bgClass: 'bg-success-tint', textClass: 'text-success' },
   shipped: { label: 'Shipped', bgClass: 'bg-info-tint', textClass: 'text-info' },
+  // Commerce order lifecycle (order_status, 0031_commerce.sql). `placed` and
+  // `in_transit` are the two values with no court/session equivalent above:
+  // `pending` would read as "awaiting payment" on an order that is already
+  // paid, and folding `in_transit` into `shipped` would tell a shopper their
+  // parcel had not moved since dispatch.
+  placed: { label: 'Placed', bgClass: 'bg-accent-tint', textClass: 'text-accent' },
+  inTransit: { label: 'In transit', bgClass: 'bg-info-tint', textClass: 'text-info' },
   noShow: { label: 'No show', bgClass: 'bg-danger-tint', textClass: 'text-danger' },
   expired: { label: 'Expired', bgClass: 'bg-danger-tint', textClass: 'text-danger' },
   // Sessions (session_status, 0018_coaching.sql): requested/accepted/

@@ -14,6 +14,14 @@ export interface WishlistProductItem {
   imageUrl?: string;
   onPress: () => void;
   onRemove: () => void;
+  /** PRD-07 FR-29's Move to Cart. Optional so the component still serves any
+   * read only wishlist surface; when present it renders as the card's action,
+   * mirroring the `upa` variant's Fund This. */
+  onMoveToCart?: () => void;
+  /** Live AVAILABLE stock at display time (FR-28), read from
+   * `product_variant_availability`. Zero disables Move to Cart and labels the
+   * card sold out instead. */
+  availableStock?: number;
 }
 
 export interface WishlistUpaItem {
@@ -100,15 +108,37 @@ export function WishlistGrid({ variant, items, numColumns = 2 }: WishlistGridPro
           </Text>
 
           {variant === 'product' ? (
-            <Text style={[textStyle('numericBase'), { color: colors.text }]}>
-              {formatINR((item as WishlistProductItem).price)}
-            </Text>
+            <ProductActions item={item as WishlistProductItem} />
           ) : (
             <UpaProgress item={item as WishlistUpaItem} />
           )}
         </Pressable>
       )}
     />
+  );
+}
+
+/** Price, live stock state, and PRD-07 FR-29's Move to Cart. The stock line
+ * reads AVAILABLE stock, never raw inventory, so a wishlisted item cannot
+ * offer a unit the checkout would then refuse. */
+function ProductActions({ item }: { item: WishlistProductItem }) {
+  const colors = useThemeColors();
+  const soldOut = item.availableStock !== undefined && item.availableStock === 0;
+
+  return (
+    <View style={{ gap: spacing.xs }}>
+      <Text style={[textStyle('numericBase'), { color: colors.text }]}>{formatINR(item.price)}</Text>
+      {item.availableStock !== undefined ? (
+        <Text style={[textStyle('numericSm'), { color: soldOut ? colors.danger : colors.textSecondary }]}>
+          {soldOut ? 'Out of stock' : `${item.availableStock} in stock`}
+        </Text>
+      ) : null}
+      {item.onMoveToCart ? (
+        <Button size="sm" disabled={soldOut} onPress={item.onMoveToCart}>
+          <Text style={[textStyle('label'), { color: colors.inkOnAccent }]}>Move to cart</Text>
+        </Button>
+      ) : null}
+    </View>
   );
 }
 

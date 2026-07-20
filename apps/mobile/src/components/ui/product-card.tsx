@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils';
 import * as Haptics from 'expo-haptics';
 import { formatINR } from '@atlitos/theme';
-import { Heart, Minus, Plus, ShoppingCart } from 'lucide-react-native';
+import { Heart, Minus, Package, Plus, ShoppingCart } from 'lucide-react-native';
 import { Image, Pressable, View } from 'react-native';
 
 import { Button } from '@/components/ui/button';
@@ -17,7 +17,11 @@ import { useThemeColors } from '@/theme/use-theme-colors';
 export type ProductCardVariant = 'grid' | 'row' | 'cartLine';
 
 export interface ProductCardProps {
-  imageUri: string;
+  /** Optional: a product with no `product_media` row yet renders a token
+   * driven placeholder rather than a broken image box. The gear media bucket
+   * lands with PRD-04's admin catalog CRUD (AT-81), so a seeded but
+   * un-photographed catalog is a real state this card has to survive. */
+  imageUri?: string;
   title: string;
   price: number;
   originalPrice?: number;
@@ -71,11 +75,23 @@ function ProductCard({
       )}
     >
       <View className={cn('relative', isRow ? 'h-24 w-24' : 'w-full')}>
-        <Image
-          source={{ uri: imageUri }}
-          className={cn(isRow ? 'h-24 w-24 rounded-lg' : 'h-32 w-full rounded-t-xl')}
-          resizeMode="cover"
-        />
+        {imageUri ? (
+          <Image
+            source={{ uri: imageUri }}
+            className={cn(isRow ? 'h-24 w-24 rounded-lg' : 'h-32 w-full rounded-t-xl')}
+            resizeMode="cover"
+          />
+        ) : (
+          <View
+            accessibilityLabel="Product photo coming soon"
+            className={cn(
+              'items-center justify-center bg-surface-muted',
+              isRow ? 'h-24 w-24 rounded-lg' : 'h-32 w-full rounded-t-xl',
+            )}
+          >
+            <Package size={isRow ? 24 : 32} strokeWidth={1.75} color={colors.textTertiary} />
+          </View>
+        )}
         {variant === 'grid' ? (
           <Pressable
             onPress={() => {
