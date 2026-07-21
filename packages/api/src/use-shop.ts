@@ -918,7 +918,13 @@ export function useShop(client: AtlitosClient) {
           location: string | null;
           created_at: string;
         }[] | null;
-        order_feedback: { id: string; rating: number; remarks: string | null; created_at: string }[] | null;
+        // A to-one embed: order_feedback has UNIQUE(order_id), so PostgREST
+        // returns a single object or null here, NOT an array. Reading it as an
+        // array (the old shape) made every rated order read its feedback as
+        // null, so the rating form reappeared on a delivered, already-rated
+        // order and the read-only confirmation never rendered. Found in the P4
+        // evidence pass (order #ATL00009, feedback row bfc6fa72).
+        order_feedback: { id: string; rating: number; remarks: string | null; created_at: string } | null;
       }
 
       const { data, error } = await client
@@ -936,7 +942,12 @@ export function useShop(client: AtlitosClient) {
       if (error) throw mapPostgrestError(error);
       if (!data) return null;
 
-      const feedbackRow = (data.order_feedback ?? [])[0] ?? null;
+      // Tolerate both shapes defensively (a PostgREST version that returned an
+      // array would otherwise silently reintroduce the null-feedback bug), but
+      // the schema guarantees to-one.
+      const feedbackRow = Array.isArray(data.order_feedback)
+        ? (data.order_feedback[0] ?? null)
+        : (data.order_feedback ?? null);
 
       return {
         id: data.id,
