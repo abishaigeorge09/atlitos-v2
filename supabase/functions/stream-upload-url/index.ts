@@ -34,22 +34,10 @@ import { AppError } from "../_shared/app-error.ts";
 import { getAuthenticatedUser, serviceRoleClient } from "../_shared/supabase.ts";
 import { CLIPS_BUCKET } from "../_shared/clip-access.ts";
 
-// The sport enum values (0001). Mirrored here so an unknown sport is a clean
-// 400 VALIDATION rather than a Postgres enum-cast 500 on insert.
-const SPORTS = [
-  "cricket",
-  "football",
-  "badminton",
-  "tennis",
-  "basketball",
-  "kabaddi",
-  "hockey",
-  "volleyball",
-  "table_tennis",
-  "athletics",
-  "swimming",
-  "other",
-] as const;
+// The sport enum values (0001: public.sport). Mirrored here so an unknown
+// sport is a clean 400 VALIDATION rather than a Postgres enum-cast 500 on
+// insert. Keep in lockstep with the enum if it ever grows.
+const SPORTS = ["football", "cricket", "badminton", "tennis"] as const;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CAPTION_MAX = 2000;
