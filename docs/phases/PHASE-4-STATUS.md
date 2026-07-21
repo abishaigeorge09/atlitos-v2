@@ -235,3 +235,59 @@ Still outstanding and unchanged from P3: the four PRD-02 assumptions (coaching f
 ## Handoff notes owed at phase close
 
 Phase close must write, at minimum: whether the reservation TTL held under real traffic, whether the late capture refund path was ever reached, the P6 handoff for moving the roundup ledger leg from `platform` to a real `upa_fund` account_ref, and the state of AT-26 across all three domains.
+
+## Integrator note (2026-07-21)
+
+Merged `main` at `6eeaf24` is coherent and ready for the gate.
+
+- **Build:** `pnpm turbo typecheck build lint` re-run green, **24/24** (all cached from the prior clean run, nothing rotted).
+- **Migrations:** local `supabase/migrations/` holds `0001` through `0040`; `list_migrations` on `syzzfgaudpifwvbpycyi` returns 40 versions with `0031` through `0040` all applied (P4 set: `0031_commerce` through `0040`/`shopper_visible_categories`). Nothing local is unapplied, nothing remote is unaccounted for. Note the usual naming drift where a few remote versions carry the bare name rather than the `00NN_` prefix (`order_placement_and_expiry_sweep`=0038, `admin_commerce_rpcs`=0039, `shopper_visible_categories`=0040); contents match.
+- **Edge functions deployed:** `checkout` (v1), `admin-order-advance` (v2), `verify-payment` (v6), `razorpay-webhook` (v9) all ACTIVE. `_shared/finalize-order-payment.ts` is the third capture branch (module, not a standalone function, by design).
+- **No lost track work in the shared-tree merges.** Present in HEAD: Track D admin (`apps/admin/src/pages/{orders,products,commerce}/*`), Track B edge fns (`supabase/functions/{checkout,admin-order-advance}`), Track C screens (`apps/mobile/src/app/shop/*`, `account/{addresses,wishlist}.tsx`), the address-snapshot fix `3e18960` (getOrder reads `ship_to_*`), the category view `0040`/`011ad0b` (`shopper_categories`), and the feedback fix `6eeaf24` (to-one embed).
+- **Web evidence present** in `docs/phases/evidence/p4-web/`: `web-shop-01` through `-22` light+dark for Journeys A to F, plus the EPAY captures (`EPAY-02` order success, `EPAY-03` order detail light+dark, `EPAY-04` feedback empty+submitted). The razorpay sheet on-disk stand-in is `web-shop-15` (EPAY-01 could not be saved on this host).
+
+## BIASED APPROVER VERDICT — Cycle 1 (2026-07-21)
+
+# APPROVE
+
+All 7 gate clauses independently re-derived from the live database and the on-disk evidence; builder and verification-track claims were treated as hypotheses and re-run, not quoted. No blocking findings. Advisories below must be carried into phase-close and none dropped.
+
+## Gate clauses, independently verified
+
+1. **Journeys A to F** — VERIFIED via evidence. Viewed EPAY order-success (`#ATL00009`, mono order number), order-detail light and dark (BillSummary rows Subtotal 3,850 / Delivery 50 / GST 693 / Total 4,593 matching the DB row exactly, roundup suppressed, `SHIPPING TO` rendering the `ship_to_*` snapshot "12 Verification Lane" not a live join), and feedback empty and submitted (5 stars, remarks, enabled submit). Dark capture confirmed genuinely dark (near-black canvas, driver asserts the `dark` class per README). The F1/F2 evidence gap the Track F pass recorded was subsequently closed by `424a903`, `a62e4c7`, `3e18960`.
+2. **Admin advances live, one timeline + one audit per transition, skip rejected zero rows** — VERIFIED. `#ATL00008` placed→shipped: 2 timeline / 1 audit. `#ATL00009` placed→shipped→in_transit→delivered: 4 timeline / 3 audit, exactly one of each per edge. Live `order_transition(#ATL00006,'delivered')` raised `INVALID_TRANSITION` and wrote zero rows. On the HTTP-vs-RPC coverage question: Track D drove the deployed `admin-order-advance` edge function end to end on `#ATL00008` (200 on the valid edge; 409 `INVALID_TRANSITION`, 400 `VALIDATION`, 409 `CANCEL_NOT_AVAILABLE` on the three rejections, all writing zero rows), and the function is deployed and ACTIVE. The founder's `#ATL00009` sequence being driven through the RPC + audit path via the service-role MCP is adequate coverage of clause 2 because the HTTP surface itself was proven on `#ATL00008`.
+3. **Ledger balances, one group per order, no denormalized balance** — VERIFIED. Four commerce groups (`#ATL00006`..`#ATL00009`), each imbalance 0.00, exactly one `entry_group_id` per `entity_id`, zero orphan legs. Founder order `#ATL00009` (`pay_TG4Mcq1sP6JfnK`, intent `dc4cf004`): debit platform 4593.00 / credit platform 4593.00. No `%balance%`/`%running%` column exists.
+4. **No oversell** — VERIFIED. Variant `...0004` carries `CHECK (stock >= 0)` (present, never fired), stock never negative (zero variants negative project-wide). The losing concurrent checkout produced **no `payment_intents` row at all** (refused at the availability pre-check before the intent is created). Honest caveat, accepted: the deployed HTTP path took that earlier step-3 exit in both runs, not step-5's row-locked `reserve_stock_for_checkout` race; Track A exercised the step-5 race directly with overlapping Postgres connections, so the property is proven, just not on the deployed path.
+5. **Reservation lifecycle, three exits** — VERIFIED. Consumed (`844951f4`, held→consumed, stock 1→0), released (webhook `payment.failed` reason, raw stock untouched, idempotent second call), swept (cron run cleared a backdated hold). An expired hold is excluded from availability before the sweep, so correctness does not depend on cron latency.
+6. **Unified sweep across three domains, stale sessions cleared** — VERIFIED. `cron.job` id 1, `*/5 * * * *`, `select public.expire_stale_holds();`, running continuously since run 1 at 2026-07-20 10:45:00. Function source covers courts (`court_booking_expire_payment`), sessions (`session_abandon_unpaid`), commerce (`release_expired_stock_reservations`). Sessions `4a64c535` and `4ee5bca9` both `cancelled` at `10:45:00.041626`, i.e. by run 1, not by hand.
+7. **Build green, advisor diffed, light+dark evidence** — VERIFIED. 24/24 green. Security advisor: 3 ERROR, all `security_definer_view`. Diffed against the P3 baseline (2 ERROR: `public_profiles`, `coach_profiles_public`): the only new ERROR is `product_variant_availability`, intentional and documented (RLS.md), because a `security_invoker` availability view cannot read `stock_reservations` and would silently report raw stock and oversell. Everything else is carried-forward WARN debt.
+
+## Known issues, disposition judged acceptable for the gate
+
+- **N1 fixture category leak** — FIXED (`0040`). `shopper_categories` returns Badminton/Cricket/Football/Tennis only; the raw `TrackB Verify` category is excluded. Acceptable.
+- **Address snapshot** — FIXED (`3e18960`). `getOrder` selects `ship_to_line1..ship_to_pincode` and drops the `addresses` join; rendered correctly in `EPAY-03`. Acceptable.
+- **Nested pressables** — FIXED (`4868df9`) across the 5 named components; pattern in DESIGN-LANGUAGE.md. Two of the five are commerce components, so this closed a live P4 risk. Acceptable.
+- **N3 feedback-as-array** — FIXED (`6eeaf24`). `getOrder` reads the to-one embed with a defensive array fallback; DB shows `#ATL00009` has exactly one feedback row, rating 5. Acceptable.
+- **EPAY-01 razorpay sheet** — no on-disk capture (host `save_to_disk` limitation); the test-mode sheet stands in as `web-shop-15`. Acceptable given the documented host constraint.
+- **Admin advance via RPC+MCP for `#ATL00009`** — adequate; the HTTP edge function was separately proven on `#ATL00008` (see clause 2).
+
+Engineering invariants also hold: no client `.insert/.update` against any money or owner table (cart via `add_to_cart`/`update_cart_item`, wishlist via `toggle_product_wishlist`, checkout via the `checkout` edge fn), server re-prices, `BillSummary` renders every money total, numeric readouts in JetBrains Mono, no emoji or hyphen in the commerce copy sampled, lucide icons only.
+
+## Advisory findings — carry ALL into phase-close, none may be dropped
+
+- [advisory] scope — **AT-88 (PRD-02 FR-35) was NOT delivered.** The cancelled-session detail still surfaces no refund amount to the athlete owed it. It was listed as a P4 deliverable but is not a gate clause; P3 classed it advisory ("rendering gap, not a money gap, data exists") and the plan granted an explicit escape hatch to P8. Re-home to P8; do not silently drop. Ref: PRD-02 FR-35.
+- [advisory] deferral — **Razorpay Route not enabled**, so no seller payout / live transfer. Commerce is first-party in P4 so no gate clause depends on it. Deferred to P8. Ref: D4, PHASE-3.
+- [advisory] platform — **Dark mode is not followed on real web routes**; only the dev-gallery toggle resolves the system signal. The P4 dark captures were forced via that toggle with a per-screen class assertion. P8. Ref: PHASE-3 open defects.
+- [advisory] platform — **Native coverage deferred to P8**: screen-level native capture of shop routes, phone-width layout, PDP gallery gestures, haptics.
+- [advisory] platform — **AT-64: `Alert.alert` inert on react-native-web** (10 existing call sites, all money-consequential, unverified on both platforms). Commerce avoided growing the count via AT-84 `ConfirmSheet`. P8.
+- [advisory] platform — **Native Razorpay checkout FAILURE path unverified** (dismiss vs decline both map to cancellation). P8.
+- [advisory] ops — **`tmp-seed-demo-users` still ACTIVE and JWT-callable** on the project. Founder action to delete.
+- [advisory] ops — **Supabase CLI on this host cannot deploy/list edge functions** (403); everything was deployed via the MCP. Fix before an integrator needs `supabase functions deploy`.
+- [advisory] eng — **TypeScript version skew** (`apps/mobile` ~6.0.3 vs monorepo ^5.x). P8.
+- [advisory] scope — **Four PRD-02 assumptions still unratified** by the founder: coaching fee rate, cancel/reschedule notice window, transfer minimums/fee, analytics threshold. First two affect money already accrued.
+- [advisory] carried P2/P3 debt against AT-4 / P8: `auth_rls_initplan` and `multiple_permissive_policies` WARNs, `venue_bookings_today` not date-filtered (AT-25), resubmission RPC decision (AT-27), fixture password hygiene (AT-29), missing onboarding evidence (AT-30, AT-31), the 44pt tap-target sizing-token gap, and the admin bundle-size warning.
+- [advisory] eng — **AT-73 late-capture auto-refund branch never run end to end** (rare by construction; both halves proven separately). Also no real Razorpay-delivered `payment.failed` has been observed. P8/hardening.
+
+## Handoff to phase-close
+
+Doc hygiene only, not gate blockers: tick the completed Track C/D/E/F deliverables (AT-74 to AT-87) whose work is present and evidenced, and reconcile the `AT` Jira board (move AT-65 to AT-87 to Done; move AT-88 to the P8 epic). Fold `PHASE-4-CHECKPOINT.md` in and delete it if present.
