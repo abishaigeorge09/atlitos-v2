@@ -12,8 +12,12 @@ import { Shell } from "./layout/Shell";
 import { BookingsList } from "./pages/bookings/list";
 import { FeeConfigList } from "./pages/fee-config/list";
 import { LoginPage } from "./pages/login";
+import { ModerationList } from "./pages/moderation/list";
+import { ModerationShow } from "./pages/moderation/show";
 import { OrderShow } from "./pages/orders/show";
 import { OrdersList } from "./pages/orders/list";
+import { ReportsList } from "./pages/reports/list";
+import { ReportShow } from "./pages/reports/show";
 import { ProductShow } from "./pages/products/show";
 import { ProductsList } from "./pages/products/list";
 import { UsersList } from "./pages/users/list";
@@ -57,6 +61,18 @@ export function App() {
             meta: { label: "Orders" },
           },
           {
+            name: "clips",
+            list: "/moderation",
+            show: "/moderation/show/:id",
+            meta: { label: "Moderation queue" },
+          },
+          {
+            name: "reports",
+            list: "/reports",
+            show: "/reports/show/:id",
+            meta: { label: "Reports queue" },
+          },
+          {
             name: "fee_config",
             list: "/fee-config",
             meta: { label: "Fee config" },
@@ -97,6 +113,10 @@ export function App() {
             <Route path="/products/show/:id" element={<ProductShow />} />
             <Route path="/orders" element={<OrdersList />} />
             <Route path="/orders/show/:id" element={<OrderShow />} />
+            <Route path="/moderation" element={<ModerationList />} />
+            <Route path="/moderation/show/:id" element={<ModerationShow />} />
+            <Route path="/reports" element={<ReportsList />} />
+            <Route path="/reports/show/:id" element={<ReportShow />} />
             <Route path="/fee-config" element={<FeeConfigList />} />
             <Route path="/bookings" element={<BookingsList />} />
             <Route path="/users" element={<UsersList />} />
