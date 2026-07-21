@@ -1,0 +1,136 @@
+// ATLITOS v2 — supabase/functions/_shared/clip-access.ts
+//
+// Shared helpers for the two Clutch signed-URL mints (AT-96) and the upload
+// and finalize functions (AT-94/AT-95). They encode the one privacy rule the
+// phase turns on (PHASE-5-STATUS.md): a clip video is only ever reachable
+// through a freshly minted, short lived signed URL produced against the LIVE
+// clip row, never a stored URL, and the mint refuses outright for a clip that
+// is `removed` or `rejected`. Columns hold PATHS only; nothing here persists a
+// resolved URL.
+
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { AppError } from "./app-error.ts";
+import { serviceRoleClient } from "./supabase.ts";
+
+/** The private `clips` bucket (0042). No anon/public policy on storage.objects. */
+export const CLIPS_BUCKET = "clips";
+
+/** Signed playback/thumbnail URL lifetime, seconds. The takedown TTL bound. */
+export const SIGNED_URL_TTL_SECONDS = 300;
+
+/**
+ * The live clip fields every access decision reads. Always fetched fresh at
+ * mint time under the service role, so a `removed`/`rejected` row refuses
+ * within the same request the takedown landed.
+ */
+export interface LiveClip {
+  id: string;
+  owner_id: string;
+  status: string;
+  storage_path: string | null;
+  thumb_path: string | null;
+}
+
+/**
+ * Validate the caller's own JWT WITHOUT throwing when it is absent or invalid.
+ * `get_clip_playback_url` is public callable (a guest browsing the published
+ * feed has no user session, FR-3/FR-42), so "no user" is a normal outcome, not
+ * an error. Returns the user id on a valid session, else null. Mirrors
+ * getAuthenticatedUser's GoTrue round trip (never trusts a decoded-only token).
+ */
+export async function getOptionalUserId(req: Request): Promise<string | null> {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) return null;
+
+  const url = Deno.env.get("SUPABASE_URL");
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+  if (!url || !anonKey) return null;
+
+  const client = createClient(url, anonKey, {
+    global: { headers: { Authorization: authHeader } },
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+
+  const { data, error } = await client.auth.getUser();
+  if (error || !data.user) return null;
+  return data.user.id;
+}
+
+/**
+ * Admin/moderator check by user id, under the service role. `has_role` reads
+ * `auth.uid()`, which is null under the service role, so an edge function that
+ * must decide against a KNOWN user id queries `user_roles` directly (the same
+ * table `has_role`/`is_guest` and every RLS admin policy resolve against).
+ */
+export async function isAdminOrModerator(
+  supabase: SupabaseClient,
+  userId: string | null,
+): Promise<boolean> {
+  if (!userId) return false;
+  const { data, error } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId)
+    .in("role", ["admin", "moderator"])
+    .limit(1);
+  if (error) {
+    throw new AppError(
+      "INTERNAL",
+      `Failed to check moderator role: ${error.message}`,
+      500,
+    );
+  }
+  return (data?.length ?? 0) > 0;
+}
+
+/**
+ * Fetch the LIVE clip row. Service role, so it sees the true current status
+ * regardless of RLS. Throws NOT_FOUND for an unknown id.
+ */
+export async function fetchLiveClip(
+  supabase: SupabaseClient,
+  clipId: string,
+): Promise<LiveClip> {
+  const { data, error } = await supabase
+    .from("clips")
+    .select("id, owner_id, status, storage_path, thumb_path")
+    .eq("id", clipId)
+    .maybeSingle<LiveClip>();
+
+  if (error) {
+    throw new AppError("INTERNAL", `Failed to load clip: ${error.message}`, 500);
+  }
+  if (!data) {
+    throw new AppError("NOT_FOUND", "Clip not found.", 404);
+  }
+  return data;
+}
+
+/**
+ * Mint a short lived (TTL 300s) signed download URL for a clip object path,
+ * against the private `clips` bucket, under the service role. Never stored.
+ * Throws NOT_FOUND if the clip has no object yet (a clip still `uploading`
+ * whose bytes never landed), so a caller never receives a dangling URL.
+ */
+export async function mintSignedClipUrl(
+  supabase: SupabaseClient,
+  objectPath: string | null,
+): Promise<string> {
+  if (!objectPath) {
+    throw new AppError("NOT_FOUND", "Clip has no stored video yet.", 404);
+  }
+  const { data, error } = await supabase.storage
+    .from(CLIPS_BUCKET)
+    .createSignedUrl(objectPath, SIGNED_URL_TTL_SECONDS);
+
+  if (error || !data?.signedUrl) {
+    throw new AppError(
+      "INTERNAL",
+      `Failed to mint signed url: ${error?.message ?? "unknown error"}`,
+      500,
+    );
+  }
+  return data.signedUrl;
+}
+
+export { serviceRoleClient };
