@@ -225,9 +225,7 @@ export default function ClutchPostDetailScreen() {
                   {clip.caption ? (
                     <Text style={[textStyle('body'), { color: colors.text }]}>{clip.caption}</Text>
                   ) : null}
-                  <Text style={[textStyle('caption'), { color: colors.textTertiary }]}>
-                    {timeAgo(clip.createdAt)}
-                  </Text>
+                  <Text className="font-mono text-xs text-text-tertiary">{timeAgo(clip.createdAt)}</Text>
                 </View>
 
                 <View
@@ -255,9 +253,7 @@ export default function ClutchPostDetailScreen() {
               <View style={{ paddingHorizontal: spacing.lg, paddingVertical: spacing.md, gap: spacing.xs }}>
                 <View className="flex-row items-center gap-sm">
                   <Text style={[textStyle('label'), { color: colors.text }]}>{item.username}</Text>
-                  <Text style={[textStyle('caption'), { color: colors.textSecondary }]}>
-                    {timeAgo(item.createdAt)}
-                  </Text>
+                  <Text className="font-mono text-xs text-text-secondary">{timeAgo(item.createdAt)}</Text>
                 </View>
                 <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>{item.text}</Text>
               </View>

@@ -110,7 +110,7 @@ export function ClutchPostCard({
       <View pointerEvents="box-none" className="absolute inset-x-0 bottom-0 gap-xs p-md" style={{ right: 72 }}>
         <View className="flex-row items-center gap-sm">
           <Text className="font-sans-semibold text-text-inverse">{clip.channel}</Text>
-          <Text className="text-xs text-text-inverse opacity-80">{timeAgo(clip.createdAt)}</Text>
+          <Text className="font-mono text-xs text-text-inverse opacity-80">{timeAgo(clip.createdAt)}</Text>
         </View>
         {clip.caption ? (
           <Text className="text-sm text-text-inverse opacity-95" numberOfLines={2}>
