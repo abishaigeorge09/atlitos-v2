@@ -1,5 +1,7 @@
 # Phase 4 Status: Commerce
 
+**Status: APPROVED, cycle 1 (2026-07-21).** Biased approver APPROVE recorded below (commit 41243b8), all 7 gate clauses independently re-derived from the live database. Phase-close done 2026-07-21: deliverables ticked, advisories carried, P5 handoff written.
+
 Gate (docs/PLAN.md P4): "catalog CRUD in admin, inventory, checkout w/ roundup stub, order lifecycle driver. GATE: Journey 4 incl. admin advancing order live."
 
 Scope ceiling: `docs/prd/PRD-07-shopper.md`, plus the admin-side commerce FRs PLAN.md's P4 line explicitly names (`PRD-04` FR-13 to FR-26), which PRD-07 section 1 delegates to PRD-04 rather than owning. Nothing else. One inherited P3 advisory (PRD-02 FR-35) is absorbed here because P3 homed it here by name.
@@ -176,26 +178,26 @@ Migration `0038_order_placement_and_expiry_sweep.sql` is applied to `syzzfgaudpi
 **One thing the founder should see.** The Supabase CLI credentials on this machine can no longer deploy or even list edge functions (`403`, "your account does not have the necessary privileges"), and Docker is not installed, so both CLI deploy paths are closed. Everything in this pass was deployed through the Supabase MCP instead, which works. Worth fixing before an integrator needs `supabase functions deploy`.
 
 ### Track C: mobile shop (sonnet)
-- [ ] AT-74 Category Browse with search and Recommended Gears rail (PRD-07 FR-1, FR-2, FR-3, FR-31, FR-32)
-- [ ] AT-75 Product Detail with variants, live stock, wishlist heart, guest gate (PRD-07 FR-4, FR-5, FR-6, FR-7)
-- [ ] AT-76 Cart with qty stepper, capping, and blocked Proceed To Buy (PRD-07 FR-8, FR-9, FR-10, FR-11, FR-12)
-- [ ] AT-77 Checkout with `BillSummary`, roundup row, and address gate (PRD-07 FR-13, FR-14, FR-16, FR-17, FR-19, FR-20)
-- [ ] AT-78 Address Book and address form with pincode validation (PRD-07 FR-15, FR-30)
-- [ ] AT-79 Order Success, Order Detail timeline, My Orders, feedback (PRD-07 FR-23, FR-24, FR-25, FR-26, FR-27)
-- [ ] AT-80 My Wishlist with Move to Cart (PRD-07 FR-28, FR-29)
-- [ ] AT-84 Cross platform `ConfirmSheet` for commerce destructive actions (PRD-07 FR-10, FR-30)
+- [x] AT-74 Category Browse with search and Recommended Gears rail (PRD-07 FR-1, FR-2, FR-3, FR-31, FR-32)
+- [x] AT-75 Product Detail with variants, live stock, wishlist heart, guest gate (PRD-07 FR-4, FR-5, FR-6, FR-7)
+- [x] AT-76 Cart with qty stepper, capping, and blocked Proceed To Buy (PRD-07 FR-8, FR-9, FR-10, FR-11, FR-12)
+- [x] AT-77 Checkout with `BillSummary`, roundup row, and address gate (PRD-07 FR-13, FR-14, FR-16, FR-17, FR-19, FR-20)
+- [x] AT-78 Address Book and address form with pincode validation (PRD-07 FR-15, FR-30)
+- [x] AT-79 Order Success, Order Detail timeline, My Orders, feedback (PRD-07 FR-23, FR-24, FR-25, FR-26, FR-27)
+- [x] AT-80 My Wishlist with Move to Cart (PRD-07 FR-28, FR-29)
+- [x] AT-84 Cross platform `ConfirmSheet` for commerce destructive actions (PRD-07 FR-10, FR-30)
 
 ### Track D: admin commerce (sonnet)
-- [ ] AT-81 Product and variant CRUD with stock adjustment and audit rows (PRD-04 FR-13 to FR-19)
-- [ ] AT-82 Order List, Order Detail, and the live advance action (PRD-04 FR-20 to FR-23, FR-26)
+- [x] AT-81 Product and variant CRUD with stock adjustment and audit rows (PRD-04 FR-13 to FR-19)
+- [x] AT-82 Order List, Order Detail, and the live advance action (PRD-04 FR-20 to FR-23, FR-26)
 
 ### Track E: fixtures and copy (haiku)
-- [ ] AT-83 Commerce seed catalog and fixtures for the P4 gate
-- [ ] AT-85 House style copy pass across all P4 commerce screens
+- [x] AT-83 Commerce seed catalog and fixtures for the P4 gate
+- [x] AT-85 House style copy pass across all P4 commerce screens
 
 ### Track F: verification (opus)
-- [ ] AT-86 Journey D money verification: one real test payment, balanced ledger, reservation consumed
-- [ ] AT-87 Oversell probe: two concurrent checkouts against stock 1
+- [x] AT-86 Journey D money verification: one real test payment, balanced ledger, reservation consumed
+- [x] AT-87 Oversell probe: two concurrent checkouts against stock 1
 
 ### Inherited from P3, absorbed here by name
 - [ ] AT-88 Cancelled session detail does not surface the refund the athlete is owed (PRD-02 FR-35)
@@ -291,3 +293,52 @@ Engineering invariants also hold: no client `.insert/.update` against any money 
 ## Handoff to phase-close
 
 Doc hygiene only, not gate blockers: tick the completed Track C/D/E/F deliverables (AT-74 to AT-87) whose work is present and evidenced, and reconcile the `AT` Jira board (move AT-65 to AT-87 to Done; move AT-88 to the P8 epic). Fold `PHASE-4-CHECKPOINT.md` in and delete it if present.
+
+---
+
+# PHASE-CLOSE (2026-07-21)
+
+Phase 4 is APPROVED, cycle 1. No `PHASE-4-CHECKPOINT.md` existed to fold in. All Track A through F deliverables (AT-65 to AT-87) are ticked; AT-88 remains open and is re-homed to P8 (below).
+
+## Approver's verified evidence, recorded (all 7 gate clauses re-derived from the live DB, not quoted)
+
+1. **Journeys A to F** — verified from the live DB and on-disk web evidence. Founder's real order **`#ATL00009`** (`pay_TG4Mcq1sP6JfnK`) rendered order-success, order-detail (light and dark), and feedback; `BillSummary` Subtotal 3,850 / Delivery 50 / GST 693 / Total 4,593 matched the DB row exactly, roundup suppressed, `SHIPPING TO` rendered the `ship_to_*` snapshot, not a live join.
+2. **Admin lifecycle** — every transition wrote **exactly one `order_timeline` + one `audit_log`** row. `#ATL00008` placed→shipped (2 timeline / 1 audit cumulative); `#ATL00009` placed→shipped→in_transit→delivered (4 timeline / 3 audit), one of each per edge. `INVALID_TRANSITION` skip attempt rejected with **zero rows written**. HTTP `admin-order-advance` proven on `#ATL00008` (200 valid, 409/400/409 on rejections).
+3. **Ledger** — four commerce groups (`#ATL00006`..`#ATL00009`), **each imbalance 0.00, exactly one entry_group per order**, zero orphan legs. `#ATL00009` (intent `dc4cf004`): debit platform 4593.00 / credit platform 4593.00, balanced. No denormalized balance/running column exists.
+4. **No oversell** — `CHECK (stock >= 0)` present and never fired, stock never negative project-wide. The losing concurrent checkout produced **no `payment_intents` row at all** (refused at the availability pre-check before the intent is created). Step-5 row-locked race proven directly by Track A on overlapping Postgres connections.
+5. **Reservation lifecycle, three exits** — consumed (`844951f4`, held→consumed, stock 1→0), released (webhook `payment.failed` reason, raw stock untouched, idempotent), swept (cron cleared a backdated hold). Expired holds excluded from availability before the sweep runs.
+6. **Unified sweep** — `cron.job` id 1, `*/5 * * * *`, `select public.expire_stale_holds();`, covering courts + sessions + commerce, running since run 1 at 2026-07-20 10:45:00. **Stale P3 sessions `4a64c535` and `4ee5bca9` both cancelled at 10:45:00.041626, i.e. by run 1, not by hand.**
+7. **Build + advisor + evidence** — 24/24 green. Security advisor 3 ERROR (all `security_definer_view`); the only new one vs the P3 baseline is `product_variant_availability`, intentional and documented in RLS.md. Light and dark web evidence in `docs/phases/evidence/p4-web/`.
+
+## Open defects / carried advisories (deferral home noted, none dropped)
+
+- **AT-88 — PRD-02 FR-35 refund amount not surfaced to the cancelled-session athlete.** Not delivered in P4. Deferred to **P8**. Note: this has now been **deferred TWICE** (P3 → P4 → P8). Must land in P8.
+- **Razorpay Route not enabled** on the merchant account, so no seller payout / live transfer. First-party commerce needs none. → **P8** (alongside coach and partner payout proof). Founder action to enable.
+- **Dark-mode web theme gap** — only the dev-gallery toggle resolves the system signal; real web routes do not follow dark mode. P4 dark captures forced via that toggle with per-screen class assertion. → **P8**.
+- **Native screen coverage deferred** — screen-level native capture of shop routes, phone-width layout, PDP gallery gestures, haptics. → **P8**.
+- **AT-64 — `Alert.alert` inert on react-native-web** (10 existing money-consequential call sites, unverified on both platforms). Commerce avoided growing the count via AT-84 `ConfirmSheet`. → **P8**.
+- **Native Razorpay checkout FAILURE path unverified** (dismiss vs decline both map to cancellation). → **P8**.
+- **`tmp-seed-demo-users` edge function still ACTIVE and JWT-callable.** → **Founder action to delete.**
+- **Supabase CLI on this host cannot deploy/list edge functions** (403, insufficient privileges); everything was deployed via the MCP. → **Founder action / fix before an integrator needs `supabase functions deploy`.**
+- **TypeScript version skew** — `apps/mobile` ~6.0.3 vs monorepo ^5.x. → **P8**.
+- **AT-73 late-capture auto-refund branch never run end to end** (rare by construction; both halves proven separately; no real Razorpay-delivered `payment.failed` observed). → **P8 / hardening.**
+- **Four PRD-02 assumptions still unratified by the founder** — coaching fee rate, cancel/reschedule notice window, transfer minimums/fee, analytics threshold. First two affect money already accrued. → **Founder decision.**
+- **Carried P2/P3 advisor WARN debt** — `auth_rls_initplan` and `multiple_permissive_policies` WARNs, plus `venue_bookings_today` not date-filtered (AT-25), resubmission RPC decision (AT-27), fixture password hygiene (AT-29), missing onboarding evidence (AT-30, AT-31), 44pt tap-target sizing-token gap, admin bundle-size warning. → **AT-4 / P8.**
+
+## HANDOFF NOTES — for the P5 Clutch (video) planner
+
+**What P5 inherits that works, reuse it, do not rebuild it:**
+
+- **The shared capture gate proven across THREE domains.** `_shared/finalize-payment.ts` now dispatches courts, sessions, and commerce; payment intents plus the shared finalize gate are proven end to end in all three. A new paid surface is one `case` plus one `finalize-*.ts` handler in the neighbours' shape. Do not fork the gate.
+- **The state-machine RPC + `audit_log` pattern.** `order_transition` / `admin-order-advance` enforce transitions in a `security definer` RPC (service-role only), raise `INVALID_TRANSITION` on an illegal edge, and write exactly one timeline + one audit row per accepted transition, zero on rejection. Any Clutch moderation/publish lifecycle should follow this exact pattern, not client-set status fields.
+- **The reservation / TTL / sweep pattern.** `stock_reservations` (held/consumed/released, 15-min TTL) plus the unified `expire_stale_holds()` `pg_cron` job (`*/5 * * * *`) is the template for any resource that must be held then released or reclaimed. If Clutch needs any held-then-expire resource, wire a fourth arm into `expire_stale_holds()` rather than cutting a new cron.
+- **`BillSummary`** is the only sanctioned money-total renderer (JetBrains Mono tabular, tokens, lucide, no emoji/hyphen). Any Clutch paid surface uses it.
+- **RLS permissive-OR discipline.** Public-browse policies sit beside owner-scoped policies; RLS is a security floor, not scoping. **Every read of an owner-scoped table carries its own explicit owner filter** (`.eq("user_id", user.id)` etc.) in app code, seeds, and tests, and isolation tests must assert the two parties' ids actually differ before trusting the result. See CLAUDE.md "Scope every query by owner."
+
+**THE DECIDED VIDEO ARCHITECTURE — do not re-litigate it. Read `docs/architecture/VIDEO.md` first.**
+
+- **Cloudflare Stream is DEFERRED.** The founder declined the paid Stream block at P0 (VIDEO.md line 153). **P5 needs NOTHING from the founder's Cloudflare account.**
+- **v1 Clutch ships on a SUPABASE STORAGE adapter** sitting behind the same `stream-upload-url` / `stream-webhook` edge-function contracts. Playback is **progressive MP4 via `react-native-video`, NOT HLS.**
+- **The `clips` table keeps Stream-shaped column names** (`cloudflare_uid` nullable, `playback_id` = the storage path) so a later swap to real Cloudflare Stream is a config change plus one adapter, **not a migration.**
+
+**WARNING — pressable-overlay pattern is now mandatory.** The nested-pressable class bug was just fixed (commit `4868df9`) across five components; the pattern is documented in `docs/design/DESIGN-LANGUAGE.md`. The P5 vertical feed and `ClutchPostCard` **MUST follow the pressable-overlay pattern** (inner controls as siblings overlaid on the card, not a card `Pressable` wrapping inner `Pressable`s). Do not reintroduce nested pressables; on web they emit `<button> cannot contain a nested <button>` and the inner control silently no-ops.
