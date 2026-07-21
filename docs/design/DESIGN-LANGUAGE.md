@@ -195,6 +195,20 @@ Lucide only, everywhere, always. No emoji, ever, as an icon substitute (this is 
 - **Money surfaces**: every screen touching money renders a `BillSummary` component (line items in `body`/`callout`, totals in `numericLg` mono), never a bare number. This mirrors the biased-approver's hard rule and is a design requirement, not just a build one. On mobile this is `apps/mobile/src/components/molecules/BillSummary.tsx`; on the web portals it is `@atlitos/ui-web`'s `BillSummary` (added in the Courts vertical slice pass), same rows-plus-total shape, expressed as vanilla CSS reading the same token set instead of nativewind classNames.
 - **Portals (court, life, admin)**: shadcn/ui component bones, same token values expressed as HSL CSS variables (see `packages/theme/src/index.ts` `hslVar`/`toCssVars` helpers), warm-light default with a dark toggle. GMV's sidebar-dashboard structure, not GMV's pink/cyan palette.
 
+### Pressable overlay pattern (interactive cards)
+
+When a card is tappable as a whole AND carries its own inner controls (a feed clip that opens on tap but also has like/comment/share buttons; a product tile that opens on tap but also has a wishlist heart), the whole-card tap MUST be a single absolute-fill `<Pressable>` rendered as a SIBLING behind the inner controls, never a card-level `<Pressable>` wrapping them. A `Pressable` nested inside another `Pressable` renders as a `<button>` inside a `<button>` on the web target, which is invalid DOM, swallows the inner press, and warns; this was fixed across five components in `4868df9` and is an automatic rejection if reintroduced.
+
+The shape:
+
+- A plain container `View` (not pressable).
+- The playback/image layer first (non-interactive).
+- Any scrim as a `pointerEvents="none"` overlay.
+- The whole-card open tap as an absolute-fill `<Pressable>` sibling, above the media but below the controls.
+- Content and action wrappers as `pointerEvents="box-none"` Views, so taps on their empty space fall through to the open-tap overlay while their `<Pressable>` children (like, comment, wishlist) still capture their own taps.
+
+Reference implementation: `apps/mobile/src/components/molecules/ClutchPostCard.tsx` (feed variant). The invariant to check in review: no `Pressable` is an ancestor of another `Pressable` in the same card.
+
 ## Voice and copy rules
 
 - No emojis, anywhere, ever, including in placeholder copy, commit-adjacent user-facing strings, and empty states. Use a lucide icon instead.
