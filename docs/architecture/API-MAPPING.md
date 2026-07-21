@@ -111,7 +111,9 @@ Identical pattern to sessions, per PLAN.md's "Courts lifecycle = Sessions lifecy
 | `get` | GET `/clutch/:id` | PostgREST | `clips` select single | same RLS |
 | `comments` | GET `/clutch/:id/comments` | PostgREST | `clip_comments` select, keyset pagination | RLS public read |
 | `addComment` | POST `/clutch/:id/comments` | PostgREST | `clip_comments` insert | RLS requires a non-anonymous `auth.uid()`, guest insert rejected, mapped to `403 GUEST` |
-| `upload` | POST `/clutch` (multipart) | Edge Function + PostgREST | `stream-upload-url` then `clips` insert (`status='uploading'`) | see `VIDEO.md` for the full tus handoff; the edge function only mints the one-time upload URL, the row insert is a normal own-row PostgREST write |
+| `upload` | POST `stream-upload-url` (edge), then a direct signed PUT, then POST `stream-webhook` (edge) | Edge Function | v1 storage adapter: `stream-upload-url` creates the own clip row at `status='uploading'` AND mints the signed Storage upload URL (bucket `clips`, private) in one call, returning `{ clipId, uploadUrl, token, path }`; the client PUTs the MP4 to `uploadUrl`, then calls `stream-webhook { clip_id }` to finalize `uploading -> ready`. See `VIDEO.md` v1 storage-adapter contracts. Row status only ever moves via `clip_transition_internal` under service role |
+| `playbackUrl` | POST `get_clip_playback_url` (edge) | Edge Function | public-callable; body `{ clip_id }` returns a 300s signed URL only for a `published` clip, the owner's own clip, or admin/moderator; refuses (403, no URL) for `removed`/`rejected`. Never stores a resolved URL. See `VIDEO.md` |
+| `moderationUrl` | POST `get_clip_moderation_url` (edge) | Edge Function | admin/moderator only; the distinct grant that previews a not-yet-published clip (PRD-04 FR-28); same 300s signed URL, refuses for `removed`/`rejected` |
 | `creator` | GET `/clutch/creators/:id` | PostgREST | `users` select joined aggregate `clips`/`follows` counts (a Postgres view `creator_stats`) | public read |
 | `like` | PUT `/clutch/:id/like` | RPC | `toggle_clip_like(clip_id)` | atomic toggle, maintains `clips.likes_count` via the same transaction; `403 GUEST` if anonymous |
 | `follow` | PUT `/clutch/creators/:id/follow` | RPC | `toggle_follow(followee_id)` | atomic toggle; `403 GUEST` if anonymous |
@@ -145,7 +147,7 @@ PLAN.md's edge function roster includes several functions v1 never had a mock fo
 | `razorpay-webhook` | Razorpay servers, not a client | confirms payment/capture, writes `ledger_entries`, advances the domain entity out of its "awaiting payment" implicit state |
 | `razorpay-route-onboard` | coach Payout Account Setup, `portal-court` Payout Account | starts Route linked-account KYC hand-off |
 | `razorpay-route-transfer` | coach Transfer screen, admin never | creates a Route transfer, writes `transfers` + a balancing `ledger_entries` group |
-| `stream-webhook` | Cloudflare Stream, not a client | flips a clip from `processing` to `ready` when transcode completes, see `VIDEO.md` |
+| `stream-webhook` | v1: the uploader's own client, synchronously after the signed PUT (Cloudflare Stream deferred) | flips a clip forward to `ready` via `clip_transition_internal` under service role, idempotent like `razorpay-webhook` (redelivery is a no-op); see `VIDEO.md` v1 storage-adapter contracts |
 | `notify-dispatch` | every RPC/edge function that writes a `notifications` row, fan-out to device push | PRD-07's surface, consumed as a given elsewhere |
 | `admin-order-advance` | `apps/admin` Order Detail | the only path that can move `orders.status` forward, writes `order_timeline` + `audit_log` |
 | `admin-order-refund` | `apps/admin` Order Detail refund action | new function beyond PLAN.md's original list (see PRD-04 open question 2), calls Razorpay refund API, writes `ledger_entries` |

@@ -14,6 +14,26 @@ financial invariant: this is the only lane in the app allowed to write
 | `razorpay-webhook` | Razorpay servers only | Verifies the webhook signature, idempotently finalizes `payment.captured` / `payment.failed` |
 | `verify-payment` | Mobile app, athlete's own JWT | Client-callback fallback that finalizes a captured payment without a public webhook URL, idempotent with `razorpay-webhook` |
 
+## Clutch video functions (Phase 5, AT-94 / AT-95 / AT-96)
+
+v1 Supabase Storage adapter (Cloudflare Stream deferred, see `docs/architecture/VIDEO.md`). Deploy:
+
+```
+supabase functions deploy stream-upload-url
+supabase functions deploy stream-webhook
+supabase functions deploy get-clip-playback-url --no-verify-jwt
+supabase functions deploy get-clip-moderation-url
+```
+
+| Function | Called by | verify_jwt | Purpose |
+|---|---|---|---|
+| `stream-upload-url` | Athlete's own JWT | on | Creates/updates the own clip row `uploading` and mints a signed Storage upload URL (private `clips` bucket). Returns `{ clipId, uploadUrl, token, path }` |
+| `stream-webhook` | Uploader's own JWT, synchronous confirm | on | Idempotent finalizer, drives the own clip `uploading -> ready` via `clip_transition_internal` (service role). Redelivery is a no-op |
+| `get-clip-playback-url` | Public (guest, owner, or admin) | OFF | 300s signed playback URL, only for `published` / owner-own / admin; refuses `removed`/`rejected` for everyone |
+| `get-clip-moderation-url` | admin/moderator only | on | 300s signed preview URL for a not-yet-published clip; the distinct moderation grant |
+
+`get-clip-playback-url` is `--no-verify-jwt` because it is public-callable (guests browsing the published feed have no user JWT); it reads any bearer token optionally inside, and a valid session only ever grants more (owner/admin), never less.
+
 Shared code lives in `_shared/` and is not itself deployed as a function:
 
 - `_shared/razorpay.ts` — minimal Razorpay REST client: `createOrder`, `verifyWebhookSignature`, `verifyPaymentSignature`, `razorpayKeyId`.
