@@ -231,6 +231,13 @@ Two findings in the diff were **not** intentional and were closed by `0037_comme
 | `clip_likes`, `follows` | public (needed for counts) | own row via `toggle_clip_like`/`toggle_follow` RPCs only, no direct `INSERT`/`DELETE` grant (keeps the `likes_count`/follower count trigger authoritative and race-free) |
 | `clip_comments` | comments on visible clips | `INSERT` requires `NOT is_guest()`; own row `DELETE`, no `UPDATE` (comments are immutable once posted) |
 
+Shipped in `0041`/`0042` (grants corrected in `0046`). Notes:
+
+- **Permissive-OR on `clips`**: `clips_select_published` (public) sits beside `clips_select_own` and `clips_select_admin` in the same table, so an unscoped `select` returns the caller's own non-published clips alongside the published feed. Every feed query carries its own `.eq('status','published')` and every profile query its own `.eq('owner_id', user.id)`; RLS is a ceiling, not scoping. Verified non-vacuously with two distinct users (owner sees own rejected/removed/uploading, a non-owner never does).
+- **anon KEEPS `SELECT`** on `clips`, `clip_likes`, `follows`, `clip_comments` (the published feed and `creator_stats` are guest browsable, FR-42/FR-3; guest gating is on actions, not viewing). Only the write verbs are withdrawn from anon. `0042` originally over-revoked (`revoke all ... from anon` stripped SELECT and broke the guest feed and the `security_invoker` `creator_stats` view); `0046` restores it.
+- **No client `clips.status` write**, by policy (no UPDATE policy) and by grant (`revoke update, delete`). Forward moves are the `stream-webhook` finalizer (`service_role`) and `moderate_clip`/`resolve_report` (admin/moderator, SECURITY DEFINER). Insert forces `uploading` via the policy `WITH CHECK`.
+- **Likes/follows have no client write grant**; `toggle_clip_like`/`toggle_follow` are the only write path, keeping the count triggers authoritative. The two count trigger functions have `EXECUTE` revoked from all client roles (they fire as the table owner; `0041`/`0047`, the `0037` precedent).
+
 ### empower
 
 | Table | `SELECT` | `INSERT`/`UPDATE`/`DELETE` |
@@ -290,7 +297,7 @@ Covered in full under "The financial write prohibition" above. Read policies:
 | Table | `SELECT` | `INSERT`/`UPDATE`/`DELETE` |
 |---|---|---|
 | `verification_requests` | own linked applicant rows (coach reads own, venue partner reads own, UPA reads own); admin or moderator reads all | own row `INSERT` on submit/resubmit (coach applicant type ships in `0003_moderation_audit.sql` as a direct `WITH CHECK (applicant_id = auth.uid() AND has_role('coach'))` policy; venue/UPA applicant types are added once `venues`/`upa_applications` exist); `UPDATE` (approve/reject) restricted to `has_role('admin') OR has_role('moderator')` |
-| `reports` | own submitted reports; admin reads all | own row `INSERT` (`reporter_id = auth.uid()`, `NOT is_guest()`); `UPDATE` (resolve) restricted to `has_role('admin')` |
+| `reports` | own submitted reports; `has_role('admin') OR has_role('moderator')` reads all (aligned to the Moderation/Reports Queue surface in `0042`, was "admin" only) | own row `INSERT` (`reporter_id = auth.uid()`, `NOT is_guest()`); no client `UPDATE` at all, resolution goes through `resolve_report` (`0043`, admin/moderator, SECURITY DEFINER) so a client can never hand-set a report's status |
 | `feature_flags` | `has_role('admin') OR has_role('moderator')`; **not** publicly readable, flag checks happen server side (RPC/edge function) so a disabled feature's existence is not discoverable client side | `has_role('admin')` only (moderators can read flags but not flip them; ships this way in `0003_moderation_audit.sql`) |
 | `audit_log` | `has_role('admin') OR has_role('moderator')` | **no** `authenticated`/`anon` write at all, ever; `service_role` `INSERT` only, and even `service_role`'s grants exclude `UPDATE`/`DELETE` at the table level (PRD-04 FR-54, enforced identically to `ledger_entries`) |
 | `support_tickets` | own rows; admin or moderator reads all | own row `INSERT`; `UPDATE` (resolve) restricted to `has_role('admin') OR has_role('moderator')` |
@@ -304,7 +311,7 @@ Supabase Storage buckets get their own RLS-style policies on `storage.objects`, 
 | `coach-certificates` | `{coach_id}/...` | owner + admin | owner (insert only) |
 | `venue-photos` | `{venue_id}/...` | public (matches verified venue visibility) | owning partner |
 | `upa-evidence` | `{application_id}/...` | owner + admin, **never public**, per PRD-05 FR-3 | owner (insert only) |
-| `clutch-video` | `{clip_id}/...` | governed by Cloudflare Stream signed URLs, not this bucket directly; see `VIDEO.md` | `stream-upload-url` edge function only |
+| `clips` | `{clip_id}/...` | **PRIVATE (`public = false`), NO policy on `storage.objects` at all**: no anon, public, or authenticated direct read. This is the Supabase Storage equivalent of Cloudflare Stream's `requireSignedURLs: true`; no clip object is resolvable by a guessed or scraped path in any status. Playback is a short-lived (TTL 300s) signed URL minted by an edge function against the live clip row (`get_clip_playback_url` / `get_clip_moderation_url`, AT-96) | `stream-upload-url` edge function only, via a service-role-minted signed UPLOAD url (`0042`) |
 | `avatars`, `product-media`, `upa-photos`, `gratitude-photos` | `{owner_id}/...` or admin-managed | public | owner or `has_role('admin')` depending on bucket |
 
 ## What the advisor checks at every gate

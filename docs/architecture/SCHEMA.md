@@ -25,7 +25,8 @@ Source of truth for every table in the Supabase Postgres schema. One domain per 
 | `venue_status` | `pending`, `verified`, `rejected` | same pattern as `coach_status` |
 | `court_booking_status` | `confirmed`, `completed`, `cancelled`, `rescheduled`, `no_show` | machine: `confirmed` to (`completed` or `cancelled` or `rescheduled` or `no_show`); `completed` to `rated` is tracked by a non-null `rating` column, not a further status value, matching the athlete-only-rates-once rule |
 | `order_status` | `placed`, `shipped`, `in_transit`, `delivered`, `cancelled` | machine: strictly forward through `placed` to `shipped` to `in_transit` to `delivered`; `cancelled` reachable only from `placed` |
-| `clip_status` | `uploading`, `processing`, `ready`, `published`, `rejected`, `removed` | machine: `uploading` to `processing`; `processing` to (`ready` or `rejected`, the latter on a Cloudflare Stream transcode error per `VIDEO.md`); `ready` to (`published` or `rejected`); `published` to `removed` (moderation takedown only) |
+| `clip_status` | `uploading`, `processing`, `ready`, `published`, `rejected`, `removed` | machine (RPC enforced by `clip_transition_internal`, `0043`): `uploading` to (`processing` or `rejected`); `processing` to (`ready` or `rejected`); `ready` to (`published` or `rejected`); `published` to `removed` (moderation takedown only); `rejected`/`removed` terminal. The `uploading` to `rejected` edge is the abandoned-upload / reconcile-absent-object case (AT-93, `0045`); in v1 there is no Cloudflare transcode, so `processing` to `rejected` is driven by the reconcile arm, not a Stream error |
+| `report_status` | `pending`, `actioned`, `dismissed` | `pending` until a moderator resolves via `resolve_report` (`0043`): takedown moves it to `actioned`, dismissal to `dismissed` |
 | `upa_status` | `submitted`, `under_review`, `needs_info`, `verified`, `rejected` | machine: `submitted` to `under_review`; `under_review` to (`needs_info` or `verified` or `rejected`); `needs_info` back to `under_review` on resubmit; `rejected` to `submitted` on reapply (new row, see `upa_applications`) |
 | `upa_wishlist_item_status` | `open`, `funded`, `delivered` | machine: `open` to `funded` (server, on funding target reached) to `delivered` (server, on fulfillment) |
 | `donation_method` | `standalone`, `checkout_roundup` | |
@@ -601,7 +602,8 @@ RLS enabled, no policies, grants withdrawn from `anon` and `authenticated`: the 
 | Function | Grant | What it does |
 |---|---|---|
 | `unpaid_hold_ttl()` | public | How long an unpaid hold survives, defined as `stock_reservation_ttl()` so all three domains cannot drift apart. |
-| `expire_stale_holds()` | `service_role` only | Courts (`pending_payment` past the TTL, via `court_booking_expire_payment`), sessions (`requested` whose payment intent is still `created` past the TTL and which have no captured intent, via `session_abandon_unpaid`), and commerce (`release_expired_stock_reservations`, Track A's seam). Returns a per domain count so a sweep that ran and did nothing is distinguishable from one that never ran. Per row failures are counted, not fatal, so one refusing booking cannot stop the other two domains being swept. |
+| `expire_stale_holds()` | `service_role` only | Courts (`pending_payment` past the TTL, via `court_booking_expire_payment`), sessions (`requested` whose payment intent is still `created` past the TTL and which have no captured intent, via `session_abandon_unpaid`), commerce (`release_expired_stock_reservations`, Track A's seam), and **clutch** (`reconcile_stranded_clips`, the fourth arm, AT-93/`0045`). Returns a per domain count so a sweep that ran and did nothing is distinguishable from one that never ran. Per row failures are counted, not fatal, so one refusing row cannot stop the other domains being swept. |
+| `reconcile_stranded_clips()` | `service_role` only | The v1 form of VIDEO.md's `stream-reconcile` poll fallback, folded into `expire_stale_holds()` rather than a separate cron. Reclaims clips stranded in `uploading`/`processing` past a 30 minute TTL: if the storage object is present in the private `clips` bucket, drives the clip forward to `ready` (through the legal edges); if absent, `rejected`. Per-row failures counted. |
 
 Scheduled with `pg_cron` as job `expire-stale-holds`, `*/5 * * * *`. A session in `requested` is deliberately NOT stale on age alone: a paid session sits there legitimately for days waiting for a coach to answer, so the query keys on the payment intent instead. Verified 2026-07-20: the first scheduled run at 10:45:00 cancelled sessions `4a64c535` and `4ee5bca9`, the two live stale rows P3 left behind, by running rather than by hand (`cron.job_run_details` runid 1, `sessions.updated_at` 10:45:00.041626).
 
@@ -615,8 +617,10 @@ Scheduled with `pg_cron` as job `expire-stale-holds`, `*/5 * * * *`. A session i
 |---|---|---|
 | `id` | `uuid` | PK |
 | `owner_id` | `uuid` | not null, references `users(id)` |
-| `cf_stream_uid` | `text` | nullable, Cloudflare Stream video id, see `VIDEO.md` |
-| `video_url`, `thumb_url` | `text` | nullable until Stream processing completes |
+| `cf_stream_uid` | `text` | nullable, the future Cloudflare Stream video id slot, **NULL in v1** (Supabase Storage adapter, VIDEO.md DECISION UPDATE) |
+| `storage_path` | `text` | nullable, the object **KEY** in the private `clips` bucket. A PATH, never a resolved URL |
+| `playback_id` | `text` | nullable, Stream-shaped alias, `= storage_path` in v1 (VIDEO.md "playback_id = storage path for now") |
+| `thumb_path` | `text` | nullable, the thumbnail object **KEY**. A PATH, never a resolved URL |
 | `caption` | `text` | not null |
 | `sport` | `sport` | not null |
 | `status` | `clip_status` | not null default `uploading` |
@@ -624,7 +628,11 @@ Scheduled with `pg_cron` as job `expire-stale-holds`, `*/5 * * * *`. A session i
 | `likes_count`, `comment_count` | `int` | not null default `0`, maintained by trigger from `clip_likes`/`clip_comments`, never client-written |
 | `created_at`, `updated_at` | `timestamptz` | |
 
+**No column stores a resolved URL.** The earlier `video_url`/`thumb_url` draft is replaced by PATH columns (`storage_path`, `thumb_path`, `playback_id`), because a stored public or long-lived signed URL would silently defeat takedown: a `removed` clip would stay fetchable at the stored URL. Every view of a clip video or thumbnail is a freshly minted, short-lived (TTL 300s) signed URL produced by an edge function (`get_clip_playback_url` / `get_clip_moderation_url`, AT-96) against the **live** clip row (`0041`, `0042`, PHASE-5-STATUS.md trap 1).
+
 Indexes: `idx_clips_status_created_at` on `(status, created_at desc)` (feed query, `published` only), `idx_clips_owner_id` on `owner_id`.
+
+**`creator_stats` view** (`0041`): a display-only per-creator aggregate the Clutch profile reads (FR-47), `security_invoker = on`, exposing `published_clips_count`, `followers_count`, `following_count`, `total_likes` (over published clips only). Deterministic for every viewer because only `published` clips and public `follows` contribute; no private clip leaks. Tapping a count to browse the list is not built in v1.
 
 ### `clip_likes`
 
@@ -659,6 +667,18 @@ Indexes: `idx_clip_comments_clip_id` on `(clip_id, created_at)`.
 | `created_at` | `timestamptz` | |
 
 Constraints: `UNIQUE(follower_id, followee_id)`.
+
+### Clutch RPCs (`0043`, `0044`, `0045`)
+
+| RPC | Grant | What it does |
+|---|---|---|
+| `clip_transition_internal(clip_id, to_status, reason)` | `service_role` only | The low-level state machine. Raises `INVALID_TRANSITION` on an illegal edge, requires a non-empty reason to move to `rejected`. Called by the webhook finalizer (AT-95), the reconcile arm, and the moderation RPCs. No client calls it. |
+| `moderate_clip(clip_id, action, reason)` | `authenticated` (has_role admin/moderator inside), `service_role` | `approve` (`ready` to `published`), `reject` (`ready` to `rejected`, reason required, FR-30), `remove` (`published` to `removed` takedown, reason required). Writes exactly one `audit_log` row per accepted transition and a `clip_moderation` notification to the creator. Zero rows on a rejected transition. |
+| `resolve_report(report_id, action, reason)` | `authenticated` (has_role admin/moderator inside), `service_role` | Reports Queue action. `remove` takes down the reported clip (reuses `moderate_clip`) or deletes the reported comment; `dismiss` leaves the entity untouched. Reason required (FR-33). One `report.<action>` audit row. `ALREADY_RESOLVED` if not `pending`. |
+| `toggle_clip_like(clip_id)` | `authenticated`, `service_role` | Idempotent like/unlike of a `published` clip. Refuses guests (`is_guest`). Returns `{liked, likes_count}` (trigger-maintained count). |
+| `toggle_follow(followee_id)` | `authenticated`, `service_role` | Idempotent follow/unfollow. Refuses guests and self-follow. Returns `{following, followers_count}`. |
+
+`clip_likes`/`clip_comments`/`follows` carry no direct client write grant; the toggle RPCs and RLS-gated comment insert are the only write paths, so the count triggers stay authoritative. Clients never set `clips.status`.
 
 ---
 
