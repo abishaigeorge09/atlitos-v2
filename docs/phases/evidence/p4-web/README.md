@@ -153,18 +153,13 @@ theming one.
 
 ## Not captured, and exactly why
 
-**A completed Razorpay payment, and therefore Order Success (FR-23) and feedback
-on a delivered order (FR-26).** Capture 15 reaches the real Razorpay Test Mode
-sheet with the correct amount. The next step is the sheet's own "Contact
-details" field, then card number, expiry and CVV. Entering card details is a
-credential entry this agent will not perform. **This needs the founder to type
-into the Razorpay sheet.** Everything up to the sheet is captured, in both
-themes, and the money path behind it is already proven separately at the API
-level in `VERIFICATION.md` (clause 3, three balanced orders including one placed
-by Track F itself).
-
-Consequently `/shop/order-success` and `/shop/order/[id]/feedback` have no UI
-capture. They are the only two PRD-07 section 3 screens not represented here.
+**CLOSED 2026-07-21 by the EPAY pass below.** This section previously recorded
+that a completed Razorpay payment, and therefore Order Success (FR-23) and
+feedback on a delivered order (FR-26), had no UI capture, because entering card
+details is a credential entry this agent will not perform. The founder has now
+typed the test card into the real Razorpay sheet himself and completed order
+`#ATL00009`. Everything behind the payment has been captured; see the EPAY
+section below. No PRD-07 section 3 screen is now unrepresented.
 
 **`21-order-detail-shipto-UNCHANGED-dark`.** The Expo dev server exited during
 the final dark capture. The light capture carries the proof; the dark pass of
@@ -209,6 +204,88 @@ the class, as the driver here now does. The underlying product issue (no theme
 control on any real screen, no working system follow on web) is P3's deferred
 defect, unchanged.
 
+### N3. MEDIUM. Submitted order feedback never renders; the form reappears.
+
+Found during the EPAY pass. `order_feedback` has `UNIQUE(order_id)` (0031), so
+PostgREST resolves the `order_feedback ( ... )` embed in `useShop.getOrder`
+(`packages/api/src/use-shop.ts`) as a **to-one object**, not a to-many array.
+The response is literally `"order_feedback": { ... }`. But `getOrder` types the
+embed as an array and reads `(data.order_feedback ?? [])[0]`, which indexes an
+object, yields `undefined`, and collapses to `feedback: null`.
+
+Consequence: after a shopper submits a rating on a delivered order, the read
+only "Thanks for the feedback" view (AC-E4) never appears. The feedback screen
+falls back to state `form` and shows "How did this order go?" and a live
+"Submit feedback" button again, and Order Detail keeps offering "Write
+feedback". A second submit is stopped only by the `UNIQUE` violation, surfaced
+as a VALIDATION error, rather than by the screen having moved on. RLS is not at
+fault: `order_feedback_select_own` returns the row both under a direct
+impersonated `auth.uid()` query and through the real PostgREST embed with the
+shopper's JWT. The fix is a one line read of the object rather than `[0]` (or a
+typed to-one embed). Verified against `#ATL00009`, whose feedback row
+`bfc6fa72` (rating 5) exists and is readable, while the screen still renders the
+empty form.
+
+This is why `web-shop-EPAY-04-feedback-submitted` shows the completed form (five
+stars filled, remarks entered) rather than a "Thanks for the feedback"
+confirmation. The submission succeeded at the database; the app cannot render
+its success.
+
+## Journey E and the EPAY captures (2026-07-21, order `#ATL00009`)
+
+The founder typed the Razorpay test card himself and completed a real test
+payment, order `#ATL00009` (`e96de725`), payment `pay_TG4Mcq1sP6JfnK`, total
+**₹4,593**. This closes Journey E and unlocks the two screens behind the
+payment. The cart charged was Professional Cricket Bat (Medium, Natural) x2 and
+Professional Football (Size 5, White) x1, subtotal ₹3,850, delivery ₹50, GST
+and others ₹693, roundup **off** (the founder left the donation box unticked, so
+`donation_roundup` is 0 and the total is the un-rounded ₹4,593).
+
+Captures were driven the same way as the rest of this folder: fixture session
+minted by script, injected into `localStorage`, and every screen reached by a
+real navigation in Chrome via Playwright `channel:'chrome'`, with the same theme
+class assertion in `shot()`. `claude-in-chrome` was used for the live checkout
+click through up to the sheet; its screenshots do not persist to disk on this
+host, so the on-disk captures are the Playwright ones.
+
+### Advancing the parcel, the real way
+
+`#ATL00009` was moved `placed -> shipped -> in_transit -> delivered`, one legal
+step at a time, through `order_transition` (0035), the same service role state
+machine `admin-order-advance` calls. Each step also wrote the one `audit_log`
+row that the edge function writes, with the admin fixture
+(`admin@atlitos.dev`, `d247e386`) as actor. Skips are impossible: the machine
+raises `INVALID_TRANSITION`, which is exactly why `delivered` could not be
+reached in one hop. The status was never hand set with an `UPDATE`.
+
+Row counts after the three transitions, confirmed in SQL:
+
+- `order_timeline`: **4 rows** for the order, one `placed` (from the payment
+  finalize, actor null) plus **exactly one row per transition** (shipped,
+  in_transit, delivered), each with the admin as `actor_id` and a location.
+- `audit_log`: **exactly 3 rows** for `entity_id = e96de725`, one per
+  transition, `action = order.advance`, correct `before`/`after` status, admin
+  as actor.
+- `orders.status` reads `delivered`; the shopper's Order Detail renders the
+  full delivered timeline.
+
+### EPAY capture index
+
+| capture | screen | what it proves |
+|---|---|---|
+| `web-shop-EPAY-02-order-success-{light,dark}` | `/shop/order-success` | FR-23 / AC-E1. "Order successfully placed", order number `#ATL00009`, Track my order / Explore more |
+| `web-shop-EPAY-03-order-detail-{light,dark}` | `/shop/order/[id]` | FR-24, FR-25. OrderTimeline with all four events and their locations, items with snapshots, SHIPPING TO reading `ship_to_*` (`12 Verification Lane, Flat 3 / Bengaluru / 560001`), BillSummary recap of the stored money columns |
+| `web-shop-EPAY-04-feedback-empty` | `/shop/order/[id]/feedback` | FR-26 / AC-E3. The rating form on a delivered order, "How did this order go?", empty StarRating and remarks |
+| `web-shop-EPAY-04-feedback-submitted` | `/shop/order/[id]/feedback` | FR-26. The five star rating and remarks that were submitted (row `bfc6fa72`, rating 5). The read only confirmation does **not** render, see defect N3 |
+
+Note on the Razorpay sheet capture (`web-shop-EPAY-01`): the sheet was reached
+and witnessed live in the founder's Chrome at ₹4,600 (roundup ticked in that
+abandoned attempt), but `claude-in-chrome` screenshots do not persist to disk on
+this host, so no `EPAY-01` file was written. The founder's own successful
+payment went through a separate sheet at the ₹4,593 no roundup total. The Test
+Mode sheet with the card field is already captured on disk as `web-shop-15` from
+the prior pass.
+
 ## Gate clause 1 status
 
 PRD-07 Journeys **A** (browse), **B** (PDP, per variant stock, wishlist),
@@ -216,7 +293,8 @@ PRD-07 Journeys **A** (browse), **B** (PDP, per variant stock, wishlist),
 roundup row), and **F** (order tracking, Order Detail, My Orders, Address Book)
 are driven end to end through the UI and captured in light and dark.
 
-Journey **E** is captured up to the Razorpay sheet and no further, for the
-credential reason above. Clause 1's phrase "a real Razorpay test payment"
-therefore remains open on the UI path and needs the founder, or an explicit
-decision that the API level proof in `VERIFICATION.md` clause 3 satisfies it.
+Journey **E** is now closed: the founder completed a real Razorpay test payment
+(`#ATL00009`, `pay_TG4Mcq1sP6JfnK`), and Order Success, Order Detail with a full
+delivered timeline, and the feedback flow are all captured above. Clause 1's
+"a real Razorpay test payment" is satisfied on the UI path. One MEDIUM defect
+(N3) was found behind the payment and is logged for the builder.
