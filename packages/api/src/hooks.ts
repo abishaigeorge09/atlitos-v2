@@ -1,7 +1,10 @@
-import type { Session } from "@supabase/supabase-js";
+import type { Session, SupabaseClient } from "@supabase/supabase-js";
 import type {
   AppRole,
   BookingSource,
+  Clip,
+  ClipStatus,
+  Comment,
   Court,
   CourtBooking,
   CourtBookingStatus,
@@ -693,11 +696,437 @@ export function useWishlist(_client: AtlitosClient) {
   throw new Error("useWishlist is not implemented yet, see API-MAPPING.md wishlist");
 }
 
-// TODO(P5): clutch. PostgREST reads + Edge Function `stream-upload-url` +
-// RPC (toggle_clip_like, toggle_follow). See API-MAPPING.md "clutch".
-export function useClutch(_client: AtlitosClient) {
-  throw new Error("useClutch is not implemented yet, see API-MAPPING.md clutch");
+// ---------------------------------------------------------------------------
+// clutch. PostgREST reads (`clips`/`clip_comments`/`creator_stats`, RLS public
+// read restricted to `status='published'`, owner reads their own in any
+// status) + RPC (`toggle_clip_like`, `toggle_follow`) + Edge Function
+// (`stream-upload-url`, `stream-webhook`, `get-clip-playback-url`). See
+// API-MAPPING.md "clutch" and VIDEO.md for the upload/playback pipeline.
+//
+// TYPING NOTE: the clutch tables/RPCs land in Track A's schema migrations
+// (0041-0047) and its regenerated `Database` type. Until that regenerated
+// type is on this branch, `client.from("clips")`/`client.rpc("toggle_...")`
+// have no literal to match, so this lane routes its PostgREST/RPC calls
+// through an intentionally-untyped view of the same client (`untyped()`
+// below) and re-narrows every result into the row interfaces declared here.
+// This is the only escape hatch; edge-function invokes and auth stay on the
+// typed client. When Track A's `Database` type merges, swap `untyped(client)`
+// back to `client` and delete the local row interfaces, no call-site changes.
+// ---------------------------------------------------------------------------
+
+/** One page of the vertical feed. `nextCursor` is the last row's `created_at`
+ * for keyset pagination; null when the page was not full (end of feed). */
+export interface ClutchFeedPage {
+  clips: Clip[];
+  nextCursor: string | null;
 }
+
+/** One page of a clip's comments (keyset on `created_at`, oldest first). */
+export interface ClutchCommentPage {
+  comments: Comment[];
+  nextCursor: string | null;
+}
+
+/** Creator/own profile header aggregate, from the `creator_stats` view. */
+export interface CreatorProfile {
+  id: string;
+  name: string;
+  channel: string;
+  avatarUrl: string | null;
+  clipCount: number;
+  followerCount: number;
+  followingCount: number;
+  followedByMe: boolean;
+}
+
+/** `stream-upload-url` response. The client PUTs the MP4 to `uploadUrl`, or
+ * uses supabase-js `uploadToSignedUrl(path, token, file)` against `bucket`. */
+export interface ClipUploadTicket {
+  clipId: string;
+  uploadUrl: string;
+  token: string;
+  path: string;
+  bucket: string;
+  status: ClipStatus;
+}
+
+/** `stream-webhook` (on-upload finalizer) response. */
+export interface ClipUploadResult {
+  clipId: string;
+  status: ClipStatus;
+  outcome: string;
+}
+
+/** `get-clip-playback-url` response. Short-lived (300s) signed MP4 URL,
+ * minted per visible card and refreshed on expiry, never stored. */
+export interface ClipPlayback {
+  clipId: string;
+  url: string;
+  thumbUrl: string | null;
+  expiresIn: number;
+  status: ClipStatus;
+}
+
+export interface ClipLikeResult {
+  liked: boolean;
+  likesCount: number;
+}
+
+export interface FollowResult {
+  following: boolean;
+  followerCount: number;
+}
+
+export interface UploadClipInput {
+  caption: string;
+  sport: Sport;
+  /** Set only when re-requesting a URL for a clip row that already exists
+   * (retry after a dropped upload); omit for a fresh post. */
+  clipId?: string;
+}
+
+const CLUTCH_PAGE_SIZE = 10;
+
+const CLIP_FEED_SELECT =
+  "id, owner_id, caption, sport, status, likes_count, comment_count, created_at, thumb_url, users:owner_id ( name, channel_name, avatar_url )";
+
+const CLIP_COMMENT_SELECT =
+  "id, clip_id, user_id, text, created_at, users:user_id ( name, channel_name )";
+
+interface ClipUserJoin {
+  name: string | null;
+  channel_name: string | null;
+  avatar_url?: string | null;
+}
+
+interface ClipFeedRow {
+  id: string;
+  owner_id: string;
+  caption: string;
+  sport: Sport;
+  status: ClipStatus;
+  likes_count: number;
+  comment_count: number;
+  created_at: string;
+  thumb_url: string | null;
+  users: ClipUserJoin | null;
+}
+
+interface ClipCommentJoinRow {
+  id: string;
+  clip_id: string;
+  user_id: string;
+  text: string;
+  created_at: string;
+  users: ClipUserJoin | null;
+}
+
+interface CreatorStatsRow {
+  id: string;
+  name: string | null;
+  channel_name: string | null;
+  avatar_url: string | null;
+  clip_count: number;
+  follower_count: number;
+  following_count: number;
+}
+
+/** users.channel_name is the display channel; fall back to the display name,
+ * then a neutral default, so a card never renders an empty channel line. */
+function channelOf(user: ClipUserJoin | null): string {
+  return user?.channel_name ?? user?.name ?? "Athlete";
+}
+
+function mapClipRow(row: ClipFeedRow, likedByMe: boolean): Clip {
+  return {
+    id: row.id,
+    ownerId: row.owner_id,
+    channel: channelOf(row.users),
+    // videoUrl is deliberately absent here: playback is a fresh signed URL
+    // minted per visible card via getPlaybackUrl, never carried on the row.
+    thumbUrl: row.thumb_url ?? undefined,
+    caption: row.caption,
+    sport: row.sport,
+    status: row.status,
+    likes: row.likes_count,
+    commentCount: row.comment_count,
+    createdAt: row.created_at,
+    likedByMe,
+  };
+}
+
+function mapCommentRow(row: ClipCommentJoinRow): Comment {
+  return {
+    id: row.id,
+    clipId: row.clip_id,
+    userId: row.user_id,
+    username: channelOf(row.users),
+    text: row.text,
+    createdAt: row.created_at,
+  };
+}
+
+export function useClutch(client: AtlitosClient) {
+  // See TYPING NOTE above: the clutch tables/RPCs are not yet in the
+  // generated `Database` type on this branch. `db` is the same client with
+  // its schema generic widened so `from`/`rpc` accept the clutch relations;
+  // every result is re-narrowed through the row interfaces above.
+  const db = client as unknown as SupabaseClient;
+
+  async function likedClipIds(ids: string[]): Promise<Set<string>> {
+    if (ids.length === 0) return new Set();
+    const { data: authData } = await client.auth.getUser();
+    // A guest (anonymous session) has no likes; skip the round trip.
+    if (!authData.user || authData.user.is_anonymous) return new Set();
+
+    const { data, error } = await db
+      .from("clip_likes")
+      .select("clip_id")
+      .eq("user_id", authData.user.id)
+      .in("clip_id", ids)
+      .returns<{ clip_id: string }[]>();
+    if (error) throw mapPostgrestError(error);
+    return new Set((data ?? []).map((r) => r.clip_id));
+  }
+
+  return {
+    /** v1 `clutch.feed`. Keyset pagination on `created_at`, newest first.
+     * `status='published'` is filtered EXPLICITLY here, never left to RLS:
+     * RLS is permissive-OR (an owner can additionally read their own clip in
+     * any status), so an unfiltered feed read would surface a signed-in
+     * athlete's own `uploading`/`rejected` clips into the public feed
+     * (CLAUDE.md's "RLS is not scoping" rule). */
+    async getFeed(cursor?: string): Promise<ClutchFeedPage> {
+      let query = db
+        .from("clips")
+        .select(CLIP_FEED_SELECT)
+        .eq("status", "published")
+        .order("created_at", { ascending: false })
+        .limit(CLUTCH_PAGE_SIZE);
+      if (cursor) query = query.lt("created_at", cursor);
+
+      const { data, error } = await query.returns<ClipFeedRow[]>();
+      if (error) throw mapPostgrestError(error);
+
+      const rows = data ?? [];
+      const liked = await likedClipIds(rows.map((r) => r.id));
+      const last = rows.at(-1);
+      return {
+        clips: rows.map((r) => mapClipRow(r, liked.has(r.id))),
+        nextCursor: rows.length === CLUTCH_PAGE_SIZE && last ? last.created_at : null,
+      };
+    },
+
+    /** v1 `clutch.get`. A single clip for the post detail screen. RLS lets a
+     * guest/other athlete read it only when `published`; the owner can read
+     * their own in any status (own-profile deep link into a pending clip). */
+    async getClip(clipId: string): Promise<Clip | null> {
+      const { data, error } = await db
+        .from("clips")
+        .select(CLIP_FEED_SELECT)
+        .eq("id", clipId)
+        .maybeSingle<ClipFeedRow>();
+      if (error) throw mapPostgrestError(error);
+      if (!data) return null;
+
+      const liked = await likedClipIds([data.id]);
+      return mapClipRow(data, liked.has(data.id));
+    },
+
+    /** v1 `clutch.comments`. Keyset on `created_at`, oldest first (a comment
+     * thread reads top to bottom, unlike the feed). Public read. */
+    async getComments(clipId: string, cursor?: string): Promise<ClutchCommentPage> {
+      let query = db
+        .from("clip_comments")
+        .select(CLIP_COMMENT_SELECT)
+        .eq("clip_id", clipId)
+        .order("created_at", { ascending: true })
+        .limit(CLUTCH_PAGE_SIZE);
+      if (cursor) query = query.gt("created_at", cursor);
+
+      const { data, error } = await query.returns<ClipCommentJoinRow[]>();
+      if (error) throw mapPostgrestError(error);
+
+      const rows = data ?? [];
+      const last = rows.at(-1);
+      return {
+        comments: rows.map(mapCommentRow),
+        nextCursor: rows.length === CLUTCH_PAGE_SIZE && last ? last.created_at : null,
+      };
+    },
+
+    /** v1 `clutch.addComment`. Own-row insert (RLS requires a non-anonymous
+     * `auth.uid()`; a guest insert is rejected and surfaces as `403 GUEST`,
+     * which the UI pre-empts with the login gate). Returns the created row
+     * hydrated with the author's channel for optimistic append. */
+    async addComment(clipId: string, text: string): Promise<Comment> {
+      const { data: authData, error: authError } = await client.auth.getUser();
+      if (authError) throw mapAuthError(authError);
+      if (!authData.user) throw mapAuthError({ message: "Sign in to comment.", status: 401 });
+
+      const { data, error } = await db
+        .from("clip_comments")
+        .insert({ clip_id: clipId, user_id: authData.user.id, text })
+        .select(CLIP_COMMENT_SELECT)
+        .single<ClipCommentJoinRow>();
+      if (error) throw mapPostgrestError(error);
+
+      return mapCommentRow(data);
+    },
+
+    /** v1 `clutch.like` -> `toggle_clip_like` RPC. Atomic toggle that also
+     * maintains `clips.likes_count` in the same transaction; the client
+     * never writes `clip_likes`/`clips.likes_count` directly (CLAUDE.md).
+     * `403 GUEST` if anonymous (UI gates first). */
+    async toggleLike(clipId: string): Promise<ClipLikeResult> {
+      const { data, error } = await db.rpc("toggle_clip_like", { p_clip_id: clipId });
+      if (error) throw mapPostgrestError(error);
+      const row = ((Array.isArray(data) ? data[0] : data) ?? null) as
+        | { liked?: boolean; likes_count?: number }
+        | null;
+      return { liked: row?.liked ?? false, likesCount: row?.likes_count ?? 0 };
+    },
+
+    /** v1 `clutch.follow` -> `toggle_follow` RPC. Atomic toggle; the client
+     * never writes `follows` directly. `403 GUEST` if anonymous. */
+    async toggleFollow(followeeId: string): Promise<FollowResult> {
+      const { data, error } = await db.rpc("toggle_follow", { p_followee_id: followeeId });
+      if (error) throw mapPostgrestError(error);
+      const row = ((Array.isArray(data) ? data[0] : data) ?? null) as
+        | { following?: boolean; follower_count?: number }
+        | null;
+      return { following: row?.following ?? false, followerCount: row?.follower_count ?? 0 };
+    },
+
+    /** v1 `clutch.creator`. Aggregate header from the `creator_stats` view
+     * (public read). `followedByMe` is a separate own-scoped `follows`
+     * existence check (a guest is never following anyone). */
+    async getCreator(creatorId: string): Promise<CreatorProfile | null> {
+      const { data, error } = await db
+        .from("creator_stats")
+        .select("id, name, channel_name, avatar_url, clip_count, follower_count, following_count")
+        .eq("id", creatorId)
+        .maybeSingle<CreatorStatsRow>();
+      if (error) throw mapPostgrestError(error);
+      if (!data) return null;
+
+      let followedByMe = false;
+      const { data: authData } = await client.auth.getUser();
+      if (authData.user && !authData.user.is_anonymous) {
+        const { count, error: followError } = await db
+          .from("follows")
+          .select("id", { count: "exact", head: true })
+          .eq("follower_id", authData.user.id)
+          .eq("followee_id", creatorId);
+        if (followError) throw mapPostgrestError(followError);
+        followedByMe = (count ?? 0) > 0;
+      }
+
+      return {
+        id: data.id,
+        name: data.name ?? "Athlete",
+        channel: data.channel_name ?? data.name ?? "Athlete",
+        avatarUrl: data.avatar_url,
+        clipCount: data.clip_count,
+        followerCount: data.follower_count,
+        followingCount: data.following_count,
+        followedByMe,
+      };
+    },
+
+    /** A creator's public grid: their `published` clips, newest first. The
+     * explicit `status='published'` filter is the same RLS-is-not-scoping
+     * guard as the feed (a visitor must not see a creator's pending clips). */
+    async getCreatorClips(creatorId: string): Promise<Clip[]> {
+      const { data, error } = await db
+        .from("clips")
+        .select(CLIP_FEED_SELECT)
+        .eq("owner_id", creatorId)
+        .eq("status", "published")
+        .order("created_at", { ascending: false })
+        .returns<ClipFeedRow[]>();
+      if (error) throw mapPostgrestError(error);
+      return (data ?? []).map((r) => mapClipRow(r, false));
+    },
+
+    /** The signed-in athlete's own clips for their own Clutch profile, in
+     * ANY status (an `uploading`/`processing`/`rejected` clip must show on
+     * the owner's own grid per PRD-01 FR-44), so this deliberately does NOT
+     * filter by status. RLS scopes the read to the caller's own rows. */
+    async getMyClips(): Promise<Clip[]> {
+      const { data: authData, error: authError } = await client.auth.getUser();
+      if (authError) throw mapAuthError(authError);
+      if (!authData.user) return [];
+
+      const { data, error } = await db
+        .from("clips")
+        .select(CLIP_FEED_SELECT)
+        .eq("owner_id", authData.user.id)
+        .order("created_at", { ascending: false })
+        .returns<ClipFeedRow[]>();
+      if (error) throw mapPostgrestError(error);
+      return (data ?? []).map((r) => mapClipRow(r, false));
+    },
+
+    /** v1 `clutch.upload` step 1 -> `stream-upload-url` edge function. Mints
+     * the one-time signed Storage upload URL and creates the `clips` row in
+     * `uploading` status server side; the client then PUTs the MP4 to
+     * `uploadUrl` (or `uploadToSignedUrl(path, token, file)`), never writing
+     * the clip row itself. See VIDEO.md. */
+    async requestUploadUrl(input: UploadClipInput): Promise<ClipUploadTicket> {
+      const { data, error } = await client.functions.invoke("stream-upload-url", {
+        body: { caption: input.caption, sport: input.sport, clip_id: input.clipId },
+      });
+      if (error) throw await mapEdgeFunctionError(error);
+
+      const body = data as {
+        clipId: string;
+        uploadUrl: string;
+        token: string;
+        path: string;
+        bucket: string;
+        status: ClipStatus;
+      };
+      return body;
+    },
+
+    /** v1 `clutch.upload` step 3 -> `stream-webhook` (on-upload finalizer).
+     * Called after the MP4 PUT completes; flips the clip to `ready` (into the
+     * moderation queue) and stores the client-captured thumbnail path. */
+    async finalizeUpload(clipId: string, thumbPath?: string): Promise<ClipUploadResult> {
+      const { data, error } = await client.functions.invoke("stream-webhook", {
+        body: { clip_id: clipId, thumb_path: thumbPath },
+      });
+      if (error) throw await mapEdgeFunctionError(error);
+
+      const body = data as { clipId: string; status: ClipStatus; outcome: string };
+      return body;
+    },
+
+    /** v1 feed/detail playback -> `get-clip-playback-url` edge function.
+     * Returns a SHORT-LIVED (300s) signed MP4 URL; call it per visible card
+     * and refresh on expiry, never store or hardcode the URL, never read the
+     * raw storage path (the bucket is private). 403 for a removed/rejected
+     * clip, or a non-owner reading an unpublished one. See VIDEO.md. */
+    async getPlaybackUrl(clipId: string): Promise<ClipPlayback> {
+      const { data, error } = await client.functions.invoke("get-clip-playback-url", {
+        body: { clip_id: clipId },
+      });
+      if (error) throw await mapEdgeFunctionError(error);
+
+      const body = data as {
+        clipId: string;
+        url: string;
+        thumbUrl: string | null;
+        expiresIn: number;
+        status: ClipStatus;
+      };
+      return body;
+    },
+  };
+}
+
+export type UseClutchResult = ReturnType<typeof useClutch>;
 
 // TODO(P6): empower. PostgREST + RPC (get_empower_stats,
 // get_my_impact_summary) + Edge Function `donate`. See API-MAPPING.md
