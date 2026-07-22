@@ -1153,12 +1153,12 @@ function makeClutchApi(client: AtlitosClient) {
 
 export type UseClutchResult = ReturnType<typeof useClutch>;
 
-// TODO(P6): empower. PostgREST + RPC (get_empower_stats,
-// get_my_impact_summary) + Edge Function `donate`. See API-MAPPING.md
-// "empower".
-export function useEmpower(_client: AtlitosClient) {
-  throw new Error("useEmpower is not implemented yet, see API-MAPPING.md empower");
-}
+// P6: empower (hub, UPA profile, donate, My Impact) is implemented in
+// `use-empower.ts` (AT-123, Track D), which owns `useEmpower` and re-exports it
+// from the package root. The placeholder that used to stand here was removed
+// rather than left beside the real implementation, because `index.ts`
+// re-exports both files and two exports of the same name would collide (the
+// same split `use-shop.ts` established). See API-MAPPING.md "empower".
 
 // TODO(P3/P8): wallet, notifications, help. RPC (get_coach_wallet_balance,
 // get_my_transactions) + PostgREST (notifications, support_tickets). See

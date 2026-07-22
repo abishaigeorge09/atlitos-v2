@@ -6,6 +6,7 @@ export * from "./client";
 export * from "./errors";
 export * from "./hooks";
 export * from "./use-coaching";
+export * from "./use-empower";
 export * from "./use-chat";
 export * from "./use-coach";
 export * from "./use-shop";
