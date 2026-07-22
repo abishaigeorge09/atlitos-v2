@@ -1,6 +1,6 @@
 # Phase 6 Status: Empower and Atlitos Life
 
-**Status: APPROVED at gate (2026-07-22), pending phase-close.** Stories AT-108 through AT-128 built and merged to main. Integrator pass green, biased approver cycle 1 verdict APPROVE (see the two sections at the end of this doc). Phase-close still owes the checklist tick-off, Jira reconciliation, and the P7 handoff note. This doc is the P6 contract and phase memory.
+**Status: CLOSED. APPROVED cycle 1 (2026-07-22), no escalation.** Stories AT-108 through AT-128 built and merged to main. Integrator pass green, biased approver cycle 1 verdict APPROVE (see the two sections at the end of this doc). Phase-close complete: checklist ticked, Jira reconciled, P7 handoff written (see the Phase-close section). This doc is the P6 contract and phase memory.
 
 Gate (docs/PLAN.md P6): "UPA apply/verify/wishlist/gratitude portal, donate + roundup real, My Impact. GATE: Journey 5 end to end."
 
@@ -99,37 +99,37 @@ PRD-06:
 Every builder ticket carries, as **step 0 inside its worktree**, `git merge main --no-edit` to pull all current phase work before building (worktree stale-base has bitten this build twice; a stale base is missing prior migrations, types, and edge functions).
 
 ### Track A: schema, RLS, state machines (opus)
-- [ ] AT-108 Empower schema migration: `upa_applications`, `upa_evidence`, `upa_wishlist_items`, `donations`, `gratitude_posts` per SCHEMA.md, plus the enums if not already present and the `users.show_donor_name` column; storage buckets `upa-evidence` (private), `upa-photos`, `gratitude-photos` (PRD-05 FR-1, FR-3, FR-11, FR-19; PRD-06 FR-1)
-- [ ] AT-109 Empower RLS: permissive-OR public (verified `upa_applications`/`upa_wishlist_items`/`gratitude_posts` rows only) beside owner-scoped; `funded_amount`/`status` excluded from the `WITH CHECK` allowed columns; `donations` takes NO authenticated write; storage.objects policies per RLS.md (PRD-05 FR-3, FR-9, FR-12, FR-13, FR-24; PRD-06 FR-1, FR-12)
-- [ ] AT-110 UPA application state machine + admin verify extension: submit/resubmit/reapply/deactivate RPCs raising `INVALID_TRANSITION`; extend `admin_approve_verification_request` for `applicant_type='upa'` (set `status='verified'`, `verified_at`, grant `upa` role, one audit row); wishlist item `open` to `funded` to `delivered` server-only transition RPC (PRD-05 FR-5, FR-6, FR-9, FR-10, FR-14, FR-27; PRD-04 verification)
+- [x] AT-108 Empower schema migration: `upa_applications`, `upa_evidence`, `upa_wishlist_items`, `donations`, `gratitude_posts` per SCHEMA.md, plus the enums if not already present and the `users.show_donor_name` column; storage buckets `upa-evidence` (private), `upa-photos`, `gratitude-photos` (PRD-05 FR-1, FR-3, FR-11, FR-19; PRD-06 FR-1)
+- [x] AT-109 Empower RLS: permissive-OR public (verified `upa_applications`/`upa_wishlist_items`/`gratitude_posts` rows only) beside owner-scoped; `funded_amount`/`status` excluded from the `WITH CHECK` allowed columns; `donations` takes NO authenticated write; storage.objects policies per RLS.md (PRD-05 FR-3, FR-9, FR-12, FR-13, FR-24; PRD-06 FR-1, FR-12)
+- [x] AT-110 UPA application state machine + admin verify extension: submit/resubmit/reapply/deactivate RPCs raising `INVALID_TRANSITION`; extend `admin_approve_verification_request` for `applicant_type='upa'` (set `status='verified'`, `verified_at`, grant `upa` role, one audit row); wishlist item `open` to `funded` to `delivered` server-only transition RPC (PRD-05 FR-5, FR-6, FR-9, FR-10, FR-14, FR-27; PRD-04 verification)
 
 ### Track B: donation payments, ledger, allocation, read layer (opus)
-- [ ] AT-111 `donate` edge function: re-price, validate verified + item not funded + `MIN_AMOUNT`, create `payment_intents` (`domain='donation'`), Razorpay order via `_shared/razorpay.ts` (PRD-06 FR-5, FR-7, FR-8, FR-15, FR-16, FR-19)
-- [ ] AT-112 `finalize-donation-payment.ts` + wire `case "donation"` into `_shared/finalize-payment.ts` (before the null `entity_id` check) and `describeAlreadyProcessed`: create `donations` row, item `funded_amount`/`funded` transition, balanced `debit platform`/`credit upa_fund(upa_id)` group, notification, atomic and idempotent (PRD-06 FR-5, FR-9, FR-17, FR-18)
-- [ ] AT-113 Roundup to General Fund allocation (the inherited P4 debt): define `GENERAL_FUND_ACCOUNT_REF` constant; forward-path change to `finalize-order-payment.ts` (credit General Fund + create `checkout_roundup` donation row in the order transaction); one-time idempotent reconciliation migration moving every historical `platform` roundup leg to the General Fund via a balanced reclass group with its donation row (PRD-06 FR-11; PHASE-4-STATUS.md D1)
-- [ ] AT-114 Empower ledger-derived read layer: `get_empower_stats()` (hub aggregate), `get_my_impact_summary()` (scoped to caller), UPA total-raised and item funded-progress derivations, `public_upa_profile` view/RPC (verified-only), all agreeing with the ledger, no denormalized balance (PRD-05 FR-18, FR-23; PRD-06 FR-3, FR-4, FR-12, FR-13, FR-14)
+- [x] AT-111 `donate` edge function: re-price, validate verified + item not funded + `MIN_AMOUNT`, create `payment_intents` (`domain='donation'`), Razorpay order via `_shared/razorpay.ts` (PRD-06 FR-5, FR-7, FR-8, FR-15, FR-16, FR-19)
+- [x] AT-112 `finalize-donation-payment.ts` + wire `case "donation"` into `_shared/finalize-payment.ts` (before the null `entity_id` check) and `describeAlreadyProcessed`: create `donations` row, item `funded_amount`/`funded` transition, balanced `debit platform`/`credit upa_fund(upa_id)` group, notification, atomic and idempotent (PRD-06 FR-5, FR-9, FR-17, FR-18)
+- [x] AT-113 Roundup to General Fund allocation (the inherited P4 debt): define `GENERAL_FUND_ACCOUNT_REF` constant; forward-path change to `finalize-order-payment.ts` (credit General Fund + create `checkout_roundup` donation row in the order transaction); one-time idempotent reconciliation migration moving every historical `platform` roundup leg to the General Fund via a balanced reclass group with its donation row (PRD-06 FR-11; PHASE-4-STATUS.md D1)
+- [x] AT-114 Empower ledger-derived read layer: `get_empower_stats()` (hub aggregate), `get_my_impact_summary()` (scoped to caller), UPA total-raised and item funded-progress derivations, `public_upa_profile` view/RPC (verified-only), all agreeing with the ledger, no denormalized balance (PRD-05 FR-18, FR-23; PRD-06 FR-3, FR-4, FR-12, FR-13, FR-14)
 
 ### Track C: Atlitos Life portal, web (sonnet)
-- [ ] AT-115 `apps/portal-life` auth, app shell, verified-route guard (non-verified routes redirect to `/status`), shadcn HSL token bridge, login/signup (PRD-05 FR-9, FR-24, FR-25; screen 1)
-- [ ] AT-116 Apply wizard: 4 steps with per-step draft autosave, certificate/PDF upload to the private bucket, external video URL validation, submission guard (PRD-05 FR-1, FR-2, FR-3, FR-4, FR-5, FR-8; screen 2)
-- [ ] AT-117 Verification Status roadmap: all states incl `needs_info` branch linking into the flagged `/apply` step and `rejected` with a reapply path, Realtime status update (PRD-05 FR-7, FR-8, FR-9, FR-10; screen 3)
-- [ ] AT-118 Dashboard, Wishlist Manager, Funding Progress Detail with Realtime funding, add/edit/remove gated by `open` and funded 0, item sub-states (PRD-05 FR-11, FR-12, FR-13, FR-15, FR-16, FR-17, FR-18; screens 4, 5, 6)
-- [ ] AT-119 Gratitude Posts (compose only for funded item without a post), Profile Preview (same query as the consumer public profile), Account Settings (PRD-05 FR-19, FR-20, FR-21, FR-22, FR-23, FR-26, FR-27; screens 7, 8, 9)
+- [x] AT-115 `apps/portal-life` auth, app shell, verified-route guard (non-verified routes redirect to `/status`), shadcn HSL token bridge, login/signup (PRD-05 FR-9, FR-24, FR-25; screen 1)
+- [x] AT-116 Apply wizard: 4 steps with per-step draft autosave, certificate/PDF upload to the private bucket, external video URL validation, submission guard (PRD-05 FR-1, FR-2, FR-3, FR-4, FR-5, FR-8; screen 2)
+- [x] AT-117 Verification Status roadmap: all states incl `needs_info` branch linking into the flagged `/apply` step and `rejected` with a reapply path, Realtime status update (PRD-05 FR-7, FR-8, FR-9, FR-10; screen 3)
+- [x] AT-118 Dashboard, Wishlist Manager, Funding Progress Detail with Realtime funding, add/edit/remove gated by `open` and funded 0, item sub-states (PRD-05 FR-11, FR-12, FR-13, FR-15, FR-16, FR-17, FR-18; screens 4, 5, 6)
+- [x] AT-119 Gratitude Posts (compose only for funded item without a post), Profile Preview (same query as the consumer public profile), Account Settings (PRD-05 FR-19, FR-20, FR-21, FR-22, FR-23, FR-26, FR-27; screens 7, 8, 9)
 
 ### Track D: consumer app Empower surfaces, mobile (sonnet)
-- [ ] AT-120 Empower Hub + UPA Public Profile: verified-only, aggregate banner from the ledger, combinable sport/region filters (filters affect grid only, stats unchanged), WishlistGrid with funded progress, all four states (PRD-06 FR-1, FR-2, FR-3, FR-4, FR-5, FR-20; screens 3.1, 3.2)
-- [ ] AT-121 Donation Flow: DonationSheet (configurable presets, custom, item preselect), `BillSummary` Donation + Total only, guest gate preserving UPA/item/amount context, processing/success/failed, `ITEM_FUNDED` mid-flow block; reuse the `react-native-razorpay` wrapper, no fork (PRD-06 FR-6, FR-7, FR-15, FR-17, FR-19; screen 3.3)
-- [ ] AT-122 Checkout roundup surfacing (checkbox default off from P4, attribute to General Fund in My Impact) + My Impact: total given, athletes/items counts, history with UPA name or General Fund, gratitude received, empty state, all ledger-scoped (PRD-06 FR-10, FR-11, FR-12, FR-13, FR-14, FR-18; screens 3.4, 3.5)
-- [ ] AT-123 `packages/api` `useEmpower` hooks: hub, profile, donate caller, My Impact, each independently handling loading/empty/error/loaded (PRD-06 FR-8, FR-20)
+- [x] AT-120 Empower Hub + UPA Public Profile: verified-only, aggregate banner from the ledger, combinable sport/region filters (filters affect grid only, stats unchanged), WishlistGrid with funded progress, all four states (PRD-06 FR-1, FR-2, FR-3, FR-4, FR-5, FR-20; screens 3.1, 3.2)
+- [x] AT-121 Donation Flow: DonationSheet (configurable presets, custom, item preselect), `BillSummary` Donation + Total only, guest gate preserving UPA/item/amount context, processing/success/failed, `ITEM_FUNDED` mid-flow block; reuse the `react-native-razorpay` wrapper, no fork (PRD-06 FR-6, FR-7, FR-15, FR-17, FR-19; screen 3.3)
+- [x] AT-122 Checkout roundup surfacing (checkbox default off from P4, attribute to General Fund in My Impact) + My Impact: total given, athletes/items counts, history with UPA name or General Fund, gratitude received, empty state, all ledger-scoped (PRD-06 FR-10, FR-11, FR-12, FR-13, FR-14, FR-18; screens 3.4, 3.5)
+- [x] AT-123 `packages/api` `useEmpower` hooks: hub, profile, donate caller, My Impact, each independently handling loading/empty/error/loaded (PRD-06 FR-8, FR-20)
 
 ### Track E: fixtures and copy (haiku)
-- [ ] AT-124 Empower seed fixtures: verified UPAs (varied sport/region), evidence, wishlist items across `open`/partial/`funded`/`delivered`, sample item and general donations, gratitude posts, one checkout-roundup General Fund donation; all seeds owner-scoped explicitly, and any isolation fixture uses two ids asserted to differ (PRD-05; PRD-06)
-- [ ] AT-125 House-style copy pass across all P6 portal-life and mobile Empower screens: no emoji, lucide only, no hyphen/em-dash in copy strings, mono tabular numerics on every amount/total/progress/count, tokens only, four states present (CLAUDE.md; DESIGN-LANGUAGE.md; PRD-01 FR-70)
+- [x] AT-124 Empower seed fixtures: verified UPAs (varied sport/region), evidence, wishlist items across `open`/partial/`funded`/`delivered`, sample item and general donations, gratitude posts, one checkout-roundup General Fund donation; all seeds owner-scoped explicitly, and any isolation fixture uses two ids asserted to differ (PRD-05; PRD-06)
+- [x] AT-125 House-style copy pass across all P6 portal-life and mobile Empower screens: no emoji, lucide only, no hyphen/em-dash in copy strings, mono tabular numerics on every amount/total/progress/count, tokens only, four states present (CLAUDE.md; DESIGN-LANGUAGE.md; PRD-01 FR-70)
 
 ### Track F: verification (opus)
-- [ ] AT-126 Donation money verification: real item-specific and general test donations, each a balanced `debit platform`/`credit upa_fund` group summing to 0.00, `funded_amount` updated atomically and reconciled with the ledger, `ITEM_FUNDED` race, `MIN_AMOUNT`, `PRICE_MISMATCH`, idempotency across `verify-payment` and `razorpay-webhook` (PRD-06 FR-5, FR-7, FR-9, FR-16, FR-17)
-- [ ] AT-127 Roundup allocation verification (the inherited debt): every historical `platform` roundup leg moved to the General Fund via a balanced reclass group, `donations` rows created, general fund balance equals the sum, forward order credits General Fund directly, no double count, My Impact shows the General Fund donation (PRD-06 FR-11; PHASE-4-STATUS.md D1)
-- [ ] AT-128 Non-vacuous RLS isolation and the verified gate: two donor ids asserted to DIFFER first, My Impact scoped to self, unverified UPA unresolvable by list or id, `donations` no client write, `funded_amount`/`status` not client-writable, gratitude only for funded items (PRD-05 FR-9, FR-24; PRD-06 FR-1, FR-12, FR-16)
+- [x] AT-126 Donation money verification: real item-specific and general test donations, each a balanced `debit platform`/`credit upa_fund` group summing to 0.00, `funded_amount` updated atomically and reconciled with the ledger, `ITEM_FUNDED` race, `MIN_AMOUNT`, `PRICE_MISMATCH`, idempotency across `verify-payment` and `razorpay-webhook` (PRD-06 FR-5, FR-7, FR-9, FR-16, FR-17)
+- [x] AT-127 Roundup allocation verification (the inherited debt): every historical `platform` roundup leg moved to the General Fund via a balanced reclass group, `donations` rows created, general fund balance equals the sum, forward order credits General Fund directly, no double count, My Impact shows the General Fund donation (PRD-06 FR-11; PHASE-4-STATUS.md D1)
+- [x] AT-128 Non-vacuous RLS isolation and the verified gate: two donor ids asserted to DIFFER first, My Impact scoped to self, unverified UPA unresolvable by list or id, `donations` no client write, `funded_amount`/`status` not client-writable, gratitude only for funded items (PRD-05 FR-9, FR-24; PRD-06 FR-1, FR-12, FR-16)
 
 ## Dependency order
 
@@ -212,3 +212,63 @@ All findings are advisory. The money proof is genuinely real and balanced, indep
 ```
 
 No punch list (verdict is APPROVE, not REJECT). Finish line remains TestFlight: P9 native pass (the founder's single native donation round-trip through the real Razorpay sheet) + P10 ship.
+
+---
+
+## Phase-close (2026-07-22)
+
+Closed on the cycle-1 APPROVE, no escalation. All 21 deliverables (AT-108..AT-128) ticked above. Jira reconciliation and P7 handoff below.
+
+### Approver-verified evidence (recorded so it is not lost)
+
+- **Ledger balance.** Whole DB: 16 ledger groups, 0 unbalanced. All 5 donation-domain groups are `debit platform / credit upa_fund`, net 0.00, with NO fee leg (PRD-06 FR-6).
+- **Roundup / General Fund.** General Fund `00000000-0000-4000-a000-0000000f0000` balance = 3.18, EXACTLY == the sum of all `checkout_roundup` donation rows (2 rows: 1 backfill + 1 forward). Platform roundup legs net 0.00 (nothing stranded). Backfill guard yields 0 remaining candidates (idempotent). Forward order credits the General Fund directly in its own commerce group.
+- **Client money-write lockout.** Under the `authenticated` role, `donations` INSERT, `ledger_entries` INSERT, `upa_applications.status` UPDATE, `upa_wishlist_items.funded_amount` UPDATE and `.status` UPDATE every one returns SQLSTATE 42501. Authenticated has UPDATE only on wishlist `cost/title/updated_at`.
+- **State machines + gratitude.** `verified->submitted` and wishlist `funded->open` both raise `INVALID_TRANSITION`. Gratitude enforced at schema+RLS: INSERT WITH CHECK requires `status='published'` + UPA ownership + item in (funded,delivered) + no existing post; UNIQUE(wishlist_item_id); public SELECT gated on verified UPA.
+- **Advisors + storage.** No new empower ERROR advisor (3 pre-existing non-empower `security_definer_view` ERRORs identical to the P5 baseline). `upa-evidence` bucket is private.
+
+### Open defects / carried advisories (none dropped, each with a deferral home)
+
+P6-specific (from the cycle-1 verdict):
+- `show_donor_name` column unwired: added per assumption 3 but no read path, so opted-in donors still render "A Sponsor" (MEDIUM). Wiring needs a finalize-time donor-name snapshot on the donation row, which is a money-path change. Deferred to P7/P8. Assumption 3 also owes founder ratification.
+- `get_empower_stats.items_funded` keys off `status='funded'` not ledger backing (LOW). Correct in production (status moves atomically with the ledger, not client-writable); only wrong for the hand-seeded fixture item-3. Carry.
+- Two fixture wishlist items (first-aid 2500, ground-rental 2000-of-2100) carry `funded_amount` without full donation backing (LOW). Fixture artifact only; re-seed via real donations. Deferred to fixture cleanup.
+- Track C PRD-05 FR-27 divergences, all acceptable-by-design: (a) verified-UPA story is read-only (0049 grants no client UPDATE, consistent with the financial invariant); (b) deactivate only from `submitted`/`under_review`, verified is terminal (verified self-withdraw is an out-of-P6 admin action); (c) sponsor names render "A Sponsor" (the show_donor_name item above).
+- Gratitude UI not driven on web this pass and Realtime funding / My Impact render not re-driven (data + schema+RLS layer fully proven). Web-verifiable happy-path render carried.
+
+Carried P1-P5 advisories (still open, none dropped):
+- Route not enabled on the test merchant (`ROUTE_UNAVAILABLE`); `record_transfer` success path unproven [P4/P8].
+- AT-88 refund not surfaced to the athlete in the shopper UI [P4].
+- Dark-mode mobile-web gap: mobile web does not follow OS dark; portals honor the in-app toggle [P3/P4/P5].
+- Native screen coverage deferred + the P9 native-pass debt: native Razorpay donation sheet, gestures/haptics [P3/P4/P5/P6].
+- `tmp-seed-demo-users` edge function still deployed (ACTIVE); remove before prod [P4/P5/P6].
+- TypeScript version skew across the workspace [P3/P4].
+- Accumulated RLS WARN debt (`auth_rls_initplan`, `multiple_permissive_policies`, `function_search_path_mutable`, `anon_security_definer_function_executable`, anon sign-ins); grew with the empower tables/RPCs [P1-P6].
+- The four PRD-02 coach assumptions the plan ships [P2].
+- AT-73 late-capture branch [P4].
+- PRD-01 assumptions: follow-graph list browse not built, no guest local persistence [P5].
+- The six PRD-05 + six PRD-06 P6 resolved-by-assumption questions (esp. show_donor_name needing founder ratification) [P6].
+
+### Founder must act on
+
+- **Ratify or reject the `show_donor_name` assumption** (assumption 3): P6 shipped a `users.show_donor_name` boolean default false, so all donors show "A Sponsor". Wiring the opt-in display is a deferred money-path change; confirm the default and the direction before P7/P8 builds it.
+- **Native pass is still owed at P9**: one real donation from a device through the native Razorpay sheet, then confirm item funded-progress and My Impact update. Everything upstream/downstream is proven on web.
+
+### Handoff notes for the P7 (Learn / XP) planner
+
+**Is P7 a money phase? Almost certainly NOT.** Learn / XP is progression and content, not payments. Do not add a payment domain, a ledger leg, an edge-function finalize handler, or a state machine on a money-bearing row unless a specific PRD-07 FR forces it. XP is not currency; model it as its own progression table, not through `ledger_entries`. Do not over-engineer against the money invariant where no money exists.
+
+**What P7 inherits that works (reuse, do not reinvent):**
+- The full payment/ledger/finalize-gate now spans FOUR domains (courts, sessions, commerce, donation) through ONE shared `_shared/finalize-payment.ts` dispatch. If P7 ever does touch money, it is one new `case` before the null-`entity_id` check plus one finalize handler, never a forked capture path.
+- The state-machine RPC + `audit_log` admin pattern: server-only transition RPCs raising `INVALID_TRANSITION`, admin actions writing one audit row (e.g. `admin_approve_verification_request`). Reuse this shape for any XP/level/unlock state transition instead of client-set status fields.
+- RLS permissive-OR discipline: any table that gains a public browse policy (a public leaderboard, published lessons) returns other rows to an unscoped select. Every owner read carries its own explicit `.eq(owner_id, user.id)` filter in app code, seeds, and tests; isolation tests assert the two party ids DIFFER before trusting the result (AT-62 lesson, this repo bitten four times).
+- The signed-URL private-media pattern from P5 (and the private `upa-evidence` bucket in P6) if P7 has media (lesson video, certificates): private bucket + service-role signed URLs, never a public bucket.
+- The `useShop`/`useClutch`/`useEmpower` data-lane pattern in `packages/api`: one hook per domain, each independently handling loading/empty/error/loaded. Add `useLearn` in the same shape.
+- The pressable-overlay card pattern for grids/lists; tokens-only (packages/theme mobile, portal HSL vars web); mono tabular figures on every numeric readout (XP counts, levels, streaks); lucide icon names only; no emoji; no hyphen/em-dash in copy strings; four states on every screen.
+
+**Process mandates carried into P7:**
+- **Worktree stale-base mandate:** every P7 builder ticket runs `git merge main --no-edit` as step 0 inside its worktree, before building. This gave a zero-conflict 4-way merge in P6 and prevents building against a base missing prior migrations, types, and edge functions.
+- **expo-router manifest gotcha:** after adding mobile routes, regenerate `.expo/types/router.d.ts` via a brief `expo start --web` before typecheck. `turbo typecheck` does not regenerate it, so a fresh route will fail typecheck against a stale router manifest. (It did not bite P6 only because routes were already registered; a new P7 Learn route will.)
+- Standard gate choreography holds: integrator runs `pnpm turbo typecheck build lint` green, deploys previews, captures light+dark evidence, then the biased approver. Max 2 fix cycles before founder escalation.
+
+**Finish line:** TestFlight. P9 native pass (the founder's single native donation round-trip) then P10 ship. P7 and P8 are still web-first; native is one consolidated pass at P9.
