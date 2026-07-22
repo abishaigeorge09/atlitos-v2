@@ -1,3 +1,5 @@
+import type { ReactElement } from 'react';
+
 import { Button } from '@/components/organisms/_shared';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
@@ -33,6 +35,9 @@ export interface WishlistUpaItem {
   imageUrl?: string;
   onPress: () => void;
   onFund: () => void;
+  /** PRD-06 3.2 fully funded state: the item reached its cost, so Fund This is
+   * replaced by a Funded marker rather than a live action (FR-5). */
+  funded?: boolean;
 }
 
 export type WishlistItem = WishlistProductItem | WishlistUpaItem;
@@ -45,9 +50,15 @@ export interface WishlistGridProps {
   variant: 'product' | 'upa';
   items: WishlistItem[];
   numColumns?: number;
+  /** Rendered above the grid inside the SAME FlatList (the UPA profile passes
+   * its story header here), so the whole screen is one scroller rather than a
+   * FlatList nested in a ScrollView. */
+  header?: ReactElement;
+  /** Shown when `items` is empty (the profile with no wishlist yet). */
+  emptyComponent?: ReactElement;
 }
 
-export function WishlistGrid({ variant, items, numColumns = 2 }: WishlistGridProps) {
+export function WishlistGrid({ variant, items, numColumns = 2, header, emptyComponent }: WishlistGridProps) {
   const colors = useThemeColors();
 
   return (
@@ -56,6 +67,8 @@ export function WishlistGrid({ variant, items, numColumns = 2 }: WishlistGridPro
       key={numColumns}
       numColumns={numColumns}
       keyExtractor={(item) => item.id}
+      ListHeaderComponent={header}
+      ListEmptyComponent={emptyComponent}
       columnWrapperStyle={numColumns > 1 ? { gap: spacing.md } : undefined}
       contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}
       renderItem={({ item }) => (
@@ -182,9 +195,24 @@ function UpaProgress({ item }: { item: WishlistUpaItem }) {
           {formatINR(item.fundedAmount)} of {formatINR(item.cost)}
         </Text>
       </View>
-      <Button size="sm" onPress={item.onFund}>
-        <Text style={[textStyle('label'), { color: colors.inkOnAccent }]}>Fund this</Text>
-      </Button>
+      {item.funded ? (
+        <View
+          pointerEvents="none"
+          style={{
+            minHeight: 36,
+            borderRadius: radii.sm,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: colors.successTint,
+          }}
+        >
+          <Text style={[textStyle('label'), { color: colors.success }]}>Funded</Text>
+        </View>
+      ) : (
+        <Button size="sm" onPress={item.onFund}>
+          <Text style={[textStyle('label'), { color: colors.inkOnAccent }]}>Fund this</Text>
+        </Button>
+      )}
     </View>
   );
 }

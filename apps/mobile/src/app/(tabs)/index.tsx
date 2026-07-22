@@ -104,12 +104,10 @@ export default function HomeScreen() {
                 <Text style={[textStyle('h3'), { color: colors.text }]}>Support an athlete</Text>
               </View>
               <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
-                Fund a verified athlete's gear or fees directly, once Empower ships.
+                Fund a verified athlete's gear or fees directly through Empower.
               </Text>
-              <Button variant="secondary" disabled={!isGuest} onPress={openGate}>
-                <Text style={[textStyle('label'), { color: colors.text }]}>
-                  {isGuest ? 'Donate' : 'Coming soon'}
-                </Text>
+              <Button variant="secondary" onPress={() => router.push('/home/empower')}>
+                <Text style={[textStyle('label'), { color: colors.text }]}>Explore Empower</Text>
               </Button>
             </View>
 
