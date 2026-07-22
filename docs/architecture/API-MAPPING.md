@@ -225,6 +225,14 @@ Client wiring lives in `apps/portal-court/src/lib/onboarding.ts`, one typed modu
 | `donate` | POST `/empower/donate` | Edge Function | `donate` | body `{ upa_id, item_id?, amount, expected_total?, method? }`; validates the UPA is still verified and the item not already funded at request time (independent of client cache), rounds/floors `amount` server side, writes ONLY `payment_intents` (`domain='donation'`, `entity_id` NULL) + a `donation_drafts` staging row + the Razorpay order. The `donations` row, `ledger_entries` group (`debit platform / credit upa_fund(upa_id)`, no fee leg) and `upa_wishlist_items.funded_amount` are written atomically ON CAPTURE by `finalize-donation-payment` (the 4th branch of the shared finalize gate). Error codes: `NOT_FOUND` 404 (UPA not verified or item missing), `ITEM_FUNDED` 409, `MIN_AMOUNT` 422, `PRICE_MISMATCH` 409, `RAZORPAY_ERROR` 502 |
 | `myImpact` | GET `/empower/impact` | PostgREST + RPC | `donations` select (own) + `get_my_impact_summary()` | summary RPC reads `ledger_entries`/`donations` scoped to `auth.uid()`, never a client-side sum of a possibly-stale local list |
 
+## learn (P7, AT-132)
+
+| v1 fn | v1 route | v2 lane | Function / RPC | Note |
+|---|---|---|---|---|
+| `learnHome` | GET `/learn/home` | RPC | `get_learn_home()` | SECURITY DEFINER, self-scoped to `auth.uid()`. Returns jsonb `{ sport, xp_total, current_stage, next_stage, stages[], milestones[] }`. `xp_total` is DERIVED `sum(xp_events.xp_amount)` (no counter column); `current_stage` is the top `roadmap_stages.stage_order` for the player's primary sport (`athlete_sports.is_primary`) whose `xp_threshold <= xp_total`; `milestones[]` each carry an `earned` flag from the caller's `user_milestones`. `sport: null` => the FR-48 empty state. `authenticated`/`service_role` only |
+| `drillLibrary` | GET `/learn/drills` | PostgREST | `drills` select | consumer read MUST carry its own `.eq('active', true)` (permissive-OR public catalog, RLS.md). Filterable by `sport`/`difficulty` |
+| `markDrillComplete` | POST `/learn/drills/:id/complete` | PostgREST | `drill_completions` insert (own row) | the ONE client write in the XP path. The `0059` `AFTER INSERT` trigger appends the `xp_events` row (amount server-read) and unlocks milestones; a duplicate fails `UNIQUE(user_id, drill_id)` (idempotent, no redo) |
+
 ## wallet / notifs / help
 
 | v1 fn | v1 route | v2 lane | Function / RPC | Note |
