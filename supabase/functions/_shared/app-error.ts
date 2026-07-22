@@ -102,4 +102,9 @@ const STATUS_BY_CODE: Record<string, number> = {
   // AT-82: admin-order-advance refusing to relay `placed -> cancelled`
   // because the refund path it would owe the shopper is not a P4 story.
   CANCEL_NOT_AVAILABLE: 409,
+  // AT-111 (donate), the fourth payment domain. MIN_AMOUNT is a 422 (the
+  // request was well formed but under the donation floor); ITEM_FUNDED is a 409
+  // (the item's state refused a second sponsor, resolvable by picking another).
+  MIN_AMOUNT: 422,
+  ITEM_FUNDED: 409,
 };

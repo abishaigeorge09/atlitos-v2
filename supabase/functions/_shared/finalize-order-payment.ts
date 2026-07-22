@@ -90,6 +90,13 @@ import { round2 } from "./fee-config.ts";
 import { razorpayRequest } from "./razorpay.ts";
 import type { CapturedIntent, FinalizeResult } from "./finalize-payment.ts";
 
+// The reserved General Fund ledger anchor (AT-113). The TS mirror of the
+// Postgres source of truth public.general_fund_account_ref() (0048); a fixed
+// sentinel account_ref, NO foreign key, for upa_fund credits that belong to the
+// platform general fund (checkout roundups, PRD-06 FR-11) rather than a specific
+// UPA. Kept byte-for-byte identical to the SQL constant; do not diverge.
+export const GENERAL_FUND_ACCOUNT_REF = "00000000-0000-4000-a000-0000000f0000";
+
 interface OrderRow {
   id: string;
   order_number: string;
@@ -153,12 +160,32 @@ export async function finalizeOrderCaptured(
  * commerce ledger row already exists for this order, the group was written by
  * an earlier call and writing it again would double the platform's recorded
  * revenue for one sale.
+ *
+ * AT-113 FORWARD ARM. The roundup leg no longer parks on `platform`: it credits
+ * the General Fund upa_fund account_ref DIRECTLY, in this same order group, and
+ * a `checkout_roundup` donations row (upa_id NULL = General Fund, order_id set,
+ * donor = the buyer) is written alongside it. So no future backfill is ever owed
+ * for orders from P6 on. The group still balances exactly:
+ *   debit platform total = credit platform revenue + credit upa_fund(general) roundup.
+ * The zero-roundup invariant is unchanged: no roundup means no third leg and no
+ * donations row (a 0.00 leg would balance while recording a donation that never
+ * happened).
  */
 async function writeCommerceLedgerGroup(
   supabase: SupabaseClient,
   intent: CapturedIntent,
   order: OrderRow,
 ): Promise<void> {
+  const roundup = round2(order.donation_roundup);
+
+  // The roundup's donations row, idempotent on (order_id, checkout_roundup), so
+  // it and the upa_fund credit below are each written at most once even across
+  // a re-entry. Written before the ledger so both halves of the allocation are
+  // attempted together.
+  if (roundup > 0) {
+    await ensureRoundupDonationRow(supabase, intent, order, roundup);
+  }
+
   const { data: existing, error: existingError } = await supabase
     .from("ledger_entries")
     .select("id")
@@ -176,7 +203,6 @@ async function writeCommerceLedgerGroup(
   if (existing && existing.length > 0) return;
 
   const entryGroupId = crypto.randomUUID();
-  const roundup = round2(order.donation_roundup);
   const revenue = round2(order.total - roundup);
 
   const legs: Record<string, unknown>[] = [
@@ -204,20 +230,20 @@ async function writeCommerceLedgerGroup(
     },
   ];
 
-  // The zero case writes no third leg. See the header: a 0.00 donation leg
-  // would balance and would record a donation that never happened.
+  // The roundup leg credits the General Fund DIRECTLY (AT-113 forward arm), no
+  // longer platform. Still no third leg when the roundup is zero.
   if (roundup > 0) {
     legs.push({
       entry_group_id: entryGroupId,
       payment_intent_id: intent.id,
-      account_type: "platform",
-      account_ref: null,
+      account_type: "upa_fund",
+      account_ref: GENERAL_FUND_ACCOUNT_REF,
       direction: "credit",
       amount: roundup,
       domain: "commerce",
       entity_id: order.id,
       description:
-        `Donation roundup held for Empower allocation, order ${order.order_number}`,
+        `Donation roundup allocated to general fund, order ${order.order_number}`,
     });
   }
 
@@ -227,6 +253,68 @@ async function writeCommerceLedgerGroup(
     throw new AppError(
       "INTERNAL",
       `Failed to write ledger_entries for order ${order.id}: ${ledgerError.message}`,
+      500,
+    );
+  }
+}
+
+/**
+ * The `checkout_roundup` donations row for a new order's roundup (AT-113). upa_id
+ * NULL means the platform General Fund. Idempotent on (order_id, method): a row
+ * already present means an earlier delivery wrote it, so this is a no-op. The
+ * donor is the order's buyer, read from payment_intents (the intent this capture
+ * belongs to) rather than trusting anything client supplied.
+ */
+async function ensureRoundupDonationRow(
+  supabase: SupabaseClient,
+  intent: CapturedIntent,
+  order: OrderRow,
+  roundup: number,
+): Promise<void> {
+  const { data: existing, error: existingError } = await supabase
+    .from("donations")
+    .select("id")
+    .eq("order_id", order.id)
+    .eq("method", "checkout_roundup")
+    .limit(1);
+
+  if (existingError) {
+    throw new AppError(
+      "INTERNAL",
+      `Failed to check existing roundup donation for order ${order.id}: ${existingError.message}`,
+      500,
+    );
+  }
+  if (existing && existing.length > 0) return;
+
+  const { data: intentRow, error: intentError } = await supabase
+    .from("payment_intents")
+    .select("user_id")
+    .eq("id", intent.id)
+    .single<{ user_id: string }>();
+
+  if (intentError || !intentRow) {
+    throw new AppError(
+      "INTERNAL",
+      `Failed to resolve buyer for roundup donation on order ${order.id}: ${intentError?.message}`,
+      500,
+    );
+  }
+
+  const { error: insertError } = await supabase.from("donations").insert({
+    donor_id: intentRow.user_id,
+    upa_id: null,
+    item_id: null,
+    amount: roundup,
+    method: "checkout_roundup",
+    order_id: order.id,
+    payment_intent_id: intent.id,
+  });
+
+  if (insertError) {
+    throw new AppError(
+      "INTERNAL",
+      `Failed to write roundup donation for order ${order.id}: ${insertError.message}`,
       500,
     );
   }

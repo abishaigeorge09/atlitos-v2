@@ -36,6 +36,10 @@ import {
   describeOrder,
   finalizeOrderCaptured,
 } from "./finalize-order-payment.ts";
+import {
+  describeDonation,
+  finalizeDonationCaptured,
+} from "./finalize-donation-payment.ts";
 
 export type FinalizeOutcome = "captured" | "already_processed";
 
@@ -108,10 +112,19 @@ export async function finalizePaymentCaptured(
     return await finalizeOrderCaptured(supabase, intent);
   }
 
+  // DONATION RUNS BEFORE THE NULL entity_id CHECK, DELIBERATELY (AT-112), for
+  // the same reason commerce does: donation is a domain whose entity row (the
+  // donations row) is created BY its handler, so a null entity_id here is the
+  // NORMAL first-delivery case, not an error. The handler backfills entity_id
+  // once the donations row exists.
+  if (intent.domain === "donation") {
+    return await finalizeDonationCaptured(supabase, intent);
+  }
+
   if (!intent.entity_id) {
-    // Domains whose row is created by the webhook itself (donation) are not
-    // built in this phase. Acknowledge the capture rather than pretending an
-    // unimplemented domain was handled.
+    // Every remaining domain hands the gate an entity that already exists, so a
+    // null entity_id here means something is wrong. Acknowledge the capture
+    // rather than pretending an unhandled domain was finalized.
     return {
       outcome: "captured",
       domain: intent.domain,
@@ -177,6 +190,8 @@ async function describeAlreadyProcessed(
       entityStatus = await describeSession(supabase, existing.entity_id);
     } else if (existing.domain === "commerce") {
       entityStatus = await describeOrder(supabase, existing.entity_id);
+    } else if (existing.domain === "donation") {
+      entityStatus = await describeDonation(supabase, existing.entity_id);
     }
   }
 
