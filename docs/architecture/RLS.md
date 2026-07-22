@@ -330,6 +330,21 @@ Per PLAN.md's verification section, the Supabase RLS advisor runs at every phase
 
 The P8 hardening pass burned down the fixable advisor debt without changing any access set, and signs off the by-design residual here. Live baseline `syzzfgaudpifwvbpycyi`, 2026-07-22. Migrations `0062`, `0063`, `0064`.
 
+| Advisor class | Level | Before | After | Disposition |
+|---|---|---|---|---|
+| `auth_rls_initplan` | WARN | 100 | 0 | FIXED, `0062` (subselect wrap) |
+| `multiple_permissive_policies` | WARN | 43 | 21 | 22 FIXED `0063`; 21 KEEP (public+owner / FOR ALL, cross-role-set merge would risk widening anon) |
+| `function_search_path_mutable` | WARN | 14 | 5 | 9 FIXED `0064`; 5 KEEP (supabase_admin-owned range constructors, not app-alterable, inert) |
+| `security_definer_view` | ERROR | 3 | 3 | KEEP by design (deliberate column/reservation surface) |
+| `authenticated_security_definer_function_executable` | WARN | 55 | 55 | KEEP by design (RPC state-machine gate) |
+| `anon_security_definer_function_executable` | WARN | 13 | 13 | KEEP by design (audited anon-callable subset) |
+| `auth_allow_anonymous_sign_ins` | WARN | 61 | 61 | KEEP by design (guest mode is a product requirement) |
+| `auth_leaked_password_protection` | WARN | 1 | 1 | FOUNDER/config (dashboard toggle) |
+| `public_bucket_allows_listing` | WARN | 4 | 4 | FOUNDER/config (public buckets by design; tighten listing if safe) |
+| `rls_enabled_no_policy` | INFO | 4 | 4 | KEEP (fail-closed: `stock_reservations`, `webhook_events`, etc.) |
+
+No new ERROR was introduced. The residual accepted count the biased approver signs against: 3 ERROR (all KEEP `security_definer_view`) and the WARN residual above, every item dispositioned below.
+
 ### What was fixed
 
 - **`auth_rls_initplan`, 100 WARN -> 0 (`0062`, AT-140).** Every RLS policy that called `auth.uid()` directly re-evaluated it per row. `0062` wraps each call in a scalar subselect `(select auth.uid())` via `ALTER POLICY` (expression-only; roles, command, and permissive/restrictive flags are preserved verbatim, so the access set cannot change). Performance-only, the documented Supabase remediation for lint 0003.
