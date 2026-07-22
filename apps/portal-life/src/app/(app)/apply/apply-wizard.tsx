@@ -13,6 +13,8 @@ import {
   Upload,
 } from "lucide-react";
 
+import type { Json } from "@atlitos/types";
+
 import { createClient } from "@/lib/supabase/client";
 import type { UpaApplication } from "@/lib/empower";
 import { sportLabel, type Sport } from "@/lib/format";
@@ -223,7 +225,7 @@ export function ApplyWizard({
       region: draft.region.trim(),
       state: draft.state.trim(),
       photoUrl: draft.photoUrl,
-    };
+    } as unknown as Json;
 
     try {
       let appId: string | undefined;
@@ -232,16 +234,16 @@ export function ApplyWizard({
           p_application_id: application.id,
           p_payload: payload,
         });
-        if (error) throw error;
-        appId = (data as { id: string } | null)?.id;
+        if (error) throw new Error(error.message);
+        appId = data?.id;
       } else if (mode === "reapply") {
         const { data, error } = await supabase.rpc("reapply_upa_application", { p_payload: payload });
-        if (error) throw error;
-        appId = (data as { id: string } | null)?.id;
+        if (error) throw new Error(error.message);
+        appId = data?.id;
       } else {
         const { data, error } = await supabase.rpc("submit_upa_application", { p_payload: payload });
-        if (error) throw error;
-        appId = (data as { id: string } | null)?.id;
+        if (error) throw new Error(error.message);
+        appId = data?.id;
       }
       if (!appId) throw new Error("VALIDATION: no application id returned");
 
