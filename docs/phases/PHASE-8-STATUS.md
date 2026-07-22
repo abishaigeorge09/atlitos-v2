@@ -1,5 +1,8 @@
 # Phase 8 Status: Search + Notifications + Hardening
 
+**STATUS: APPROVED (biased approver, cycle 1, no escalation). Dated 2026-07-22. CLOSED.**
+**This closes the entire autonomous build P0-P8. Only ship stages P9 (native) and P10 (TestFlight) remain, both founder-gated. See `docs/phases/BUILD-COMPLETE.md` and `docs/phases/SHIP-HANDOFF.md`.**
+
 The LAST autonomous build phase. After the P8 gate come the ship stages P9 (native verification) and P10 (TestFlight), which genuinely need the founder.
 
 PLAN.md P8 line (the contract): "Search + Notifications + Hardening: ai-search, push, states pass, RLS/advisor audit, 5-journey regression, perf, docs freeze. GATE: full sign-off, then the ship stages."
@@ -43,20 +46,20 @@ P8 CANNOT self-serve these. The gate passes on autonomous hardening + green 5-jo
 
 ## Deliverables checklist
 
-- [ ] `AT-140` initplan subselect wrap + function_search_path fix migration (opus)
-- [ ] `AT-141` multiple_permissive_policies collapse migration (opus)
-- [ ] `AT-142` advisor disposition + RLS.md sign-off (opus)
-- [ ] `AT-143` states pass audit, findings + any client-writable leak fix (opus)
-- [ ] `AT-144` ai-search edge function, v1 heuristic behind contract (sonnet)
-- [ ] `AT-145` search surface, mobile discovery (sonnet)
+- [x] `AT-140` initplan subselect wrap + function_search_path fix migration (opus). Migrations `0062` (100 ALTER POLICY, wrap `auth.uid()` in `(select ...)`, initplan 100->0) + `0064` (search_path 14->5, 5 residual are non-app-alterable range constructors, KEEP). Isolation before==after (0-row diff, 6 viewers x 20 tables).
+- [x] `AT-141` multiple_permissive_policies collapse migration (opus). Migration `0063` (guarded DO block, 22 authenticated-only pure-SELECT tables merged to one OR policy each), permissive 43->21. Residual 21 = by-design public+owner / FOR ALL+public overlaps. Re-proven non-vacuously (ids asserted to DIFFER, before==after 0-row diff).
+- [x] `AT-142` advisor disposition + RLS.md sign-off (opus). KEEP set (3 security_definer_view ERROR, 55+13 security-definer fns, 61 anon sign-ins, 4 bucket-listing, 1 leaked-password) dispositioned + signed off in RLS.md.
+- [x] `AT-143` states pass audit, findings + any client-writable leak fix (opus). Self-unsuspend escalation closed via migration `0065` (`users.status` FIELD_LOCKED / `lock_user_admin_fields`). No client-writable status field on any money- or state-bearing row.
+- [x] `AT-144` ai-search edge function, v1 heuristic behind contract (sonnet). `supabase/functions/ai-search`, userScopedClient (auth-only, guest 401 by design), `rerank()` identity seam for LLM swap. Leaks no non-public rows (non-owner sees 0 inactive products / non-published clips / non-verified UPAs).
+- [x] `AT-145` search surface, mobile discovery (sonnet). Route `/home/search`, house-style copy clean.
 - [x] `AT-146` notify-dispatch fan-out + notification row-writing wired into sources (sonnet). Built `supabase/functions/notify-dispatch` + shared orchestration `_shared/notify.ts` (deployed, ACTIVE, service-role-only); device push STUBBED behind `deliverToDevice()` TODO(P9). Migration `0066_verification_decision_notification` wires the deferred FR-9/FR-10 verification-decision notification into `admin_approve/reject_verification_request`. Owner-scoping + no-forge proven non-vacuously (two distinct ids, own_visible 1 / others_visible 0, cross-user mark-read 0 rows, authenticated insert rejected).
 - [x] `AT-147` in-app notification surface + prefs screen, mobile (sonnet). `packages/api/src/use-notifications.ts` (owner-scoped list/unreadCount/markRead/markAllRead/listPrefs/setPref/subscribe), routes `apps/mobile/src/app/notifications/{index,preferences}.tsx`, reached from the Home AppBar bell (badge wired via `unreadCount`). NEW mobile routes `/notifications` and `/notifications/preferences`.
 - [x] `AT-148` AT-88 refund surfaced to cancelled-session athlete, PRD-02 FR-35 (sonnet) DONE (Track E). Shared `readRefundSummary` (payer-scoped, no money write); real FR-35 refund `rfnd_TFhrCu5zWLRuzd` shown with a status-keyed heading.
 - [x] `AT-149` show_donor_name finalize-time snapshot + read path, PRD-05 FR-17 (opus, money-path) DONE (Track E). Migration `0067_donation_donor_name_snapshot` adds `donations.donor_display_name`, snapshotted in `record_donation_from_draft` iff opted-in; portal reads the snapshot. Amounts/ledger untouched.
 - [x] `AT-150` carried verifications: AT-25 date filter, AT-26 sweep coverage, AT-73 late-capture, TS skew (sonnet) DONE (Track E, see disposition below). TS skew fixed (mobile pinned `~5.9.3`).
-- [ ] `AT-151` perf pass: admin bundle, FK indexes, N+1s (sonnet)
-- [ ] `AT-152` docs freeze: SCHEMA/RLS/PAYMENTS/API-MAPPING/VIDEO reconcile + P9/P10 handoff (sonnet)
-- [ ] `AT-153` 5-journey regression, the gate proof (opus)
+- [x] `AT-151` perf pass: admin bundle, FK indexes, N+1s (sonnet). Migrations `0068` (26 FK covering indexes) + `0069` (drop redundant duplicate indexes); admin vendor chunk split cleared the >500kB bundle warning. Advisor unindexed_foreign_keys cleared.
+- [x] `AT-152` docs freeze: SCHEMA/RLS/PAYMENTS/API-MAPPING/VIDEO reconcile + P9/P10 handoff (sonnet). All five architecture docs reconciled to shipped reality; `docs/phases/SHIP-HANDOFF.md` is the start-cold P9/P10 checklist. One drift corrected (donor-snapshot 0066->0067).
+- [x] `AT-153` 5-journey regression, the gate proof (opus). J1-J5 driven scripted-real against live `syzzfgaudpifwvbpycyi` AFTER all P8 migrations; all green, ids asserted to DIFFER in every isolation check. Evidence `docs/phases/evidence/p8-web/VERIFICATION.md` (transcribed/SQL, browser MCP could not write PNGs). Independently re-derived by the approver.
 
 ## Work breakdown, parallel builder tracks with model tiers
 
@@ -232,3 +235,28 @@ Evidence note: the p8-web regression is transcribed (VERIFICATION.md), not PNG, 
 - Every builder ticket runs `git merge main --no-edit` as step 0 inside its worktree (stale base misses prior migrations/types/edge functions).
 - Any ticket adding a mobile route regenerates `.expo/types/router.d.ts` via a brief `expo start --web` before typecheck (turbo typecheck does not regenerate it).
 - CLAUDE.md house rules: tokens only, JetBrains Mono tabular numerics, lucide icons only, no emoji, no hyphen/em-dash in copy, BillSummary on every money surface, no client money/status writes, permissive-OR owner-scoping with ids asserted to DIFFER in isolation tests.
+
+## Phase-close (2026-07-22, closes P0-P8)
+
+Closed on the cycle-1 APPROVE (no escalation, gate commit `f14134a`). All deliverables AT-140..AT-153 ticked above.
+
+**Approver's independently-verified gate evidence (read-only SQL under real role/JWT, not service role, ids asserted to DIFFER first):**
+- RLS burn-down changed NO access set: 143 policies; non-owner (B) sees 0 rows on all 11 sensitive tables (orders, sessions, payment_intents, ledger_entries, donations, notifications, xp_events, drill_completions, cart_items, addresses, unpublished clips); public reads all return rows (verified coaches 2, active products 14, published clips 4, active drills 12, active courts 5, verified UPA 1); non-vacuous and balanced.
+- Whole-DB ledger: 21 groups, 0 unbalanced, global net 0.00, 51 legs.
+- Self-unsuspend escalation CLOSED: `users.status` FIELD_LOCKED (P0001 via `lock_user_admin_fields`); same-value no-op permitted, real change refused.
+- All 5 journeys green end to end after the migrations.
+- ai-search leaks no non-public rows (non-owner sees 0 of 4 inactive products / 10 non-published clips / 3 non-verified UPAs; 2 public coaches positive control).
+- Notifications owner-scoped; forge INSERT under non-owner JWT refused 42501; client writes to ledger_entries + donations both 42501.
+- Advisors: `auth_rls_initplan` 100->0, `multiple_permissive_policies` 43->21 (residual by-design public+owner/admin overlaps), `function_search_path_mutable` 14->5, 0 new ERROR; KEEP set (3 `security_definer_view`) unchanged.
+- Perf: `unindexed_foreign_keys` cleared, admin bundle warning cleared.
+
+Full itemized verdict retained above under "Biased approver verdict (cycle 1)". Non-blocking advisories retained under "Advisories" (none dropped). All founder-blocked and carried items detailed in `docs/phases/SHIP-HANDOFF.md`.
+
+### History (folded from PHASE-8-CHECKPOINT.md, now deleted)
+
+Track A RLS + advisor burn-down (AT-140/141/142), applied to `syzzfgaudpifwvbpycyi`:
+- Baseline 2026-07-22: perf 143 WARN / 41 INFO (initplan 100, permissive 43, unindexed_fk 26 INFO, unused_index 14 INFO); security 3 ERROR (security_definer_view) / 148 WARN / 4 INFO (function_search_path 14).
+- `0062_advisor_initplan_subselect`: 100 ALTER POLICY wrapping `auth.uid()` in `(select ...)`, initplan 100->0. Isolation before vs after = 0-row diff (6 viewers x 20 tables).
+- `0063_advisor_permissive_collapse`: guarded DO block, 22 authenticated-only pure-SELECT tables merged to one OR policy each, permissive 43->21. Residual 21 = Category B (public+owner or FOR ALL+public) by design. Before vs after = 0-row diff.
+- `0064_advisor_function_search_path`: 9 postgres-owned functions `SET search_path=''`, search_path 14->5. The 5 residual are supabase_admin-owned range constructors, not app-alterable, inert, KEEP. Auth-hook JWT injection re-verified (returns ["player"]).
+- Isolation harness (`_rls_audit` + probes, ids asserted to DIFFER) dropped after the pass; before == after_0062 == after_0063 == after_0064 (0-row diff each).
