@@ -774,6 +774,13 @@ The empower machines follow the orders/sessions/clips pattern: `upa_application_
 
 `users.show_donor_name` (`0048`, boolean, default false): donor name visibility opt-in (PRD-05 FR-17 / PRD-06 anonymization); donations render as "A Sponsor" unless the donor opts in. Resolved-by-assumption 3 in PHASE-6-STATUS.md.
 
+### Track B additions (donations, allocation, read layer)
+- `donation_drafts` (`0053`): the standalone-donation staging row (`payment_intent_id` PK, `donor_id`, `upa_id` NOT NULL, `item_id?`, `amount`), the `order_drafts` analog. Written and read ONLY under the service role, by `donate` and `finalize-donation-payment`; the `donations` row does not exist until capture.
+- `fee_config` `donations.min_amount` (`0053`, seeded flat `10.00`): the `MIN_AMOUNT` donation floor, read via the shared `getActiveFeeConfig` helper.
+- `record_donation_from_draft(payment_intent_id)` (`0054`, `security definer`, `service_role`-only): the atomic state half of the donation finalize (donations row + `funded_amount` increment under a row lock + `open -> funded` flip + owner notification), idempotent on `payment_intent_id`. The balanced ledger group `debit platform / credit upa_fund(upa_id)` (no fee leg) is written by the edge function afterwards.
+- Roundup allocation (`0055`): forward path credits the General Fund anchor directly from `finalize-order-payment` + a `checkout_roundup` `donations` row per order; the one-time backfill reclassified every historical `platform` roundup leg to the General Fund via a balanced `debit platform / credit upa_fund(general)` group, idempotent on one `checkout_roundup` donation per order.
+- Read layer (`0056`, all `security definer`, ledger-derived, no denormalized balance column): `upa_fund_balance(account_ref)`, `general_fund_balance()`, `get_empower_stats()` (hub aggregate, anon-callable), `get_my_impact_summary()` (`auth.uid()`-scoped), `public_upa_profile(upa_id)` (verified-only, NULL otherwise).
+
 ---
 
 ## Domain: learn
