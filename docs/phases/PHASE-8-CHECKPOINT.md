@@ -16,7 +16,7 @@ Harness: public._rls_probe_r + _rls_capture + _rls_anon_probe -> public._rls_aud
 
 ## Migrations
 - [x] 0062_advisor_initplan_subselect.sql — APPLIED. 100 ALTER POLICY, wrap auth.uid() in (select ...). Perf initplan 100->0. Isolation: before vs after_0062 diff = 0 rows (identical for all 6 viewers x 20 tables). 
-- [ ] 0063 permissive collapse (Category A only: 22 tables, same-roleset pure-SELECT authenticated policies merged with OR). 43 -> 21 expected.
+- [x] 0063_advisor_permissive_collapse.sql — APPLIED (DO block, guarded). 22 Category-A tables (authenticated-only pure-SELECT) merged to one OR policy each. multiple_permissive 43 -> 21. Isolation: before vs after_0063 diff = 0 rows. Non-owner (B_guest, C_coach) see 0 of A's rows on orders/PI/order_items/refunds/transfers/ledger; sessions/donations nonzero-for-C are by-design dual-key (identical before/after). Remaining 21 = Category B (public+owner or FOR ALL+public), left by design.
 - [ ] 0064 function_search_path_mutable (14 -> 0).
 
 ## Cleanup owed
