@@ -11,6 +11,8 @@ import type {
   CourtBooking,
   CourtBookingStatus,
   Json,
+  SearchInput,
+  SearchResponse,
   Sport,
   TimeSlot,
 } from "@atlitos/types";
@@ -254,10 +256,39 @@ export type UseProfileResult = ReturnType<typeof useProfile>;
 // schema domain migration lands (see docs/PLAN.md "Schema domains").
 // ---------------------------------------------------------------------------
 
-// TODO(P8): search. Edge Function `ai-search`. See API-MAPPING.md "search".
-export function useSearch(_client: AtlitosClient) {
-  throw new Error("useSearch is not implemented yet, see API-MAPPING.md search");
+/**
+ * v1 `search.aiSearch` -> `ai-search` edge function (API-MAPPING.md "search",
+ * AT-144). The v1 heuristic runs server side (keyword to entityTypes, weighted
+ * distance/price/rating score) behind the same request/response contract; this
+ * hook only shapes the request and relays the ranked, RLS-scoped results. The
+ * function itself is the sole visibility boundary, so this never re-filters and
+ * never trusts a broad query to be safe.
+ */
+export function useSearch(client: AtlitosClient) {
+  return {
+    async search(input: SearchInput): Promise<SearchResponse> {
+      if (!input.query.trim()) {
+        return { query: input.query, parsedIntent: { entityTypes: [], sport: "general", keywords: [] }, results: [] };
+      }
+      const { data, error } = await client.functions.invoke("ai-search", {
+        body: {
+          query: input.query.trim(),
+          entityTypes: input.entityTypes,
+          sport: input.sport,
+          priceMax: input.priceMax,
+          lat: input.lat,
+          lng: input.lng,
+          city: input.city,
+          limit: input.limit,
+        },
+      });
+      if (error) throw await mapEdgeFunctionError(error);
+      return data as SearchResponse;
+    },
+  };
 }
+
+export type UseSearchResult = ReturnType<typeof useSearch>;
 
 // TODO(P3): coaches. PostgREST list/get + RPC `get_coach_busy_slots`. See
 // API-MAPPING.md "coaches".

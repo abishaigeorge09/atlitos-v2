@@ -510,3 +510,46 @@ export interface LocationContext {
   city: string;
   pincode: string;
 }
+
+/**
+ * What the `ai-search` edge function accepts. Only `query` is required; the
+ * rest are optional narrowings the client already knows (its location store, a
+ * segment the user tapped). The server re-derives intent from `query`
+ * regardless, so these never widen what a caller can see.
+ */
+export interface SearchInput {
+  query: string;
+  entityTypes?: SearchEntityType[];
+  sport?: Sport;
+  priceMax?: number;
+  lat?: number;
+  lng?: number;
+  city?: string;
+  limit?: number;
+}
+
+/**
+ * One ranked row the `ai-search` edge function returns. A lean, display-ready
+ * shape (title/subtitle/price/rankReason) plus `entityType`+`entityId` for
+ * routing to the right detail screen. The heavier `SearchResult.snapshot`
+ * above was the v1 mock's full-object shape; the real endpoint returns only
+ * what a result card renders, keeping the query cheap and RLS-scoped.
+ */
+export interface SearchHit {
+  entityType: SearchEntityType;
+  entityId: string;
+  title: string;
+  subtitle: string;
+  imageUrl?: string;
+  sport?: Sport;
+  price?: number;
+  distanceKm?: number;
+  rankScore: number; // 0-1
+  rankReason: string; // "Closest, 1.2km" | "Best price match" | "Top rated"
+}
+
+export interface SearchResponse {
+  query: string;
+  parsedIntent: ParsedIntent;
+  results: SearchHit[];
+}
