@@ -1,4 +1,4 @@
-import { useShop, toApiError, type OrderDetail } from '@atlitos/api';
+import { useShop, toApiError, type OrderDetail, type RefundSummary } from '@atlitos/api';
 import type { ApiError } from '@atlitos/types';
 import { formatINR, radii, spacing } from '@atlitos/theme';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -15,8 +15,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { StarRating } from '@/components/ui/star-rating';
 import { StatusPill } from '@/components/ui/status-pill';
 import { Text } from '@/components/ui/text';
+import { PriceText } from '@/components/ui/price-text';
 import { COMMERCE_BILL_LABELS, commerceBillRows } from '@/lib/commerce-bill';
 import { ORDER_STATUS_EVENT, ORDER_STATUS_PILL, formatOrderDate } from '@/lib/order-display';
+import { REFUND_STATUS_CAPTION, REFUND_STATUS_HEADING } from '@/lib/refund-display';
 import { supabase } from '@/lib/supabase';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
@@ -52,6 +54,7 @@ export default function OrderDetailScreen() {
 
   const [state, setState] = useState<LoadState>('loading');
   const [order, setOrder] = useState<OrderDetail | null>(null);
+  const [refund, setRefund] = useState<RefundSummary | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
 
   const load = useCallback(async () => {
@@ -65,6 +68,10 @@ export default function OrderDetailScreen() {
       }
       setOrder(row);
       setState('populated');
+      // AT-148 (AT-88, PRD-04 FR-24): surface any refund issued against this
+      // order so the shopper who is owed the money sees the real amount and
+      // status. A failed read never blocks the order view.
+      void shop.getOrderRefund(row.id).then(setRefund).catch(() => setRefund(null));
     } catch (err) {
       setError(toApiError(err));
       setState('error');
@@ -239,6 +246,33 @@ export default function OrderDetailScreen() {
             total={order.bill.total}
           />
         </View>
+
+        {/* AT-148 (AT-88, PRD-04 FR-24). When a refund was issued against this
+            order, surface its real amount and status from the refunds row,
+            keyed off the refund's own status so a pending refund never reads
+            as done. */}
+        {refund ? (
+          <View
+            style={{
+              borderRadius: radii.xl,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.card,
+              padding: spacing.lg,
+              gap: spacing.xs,
+            }}
+          >
+            <View className="flex-row items-center justify-between">
+              <Text style={[textStyle('overline'), { color: colors.textTertiary }]}>
+                {REFUND_STATUS_HEADING[refund.status]}
+              </Text>
+              <PriceText amount={refund.amount} size="lg" />
+            </View>
+            <Text style={[textStyle('caption'), { color: colors.textSecondary }]}>
+              {REFUND_STATUS_CAPTION[refund.status]}
+            </Text>
+          </View>
+        ) : null}
 
         {/* FR-26 / AC-E3, AC-E4. */}
         {order.feedback ? (

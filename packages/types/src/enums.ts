@@ -99,6 +99,12 @@ export type PayoutAccountStatus = (typeof PAYOUT_ACCOUNT_STATUSES)[number];
 export const TRANSFER_STATUSES = ['processing', 'paid', 'failed'] as const;
 export type TransferStatus = (typeof TRANSFER_STATUSES)[number];
 
+// One refund attempt's outcome, mirrors the DB `refund_status` enum (0026).
+// `pending` is money that has NOT moved yet, so a screen must never read it as
+// "refunded"; only `processed` means the money is back with the payer.
+export const REFUND_STATUSES = ['pending', 'processed', 'failed'] as const;
+export type RefundStatus = (typeof REFUND_STATUSES)[number];
+
 export const VERIFICATION_STATUSES = ['pending_review', 'approved', 'rejected'] as const;
 export type VerificationStatus = (typeof VERIFICATION_STATUSES)[number];
 

@@ -11,6 +11,7 @@ import type {
 
 import type { AtlitosClient } from "./client";
 import { mapEdgeFunctionError, mapPostgrestError } from "./errors";
+import { readRefundSummary, type RefundSummary } from "./refunds";
 
 /**
  * `@atlitos/api`'s athlete-side coaching domain hook (AT-52/53/54, Track D).
@@ -440,6 +441,15 @@ export function useCoaching(client: AtlitosClient) {
       }
 
       return { session, refundStatus: body.refund_status };
+    },
+
+    /** AT-148 (AT-88, PRD-02 FR-35). READ the refund owed on a cancelled
+     * session so the athlete detail screen can surface its amount and status.
+     * Pure read against `refunds` (the payer may select their own row per its
+     * RLS); no money is written here. Returns null when no refund exists (an
+     * accepted-session cancellation issues none, per PAYMENTS.md). */
+    async getSessionRefund(sessionId: string): Promise<RefundSummary | null> {
+      return readRefundSummary(client, "session", sessionId);
     },
   };
 }

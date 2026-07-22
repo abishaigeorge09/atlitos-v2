@@ -5,6 +5,7 @@
 export * from "./client";
 export * from "./errors";
 export * from "./hooks";
+export * from "./refunds";
 export * from "./use-coaching";
 export * from "./use-empower";
 export * from "./use-learn";
