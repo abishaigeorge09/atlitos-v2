@@ -27,7 +27,7 @@ Source of truth for every table in the Supabase Postgres schema. One domain per 
 | `order_status` | `placed`, `shipped`, `in_transit`, `delivered`, `cancelled` | machine: strictly forward through `placed` to `shipped` to `in_transit` to `delivered`; `cancelled` reachable only from `placed` |
 | `clip_status` | `uploading`, `processing`, `ready`, `published`, `rejected`, `removed` | machine (RPC enforced by `clip_transition_internal`, `0043`): `uploading` to (`processing` or `rejected`); `processing` to (`ready` or `rejected`); `ready` to (`published` or `rejected`); `published` to `removed` (moderation takedown only); `rejected`/`removed` terminal. The `uploading` to `rejected` edge is the abandoned-upload / reconcile-absent-object case (AT-93, `0045`); in v1 there is no Cloudflare transcode, so `processing` to `rejected` is driven by the reconcile arm, not a Stream error |
 | `report_status` | `pending`, `actioned`, `dismissed` | `pending` until a moderator resolves via `resolve_report` (`0043`): takedown moves it to `actioned`, dismissal to `dismissed` |
-| `upa_status` | `submitted`, `under_review`, `needs_info`, `verified`, `rejected` | machine: `submitted` to `under_review`; `under_review` to (`needs_info` or `verified` or `rejected`); `needs_info` back to `under_review` on resubmit; `rejected` to `submitted` on reapply (new row, see `upa_applications`) |
+| `upa_status` | `submitted`, `under_review`, `needs_info`, `verified`, `rejected`, `deactivated` | machine (owned by `upa_application_transition_internal`, `0050`, raises `INVALID_TRANSITION`): `submitted` to (`under_review` or `needs_info` or `verified` or `rejected`); `under_review` to (`needs_info` or `verified` or `rejected`); `needs_info` back to `under_review` on resubmit; `verified` to `deactivated` (owner self-withdraw); `rejected` and `deactivated` terminal; reapply creates a NEW row (see `upa_applications`). `deactivated` is an addition beyond the original five (`0048`), driven by AT-110's deactivate RPC; the public browse policy filters `status = 'verified'` so a deactivated UPA disappears from the consumer app without a delete |
 | `upa_wishlist_item_status` | `open`, `funded`, `delivered` | machine: `open` to `funded` (server, on funding target reached) to `delivered` (server, on fulfillment) |
 | `donation_method` | `standalone`, `checkout_roundup` | |
 | `payment_intent_status` | `created`, `authorized`, `captured`, `failed`, `refunded`, `partially_refunded` | mirrors Razorpay order/payment lifecycle, see `PAYMENTS.md` |
@@ -702,8 +702,9 @@ Combined application and verified profile row; there is one row per UPA for the 
 | `verified_at` | `timestamptz` | nullable |
 | `created_at`, `updated_at` | `timestamptz` | |
 
-Constraints: at most one row with `status IN ('submitted','under_review','needs_info','verified')` per `applicant_user_id`, enforced by a partial unique index `UNIQUE (applicant_user_id) WHERE status <> 'rejected'`.
-Indexes: `idx_upa_applications_status` on `status` (public browse filters to `verified` only).
+Constraints: at most one active row per `applicant_user_id`, enforced by the partial unique index `uq_upa_applications_active_per_user` on `(applicant_user_id) WHERE status NOT IN ('rejected','deactivated')` (`0048`). Both terminal states are excluded so a rejected or deactivated applicant can start a fresh row via `reapply_upa_application` without tripping it.
+Created and transitioned only by the `0050` RPCs (`submit_upa_application`, `resubmit_upa_application`, `reapply_upa_application`, `deactivate_upa_application`) and the admin verify branch (`admin_approve`/`admin_reject`/`admin_request_upa_info`); no client `INSERT`/`UPDATE`/`DELETE` grant (`0049`). `submit` also creates the linked `verification_requests` row (`applicant_type='upa'`, `applicant_id = upa_applications.id`) atomically, mirroring the coach flow.
+Indexes: `idx_upa_applications_status` on `status` (public browse filters to `verified` only), `idx_upa_applications_applicant` on `applicant_user_id`.
 
 ### `upa_evidence`
 Certificates, ID proof, guardian consent, and video links, one table with a `kind` discriminator instead of three near-identical tables.
@@ -763,7 +764,15 @@ Indexes: `idx_donations_donor_id` on `donor_id`, `idx_donations_upa_id` on `upa_
 | `deleted_at` | `timestamptz` | nullable |
 | `created_at` | `timestamptz` | |
 
-Constraints: `UNIQUE(wishlist_item_id)` enforces at most one gratitude post per funded item (FR-19).
+Constraints: `UNIQUE(wishlist_item_id)` enforces at most one gratitude post per funded item (FR-19). `INSERT` gated (`0049`) to a `funded`/`delivered` item of the caller's own verified UPA with no existing post; immutable except an own-UPA soft-delete `UPDATE` to `status = 'removed'` (the client `UPDATE` grant is column-scoped to `status`/`deleted_at`, so body/photo cannot be rewritten after posting).
+
+### The General Fund ledger anchor (`0048`)
+`ledger_entries.account_ref` carries no FK, so the reserved platform General Fund is a pure ledger anchor, a fixed sentinel UUID `00000000-0000-4000-a000-0000000f0000`, exposed as the immutable SQL function `public.general_fund_account_ref()` as the single source of truth (Track B's edge functions mirror it as a TS constant `GENERAL_FUND_ACCOUNT_REF`). Checkout roundups (which target no specific UPA, PRD-06 FR-11) are credited to `account_type = 'upa_fund'` at this `account_ref`. Fund balances derive uniformly from the ledger with no denormalized balance column: a specific UPA's total raised is `sum(credit) - sum(debit) WHERE account_type='upa_fund' AND account_ref = <upa_application_id>`; the general fund balance is the same with `account_ref = general_fund_account_ref()`.
+
+### State-machine and admin RPCs (`0050`)
+The empower machines follow the orders/sessions/clips pattern: `upa_application_transition_internal` and `upa_wishlist_item_transition_internal` (both `service_role`-only, raise `INVALID_TRANSITION`) own the two machines; the client-facing `submit`/`resubmit`/`reapply`/`deactivate_upa_application` and `mark_wishlist_item_delivered` RPCs (granted to `authenticated`, revoke anon in `0051`) and Track B's donate finalize handler are the only things that move an empower row's state. The wishlist `open -> funded` edge is called by the finalize handler under the service role; `funded -> delivered` by the owning UPA via `mark_wishlist_item_delivered`. `admin_approve_verification_request` / `admin_reject_verification_request` (`0009`) gained their `applicant_type = 'upa'` branch: approve transitions the application to `verified`, grants the `upa` `user_roles` row, and writes exactly one `audit_log` row; `admin_request_upa_info` moves a pending application to `needs_info` with a flagged field and its own audit row.
+
+`users.show_donor_name` (`0048`, boolean, default false): donor name visibility opt-in (PRD-05 FR-17 / PRD-06 anonymization); donations render as "A Sponsor" unless the donor opts in. Resolved-by-assumption 3 in PHASE-6-STATUS.md.
 
 ---
 
