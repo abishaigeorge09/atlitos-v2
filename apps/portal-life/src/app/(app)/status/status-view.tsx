@@ -10,7 +10,6 @@ import {
   CircleAlert,
   CircleDashed,
   FileText,
-  Loader2,
   RotateCcw,
 } from "lucide-react";
 
