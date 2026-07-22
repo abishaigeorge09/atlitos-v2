@@ -65,12 +65,14 @@ Extends `auth.users` with app profile fields. One row per Supabase Auth user, cr
 | `city` | `text` | nullable |
 | `state` | `text` | nullable |
 | `sports` | `sport[]` | not null default `{}` |
-| `status` | `user_status` | not null default `active` |
-| `suspended_reason` | `text` | nullable |
+| `status` | `user_status` | not null default `active`, admin-locked (see below) |
+| `suspended_reason` | `text` | nullable, admin-locked (see below) |
 | `show_donor_name` | `boolean` | not null default `false`, sponsor name opt-in read by `portal-life` |
 | `created_at`, `updated_at` | `timestamptz` | |
 
 Indexes: `idx_users_phone` on `phone`.
+
+`status` and `suspended_reason` are moderation fields set only by an admin. The row is self-editable through `users_update_own` (WITH CHECK `id = auth.uid()`), so a member updates their own `name`, `avatar_url`, `show_donor_name`, etc. freely, but the `users_lock_admin_fields` trigger (`lock_user_admin_fields`, `0065`, states pass AT-143) raises `FIELD_LOCKED` if `status` or `suspended_reason` change and the caller is not `has_role('admin')`. Same admin-lock pattern as `lock_venue_admin_fields` / `lock_coach_profile_admin_fields`. Before `0065` a member could lift their own suspension by a direct `update users set status='active' where id=auth.uid()`; that was the one client-writable status leak the states pass found and closed.
 
 ### `user_roles`
 Multi-role membership. A user can hold several roles at once (for example `player` and `coach`).
