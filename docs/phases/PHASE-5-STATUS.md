@@ -1,6 +1,6 @@
 # Phase 5 Status: Clutch (the video feed)
 
-**Status: PLANNED (2026-07-21).** Stories AT-89 through AT-107 filed under Jira epic AT-7 (Clutch Video). Deliverables unchecked below. This doc is the contract the P5 builders, integrator, and biased approver work to.
+**Status: APPROVED cycle 1 (2026-07-22).** Biased approver APPROVE, no escalation (verdict at commit 17b40f5, recorded below). Stories AT-89 through AT-107 (Jira epic AT-7, Clutch Video) delivered and checked off below. Phase closed by the phase-close agent 2026-07-22. This doc is the P5 phase memory and the handoff to the P6 (Empower / Atlitos Life) planner.
 
 Gate (docs/PLAN.md P5): "Cloudflare pipeline, vertical feed, upload, creator profiles, moderation queue. GATE: founder uploads clip from device to approved to in feed."
 
@@ -71,35 +71,35 @@ Consistent with the founder's standing instruction and P4's measured amendment.
 ## Deliverables owed, by track
 
 ### Track A: schema, RLS, state machine, storage privacy (opus)
-- [ ] AT-89 Clutch schema migration: clips (storage adapter shaped, `storage_path`), clip_likes, clip_comments, follows, count triggers, creator_stats view (PRD-01 FR-42, FR-44, FR-45, FR-46, FR-47)
-- [ ] AT-90 Clutch RLS + private `clips` storage bucket + storage.objects policies (PRD-01 FR-42, FR-45; PRD-04 FR-2)
-- [ ] AT-91 Clip state machine RPCs: `clip_transition_internal`, `moderate_clip`, `resolve_report` (PRD-01 FR-44, FR-45; PRD-04 FR-29, FR-30, FR-32, FR-33, FR-53)
-- [ ] AT-92 `toggle_clip_like` / `toggle_follow` count maintaining RPCs (PRD-01 FR-43, FR-46)
-- [ ] AT-93 Stranded clip reconcile arm in `expire_stale_holds()` (stream-reconcile v1 form) (PRD-01 FR-44; VIDEO.md step 4)
+- [x] AT-89 Clutch schema migration: clips (storage adapter shaped, `storage_path`), clip_likes, clip_comments, follows, count triggers, creator_stats view (PRD-01 FR-42, FR-44, FR-45, FR-46, FR-47)
+- [x] AT-90 Clutch RLS + private `clips` storage bucket + storage.objects policies (PRD-01 FR-42, FR-45; PRD-04 FR-2)
+- [x] AT-91 Clip state machine RPCs: `clip_transition_internal`, `moderate_clip`, `resolve_report` (PRD-01 FR-44, FR-45; PRD-04 FR-29, FR-30, FR-32, FR-33, FR-53)
+- [x] AT-92 `toggle_clip_like` / `toggle_follow` count maintaining RPCs (PRD-01 FR-43, FR-46)
+- [x] AT-93 Stranded clip reconcile arm in `expire_stale_holds()` (stream-reconcile v1 form) (PRD-01 FR-44; VIDEO.md step 4)
 
 ### Track B: edge functions, upload + finalize + signed URL mints (opus)
-- [ ] AT-94 `stream-upload-url` edge function (Supabase Storage adapter) (PRD-01 FR-44; VIDEO.md)
-- [ ] AT-95 `stream-webhook` storage finalizer, idempotent (PRD-01 FR-44; VIDEO.md)
-- [ ] AT-96 `get_clip_playback_url` + `get_clip_moderation_url`, two distinct grants (PRD-01 FR-42, FR-45; PRD-04 FR-28; VIDEO.md)
+- [x] AT-94 `stream-upload-url` edge function (Supabase Storage adapter) (PRD-01 FR-44; VIDEO.md)
+- [x] AT-95 `stream-webhook` storage finalizer, idempotent (PRD-01 FR-44; VIDEO.md)
+- [x] AT-96 `get_clip_playback_url` + `get_clip_moderation_url`, two distinct grants (PRD-01 FR-42, FR-45; PRD-04 FR-28; VIDEO.md)
 
 ### Track C: mobile Clutch feed, upload, profiles (sonnet)
-- [ ] AT-97 Vertical feed with `react-native-video` progressive MP4, pressable overlay (PRD-01 FR-42, FR-43)
-- [ ] AT-98 Post detail + comments sheet, guest gated add comment (PRD-01 FR-43)
-- [ ] AT-99 Upload screen: capture/pick, caption+sport gate, upload progress (PRD-01 FR-44)
-- [ ] AT-100 Creator profile + own social profile, follow toggle (PRD-01 FR-46, FR-47)
-- [ ] AT-101 `packages/api` `useClutch` wiring (PRD-01 FR-42, FR-43, FR-44, FR-46)
+- [x] AT-97 Vertical feed with `react-native-video` progressive MP4, pressable overlay (PRD-01 FR-42, FR-43)
+- [x] AT-98 Post detail + comments sheet, guest gated add comment (PRD-01 FR-43)
+- [x] AT-99 Upload screen: capture/pick, caption+sport gate, upload progress (PRD-01 FR-44)
+- [x] AT-100 Creator profile + own social profile, follow toggle (PRD-01 FR-46, FR-47)
+- [x] AT-101 `packages/api` `useClutch` wiring (PRD-01 FR-42, FR-43, FR-44, FR-46)
 
 ### Track D: admin moderation (sonnet)
-- [ ] AT-102 Moderation Queue: inline preview, approve/reject with required reason (PRD-04 FR-27, FR-28, FR-29, FR-30, FR-33, FR-53)
-- [ ] AT-103 Reports Queue: resolve by takedown or dismissal with required reason (PRD-04 FR-31, FR-32, FR-33, FR-53)
+- [x] AT-102 Moderation Queue: inline preview, approve/reject with required reason (PRD-04 FR-27, FR-28, FR-29, FR-30, FR-33, FR-53)
+- [x] AT-103 Reports Queue: resolve by takedown or dismissal with required reason (PRD-04 FR-31, FR-32, FR-33, FR-53)
 
 ### Track E: fixtures and copy (haiku)
-- [ ] AT-104 Clutch seed fixtures: published clips, storage objects, pending queue, reports (PRD-01 FR-42, FR-45, FR-47; PRD-04 FR-27, FR-31)
-- [ ] AT-105 House style copy pass across all P5 screens (PRD-01 FR-70; CLAUDE.md)
+- [x] AT-104 Clutch seed fixtures: published clips, storage objects, pending queue, reports (PRD-01 FR-42, FR-45, FR-47; PRD-04 FR-27, FR-31)
+- [x] AT-105 House style copy pass across all P5 screens (PRD-01 FR-70; CLAUDE.md)
 
 ### Track F: verification (opus)
-- [ ] AT-106 Pipeline + state machine + non vacuous RLS isolation verification (PRD-01 FR-42, FR-44, FR-45; PRD-04 FR-27, FR-29, FR-30)
-- [ ] AT-107 Clip privacy and takedown teeth verification (PRD-01 FR-45; PRD-04 FR-32; VIDEO.md)
+- [x] AT-106 Pipeline + state machine + non vacuous RLS isolation verification (PRD-01 FR-42, FR-44, FR-45; PRD-04 FR-27, FR-29, FR-30)
+- [x] AT-107 Clip privacy and takedown teeth verification (PRD-01 FR-45; PRD-04 FR-32; VIDEO.md)
 
 ## Dependency order
 
@@ -128,6 +128,34 @@ Track A first and strictly in order: AT-89 gates everything; AT-90 and AT-91 nee
 ## Handoff notes owed at phase close
 
 Phase close must record: whether the on device capture to autoplay round trip actually closed at the gate or is carried; the state of AT-93 across the reconcile arm (observed to have run, not just scheduled); confirmation that no column stores a resolved URL; and the Cloudflare Stream swap surface for a future phase (the `cf_stream_uid` slot, the two edge function contracts, and the real `stream-reconcile` poller that becomes live only when Stream is enabled).
+
+### Phase-close record (2026-07-22)
+
+- **On device capture to autoplay round trip: CARRIED, not closed at the gate.** The approver accepted the scripted-but-real backend pipeline (`stream-upload-url` -> signed storage PUT -> `stream-webhook` finalize -> `moderate_clip` approve -> published feed query -> `get-clip-playback-url` playback, guest returning 200 with 9409 matching `video/mp4` bytes) as satisfying the native-upload gate step under the founder full-autonomy directive. The genuinely device-only sliver (expo-camera capture, on-device gallery picker, react-native-video muted autoplay/poster-swap/prefetch, engagement-rail haptics) is deferred to the native pass. See advisory `native-coverage`.
+- **AT-93 reconcile arm: observed to have run.** Wired into the scheduled `expire-stale-holds` pg_cron (`*/5 * * * *`, active), returns the readied/rejected/failed shape. Not merely scheduled.
+- **No column stores a resolved URL: confirmed.** Columns hold object PATHS only (`storage_path`, `thumb_path`); every view is a fresh 300s mint against the live row. AT-107's removed-clip fetch found no column bypass.
+- **Cloudflare Stream swap surface (future phase):** `cf_stream_uid` nullable slot on `clips` (null in v1); the two stable edge contracts `stream-upload-url` and `stream-webhook`; the real `stream-reconcile` poller (`GET /stream/{uid}`) that becomes live only when Stream is enabled. Swap is config plus one adapter, not a migration.
+
+## Handoff notes for the P6 planner (Empower / Atlitos Life portal)
+
+### What P6 inherits that works (reuse, do not rebuild)
+
+- **Payment intents + the shared finalize gate, now across THREE domains** (courts, sessions, commerce). Empower's donation/contribution charges hang off the same `payment_intents` shape and the same shared finalize path; do not fork a fourth.
+- **The double-entry ledger** (`ledger_entries`, one `entry_group_id` per entity, every group balances to 0.00, no denormalized balance/running column). Every Empower money movement writes a balanced group under the service role in an edge function. Clients never write ledger rows.
+- **The state-machine RPC + `audit_log` admin pattern** (`SECURITY DEFINER` transition raising `INVALID_TRANSITION`, exactly one audit row per accepted transition, zero on rejection; client `status` writes = 42501). Any Empower moderation/approval flow follows this exactly.
+- **RLS permissive-OR discipline** (CLAUDE.md): a public-browse policy beside an owner policy returns other people's rows to an unscoped select. Every owner read carries its own explicit filter in app code, seed, AND tests; isolation tests assert the two party ids DIFFER before trusting the result (AT-62 lesson).
+- **The reservation/sweep pattern**: the unified `expire_stale_holds()` pg_cron (`*/5 * * * *`) now runs four arms (courts, sessions, commerce, clip reconcile). Add a fifth ARM for any Empower TTL/stranded sweep, do not cut a new cron.
+- **The signed-URL privacy pattern** (if P6 has any private media): private bucket, no anon/public read policy, columns store PATHS, every view is a fresh short-TTL mint against the live row through an edge function, so a takedown/withdrawal is bounded by TTL not indefinite. Never persist a resolved URL.
+
+### CRITICAL for P6: the donation roundup ledger leg P6 owes
+
+The commerce donation roundup (D-053 / PRD-07 FR-16, decided by the founder 2026-07-20: round the cart total up to the next multiple of 10) already accrues **its own `platform` ledger leg per order**, tagged for Empower ("donation roundup held for Empower allocation, order <id>"). See PHASE-4-STATUS.md D1 and the P4 handoff (lines ~44-49, ~239). It got its own leg precisely so P6 can find every roundup rupee with one indexed query.
+
+**P6 owes moving that roundup leg from `platform` to a real `upa_fund` account_ref.** It is NOT credited to `upa_fund` in P4 only because `ledger_entries.account_ref` is not nullable for non-platform accounts and the checkout roundup targets no specific UPA at capture time. The attribution/migration plan for this is written in PHASE-4-STATUS.md; **P6 must honor that plan** rather than re-derive it, and must move the leg without re-reading order rows (the leg is queryable directly).
+
+### CRITICAL for P6 builders: worktree base staleness (step 0 in every ticket)
+
+Worktree agents have been created from a STALE `origin/main` base at least TWICE in this build (Track C was 3 phases stale). **Every P6 builder must, as step 0 inside its worktree, run `git merge main --no-edit` to pull current work before building.** The P6 planner must put that exact instruction in EVERY builder ticket. A builder that skips it will build against a base missing prior phases' migrations, types, and edge functions.
 
 ## Integrator note (2026-07-22)
 
@@ -181,7 +209,7 @@ The scripted proof exercises the exact backend path a device would (`stream-uplo
 [advisory] native screen coverage deferred to native pass  [P3/P4/P5]
 [advisory] tmp-seed-demo-users edge function still deployed (ACTIVE) — remove before prod  [P4/P5]
 [advisory] TypeScript version skew across workspace  [P3/P4]
-[advisory] accumulated RLS WARN debt (function_search_path_mutable, security_definer function executable, anon sign-ins)  [P1-P5]
+[advisory] accumulated RLS WARN debt (auth_rls_initplan, multiple_permissive_policies, function_search_path_mutable, security_definer function executable, anon sign-ins) — grew with the clutch tables in P5  [P1-P5]
 [advisory] the four PRD-02 assumptions the plan ships  [P2]
 [advisory] AT-73 late-capture branch  [P4]
 [advisory] PRD-01 section 9 assumptions: follow-graph list browse not built (item 7), no guest local persistence (item 2)  [P5]
