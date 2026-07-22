@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LoginGateModal } from '@/components/organisms/LoginGateModal';
 import { AppBar } from '@/components/ui/app-bar';
 import { Button } from '@/components/ui/button';
+import { SearchBar } from '@/components/ui/search-bar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useSessionStore } from '@/store/session-store';
 import { textStyle } from '@/theme/text-style';
@@ -70,6 +71,8 @@ export default function HomeScreen() {
       />
 
       <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.xl, paddingBottom: spacing['4xl'] }}>
+        <SearchBar variant="ai" onPress={() => router.push('/home/search')} />
+
         {showLoading ? (
           <View style={{ gap: spacing.sm }}>
             <Skeleton shape="line" width="60%" />
