@@ -1,6 +1,6 @@
 import { spacing, radii } from '@atlitos/theme';
 import { router } from 'expo-router';
-import { Heart, LayoutGrid } from 'lucide-react-native';
+import { GraduationCap, Heart, LayoutGrid } from 'lucide-react-native';
 import { useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -108,6 +108,28 @@ export default function HomeScreen() {
               </Text>
               <Button variant="secondary" onPress={() => router.push('/home/empower')}>
                 <Text style={[textStyle('label'), { color: colors.text }]}>Explore Empower</Text>
+              </Button>
+            </View>
+
+            <View
+              style={{
+                gap: spacing.sm,
+                padding: spacing.lg,
+                borderRadius: radii.xl,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.card,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                <GraduationCap size={20} color={colors.accent} strokeWidth={1.75} />
+                <Text style={[textStyle('h3'), { color: colors.text }]}>Train and level up</Text>
+              </View>
+              <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
+                Complete drills to earn XP, climb your roadmap and unlock milestones.
+              </Text>
+              <Button variant="secondary" onPress={() => router.push('/learn')}>
+                <Text style={[textStyle('label'), { color: colors.text }]}>Open Learn</Text>
               </Button>
             </View>
 
