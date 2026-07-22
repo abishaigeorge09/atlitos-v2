@@ -112,6 +112,46 @@ Every builder ticket carries, as **step 0 inside its worktree**, `git merge main
 ### Track E: verification (opus)
 - [x] AT-139 XP tamper-proof and gate verification, against the LIVE project, non-vacuously by actual attempts and row reads: (1) a real player marks a drill complete and exactly one `xp_events` row appears with `xp_amount == drills.xp_value`, no client `xp_events` write in the path; (2) the roadmap current stage advances as a pure function of the XP total when a threshold is crossed, and a milestone unlocks when its criteria are met; (3) direct `authenticated` INSERT into `xp_events` and `user_milestones` each return `42501`, and a client cannot forge `xp_amount`; (4) idempotency: a duplicate completion writes no second event and leaves the total unchanged; (5) isolation, two player ids asserted to DIFFER first, A's XP/roadmap/milestones never visible to B, the public catalog readable but the app `active = true` filter enforced; (6) admin create/edit/deactivate each write exactly one `audit_log` row and a non-admin drill write is refused. Capture light and dark web evidence under `docs/phases/evidence/p7-web/` (PRD-01 FR-48, FR-49, FR-50, FR-51; PRD-04 FR-49, FR-50, FR-51; CLAUDE.md permissive-OR)
 
+## Integrator note (2026-07-22)
+
+Merged `main` is coherent. Verified independently, not taken on trust from Track F.
+
+- `pnpm turbo typecheck build lint` green, 24/24 (all cache-replayed). The mobile `.expo/types/router.d.ts` gotcha did not bite this pass: the learn routes were already present in the manifest, typecheck passed without a regenerate.
+- P7 migrations `0057_learn_schema` through `0061_admin_drill_rpcs` all applied to remote `syzzfgaudpifwvbpycyi` (confirmed via list_migrations against supabase/migrations). Versions 20260722082836 / 082952 / 083048 / 083207 / 084604.
+- All P7 tracks present in HEAD (e1b6fae): Track A XP engine (0057-0060), Track B admin drill RPCs (0061) + admin screens, Track C Learn mobile screens + `packages/api/src/use-learn.ts`, Track D fixtures (`seed_p7_learn.sql`), Track F evidence (`docs/phases/evidence/p7-web/VERIFICATION.md`).
+- Catalog-pollution remediation HELD. `drills where active=true` = 12 legit seeded drills (cricket/tennis/badminton). The 10 Track B `VERIFY` probe drills are all `active=false`. Inactive seed drill 440004 ("Slip fielding basics") also inactive as designed for the active-filter proof. No test/probe drill is active. No further deactivation needed.
+- p7-web evidence exists as `VERIFICATION.md`. Track F's web evidence is transcribed values (rendered `get_page_text`, exact numerics, console-error checks) not PNGs, because the browser MCP could not write files to disk in that environment. Judgment: the structural web claims (screens render from `get_learn_home`, zero nested-button/`validateDOMNesting` errors, mono numerics, lucide milestone icons) are adequately evidenced in text AND the load-bearing backend is fully reproducible by SQL/`scripts/verify-learn-p7.mjs`; the gate itself is web/SQL-provable and does not rest on a screenshot. Adequate. Logged as a LOW advisory (evidence medium), not a block.
+
+## Biased approver verdict — Cycle 1 (2026-07-22)
+
+**VERDICT: APPROVE.**
+
+Gate: "roadmap progresses from real activity." Every clause re-derived independently with read-only SQL and rolled-back write probes against the live project; Track F not trusted.
+
+Independent verification (all PASS):
+1. THE GATE — in a rolled-back txn, a throwaway fixture player's single own-row `drill_completions` insert (Backfoot pull shot, `xp_value=100`) took `get_learn_home().xp_total` 0 -> 100 (exactly the drill's `xp_value`), advanced current stage order 1 "Finding your stance" -> order 2 "Building consistency" (threshold crossed), and unlocked 3 milestones. The `xp_events` row was written by the trigger with the server-read amount (`{source:'drill_complete', xp_amount:100}`, exactly one row). No client write to `xp_events`/`user_milestones` in the path.
+2. UN-FORGEABILITY — as `authenticated`: direct `INSERT xp_events` -> 42501; `INSERT user_milestones` -> 42501; XP-column smuggle on `drill_completions` -> 42703 (raw SQL; PGRST204 over REST, same guarantee, no client-writable XP column). `xp_total` is derived `sum(xp_amount)`, no counter column.
+3. IDEMPOTENCY — duplicate completion -> 23505; atomic, no second event, no double unlock.
+4. CATALOG — 12 active legit drills, 10 Track B probes inactive; the permissive-OR `.eq("active", true)` filter is in app code (`use-learn.ts` listDrills L238, getDrill L258), unconditional, not only RLS.
+5. ADMIN — create + edit + deactivate wrote exactly 3 audit_log rows (drill.create, drill.update, drill.deactivate, one each); non-admin -> P0001 FORBIDDEN; `xp_value=0` -> P0001 VALIDATION.
+6. RLS ISOLATION — B (coach2 883b6f5d) vs A (player 58756043), ids asserted DIFFER first; B sees 0 of A's completions/events/milestones and 0 owner-scoped rows total; public catalog (12) visible.
+7. ADVISORS — security = 155 lints, 3 ERROR none referencing any learn table/function; all learn entries WARN (baseline SECURITY-DEFINER-executable + anon-access pattern). No new learn ERROR vs P6.
+
+Advisories (non-blocking, carried to phase-close; disposition judged, not merely noted):
+- [advisory] data-hygiene — Track B left 10 active `VERIFY` probe drills; Track F remediated by deactivating. Confirmed inactive now. MEDIUM in origin, fully resolved; not blocking. Follow-up: Track B verification should seed probes inactive or roll them back.
+- [advisory] dark-mode — no consumer-facing dark toggle on Learn screens, and scheme does not persist across expo-router web nav; dark tokens resolve correctly (proven on /dev/tokens). Pre-existing platform gap, not a P7 regression; carried to P9 native pass. MEDIUM, not blocking per the founder web/native split (P7 is the web-verifiable phase; touch feel + native theming are P9).
+- [advisory] doc-nit — XP-smuggle returns PGRST204 over REST / 42703 in raw SQL, not the 42703 Track A originally cited from raw SQL only. Same substantive guarantee. LOW.
+- [advisory] gate-wording — "exactly one milestone unlocks" is imprecise; a fresh player's first completion correctly co-unlocks first_drill_complete plus any met xp_threshold milestone (3 on the 100-XP first completion). Behavior correct; phrasing only. LOW.
+- [advisory] evidence-medium — p7-web evidence is transcribed values not PNGs (browser MCP could not write files). Backend fully reproducible by SQL/verify script; gate is SQL-provable. LOW.
+
+Not rejected for: a missing native tap/haptic. The gate is fully web/SQL-provable and was proven both by SQL and through the shipped Mark-complete UI. Native gestures/haptics are correctly carried to P9 per the founder directive; this is not a P7 miss.
+
+Scope discipline: no out-of-ceiling feature shipped. No cross-domain XP aggregation (correctly a designed-in `xp_source='other'` hook, no PRD FR wires it). No leaderboard, streak, redo, or roadmap/milestone admin authoring UI. Financial invariant N/A (XP is progression, not money; append-only `xp_events`, no ledger leg). House style: lucide milestone icons, mono numerics, tokens confirmed in Track F web pass.
+
+Carried-forward advisories from P1-P6 (NONE dropped): Route not enabled; AT-88; dark-mode mobile-web gap; native coverage + P9 native-pass debt (Learn gestures/haptics); tmp-seed-demo-users; TS skew; RLS WARN debt (SECURITY DEFINER executable-by-authenticated, now +2 for admin_upsert_drill/admin_set_drill_active, by design); PRD-02 assumptions; AT-73; show_donor_name; and the P7 assumptions incl. cross-domain-XP-is-a-hook-not-built. Finish line = TestFlight (P9 native + P10 ship).
+
+No blocking findings. Gate APPROVED.
+
 ## Dependency order
 
 Track A first: AT-129 (schema) -> AT-130 (RLS) and AT-131 (triggers) -> AT-132 (read layer). AT-131 needs AT-129; AT-132 needs AT-131. Track B (AT-133) needs AT-129/AT-130. Track C needs AT-130 + AT-132 (and seeded drills from AT-137 for populated render). AT-137 fixtures need AT-129. AT-138 runs after the screens land. AT-139 verification runs last, after every other P7 ticket.
