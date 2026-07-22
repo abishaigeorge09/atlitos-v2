@@ -787,14 +787,14 @@ export default function GalleryScreen() {
         {/* 39 DonationSheet */}
         <Section number="39" name="DonationSheet" note="preset amount selected and fund a specific item">
           <Frame height={520}>
-            <DonationSheet causeTitle="Meena K, badminton fund" presetAmounts={[100, 250, 500, 1000]} platformFee={20} onDonate={() => {}} />
+            <DonationSheet causeTitle="Meena K, badminton fund" presetAmounts={[100, 250, 500, 1000]} minAmount={10} onDonate={() => {}} />
           </Frame>
           <Frame height={560}>
             <DonationSheet
               causeTitle="Meena K, badminton fund"
               presetAmounts={[100, 250, 500]}
-              fundItem={{ label: 'Racket and shuttlecocks', cost: 4500 }}
-              platformFee={20}
+              minAmount={10}
+              fundItem={{ label: 'Racket and shuttlecocks', cost: 4500, fundedAmount: 1200 }}
               onDonate={() => {}}
             />
           </Frame>

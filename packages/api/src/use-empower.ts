@@ -1,3 +1,5 @@
+import { useMemo } from "react";
+
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { ApiError, Sport } from "@atlitos/types";
@@ -224,6 +226,15 @@ interface ImpactJson {
 // ---------------------------------------------------------------------------
 
 export function useEmpower(client: AtlitosClient) {
+  // Memoize on [client] for a STABLE identity across renders, the same fix
+  // `useClutch` documents: the empower screens feed the returned object into a
+  // `useCallback(load, [empower])` whose effect runs on `[load]`, so a fresh
+  // object each render would refire the effect forever (the F1 render/request
+  // loop). `supabase` is a module singleton, so this resolves once.
+  return useMemo(() => makeEmpowerApi(client), [client]);
+}
+
+function makeEmpowerApi(client: AtlitosClient) {
   // Widen the schema generic so `from`/`rpc` accept the empower relations and
   // read RPCs: they land in Track A/B's migrations (0048-0056), not yet in the
   // generated `Database` type on this branch (the same escape hatch `useClutch`
@@ -250,6 +261,22 @@ export function useEmpower(client: AtlitosClient) {
         athletesSupported: json.athletes_supported ?? 0,
         itemsFunded: json.items_funded ?? 0,
       };
+    },
+
+    /** The platform minimum standalone donation (fee_config donations.min_amount,
+     * PRD-06 FR-7). Used only to PREVIEW the floor and gate the button; the
+     * `donate` edge function re-enforces MIN_AMOUNT server side, so a missing
+     * key resolves to 0 (no client side floor) rather than throwing. fee_config
+     * is readable by any authenticated caller (0010), anonymous guests included. */
+    async getMinDonation(): Promise<number> {
+      const { data, error } = await db
+        .from("fee_config")
+        .select("value")
+        .eq("domain", "donations")
+        .eq("key", "min_amount")
+        .maybeSingle<{ value: number }>();
+      if (error) throw mapPostgrestError(error);
+      return data?.value ?? 0;
     },
 
     /** PRD-06 FR-1/FR-2. The verified UPA grid. The `.eq("status","verified")`
