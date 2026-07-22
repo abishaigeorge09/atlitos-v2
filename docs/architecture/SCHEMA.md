@@ -749,12 +749,12 @@ Indexes: `idx_upa_wishlist_items_upa_id` on `upa_id`.
 | `method` | `donation_method` | not null |
 | `order_id` | `uuid` | nullable, references `orders(id)`, set when `method = 'checkout_roundup'` |
 | `payment_intent_id` | `uuid` | not null, references `payment_intents(id)` |
-| `donor_display_name` | `text` | nullable, the finalize-time visibility snapshot (`0066`, AT-149) |
+| `donor_display_name` | `text` | nullable, the finalize-time visibility snapshot (`0067`, AT-149) |
 | `created_at` | `timestamptz` | |
 
 Indexes: `idx_donations_donor_id` on `donor_id`, `idx_donations_upa_id` on `upa_id`.
 
-`donor_display_name` (`0066`, AT-149, PRD-05 FR-17 / PRD-06 anonymization): the donor name to show the UPA, SNAPSHOTTED at finalize time inside `record_donation_from_draft` in the same transaction as the row insert. It is `users.name` when `users.show_donor_name` was true at that moment, else null (the UPA-facing sponsor list renders null as "A Sponsor"). The read path (`portal-life` funding detail) reads this column and NEVER joins the live `users` row, matching the address-snapshot discipline: a donor who opts in, is shown, then toggles off does not retroactively leak on old rows, and one who was anonymous at donation time does not retroactively appear. Historical rows (pre `0066`) are null and correctly render as "A Sponsor". This is a display snapshot only; it does not touch amount, `funded_amount`, the state flip, or the ledger group.
+`donor_display_name` (`0067`, AT-149, PRD-05 FR-17 / PRD-06 anonymization): the donor name to show the UPA, SNAPSHOTTED at finalize time inside `record_donation_from_draft` in the same transaction as the row insert. It is `users.name` when `users.show_donor_name` was true at that moment, else null (the UPA-facing sponsor list renders null as "A Sponsor"). The read path (`portal-life` funding detail) reads this column and NEVER joins the live `users` row, matching the address-snapshot discipline: a donor who opts in, is shown, then toggles off does not retroactively leak on old rows, and one who was anonymous at donation time does not retroactively appear. Historical rows (pre `0067`) are null and correctly render as "A Sponsor". This is a display snapshot only; it does not touch amount, `funded_amount`, the state flip, or the ledger group.
 
 ### `gratitude_posts`
 
