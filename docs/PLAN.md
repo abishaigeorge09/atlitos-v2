@@ -54,7 +54,16 @@ Prompt at docs/agents/biased-approver.md: no emojis/em-dashes, tokens-only styli
 - **P5 Clutch:** Cloudflare pipeline, vertical feed, upload, creator profiles, moderation queue · GATE: founder uploads clip from device → approved → in feed
 - **P6 Empower + Life portal:** UPA apply/verify/wishlist/gratitude portal, donate + roundup real, My Impact · GATE: Journey 5 end-to-end
 - **P7 Learn + XP:** drills, roadmap, xp from real actions, lucide milestones, admin drill CRUD · GATE: roadmap progresses from real activity
-- **P8 Search + Notifications + Hardening:** ai-search, push, states pass, RLS/advisor audit, 5-journey regression, perf, docs freeze · GATE: full sign-off → then Apple dev + TestFlight hand-off
+- **P8 Search + Notifications + Hardening:** ai-search, push, states pass, RLS/advisor audit, 5-journey regression, perf, docs freeze · GATE: full sign-off → then the ship stages below
+
+### Post-P8 ship stages (finish line = TestFlight, founder decision 2026-07-22)
+
+The founder confirmed on 2026-07-22 that "ready end to end" means **all the way to TestFlight**, not merely web-proven through P8. So the definition of done extends past P8 with two stages that genuinely need the founder, and cannot be fully autonomous:
+
+- **P9 Native verification pass:** actually run the iOS/Android app on a device or simulator (not react-native-web), and fix what is broken natively. This burns down the accumulated native debt carried since P3: near-zero native screen coverage, `react-native-video` muted autoplay, `react-native-razorpay` on the real native sheet (only the web wrapper is proven), camera capture + gallery picker, haptics, `Alert.alert`/confirm-then-act call sites (AT-64), keyboard offsets, splash, phone-width layout. Needs the founder's device/sim time; the accessibility + screen-recording grant to ClaudeCode.app plus a full restart is the enabler for programmatic taps. Web verification through P8 takes each surface as far as react-native-web can; this stage is where "works on web" becomes "works on a phone."
+- **P10 TestFlight ship:** a signed native production build (EAS Build or Xcode archive), App Store Connect metadata, screenshots, privacy declarations, then Apple review. HARD DEPENDENCY: the founder's **Apple Developer account** ($99/yr, enrollment can take 24 to 48h to activate), which Claude cannot create or pay for. This is the critical-path external dependency for the finish line, the analogue of the Cloudflare account for video; start enrollment early so it is not the final blocker. Android/Google Play is the same shape if wanted.
+
+An automated regression suite (Jest/Playwright/Detox in CI) is NOT in this plan; the build has used adversarial verification agents + per-phase evidence instead. If the founder wants a maintained suite it is separate, explicitly-scoped work, not folded silently into any phase.
 
 **Agent model per phase:** planner (cuts Jira stories) → parallel builders per app/domain (opus-tier: schema/payments/RLS; sonnet-tier: screens/CRUD; haiku: mechanical) → integrator (build+deploy) → biased approver → phase-close. ScheduleWakeup loop keeps it autonomous between phases; founder pinged only at gates needing him (P0 accounts, P2 demo, disagreements).
 
