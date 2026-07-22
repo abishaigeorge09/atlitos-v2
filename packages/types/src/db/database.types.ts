@@ -1024,6 +1024,162 @@ export type Database = {
           },
         ]
       }
+      donation_drafts: {
+        Row: {
+          amount: number
+          created_at: string
+          donor_id: string
+          item_id: string | null
+          payment_intent_id: string
+          upa_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          donor_id: string
+          item_id?: string | null
+          payment_intent_id: string
+          upa_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          donor_id?: string
+          item_id?: string | null
+          payment_intent_id?: string
+          upa_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "donation_drafts_donor_id_fkey"
+            columns: ["donor_id"]
+            isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "donation_drafts_donor_id_fkey"
+            columns: ["donor_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "donation_drafts_donor_id_fkey"
+            columns: ["donor_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "donation_drafts_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "upa_wishlist_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "donation_drafts_payment_intent_id_fkey"
+            columns: ["payment_intent_id"]
+            isOneToOne: true
+            referencedRelation: "payment_intents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "donation_drafts_upa_id_fkey"
+            columns: ["upa_id"]
+            isOneToOne: false
+            referencedRelation: "upa_applications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      donations: {
+        Row: {
+          amount: number
+          created_at: string
+          donor_id: string
+          id: string
+          item_id: string | null
+          method: Database["public"]["Enums"]["donation_method"]
+          order_id: string | null
+          payment_intent_id: string
+          upa_id: string | null
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          donor_id: string
+          id?: string
+          item_id?: string | null
+          method: Database["public"]["Enums"]["donation_method"]
+          order_id?: string | null
+          payment_intent_id: string
+          upa_id?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          donor_id?: string
+          id?: string
+          item_id?: string | null
+          method?: Database["public"]["Enums"]["donation_method"]
+          order_id?: string | null
+          payment_intent_id?: string
+          upa_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "donations_donor_id_fkey"
+            columns: ["donor_id"]
+            isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "donations_donor_id_fkey"
+            columns: ["donor_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "donations_donor_id_fkey"
+            columns: ["donor_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "donations_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "upa_wishlist_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "donations_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "donations_payment_intent_id_fkey"
+            columns: ["payment_intent_id"]
+            isOneToOne: false
+            referencedRelation: "payment_intents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "donations_upa_id_fkey"
+            columns: ["upa_id"]
+            isOneToOne: false
+            referencedRelation: "upa_applications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       feature_flags: {
         Row: {
           created_at: string
@@ -1141,6 +1297,54 @@ export type Database = {
             columns: ["follower_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gratitude_posts: {
+        Row: {
+          body: string
+          created_at: string
+          deleted_at: string | null
+          id: string
+          photo_url: string | null
+          status: string
+          upa_id: string
+          wishlist_item_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          photo_url?: string | null
+          status?: string
+          upa_id: string
+          wishlist_item_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          photo_url?: string | null
+          status?: string
+          upa_id?: string
+          wishlist_item_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gratitude_posts_upa_id_fkey"
+            columns: ["upa_id"]
+            isOneToOne: false
+            referencedRelation: "upa_applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gratitude_posts_wishlist_item_id_fkey"
+            columns: ["wishlist_item_id"]
+            isOneToOne: true
+            referencedRelation: "upa_wishlist_items"
             referencedColumns: ["id"]
           },
         ]
@@ -2425,6 +2629,158 @@ export type Database = {
           },
         ]
       }
+      upa_applications: {
+        Row: {
+          applicant_user_id: string
+          created_at: string
+          id: string
+          needs_info_field: string | null
+          photo_url: string | null
+          reapply_after: string | null
+          region: string
+          rejection_reason: string | null
+          sport: Database["public"]["Enums"]["sport"]
+          state: string
+          status: Database["public"]["Enums"]["upa_status"]
+          story_body: string
+          story_headline: string
+          updated_at: string
+          verified_at: string | null
+        }
+        Insert: {
+          applicant_user_id: string
+          created_at?: string
+          id?: string
+          needs_info_field?: string | null
+          photo_url?: string | null
+          reapply_after?: string | null
+          region: string
+          rejection_reason?: string | null
+          sport: Database["public"]["Enums"]["sport"]
+          state: string
+          status?: Database["public"]["Enums"]["upa_status"]
+          story_body: string
+          story_headline: string
+          updated_at?: string
+          verified_at?: string | null
+        }
+        Update: {
+          applicant_user_id?: string
+          created_at?: string
+          id?: string
+          needs_info_field?: string | null
+          photo_url?: string | null
+          reapply_after?: string | null
+          region?: string
+          rejection_reason?: string | null
+          sport?: Database["public"]["Enums"]["sport"]
+          state?: string
+          status?: Database["public"]["Enums"]["upa_status"]
+          story_body?: string
+          story_headline?: string
+          updated_at?: string
+          verified_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "upa_applications_applicant_user_id_fkey"
+            columns: ["applicant_user_id"]
+            isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "upa_applications_applicant_user_id_fkey"
+            columns: ["applicant_user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "upa_applications_applicant_user_id_fkey"
+            columns: ["applicant_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      upa_evidence: {
+        Row: {
+          application_id: string
+          created_at: string
+          id: string
+          kind: string
+          storage_path: string | null
+          url: string | null
+        }
+        Insert: {
+          application_id: string
+          created_at?: string
+          id?: string
+          kind: string
+          storage_path?: string | null
+          url?: string | null
+        }
+        Update: {
+          application_id?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          storage_path?: string | null
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "upa_evidence_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "upa_applications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      upa_wishlist_items: {
+        Row: {
+          cost: number
+          created_at: string
+          funded_amount: number
+          id: string
+          status: Database["public"]["Enums"]["upa_wishlist_item_status"]
+          title: string
+          upa_id: string
+          updated_at: string
+        }
+        Insert: {
+          cost: number
+          created_at?: string
+          funded_amount?: number
+          id?: string
+          status?: Database["public"]["Enums"]["upa_wishlist_item_status"]
+          title: string
+          upa_id: string
+          updated_at?: string
+        }
+        Update: {
+          cost?: number
+          created_at?: string
+          funded_amount?: number
+          id?: string
+          status?: Database["public"]["Enums"]["upa_wishlist_item_status"]
+          title?: string
+          upa_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "upa_wishlist_items_upa_id_fkey"
+            columns: ["upa_id"]
+            isOneToOne: false
+            referencedRelation: "upa_applications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -3148,6 +3504,36 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      admin_request_upa_info: {
+        Args: {
+          p_needs_info_field: string
+          p_note?: string
+          p_request_id: string
+        }
+        Returns: {
+          applicant_user_id: string
+          created_at: string
+          id: string
+          needs_info_field: string | null
+          photo_url: string | null
+          reapply_after: string | null
+          region: string
+          rejection_reason: string | null
+          sport: Database["public"]["Enums"]["sport"]
+          state: string
+          status: Database["public"]["Enums"]["upa_status"]
+          story_body: string
+          story_headline: string
+          updated_at: string
+          verified_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "upa_applications"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       admin_set_product_active: {
         Args: { p_active: boolean; p_id: string }
         Returns: {
@@ -3473,6 +3859,32 @@ export type Database = {
         }
       }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
+      deactivate_upa_application: {
+        Args: { p_application_id: string }
+        Returns: {
+          applicant_user_id: string
+          created_at: string
+          id: string
+          needs_info_field: string | null
+          photo_url: string | null
+          reapply_after: string | null
+          region: string
+          rejection_reason: string | null
+          sport: Database["public"]["Enums"]["sport"]
+          state: string
+          status: Database["public"]["Enums"]["upa_status"]
+          story_body: string
+          story_headline: string
+          updated_at: string
+          verified_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "upa_applications"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       expire_stale_holds: { Args: never; Returns: Json }
       fail_transfer: {
         Args: {
@@ -3499,6 +3911,8 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      general_fund_account_ref: { Args: never; Returns: string }
+      general_fund_balance: { Args: never; Returns: number }
       get_coach_busy_slots: {
         Args: { p_coach_id: string; p_from: string; p_to: string }
         Returns: {
@@ -3537,6 +3951,8 @@ export type Database = {
           rating_count: number
         }[]
       }
+      get_empower_stats: { Args: never; Returns: Json }
+      get_my_impact_summary: { Args: never; Returns: Json }
       get_my_transactions: {
         Args: { p_kind?: string; p_limit?: number; p_offset?: number }
         Returns: {
@@ -3564,6 +3980,25 @@ export type Database = {
       is_guest: { Args: never; Returns: boolean }
       is_moderator: { Args: never; Returns: boolean }
       is_verified_coach: { Args: { _coach_id: string }; Returns: boolean }
+      mark_wishlist_item_delivered: {
+        Args: { p_item_id: string }
+        Returns: {
+          cost: number
+          created_at: string
+          funded_amount: number
+          id: string
+          status: Database["public"]["Enums"]["upa_wishlist_item_status"]
+          title: string
+          upa_id: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "upa_wishlist_items"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       moderate_clip: {
         Args: { p_action: string; p_clip_id: string; p_reason?: string }
         Returns: {
@@ -3653,6 +4088,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      public_upa_profile: { Args: { p_upa_id: string }; Returns: Json }
       rate_court_booking: {
         Args: { p_booking_id: string; p_rating: number; p_remarks?: string }
         Returns: {
@@ -3718,7 +4154,53 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      reapply_upa_application: {
+        Args: { p_payload: Json }
+        Returns: {
+          applicant_user_id: string
+          created_at: string
+          id: string
+          needs_info_field: string | null
+          photo_url: string | null
+          reapply_after: string | null
+          region: string
+          rejection_reason: string | null
+          sport: Database["public"]["Enums"]["sport"]
+          state: string
+          status: Database["public"]["Enums"]["upa_status"]
+          story_body: string
+          story_headline: string
+          updated_at: string
+          verified_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "upa_applications"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       reconcile_stranded_clips: { Args: never; Returns: Json }
+      record_donation_from_draft: {
+        Args: { p_payment_intent_id: string }
+        Returns: {
+          amount: number
+          created_at: string
+          donor_id: string
+          id: string
+          item_id: string | null
+          method: Database["public"]["Enums"]["donation_method"]
+          order_id: string | null
+          payment_intent_id: string
+          upa_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "donations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       record_transfer: {
         Args: {
           p_amount: number
@@ -3801,6 +4283,32 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "reports"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      resubmit_upa_application: {
+        Args: { p_application_id: string; p_payload: Json }
+        Returns: {
+          applicant_user_id: string
+          created_at: string
+          id: string
+          needs_info_field: string | null
+          photo_url: string | null
+          reapply_after: string | null
+          region: string
+          rejection_reason: string | null
+          sport: Database["public"]["Enums"]["sport"]
+          state: string
+          status: Database["public"]["Enums"]["upa_status"]
+          story_body: string
+          story_headline: string
+          updated_at: string
+          verified_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "upa_applications"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -3968,6 +4476,32 @@ export type Database = {
       }
       stock_reservation_ttl: { Args: never; Returns: string }
       submit_coach_verification: { Args: { p_payload: Json }; Returns: string }
+      submit_upa_application: {
+        Args: { p_payload: Json }
+        Returns: {
+          applicant_user_id: string
+          created_at: string
+          id: string
+          needs_info_field: string | null
+          photo_url: string | null
+          reapply_after: string | null
+          region: string
+          rejection_reason: string | null
+          sport: Database["public"]["Enums"]["sport"]
+          state: string
+          status: Database["public"]["Enums"]["upa_status"]
+          story_body: string
+          story_headline: string
+          updated_at: string
+          verified_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "upa_applications"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       submit_venue_verification: { Args: { p_payload: Json }; Returns: string }
       timemultirange: { Args: never; Returns: unknown }
       toggle_clip_like: { Args: { p_clip_id: string }; Returns: Json }
@@ -3977,6 +4511,60 @@ export type Database = {
         Returns: boolean
       }
       unpaid_hold_ttl: { Args: never; Returns: string }
+      upa_application_transition_internal: {
+        Args: {
+          p_application_id: string
+          p_needs_info_field?: string
+          p_rejection_reason?: string
+          p_to_status: Database["public"]["Enums"]["upa_status"]
+        }
+        Returns: {
+          applicant_user_id: string
+          created_at: string
+          id: string
+          needs_info_field: string | null
+          photo_url: string | null
+          reapply_after: string | null
+          region: string
+          rejection_reason: string | null
+          sport: Database["public"]["Enums"]["sport"]
+          state: string
+          status: Database["public"]["Enums"]["upa_status"]
+          story_body: string
+          story_headline: string
+          updated_at: string
+          verified_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "upa_applications"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      upa_fund_balance: { Args: { p_account_ref: string }; Returns: number }
+      upa_wishlist_item_transition_internal: {
+        Args: {
+          p_item_id: string
+          p_to_status: Database["public"]["Enums"]["upa_wishlist_item_status"]
+        }
+        Returns: {
+          cost: number
+          created_at: string
+          funded_amount: number
+          id: string
+          status: Database["public"]["Enums"]["upa_wishlist_item_status"]
+          title: string
+          upa_id: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "upa_wishlist_items"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       update_cart_item: {
         Args: { p_qty: number; p_variant_id: string }
         Returns: Database["public"]["CompositeTypes"]["cart_mutation_result"]
@@ -4019,6 +4607,7 @@ export type Database = {
         | "no_show"
         | "pending_payment"
         | "expired"
+      donation_method: "standalone" | "checkout_roundup"
       fee_value_type: "percentage" | "flat"
       ledger_account_type:
         | "platform"
@@ -4071,6 +4660,14 @@ export type Database = {
       stock_reservation_status: "held" | "consumed" | "released"
       ticket_status: "open" | "resolved"
       transfer_status: "processing" | "paid" | "failed"
+      upa_status:
+        | "submitted"
+        | "under_review"
+        | "needs_info"
+        | "verified"
+        | "rejected"
+        | "deactivated"
+      upa_wishlist_item_status: "open" | "funded" | "delivered"
       user_status: "active" | "suspended"
       venue_status: "pending" | "verified" | "rejected"
       verification_status: "pending_review" | "approved" | "rejected"
@@ -4237,6 +4834,7 @@ export const Constants = {
         "pending_payment",
         "expired",
       ],
+      donation_method: ["standalone", "checkout_roundup"],
       fee_value_type: ["percentage", "flat"],
       ledger_account_type: [
         "platform",
@@ -4295,10 +4893,18 @@ export const Constants = {
       stock_reservation_status: ["held", "consumed", "released"],
       ticket_status: ["open", "resolved"],
       transfer_status: ["processing", "paid", "failed"],
+      upa_status: [
+        "submitted",
+        "under_review",
+        "needs_info",
+        "verified",
+        "rejected",
+        "deactivated",
+      ],
+      upa_wishlist_item_status: ["open", "funded", "delivered"],
       user_status: ["active", "suspended"],
       venue_status: ["pending", "verified", "rejected"],
       verification_status: ["pending_review", "approved", "rejected"],
     },
   },
 } as const
-
