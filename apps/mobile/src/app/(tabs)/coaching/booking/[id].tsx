@@ -1,4 +1,4 @@
-import { computeAvailableSessionSlots, useChat, useCoaching } from '@atlitos/api';
+import { computeAvailableSessionSlots, useChat, useCoaching, type RefundSummary } from '@atlitos/api';
 import { canTransition, SESSION_TRANSITIONS } from '@atlitos/types';
 import type { ApiError, Session } from '@atlitos/types';
 import { radii, spacing } from '@atlitos/theme';
@@ -17,6 +17,8 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusPill } from '@/components/ui/status-pill';
 import { Text } from '@/components/ui/text';
+import { PriceText } from '@/components/ui/price-text';
+import { REFUND_STATUS_CAPTION, REFUND_STATUS_HEADING } from '@/lib/refund-display';
 import { SESSION_FREQUENCY_LABEL, SESSION_STATUS_PILL } from '@/lib/session-display';
 import { supabase } from '@/lib/supabase';
 import { textStyle } from '@/theme/text-style';
@@ -66,6 +68,7 @@ export default function SessionDetailScreen() {
 
   const [state, setState] = useState<ScreenState>('loading');
   const [session, setSession] = useState<Session | null>(null);
+  const [refund, setRefund] = useState<RefundSummary | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
@@ -93,6 +96,18 @@ export default function SessionDetailScreen() {
       }
       setSession(result);
       setState('populated');
+      // AT-148: a cancelled session may be owed a refund (FR-35's automatic
+      // full refund on a requested cancel). Read it so the athlete sees the
+      // real amount and status, not just "cancelled". A failed read never
+      // blocks the detail view; the refund card simply does not render.
+      if (result.status === 'cancelled') {
+        void coaching
+          .getSessionRefund(result.id)
+          .then(setRefund)
+          .catch(() => setRefund(null));
+      } else {
+        setRefund(null);
+      }
     } catch (err) {
       setError(err as ApiError);
       setState('error');
@@ -176,6 +191,8 @@ export default function SessionDetailScreen() {
     try {
       const result = await coaching.cancelRequestedSession(session.id);
       setSession(result.session);
+      // Surface the just-issued refund without waiting for a reload.
+      void coaching.getSessionRefund(result.session.id).then(setRefund).catch(() => setRefund(null));
       // refund_status is the only honest source for whether the money has
       // actually moved yet; a successful call here only means the request
       // was cancelled, never that the refund completed (task brief, FR-35's
@@ -334,6 +351,32 @@ export default function SessionDetailScreen() {
         >
           <BillSummary rows={[{ label: 'Session fee', amount: session.price }]} total={session.total} />
         </View>
+
+        {/* AT-148 (AT-88, PRD-02 FR-35). When a cancelled session was refunded,
+            surface the real amount and status from the refunds row, keyed off
+            the refund's own status so a pending refund never reads as done. */}
+        {refund ? (
+          <View
+            style={{
+              borderRadius: radii.xl,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.card,
+              padding: spacing.lg,
+              gap: spacing.xs,
+            }}
+          >
+            <View className="flex-row items-center justify-between">
+              <Text style={[textStyle('label'), { color: colors.textSecondary }]}>
+                {REFUND_STATUS_HEADING[refund.status]}
+              </Text>
+              <PriceText amount={refund.amount} size="lg" />
+            </View>
+            <Text style={[textStyle('caption'), { color: colors.textTertiary }]}>
+              {REFUND_STATUS_CAPTION[refund.status]}
+            </Text>
+          </View>
+        ) : null}
 
         {actionError ? <Text style={[textStyle('caption'), { color: colors.danger }]}>{actionError}</Text> : null}
 

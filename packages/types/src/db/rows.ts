@@ -515,6 +515,9 @@ export interface DonationRow {
   method: DonationMethod;
   order_id: UUID | null;
   payment_intent_id: UUID;
+  // AT-149: finalize-time snapshot of the donor name to show the UPA. Null
+  // unless show_donor_name was on at donation time; renders "A Sponsor".
+  donor_display_name: string | null;
   created_at: ISODateTime;
 }
 

@@ -22,6 +22,10 @@ interface DonationRow {
   amount: number;
   created_at: string;
   method: string;
+  // AT-149: the finalize-time visibility snapshot. Non null only when the donor
+  // had show_donor_name on at the moment they gave; null renders "A Sponsor".
+  // Read from the row, never joined live against users (address-snapshot rule).
+  donor_display_name: string | null;
 }
 
 export function FundingDetail({ itemId, upaId }: { itemId: string; upaId: string }) {
@@ -57,7 +61,7 @@ export function FundingDetail({ itemId, upaId }: { itemId: string; upaId: string
     const [{ data: donationData }, { data: gratitudeData }] = await Promise.all([
       supabase
         .from("donations")
-        .select("id, amount, created_at, method")
+        .select("id, amount, created_at, method, donor_display_name")
         .eq("item_id", itemId)
         .order("created_at", { ascending: false }),
       supabase
@@ -209,7 +213,9 @@ export function FundingDetail({ itemId, upaId }: { itemId: string; upaId: string
                       <CircleUser className="size-4" strokeWidth={1.75} />
                     </div>
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-sm font-medium text-foreground">A Sponsor</span>
+                      <span className="text-sm font-medium text-foreground">
+                        {donation.donor_display_name ?? "A Sponsor"}
+                      </span>
                       <span className="font-mono text-xs tabular-nums text-muted-foreground">
                         {formatDate(donation.created_at)}
                       </span>

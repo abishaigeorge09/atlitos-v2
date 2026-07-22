@@ -1098,6 +1098,7 @@ export type Database = {
         Row: {
           amount: number
           created_at: string
+          donor_display_name: string | null
           donor_id: string
           id: string
           item_id: string | null
@@ -1109,6 +1110,7 @@ export type Database = {
         Insert: {
           amount: number
           created_at?: string
+          donor_display_name?: string | null
           donor_id: string
           id?: string
           item_id?: string | null
@@ -1120,6 +1122,7 @@ export type Database = {
         Update: {
           amount?: number
           created_at?: string
+          donor_display_name?: string | null
           donor_id?: string
           id?: string
           item_id?: string | null

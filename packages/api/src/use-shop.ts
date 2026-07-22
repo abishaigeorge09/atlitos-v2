@@ -2,6 +2,7 @@ import type { ApiError, ApiErrorCode, OrderStatus, Sport } from "@atlitos/types"
 
 import type { AtlitosClient } from "./client";
 import { mapEdgeFunctionError, mapPostgrestError } from "./errors";
+import { readRefundSummary, type RefundSummary } from "./refunds";
 
 /**
  * `@atlitos/api`'s shopper commerce lane (AT-74 to AT-80, P4 Track C), per
@@ -993,6 +994,17 @@ export function useShop(client: AtlitosClient) {
             }
           : null,
       };
+    },
+
+    /** AT-148 (AT-88, PRD-04 FR-24). READ any refund issued against a
+     * commerce order so its detail screen can surface the amount and status
+     * to the shopper who is owed it. Commerce refunds carry
+     * `entity_id = order id` (PAYMENTS.md), except the late-capture branch that
+     * points at a payment_intent because no order exists, which by definition
+     * has no order detail screen to show. Pure read against `refunds` (the
+     * payer may select their own row); no money is written here. */
+    async getOrderRefund(orderId: string): Promise<RefundSummary | null> {
+      return readRefundSummary(client, "commerce", orderId);
     },
 
     /** PRD-07 FR-26. Both halves are enforced in the database, not here:
