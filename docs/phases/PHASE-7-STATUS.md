@@ -1,6 +1,6 @@
 # Phase 7 Status: Learn and XP
 
-**Status: OPEN. Planner skeleton (2026-07-22).** Stories AT-129 through AT-139 filed under epic AT-9 (Learn and XP), with the admin drill CRUD story also citing epic AT-10 (Admin Back Office). Deliverables below are unchecked; builders tick them as they land. This doc is the P7 contract and phase memory.
+**Status: APPROVED cycle 1 (2026-07-22). CLOSED.** Biased approver APPROVE, no escalation (gate commit 301be20). Stories AT-129 through AT-139 filed under epic AT-9 (Learn and XP), with the admin drill CRUD story also citing epic AT-10 (Admin Back Office); all Done. This closes the last fully-autonomous build phase (P0-P7); only P8 hardening and the P9 native / P10 ship stages remain. This doc is the P7 contract and phase memory.
 
 Gate (docs/PLAN.md P7): "Learn + XP: drills, roadmap, xp from real actions, lucide milestones, admin drill CRUD. GATE: roadmap progresses from real activity."
 
@@ -92,22 +92,22 @@ The founder will not answer mid-phase (full-autonomy directive). Each open quest
 Every builder ticket carries, as **step 0 inside its worktree**, `git merge main --no-edit` to pull all current phase work before building (worktree stale-base has bitten prior builds; a stale base is missing prior migrations, types, and edge functions). Any ticket that adds a mobile route must, after adding it, regenerate `.expo/types/router.d.ts` via a brief `expo start --web` before typecheck; `turbo typecheck` does not regenerate it and a fresh Learn route will otherwise fail typecheck against a stale router manifest (PHASE-6-STATUS.md gotcha).
 
 ### Track A: schema, RLS, the XP engine, derivations (opus)
-- [ ] AT-129 Learn schema migration: `drills`, `drill_completions`, `roadmap_stages`, `xp_events`, `milestones`, `user_milestones` per SCHEMA.md Domain: learn, with enums `drill_difficulty` and `xp_source` if not already present, the `UNIQUE(user_id, drill_id)` and `UNIQUE(user_id, milestone_id)` and `UNIQUE(sport, stage_order)` and `milestones.key` constraints, `CHECK (xp_value > 0)`, and the `idx_drills_sport_active` / `idx_xp_events_user_id` indexes (PRD-01 FR-48, FR-49, FR-50, FR-51; PRD-04 FR-49)
-- [ ] AT-130 Learn RLS: public `anon`-inclusive SELECT on `drills`/`roadmap_stages`/`milestones` (all rows, reference content), `drills` write `has_role('admin')` only; `drill_completions` own-row `INSERT` only (no UPDATE/DELETE), owner SELECT; `xp_events` owner SELECT with NO authenticated write grant; `user_milestones` owner SELECT with NO authenticated write grant. Document the permissive-OR active-filter contract for `drills` (RLS.md lines 118, 257 to 260; PRD-01 FR-49, FR-51; CLAUDE.md permissive-OR)
-- [ ] AT-131 XP engine triggers: `AFTER INSERT ON drill_completions` writes exactly one `xp_events` row (`source='drill_complete'`, `drill_id` set, `xp_amount` read from `drills.xp_value` server side) in the same transaction; a milestone-evaluation trigger inserts `user_milestones` for each newly met `criteria` (`xp_threshold` against the XP sum, `drill_count` against the completion count); both idempotent via the UNIQUE constraints (PRD-01 FR-49, FR-50, FR-51)
-- [ ] AT-132 Learn read layer: `get_learn_home()` returning the player's XP total (`sum(xp_amount)`), current roadmap stage (top `stage_order` whose `xp_threshold <= total` for the player's sport), and earned vs locked milestones, all computed at read time with no denormalized counter; owner-scoped explicitly (PRD-01 FR-48, FR-50, FR-51)
+- [x] AT-129 Learn schema migration: `drills`, `drill_completions`, `roadmap_stages`, `xp_events`, `milestones`, `user_milestones` per SCHEMA.md Domain: learn, with enums `drill_difficulty` and `xp_source` if not already present, the `UNIQUE(user_id, drill_id)` and `UNIQUE(user_id, milestone_id)` and `UNIQUE(sport, stage_order)` and `milestones.key` constraints, `CHECK (xp_value > 0)`, and the `idx_drills_sport_active` / `idx_xp_events_user_id` indexes (PRD-01 FR-48, FR-49, FR-50, FR-51; PRD-04 FR-49)
+- [x] AT-130 Learn RLS: public `anon`-inclusive SELECT on `drills`/`roadmap_stages`/`milestones` (all rows, reference content), `drills` write `has_role('admin')` only; `drill_completions` own-row `INSERT` only (no UPDATE/DELETE), owner SELECT; `xp_events` owner SELECT with NO authenticated write grant; `user_milestones` owner SELECT with NO authenticated write grant. Document the permissive-OR active-filter contract for `drills` (RLS.md lines 118, 257 to 260; PRD-01 FR-49, FR-51; CLAUDE.md permissive-OR)
+- [x] AT-131 XP engine triggers: `AFTER INSERT ON drill_completions` writes exactly one `xp_events` row (`source='drill_complete'`, `drill_id` set, `xp_amount` read from `drills.xp_value` server side) in the same transaction; a milestone-evaluation trigger inserts `user_milestones` for each newly met `criteria` (`xp_threshold` against the XP sum, `drill_count` against the completion count); both idempotent via the UNIQUE constraints (PRD-01 FR-49, FR-50, FR-51)
+- [x] AT-132 Learn read layer: `get_learn_home()` returning the player's XP total (`sum(xp_amount)`), current roadmap stage (top `stage_order` whose `xp_threshold <= total` for the player's sport), and earned vs locked milestones, all computed at read time with no denormalized counter; owner-scoped explicitly (PRD-01 FR-48, FR-50, FR-51)
 
 ### Track B: admin drill CRUD (sonnet)
 - [x] AT-133 Admin drill CRUD (migration `0061`, `apps/admin/src/pages/drills/*`): SECURITY DEFINER `admin_upsert_drill(...)` and `admin_set_drill_active(...)` RPCs (`has_role('admin')` inside, each writing exactly one `audit_log` row per accepted mutation), plus the Refine Drill List (name, sport, skill category, difficulty, XP value) and Drill Create/Edit screens with required-field validation, optional media, and activate/deactivate (PRD-04 FR-49, FR-50, FR-51)
 
 ### Track C: Learn consumer screens, mobile (sonnet)
-- [ ] AT-134 Learn home + Drill library/list + `useLearn` hook in `packages/api`: Learn home shows roadmap progress, XP total, drill categories (FR-48 empty state when no roadmap), Drill library filterable by sport and difficulty with the explicit `active = true` filter; the hook independently handles loading/empty/error/loaded like `useEmpower` (PRD-01 FR-48; screens Learn home, Drill library)
-- [ ] AT-135 Drill detail + mark complete: instructions, a mark-complete action that INSERTs the own `drill_completions` row, completion state that persists across reload, idempotent (a completed drill shows completed and does not re-award), no redo affordance (PRD-01 FR-49; screen Drill detail)
-- [ ] AT-136 Roadmap + Milestones screens: milestone track with the current stage highlighted and XP thresholds shown, Milestones screen rendering earned vs locked from real `user_milestones` data with a lucide icon per milestone and never an emoji (PRD-01 FR-50, FR-51; screens Roadmap, Milestones)
+- [x] AT-134 Learn home + Drill library/list + `useLearn` hook in `packages/api`: Learn home shows roadmap progress, XP total, drill categories (FR-48 empty state when no roadmap), Drill library filterable by sport and difficulty with the explicit `active = true` filter; the hook independently handles loading/empty/error/loaded like `useEmpower` (PRD-01 FR-48; screens Learn home, Drill library)
+- [x] AT-135 Drill detail + mark complete: instructions, a mark-complete action that INSERTs the own `drill_completions` row, completion state that persists across reload, idempotent (a completed drill shows completed and does not re-award), no redo affordance (PRD-01 FR-49; screen Drill detail)
+- [x] AT-136 Roadmap + Milestones screens: milestone track with the current stage highlighted and XP thresholds shown, Milestones screen rendering earned vs locked from real `user_milestones` data with a lucide icon per milestone and never an emoji (PRD-01 FR-50, FR-51; screens Roadmap, Milestones)
 
 ### Track D: fixtures and copy (haiku)
-- [ ] AT-137 Learn seed fixtures: `supabase/seed/seed_p7_learn.sql` with drills across sports/difficulties/`xp_value`s (some inactive, to prove the active filter), `roadmap_stages` per sport with ascending `xp_threshold`s, milestones covering both `xp_threshold` and `drill_count` criteria each with a lucide `icon_name`, and a few `drill_completions` for one demo player so roadmap and milestones render populated; every seed row carries its explicit owner id and any isolation fixture uses two ids asserted to DIFFER; no emoji, no hyphen/em-dash in any seeded copy string (PRD-01; PRD-04)
-- [ ] AT-138 House-style copy pass across all P7 Learn mobile screens and the admin drill screens: no emoji and lucide names only, no hyphen/em-dash in any copy string, JetBrains Mono tabular figures on every numeric readout (XP, levels, stage numbers, counts, progress percent), tokens only, all four states present on every screen (CLAUDE.md; DESIGN-LANGUAGE.md; PRD-01 FR-70)
+- [x] AT-137 Learn seed fixtures: `supabase/seed/seed_p7_learn.sql` with drills across sports/difficulties/`xp_value`s (some inactive, to prove the active filter), `roadmap_stages` per sport with ascending `xp_threshold`s, milestones covering both `xp_threshold` and `drill_count` criteria each with a lucide `icon_name`, and a few `drill_completions` for one demo player so roadmap and milestones render populated; every seed row carries its explicit owner id and any isolation fixture uses two ids asserted to DIFFER; no emoji, no hyphen/em-dash in any seeded copy string (PRD-01; PRD-04)
+- [x] AT-138 House-style copy pass across all P7 Learn mobile screens and the admin drill screens: no emoji and lucide names only, no hyphen/em-dash in any copy string, JetBrains Mono tabular figures on every numeric readout (XP, levels, stage numbers, counts, progress percent), tokens only, all four states present on every screen (CLAUDE.md; DESIGN-LANGUAGE.md; PRD-01 FR-70)
 
 ### Track E: verification (opus)
 - [x] AT-139 XP tamper-proof and gate verification, against the LIVE project, non-vacuously by actual attempts and row reads: (1) a real player marks a drill complete and exactly one `xp_events` row appears with `xp_amount == drills.xp_value`, no client `xp_events` write in the path; (2) the roadmap current stage advances as a pure function of the XP total when a threshold is crossed, and a milestone unlocks when its criteria are met; (3) direct `authenticated` INSERT into `xp_events` and `user_milestones` each return `42501`, and a client cannot forge `xp_amount`; (4) idempotency: a duplicate completion writes no second event and leaves the total unchanged; (5) isolation, two player ids asserted to DIFFER first, A's XP/roadmap/milestones never visible to B, the public catalog readable but the app `active = true` filter enforced; (6) admin create/edit/deactivate each write exactly one `audit_log` row and a non-admin drill write is refused. Capture light and dark web evidence under `docs/phases/evidence/p7-web/` (PRD-01 FR-48, FR-49, FR-50, FR-51; PRD-04 FR-49, FR-50, FR-51; CLAUDE.md permissive-OR)
@@ -155,3 +155,75 @@ No blocking findings. Gate APPROVED.
 ## Dependency order
 
 Track A first: AT-129 (schema) -> AT-130 (RLS) and AT-131 (triggers) -> AT-132 (read layer). AT-131 needs AT-129; AT-132 needs AT-131. Track B (AT-133) needs AT-129/AT-130. Track C needs AT-130 + AT-132 (and seeded drills from AT-137 for populated render). AT-137 fixtures need AT-129. AT-138 runs after the screens land. AT-139 verification runs last, after every other P7 ticket.
+
+## Phase-close (2026-07-22): approver-verified evidence
+
+Independently re-derived by the biased approver against live `syzzfgaudpifwvbpycyi` (rolled-back write probes, read-only SQL, Track F not trusted). Concise record so the gate proof survives:
+
+- **The gate proven.** A real own-row `drill_completions` insert (throwaway fixture player, drill `xp_value=100`) took `get_learn_home().xp_total` 0 -> 100 (exactly the drill's `xp_value`); current stage advanced order 1 -> order 2 (threshold crossed); 3 milestones unlocked; exactly one trigger-written `xp_events` row (`source='drill_complete'`, `xp_amount=100`); no client XP write anywhere in the path.
+- **Un-forgeability.** As `authenticated`: direct `INSERT xp_events` -> 42501, `INSERT user_milestones` -> 42501; XP smuggle on `drill_completions` -> 42703 raw SQL / PGRST204 over REST (no client-writable XP column, same guarantee); total is derived `sum(xp_amount)`, no counter column.
+- **Idempotency.** Duplicate completion -> 23505; atomic, no second event, no double unlock.
+- **Catalog active filter.** 12 active legit drills, 10 Track B probes inactive; `.eq('active', true)` is explicit in app code (`use-learn.ts` listDrills L238, getDrill L258), unconditional, not RLS-only.
+- **Admin RPCs.** create + edit + deactivate wrote exactly one `audit_log` row each; non-admin -> P0001 FORBIDDEN; `xp_value<=0` -> P0001 VALIDATION.
+- **RLS isolation, non-vacuous.** B (coach2 883b6f5d) vs A (player 58756043), ids asserted DIFFER first; B sees 0 of A's completions/events/milestones; public catalog visible.
+- **Advisors.** No new learn ERROR vs P6; all learn entries WARN (baseline SECURITY-DEFINER-executable + anon-access pattern).
+
+## Open defects / carried advisories (NONE dropped; each has a deferral home)
+
+**P7 advisories (from the cycle-1 verdict):**
+- Track B probe-drill hygiene: 10 active `VERIFY` probe drills left by Track B, RESOLVED (Track F deactivated; confirmed inactive). Follow-up for future verification: seed probes inactive or roll them back. Closed.
+- Dark-mode mobile-web gap: no consumer dark toggle on Learn, scheme does not persist across expo-router web nav (dark tokens resolve correctly on /dev/tokens). Pre-existing platform gap, not a P7 regression. -> P9 native pass.
+- Doc-nit: XP smuggle returns PGRST204 over REST / 42703 in raw SQL, not 42703 everywhere as Track A first cited. Same guarantee. LOW, noted.
+- Evidence-medium: p7-web evidence is transcribed values not PNGs (browser MCP could not write files). Backend reproducible by SQL / `scripts/verify-learn-p7.mjs`; gate is SQL-provable. LOW, noted.
+- Cross-domain XP (session/court/donation/clip) is a designed-in `xp_source='other'` hook, NOT built (no PRD FR wires it). Intentional scope call; a later phase adds one trigger with zero read-layer change.
+
+**Carried P1-P6 debt (still open, re-listed so nothing is lost):**
+- Razorpay Route not enabled (live founder action; blocks partner/coach payout split going live).
+- AT-88 refund-not-surfaced (refund state not shown in the athlete UI).
+- Native coverage debt + the P9 native-pass debt (Learn gestures/haptics, plus every prior phase's device-only surface).
+- `tmp-seed-demo-users` still deployed (temporary seed helper; founder must delete).
+- TS version skew in `apps/mobile`.
+- RLS WARN debt: `auth_rls_initplan` + `multiple_permissive_policies` across all phases, plus SECURITY DEFINER executable-by-authenticated (now +2 for `admin_upsert_drill` / `admin_set_drill_active`, by design).
+- PRD-02 (coach) four assumptions carried unresolved.
+- AT-73 (late-capture branch).
+- `show_donor_name` wiring (Empower donor-name display not wired).
+- PRD-01 / P6 assumptions carried.
+
+## Handoff notes for the P8 planner (Search + Notifications + Hardening)
+
+P8 is the LAST autonomous phase. Per PLAN.md it covers: ai-search, push notifications, a states pass, an RLS/advisor audit, a 5-journey regression, perf, and a docs freeze. Its GATE is full sign-off; after that come the ship stages (P9 native verification, P10 TestFlight).
+
+**(a) FULL inventory of accumulated advisory debt P8 must burn down or explicitly re-defer** (pull from every PHASE-N-STATUS open-defects section; do not let any lapse silently):
+- RLS WARN debt across ALL phases: `auth_rls_initplan` (re-eval of `auth.*()` per row) and `multiple_permissive_policies` (permissive-OR overlap) on every domain, plus SECURITY DEFINER RPCs executable by `authenticated` (by design, but must be audited and signed off, not merely inherited).
+- `tmp-seed-demo-users` deletion (founder action; see (b)).
+- The live Route transfer / Razorpay Route enablement (founder action; see (b)).
+- `show_donor_name` wiring.
+- AT-88 refund-not-surfaced.
+- TS version skew in `apps/mobile`.
+- AT-73 late-capture branch.
+- `venue_bookings_today` date filter (AT-25) — verify the today-scoping filter is correct.
+- The AT-26 sweep coverage — confirm the sweep covers all intended surfaces.
+- Dark-mode mobile-web gap (P7, -> P9 but note it in the states pass).
+- Cross-domain XP hook (P7) — decide if any P8 source (notification-worthy action) should grant XP; default is leave as designed-in hook.
+- Any others surfaced by the RLS/advisor audit against the current baseline.
+
+**(b) THREE founder actions P8 needs and CANNOT self-serve** (surface these to the founder early; the docs-freeze / sign-off cannot honestly claim green without them):
+1. Enable Razorpay Route (partner/coach payout split; live dashboard action).
+2. Delete `tmp-seed-demo-users` (temporary seed helper still deployed).
+3. Ratify the platform fee rate + the other PRD-02 / PRD-05 assumptions (the money-split and life-domain assumptions that were resolved-by-assumption and never founder-confirmed).
+
+**(c) The finish line is TestFlight.** P8's docs-freeze / sign-off feeds directly into:
+- P9 native verification pass (burns the native debt: Learn gestures/haptics and every prior device-only surface; needs founder device time).
+- P10 TestFlight ship (needs the founder's Apple Developer account).
+Write the P8 sign-off so P9 and P10 can start cold from it.
+
+**(d) Two mechanical mandates that held clean through P7, keep enforcing:**
+- Every builder ticket runs `git merge main --no-edit` as step 0 inside its worktree (stale-base misses prior migrations/types/edge functions).
+- Any ticket adding a mobile route regenerates `.expo/types/router.d.ts` via a brief `expo start --web` before typecheck (`turbo typecheck` does not regenerate it; a fresh route fails against a stale router manifest). Did not bite P7 (learn routes already in the manifest) but remains a live gotcha.
+
+## History (folded from PHASE-7-CHECKPOINT.md, now deleted)
+
+Track A (AT-129 schema, AT-130 RLS, AT-131 XP engine, AT-132 read layer) built + verified:
+- Migrations applied remotely in order: `0057_learn_schema` (enums drill_difficulty/xp_source + 6 tables + UNIQUE/CHECK/indexes), `0058_learn_rls` (public catalog, owner-scoped completions, un-forgeable xp_events/user_milestones), `0059_learn_xp_engine` (`AFTER INSERT` trigger `grant_xp_on_drill_completion()` + milestone eval), `0060_learn_read_layer` (`get_learn_home()`). Track B added `0061_admin_drill_rpcs`. Versions 20260722082836 / 082952 / 083048 / 083207 / 084604.
+- Track A live verification (test data then cleaned up): real own-row completion -> exactly one `xp_events` row, `xp_amount=60 == drills.xp_value`; smuggle -> 42703; direct `xp_events`/`user_milestones` insert -> 42501; duplicate -> 23505; cross-threshold at total 360 unlocked xp100 + drill_count2 (one row each, not xp500); `get_learn_home()` derived xp_total 360, current stage Rising(102), next Elite(500); isolation ids asserted DIFFER, A invisible to B, B empty state.
+- Integrator (HEAD e1b6fae, gate 301be20): `pnpm turbo typecheck build lint` green 24/24; all P7 tracks present; router.d.ts gotcha did not bite; p7-web evidence as `VERIFICATION.md` (transcribed, LOW advisory).
