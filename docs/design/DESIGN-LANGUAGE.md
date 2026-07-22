@@ -211,6 +211,8 @@ Consequence to accept: the container can no longer carry `active:opacity-90`, be
 
 The one sanctioned exception is the modal backdrop idiom (`ConfirmSheet`, `LoginGateModal`, and the variant pickers): a roleless backdrop `Pressable` wrapping a roleless `Pressable` that calls `event.stopPropagation()` to swallow sheet taps. Neither carries a button role, so neither renders a `<button>`, and the nesting is what makes dismiss-on-backdrop work. Do not add `accessibilityRole="button"` to either of those.
 
+Reference implementation: `apps/mobile/src/components/molecules/ClutchPostCard.tsx` (feed variant). The invariant to check in review: no `Pressable` is an ancestor of another `Pressable` in the same card.
+
 ## Voice and copy rules
 
 - No emojis, anywhere, ever, including in placeholder copy, commit-adjacent user-facing strings, and empty states. Use a lucide icon instead.

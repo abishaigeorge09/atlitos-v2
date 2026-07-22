@@ -1,21 +1,35 @@
-import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/theme/use-theme-colors';
 import type { Clip } from '@atlitos/types';
 import * as Haptics from 'expo-haptics';
 import { Heart, MessageCircle, Share2 } from 'lucide-react-native';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 
+import { ClipVideo } from '@/components/molecules/clip-video';
+import { Text } from '@/components/ui/text';
+import { useThemeColors } from '@/theme/use-theme-colors';
+
 /**
- * SPEC #23. Two variants: `feed` (full video card with engagement rail, per
- * SPEC "video thumb, channel, likes, timestamp, top comment, View all N
- * comments") and `thumb` (square grid tile for a creator profile grid, a
- * flagged extension: SPEC only describes the feed context in prose).
+ * SPEC #23. Two variants: `feed` (full-bleed vertical video card with the
+ * engagement rail, one per viewport in the vertical feed) and `thumb` (square
+ * grid tile for a creator/own profile grid).
+ *
+ * PRESSABLE-OVERLAY PATTERN (DESIGN-LANGUAGE.md): the whole-card open tap is a
+ * single absolute-fill <Pressable> rendered as a SIBLING behind the action
+ * controls, never a wrapper around them. The caption and action-rail wrappers
+ * are `pointerEvents="box-none"` Views, so taps on empty space fall through to
+ * that overlay while the like/comment/share Pressables still capture their own
+ * taps. This is the fix for the nested-<button> regression (4868df9); do not
+ * reintroduce a card-level Pressable wrapping the inner ones.
  */
 export type ClutchPostCardVariant = 'feed' | 'thumb';
 
 export interface ClutchPostCardProps {
   clip: Clip;
   variant?: ClutchPostCardVariant;
+  /** Short-lived signed MP4 URL for this card, minted by the feed per visible
+   * card (feed variant only). Absent until minted; the poster carries it. */
+  playbackUrl?: string;
+  /** True only for the single on-screen card, drives muted autoplay. */
+  active?: boolean;
   onLike?: () => void;
   onComment?: () => void;
   onShare?: () => void;
@@ -32,19 +46,32 @@ function timeAgo(iso: string): string {
   return `${days}d ago`;
 }
 
-export function ClutchPostCard({ clip, variant = 'feed', onLike, onComment, onShare, onOpen }: ClutchPostCardProps) {
+export function ClutchPostCard({
+  clip,
+  variant = 'feed',
+  playbackUrl,
+  active = false,
+  onLike,
+  onComment,
+  onShare,
+  onOpen,
+}: ClutchPostCardProps) {
   const colors = useThemeColors();
 
   const handleLike = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {
+      // Haptics unavailable (web/simulator), not fatal.
+    });
     onLike?.();
   };
 
   if (variant === 'thumb') {
+    // Single Pressable, only non-interactive children (no nested pressables).
     return (
       <Pressable
         onPress={onOpen}
-        role="button"
+        accessibilityRole="button"
+        accessibilityLabel={`Open clip, ${clip.likes} likes`}
         className="aspect-square flex-1 overflow-hidden rounded-sm bg-surface-muted active:opacity-90"
       >
         {clip.thumbUrl ? (
@@ -59,48 +86,57 @@ export function ClutchPostCard({ clip, variant = 'feed', onLike, onComment, onSh
   }
 
   return (
-    // Pressable overlay card, see docs/design/DESIGN-LANGUAGE.md. The card is a
-    // plain View. The open-the-clip press is an absolutely filled Pressable
-    // sibling rendered before the caption and the engagement rail, so the View
-    // all comments link and the like, comment and share buttons are siblings of
-    // it rather than nested buttons.
-    <View className="overflow-hidden rounded-md bg-text" style={{ width: '100%', aspectRatio: 9 / 16 }}>
-      {clip.thumbUrl ? (
-        <View pointerEvents="none" className="absolute inset-0">
-          <Image source={{ uri: clip.thumbUrl }} className="h-full w-full" resizeMode="cover" />
-        </View>
-      ) : null}
+    <View className="h-full w-full overflow-hidden bg-text">
+      {/* 1. Playback surface (poster + video), non-interactive. */}
+      <ClipVideo url={playbackUrl} thumbUrl={clip.thumbUrl} active={active} />
 
-      <Pressable
-        onPress={onOpen}
-        role="button"
-        accessibilityLabel={`Open clip by ${clip.channel}`}
-        style={StyleSheet.absoluteFill}
+      {/* 2. Bottom scrim for caption legibility, never a touch target. */}
+      <View
+        pointerEvents="none"
+        style={[StyleSheet.absoluteFill, { top: '55%', backgroundColor: colors.overlay }]}
       />
 
-      <View pointerEvents="box-none" className="absolute inset-x-0 bottom-0 gap-xs p-md" style={{ right: 64, zIndex: 1 }}>
-        <View pointerEvents="none" className="gap-xs">
-          <View className="flex-row items-center gap-sm">
-            <Text className="font-sans-semibold text-text-inverse">{clip.channel}</Text>
-            <Text className="text-xs text-text-inverse opacity-80">{timeAgo(clip.createdAt)}</Text>
-          </View>
-          {clip.topComment ? (
-            <Text className="text-xs text-text-inverse opacity-90" numberOfLines={1}>
-              {clip.topComment.username}: {clip.topComment.text}
-            </Text>
-          ) : null}
+      {/* 3. Whole-card open tap: a sibling overlay BEHIND the controls, never a
+          wrapper around them. */}
+      <Pressable
+        style={StyleSheet.absoluteFill}
+        accessibilityRole="button"
+        accessibilityLabel={`Open clip by ${clip.channel}`}
+        onPress={onOpen}
+      />
+
+      {/* 4. Caption block. box-none so empty space falls through to overlay
+          (3); the inner "View all comments" Pressable still captures taps. */}
+      <View pointerEvents="box-none" className="absolute inset-x-0 bottom-0 gap-xs p-md" style={{ right: 72 }}>
+        <View className="flex-row items-center gap-sm">
+          <Text className="font-sans-semibold text-text-inverse">{clip.channel}</Text>
+          <Text className="font-mono text-xs text-text-inverse opacity-80">{timeAgo(clip.createdAt)}</Text>
         </View>
+        {clip.caption ? (
+          <Text className="text-sm text-text-inverse opacity-95" numberOfLines={2}>
+            {clip.caption}
+          </Text>
+        ) : null}
+        {clip.topComment ? (
+          <Text className="text-xs text-text-inverse opacity-90" numberOfLines={1}>
+            {clip.topComment.username}: {clip.topComment.text}
+          </Text>
+        ) : null}
         {clip.commentCount > 0 ? (
-          <Pressable onPress={onComment} role="button" hitSlop={8} className="min-h-11 justify-center">
-            <Text className="text-xs text-text-inverse opacity-75">
-              View all {clip.commentCount} comments
-            </Text>
+          <Pressable onPress={onComment} accessibilityRole="button" hitSlop={8} className="self-start py-xs">
+            <Text className="text-xs text-text-inverse opacity-75">View all {clip.commentCount} comments</Text>
           </Pressable>
         ) : null}
       </View>
 
-      <View pointerEvents="box-none" style={{ zIndex: 1 }} className="absolute bottom-md right-md items-center gap-lg">
-        <Pressable onPress={handleLike} role="button" className="min-h-11 min-w-11 items-center justify-center gap-xs">
+      {/* 5. Action rail. box-none wrapper; each action is its own Pressable. */}
+      <View pointerEvents="box-none" className="absolute bottom-md right-md items-center gap-lg">
+        <Pressable
+          onPress={handleLike}
+          accessibilityRole="button"
+          accessibilityLabel={clip.likedByMe ? 'Unlike' : 'Like'}
+          className="min-h-11 min-w-11 items-center justify-center gap-xs"
+        >
           <Heart
             size={24}
             strokeWidth={1.75}
@@ -109,11 +145,21 @@ export function ClutchPostCard({ clip, variant = 'feed', onLike, onComment, onSh
           />
           <Text className="font-mono text-xs text-text-inverse">{clip.likes}</Text>
         </Pressable>
-        <Pressable onPress={onComment} role="button" className="min-h-11 min-w-11 items-center justify-center gap-xs">
+        <Pressable
+          onPress={onComment}
+          accessibilityRole="button"
+          accessibilityLabel="Comments"
+          className="min-h-11 min-w-11 items-center justify-center gap-xs"
+        >
           <MessageCircle size={24} strokeWidth={1.75} color={colors.textInverse} />
           <Text className="font-mono text-xs text-text-inverse">{clip.commentCount}</Text>
         </Pressable>
-        <Pressable onPress={onShare} role="button" className="min-h-11 min-w-11 items-center justify-center gap-xs">
+        <Pressable
+          onPress={onShare}
+          accessibilityRole="button"
+          accessibilityLabel="Share"
+          className="min-h-11 min-w-11 items-center justify-center gap-xs"
+        >
           <Share2 size={24} strokeWidth={1.75} color={colors.textInverse} />
           <Text className="text-xs text-text-inverse">Share</Text>
         </Pressable>
