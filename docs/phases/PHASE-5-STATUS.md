@@ -135,6 +135,7 @@ Phase close must record: whether the on device capture to autoplay round trip ac
 - **AT-93 reconcile arm: observed to have run.** Wired into the scheduled `expire-stale-holds` pg_cron (`*/5 * * * *`, active), returns the readied/rejected/failed shape. Not merely scheduled.
 - **No column stores a resolved URL: confirmed.** Columns hold object PATHS only (`storage_path`, `thumb_path`); every view is a fresh 300s mint against the live row. AT-107's removed-clip fetch found no column bypass.
 - **Cloudflare Stream swap surface (future phase):** `cf_stream_uid` nullable slot on `clips` (null in v1); the two stable edge contracts `stream-upload-url` and `stream-webhook`; the real `stream-reconcile` poller (`GET /stream/{uid}`) that becomes live only when Stream is enabled. Swap is config plus one adapter, not a migration.
+- **Jira board reconciled (2026-07-22):** all 19 P5 stories AT-89 through AT-107 (epic AT-7, Clutch Video) transitioned to Done. Before close: AT-89 to AT-103 were In Progress, AT-104 to AT-107 were Backlog. No P5 ticket left open. Project key is `AT` (project id 10066), no In Review status in the workflow (In Progress -> Done directly).
 
 ## Handoff notes for the P6 planner (Empower / Atlitos Life portal)
 
