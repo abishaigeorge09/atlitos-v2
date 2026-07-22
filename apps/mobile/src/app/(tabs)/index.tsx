@@ -1,7 +1,8 @@
+import { useNotifications } from '@atlitos/api';
 import { spacing, radii } from '@atlitos/theme';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { GraduationCap, Heart, LayoutGrid } from 'lucide-react-native';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -10,6 +11,7 @@ import { AppBar } from '@/components/ui/app-bar';
 import { Button } from '@/components/ui/button';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Skeleton } from '@/components/ui/skeleton';
+import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
@@ -35,8 +37,35 @@ export default function HomeScreen() {
 
   const [gateVisible, setGateVisible] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [hasUnread, setHasUnread] = useState(false);
 
+  const notifications = useNotifications(supabase);
   const isGuest = status === 'guest';
+
+  // Refresh the bell badge whenever Home regains focus (returning from the
+  // notifications screen where the user may have marked things read).
+  // Owner-scoped count in useNotifications; fails silent so the badge never
+  // blocks Home.
+  useFocusEffect(
+    useCallback(() => {
+      if (status !== 'signed_in') {
+        setHasUnread(false);
+        return;
+      }
+      let active = true;
+      notifications
+        .unreadCount()
+        .then((count) => {
+          if (active) setHasUnread(count > 0);
+        })
+        .catch(() => {
+          if (active) setHasUnread(false);
+        });
+      return () => {
+        active = false;
+      };
+    }, [status]),
+  );
   const greetingName = me?.name?.trim().split(/\s+/)[0];
   const showLoading = status === 'signed_in' && meLoading && !me;
 
@@ -60,10 +89,14 @@ export default function HomeScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       <AppBar
         variant="brand"
-        hasUnreadNotifications={false}
+        hasUnreadNotifications={hasUnread}
         avatarUri={me?.avatarUrl ?? undefined}
         onPressNotifications={() => {
-          if (isGuest) openGate();
+          if (isGuest) {
+            openGate();
+            return;
+          }
+          router.push('/notifications');
         }}
         onPressProfile={() => {
           if (isGuest) openGate();

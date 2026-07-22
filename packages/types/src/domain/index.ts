@@ -18,6 +18,7 @@ import type {
   CourtBookingStatus,
   DonationMethod,
   DrillDifficulty,
+  NotificationType,
   OrderStatus,
   SearchEntityType,
   Sport,
@@ -448,11 +449,18 @@ export interface ChatMessage {
 export interface AppNotification {
   id: string;
   userId: string;
+  type: NotificationType;
   title: string;
   body: string;
   deepLink: string;
   readAt?: string;
   createdAt: string;
+}
+
+export interface NotificationPref {
+  notificationType: NotificationType;
+  pushEnabled: boolean;
+  emailEnabled: boolean;
 }
 
 // ---------------------------------------------------------------------------
