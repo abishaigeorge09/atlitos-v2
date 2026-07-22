@@ -53,6 +53,13 @@ export type Database = {
             foreignKeyName: "addresses_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "addresses_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
@@ -94,6 +101,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "athlete_sports_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
           {
             foreignKeyName: "athlete_sports_user_id_fkey"
             columns: ["user_id"]
@@ -149,6 +163,13 @@ export type Database = {
             foreignKeyName: "audit_log_actor_id_fkey"
             columns: ["actor_id"]
             isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "audit_log_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
@@ -200,6 +221,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "product_variants"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cart_items_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
           },
           {
             foreignKeyName: "cart_items_user_id_fkey"
@@ -265,6 +293,13 @@ export type Database = {
             foreignKeyName: "chat_messages_sender_id_fkey"
             columns: ["sender_id"]
             isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "chat_messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
@@ -317,6 +352,13 @@ export type Database = {
             foreignKeyName: "chat_threads_participant_a_fkey"
             columns: ["participant_a"]
             isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "chat_threads_participant_a_fkey"
+            columns: ["participant_a"]
+            isOneToOne: false
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
@@ -331,12 +373,195 @@ export type Database = {
             foreignKeyName: "chat_threads_participant_b_fkey"
             columns: ["participant_b"]
             isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "chat_threads_participant_b_fkey"
+            columns: ["participant_b"]
+            isOneToOne: false
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "chat_threads_participant_b_fkey"
             columns: ["participant_b"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clip_comments: {
+        Row: {
+          clip_id: string
+          created_at: string
+          id: string
+          text: string
+          user_id: string
+        }
+        Insert: {
+          clip_id: string
+          created_at?: string
+          id?: string
+          text: string
+          user_id: string
+        }
+        Update: {
+          clip_id?: string
+          created_at?: string
+          id?: string
+          text?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clip_comments_clip_id_fkey"
+            columns: ["clip_id"]
+            isOneToOne: false
+            referencedRelation: "clips"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clip_comments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "clip_comments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clip_comments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clip_likes: {
+        Row: {
+          clip_id: string
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          clip_id: string
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          clip_id?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clip_likes_clip_id_fkey"
+            columns: ["clip_id"]
+            isOneToOne: false
+            referencedRelation: "clips"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clip_likes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "clip_likes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clip_likes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clips: {
+        Row: {
+          caption: string
+          cf_stream_uid: string | null
+          comment_count: number
+          created_at: string
+          id: string
+          likes_count: number
+          owner_id: string
+          playback_id: string | null
+          rejection_reason: string | null
+          sport: Database["public"]["Enums"]["sport"]
+          status: Database["public"]["Enums"]["clip_status"]
+          storage_path: string | null
+          thumb_path: string | null
+          updated_at: string
+        }
+        Insert: {
+          caption: string
+          cf_stream_uid?: string | null
+          comment_count?: number
+          created_at?: string
+          id?: string
+          likes_count?: number
+          owner_id: string
+          playback_id?: string | null
+          rejection_reason?: string | null
+          sport: Database["public"]["Enums"]["sport"]
+          status?: Database["public"]["Enums"]["clip_status"]
+          storage_path?: string | null
+          thumb_path?: string | null
+          updated_at?: string
+        }
+        Update: {
+          caption?: string
+          cf_stream_uid?: string | null
+          comment_count?: number
+          created_at?: string
+          id?: string
+          likes_count?: number
+          owner_id?: string
+          playback_id?: string | null
+          rejection_reason?: string | null
+          sport?: Database["public"]["Enums"]["sport"]
+          status?: Database["public"]["Enums"]["clip_status"]
+          storage_path?: string | null
+          thumb_path?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clips_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "clips_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clips_owner_id_fkey"
+            columns: ["owner_id"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
@@ -480,6 +705,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "coach_profiles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
           {
             foreignKeyName: "coach_profiles_user_id_fkey"
             columns: ["user_id"]
@@ -654,6 +886,13 @@ export type Database = {
             foreignKeyName: "court_bookings_created_by_staff_id_fkey"
             columns: ["created_by_staff_id"]
             isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "court_bookings_created_by_staff_id_fkey"
+            columns: ["created_by_staff_id"]
+            isOneToOne: false
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
@@ -670,6 +909,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "payment_intents"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "court_bookings_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
           },
           {
             foreignKeyName: "court_bookings_user_id_fkey"
@@ -835,6 +1081,70 @@ export type Database = {
         }
         Relationships: []
       }
+      follows: {
+        Row: {
+          created_at: string
+          followee_id: string
+          follower_id: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          followee_id: string
+          follower_id: string
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          followee_id?: string
+          follower_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "follows_followee_id_fkey"
+            columns: ["followee_id"]
+            isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "follows_followee_id_fkey"
+            columns: ["followee_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "follows_followee_id_fkey"
+            columns: ["followee_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "follows_follower_id_fkey"
+            columns: ["follower_id"]
+            isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "follows_follower_id_fkey"
+            columns: ["follower_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "follows_follower_id_fkey"
+            columns: ["follower_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ledger_entries: {
         Row: {
           account_ref: string | null
@@ -918,6 +1228,13 @@ export type Database = {
             foreignKeyName: "notification_prefs_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "notification_prefs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
@@ -962,6 +1279,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
           {
             foreignKeyName: "notifications_user_id_fkey"
             columns: ["user_id"]
@@ -1047,6 +1371,13 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "payment_intents"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_drafts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
           },
           {
             foreignKeyName: "order_drafts_user_id_fkey"
@@ -1184,6 +1515,13 @@ export type Database = {
             foreignKeyName: "order_timeline_actor_id_fkey"
             columns: ["actor_id"]
             isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "order_timeline_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
@@ -1283,6 +1621,13 @@ export type Database = {
             foreignKeyName: "orders_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "orders_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
@@ -1336,6 +1681,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "payment_intents_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
           {
             foreignKeyName: "payment_intents_user_id_fkey"
             columns: ["user_id"]
@@ -1492,6 +1844,13 @@ export type Database = {
             foreignKeyName: "product_wishlist_items_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "product_wishlist_items_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
@@ -1585,6 +1944,13 @@ export type Database = {
             foreignKeyName: "push_tokens_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "push_tokens_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
@@ -1646,6 +2012,85 @@ export type Database = {
             columns: ["payment_intent_id"]
             isOneToOne: false
             referencedRelation: "payment_intents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reports: {
+        Row: {
+          created_at: string
+          entity_id: string
+          entity_type: string
+          id: string
+          reason: string
+          reporter_id: string
+          resolved_at: string | null
+          resolved_by: string | null
+          status: Database["public"]["Enums"]["report_status"]
+        }
+        Insert: {
+          created_at?: string
+          entity_id: string
+          entity_type: string
+          id?: string
+          reason: string
+          reporter_id: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: Database["public"]["Enums"]["report_status"]
+        }
+        Update: {
+          created_at?: string
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          reason?: string
+          reporter_id?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: Database["public"]["Enums"]["report_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reports_reporter_id_fkey"
+            columns: ["reporter_id"]
+            isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "reports_reporter_id_fkey"
+            columns: ["reporter_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reports_reporter_id_fkey"
+            columns: ["reporter_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reports_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "reports_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reports_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -1794,6 +2239,13 @@ export type Database = {
             foreignKeyName: "sessions_player_id_fkey"
             columns: ["player_id"]
             isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "sessions_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
@@ -1907,6 +2359,13 @@ export type Database = {
             foreignKeyName: "support_tickets_submitter_id_fkey"
             columns: ["submitter_id"]
             isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "support_tickets_submitter_id_fkey"
+            columns: ["submitter_id"]
+            isOneToOne: false
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
@@ -1986,6 +2445,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "user_roles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
           {
             foreignKeyName: "user_roles_user_id_fkey"
             columns: ["user_id"]
@@ -2112,6 +2578,13 @@ export type Database = {
             foreignKeyName: "venue_staff_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "venue_staff_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
@@ -2182,6 +2655,13 @@ export type Database = {
             foreignKeyName: "venues_partner_user_id_fkey"
             columns: ["partner_user_id"]
             isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "venues_partner_user_id_fkey"
+            columns: ["partner_user_id"]
+            isOneToOne: false
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
@@ -2229,6 +2709,13 @@ export type Database = {
           status?: Database["public"]["Enums"]["verification_status"]
         }
         Relationships: [
+          {
+            foreignKeyName: "verification_requests_reviewer_id_fkey"
+            columns: ["reviewer_id"]
+            isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
           {
             foreignKeyName: "verification_requests_reviewer_id_fkey"
             columns: ["reviewer_id"]
@@ -2316,6 +2803,13 @@ export type Database = {
             foreignKeyName: "coach_profiles_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: true
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "coach_profiles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
@@ -2327,6 +2821,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      creator_stats: {
+        Row: {
+          followers_count: number | null
+          following_count: number | null
+          published_clips_count: number | null
+          total_likes: number | null
+          user_id: string | null
+        }
+        Insert: {
+          followers_count?: never
+          following_count?: never
+          published_clips_count?: never
+          total_likes?: never
+          user_id?: string | null
+        }
+        Update: {
+          followers_count?: never
+          following_count?: never
+          published_clips_count?: never
+          total_likes?: never
+          user_id?: string | null
+        }
+        Relationships: []
       }
       product_variant_availability: {
         Row: {
@@ -2432,6 +2950,13 @@ export type Database = {
             foreignKeyName: "court_bookings_created_by_staff_id_fkey"
             columns: ["created_by_staff_id"]
             isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "court_bookings_created_by_staff_id_fkey"
+            columns: ["created_by_staff_id"]
+            isOneToOne: false
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
@@ -2448,6 +2973,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "payment_intents"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "court_bookings_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
           },
           {
             foreignKeyName: "court_bookings_user_id_fkey"
@@ -2744,6 +3276,35 @@ export type Database = {
         Args: { p_after: Json; p_before: Json }
         Returns: Json
       }
+      clip_transition_internal: {
+        Args: {
+          p_clip_id: string
+          p_reason?: string
+          p_to_status: Database["public"]["Enums"]["clip_status"]
+        }
+        Returns: {
+          caption: string
+          cf_stream_uid: string | null
+          comment_count: number
+          created_at: string
+          id: string
+          likes_count: number
+          owner_id: string
+          playback_id: string | null
+          rejection_reason: string | null
+          sport: Database["public"]["Enums"]["sport"]
+          status: Database["public"]["Enums"]["clip_status"]
+          storage_path: string | null
+          thumb_path: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "clips"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       complete_player_setup: {
         Args: {
           p_avatar_url: string
@@ -3003,6 +3564,31 @@ export type Database = {
       is_guest: { Args: never; Returns: boolean }
       is_moderator: { Args: never; Returns: boolean }
       is_verified_coach: { Args: { _coach_id: string }; Returns: boolean }
+      moderate_clip: {
+        Args: { p_action: string; p_clip_id: string; p_reason?: string }
+        Returns: {
+          caption: string
+          cf_stream_uid: string | null
+          comment_count: number
+          created_at: string
+          id: string
+          likes_count: number
+          owner_id: string
+          playback_id: string | null
+          rejection_reason: string | null
+          sport: Database["public"]["Enums"]["sport"]
+          status: Database["public"]["Enums"]["clip_status"]
+          storage_path: string | null
+          thumb_path: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "clips"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       order_transition: {
         Args: {
           p_actor_id?: string
@@ -3132,6 +3718,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      reconcile_stranded_clips: { Args: never; Returns: Json }
       record_transfer: {
         Args: {
           p_amount: number
@@ -3196,6 +3783,26 @@ export type Database = {
           to: "stock_reservations"
           isOneToOne: false
           isSetofReturn: true
+        }
+      }
+      resolve_report: {
+        Args: { p_action: string; p_reason?: string; p_report_id: string }
+        Returns: {
+          created_at: string
+          entity_id: string
+          entity_type: string
+          id: string
+          reason: string
+          reporter_id: string
+          resolved_at: string | null
+          resolved_by: string | null
+          status: Database["public"]["Enums"]["report_status"]
+        }
+        SetofOptions: {
+          from: "*"
+          to: "reports"
+          isOneToOne: true
+          isSetofReturn: false
         }
       }
       session_abandon_unpaid: {
@@ -3363,6 +3970,8 @@ export type Database = {
       submit_coach_verification: { Args: { p_payload: Json }; Returns: string }
       submit_venue_verification: { Args: { p_payload: Json }; Returns: string }
       timemultirange: { Args: never; Returns: unknown }
+      toggle_clip_like: { Args: { p_clip_id: string }; Returns: Json }
+      toggle_follow: { Args: { p_followee_id: string }; Returns: Json }
       toggle_product_wishlist: {
         Args: { p_product_id: string }
         Returns: boolean
@@ -3394,6 +4003,13 @@ export type Database = {
         | "moderator"
       applicant_type: "coach" | "venue" | "upa"
       booking_source: "self_service" | "walk_in"
+      clip_status:
+        | "uploading"
+        | "processing"
+        | "ready"
+        | "published"
+        | "rejected"
+        | "removed"
       coach_status: "pending_review" | "verified" | "rejected"
       court_booking_status:
         | "confirmed"
@@ -3441,6 +4057,7 @@ export type Database = {
         | "needs_attention"
         | "failed"
       refund_status: "pending" | "processed" | "failed"
+      report_status: "pending" | "actioned" | "dismissed"
       session_frequency: "one_time" | "weekly" | "monthly"
       session_status:
         | "requested"
@@ -3602,6 +4219,14 @@ export const Constants = {
       ],
       applicant_type: ["coach", "venue", "upa"],
       booking_source: ["self_service", "walk_in"],
+      clip_status: [
+        "uploading",
+        "processing",
+        "ready",
+        "published",
+        "rejected",
+        "removed",
+      ],
       coach_status: ["pending_review", "verified", "rejected"],
       court_booking_status: [
         "confirmed",
@@ -3655,6 +4280,7 @@ export const Constants = {
         "failed",
       ],
       refund_status: ["pending", "processed", "failed"],
+      report_status: ["pending", "actioned", "dismissed"],
       session_frequency: ["one_time", "weekly", "monthly"],
       session_status: [
         "requested",
