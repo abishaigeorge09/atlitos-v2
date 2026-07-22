@@ -49,8 +49,8 @@ P8 CANNOT self-serve these. The gate passes on autonomous hardening + green 5-jo
 - [ ] `AT-143` states pass audit, findings + any client-writable leak fix (opus)
 - [ ] `AT-144` ai-search edge function, v1 heuristic behind contract (sonnet)
 - [ ] `AT-145` search surface, mobile discovery (sonnet)
-- [ ] `AT-146` notify-dispatch fan-out + notification row-writing wired into sources (sonnet)
-- [ ] `AT-147` in-app notification surface + prefs screen, mobile (sonnet)
+- [x] `AT-146` notify-dispatch fan-out + notification row-writing wired into sources (sonnet). Built `supabase/functions/notify-dispatch` + shared orchestration `_shared/notify.ts` (deployed, ACTIVE, service-role-only); device push STUBBED behind `deliverToDevice()` TODO(P9). Migration `0066` wires the deferred FR-9/FR-10 verification-decision notification into `admin_approve/reject_verification_request`. Owner-scoping + no-forge proven non-vacuously (two distinct ids, own_visible 1 / others_visible 0, cross-user mark-read 0 rows, authenticated insert rejected).
+- [x] `AT-147` in-app notification surface + prefs screen, mobile (sonnet). `packages/api/src/use-notifications.ts` (owner-scoped list/unreadCount/markRead/markAllRead/listPrefs/setPref/subscribe), routes `apps/mobile/src/app/notifications/{index,preferences}.tsx`, reached from the Home AppBar bell (badge wired via `unreadCount`). NEW mobile routes `/notifications` and `/notifications/preferences`: coordinator regenerates `.expo/types/router.d.ts` at merge (mechanical mandate).
 - [ ] `AT-148` AT-88 refund surfaced to cancelled-session athlete, PRD-02 FR-35 (sonnet)
 - [ ] `AT-149` show_donor_name finalize-time snapshot + read path, PRD-05 FR-17 (opus, money-path)
 - [ ] `AT-150` carried verifications: AT-25 date filter, AT-26 sweep coverage, AT-73 late-capture, TS skew (sonnet)
