@@ -140,3 +140,62 @@ Merged main confirmed coherent for the biased approver gate.
 - **Cleanup done**: redeployed `get-clip-playback-url` (now v2, ACTIVE, verify_jwt=false) so it shares the fixed `_shared/clip-access.ts` and returns 404 (not 500) for an absent/placeholder storage object, consistent with the already-fixed `get-clip-moderation-url`. No source change (source already imported the shared helper); this was a stale-bundle remote redeploy only. Verified against the live function as guest: placeholder-byte published clips `535154a7` and `f481b1d4` -> 404 `NOT_FOUND`; real-bytes published `04651620` -> 200 with a signed URL that fetches 9409 bytes `video/mp4`; removed `67bdf7a9` -> 403 `FORBIDDEN`. Auth/privacy unchanged (terminal + owner/admin gates run before the mint). Raw public storage path refused (private bucket).
 - **p5-web evidence present**: `docs/phases/evidence/p5-web/VERIFICATION.md`, `clutch-feed-light.png`, `clutch-feed-dark.png`, `atlitos-clip.mp4`.
 
+## Biased approver verdict (cycle 1, 2026-07-22): APPROVE
+
+Judged against the gate above. Every claim re-verified independently against the live project (`syzzfgaudpifwvbpycyi`) with read-only SQL and real HTTP; reports were not trusted. Fixture state mutated by the takedown/approve proofs was restored (04651620 back to published and playing; dbc6f83f back to ready; test audit rows deleted).
+
+Independently confirmed: scripted-real pipeline is genuinely end to end (guest `get-clip-playback-url` on published `04651620` returns 200, the signed URL fetches 9409 real `video/mp4` bytes matching the upload); takedown teeth real (admin `moderate_clip` remove on the real-bytes clip flips every mint 200 -> 403 for guest/owner/admin playback and admin moderation, raw storage path stays non-public 400); state machine RPC enforced (illegal `uploading/rejected -> published` raises, legal chain works, client cannot set `clips.status` or write `clip_likes`/`follows` = 42501, `clip_transition_internal`/`reconcile_stranded_clips` are service_role only); RLS isolation non-vacuous (player/admin/other ids all differ; non-owner sees 0 of owner's non-published, owner sees its own, published visible to both, removed/rejected invisible to non-owner); admin approve writes exactly one audit row (delta 1) and moderation preview is admin only (non-admin 403); reconcile arm wired into the scheduled `expire-stale-holds` (`*/5 * * * *`, active) and returns the readied/rejected/failed shape; F1 fix real in code (`useClutch` = `useMemo(makeClutchApi, [client])`, `thumb_path`), F2 real (moderation-url 404 for absent bytes); advisors carry no new clutch ERROR (the 3 ERRORs are pre-existing non-clutch `security_definer_view`s), clips bucket private. Light feed shot shows a genuinely playing video in the pressable-overlay card with mono counts and no spinner (F1 fixed).
+
+The scripted proof exercises the exact backend path a device would (`stream-upload-url` -> signed storage PUT -> `stream-webhook` finalize -> `moderate_clip` approve -> published feed query -> `get-clip-playback-url` playback), so per the founder's full-autonomy directive it satisfies the native-upload gate step; only the genuinely device-only sliver is carried. No blocking findings.
+
+### Advisory findings (none blocking; all carried to phase close)
+
+```
+[advisory] native-coverage — on-device Clutch sliver not exercised, carried to a native pass
+  Ref: PHASE-5-STATUS.md "Deferred to the native pass"; founder full-autonomy directive
+  Where: expo-camera capture, on-device gallery picker (AT-99), react-native-video muted autoplay/poster-swap/prefetch (AT-97), haptics on the engagement rail
+  Why: inherently native, not exercisable on react-native-web; the scripted-but-real backend proof stands in for everything upstream and downstream. Only the founder's device pass closes camera-capture to on-device autoplay.
+
+[advisory] house-style/dark-mode — dark web rendering incomplete on the Clutch feed and admin
+  Ref: DESIGN-LANGUAGE.md (light and dark first-class); carried from P3/P4 F3; founder "web now, native later" amendment
+  Where: clutch-feed-dark.png (top band renders light cream, video is a grey placeholder in that capture); apps/admin light only
+  Why: the mobile feed's real dark autoplay is a native surface (carried above); the admin dark-mode gap is pre-existing. Within the recorded carried envelope, not a P5 regression.
+
+[advisory] engagement-ui-gate — LoginGateSheet guest tap and feed cursor pagination not exercised on web
+  Ref: PRD-01 FR-3, FR-43, FR-46
+  Where: apps/mobile clutch feed/detail (web)
+  Why: backend toggles and gating proven (42501 direct writes, toggle idempotent); the UI guest-gate and pagination interaction were blocked on web by the now-fixed F1 loop and are exercised on the native pass.
+
+[advisory] test-data — verification left test rows in the project
+  Ref: p5-web/VERIFICATION.md "Test data left in the project"
+  Where: 67bdf7a9 (removed), 04651620 (published, playable), f02b8a37 (own uploading probe)
+  Why: harmless; the uploading probe will reconcile to rejected. Note for phase-close/prod-seed cleanup.
+```
+
+### Carried-forward open advisories from P1-P4 and P5 (none dropped)
+
+```
+[advisory] Route not enabled on test merchant (razorpay-route-* -> ROUTE_UNAVAILABLE)  [P4]
+[advisory] AT-88 refund not surfaced to athlete in shopper UI  [P4]
+[advisory] dark-mode web theme gap incl. admin light-only  [P3/P4/P5]
+[advisory] native screen coverage deferred to native pass  [P3/P4/P5]
+[advisory] tmp-seed-demo-users edge function still deployed (ACTIVE) — remove before prod  [P4/P5]
+[advisory] TypeScript version skew across workspace  [P3/P4]
+[advisory] accumulated RLS WARN debt (function_search_path_mutable, security_definer function executable, anon sign-ins)  [P1-P5]
+[advisory] the four PRD-02 assumptions the plan ships  [P2]
+[advisory] AT-73 late-capture branch  [P4]
+[advisory] PRD-01 section 9 assumptions: follow-graph list browse not built (item 7), no guest local persistence (item 2)  [P5]
+```
+
+### Known-and-disposed items (disposition judged, not existence)
+
+```
+F1 Clutch feed/detail render loop — FIXED (8121af5): useClutch memoized; verified 19+ req/s -> 1 request. Disposed.
+Masked thumb_url -> thumb_path feed 400 — FIXED (8121af5, CLIP_FEED_SELECT). Disposed.
+F2 get-clip-moderation-url 500 on placeholder bytes — FIXED (redeployed v2, 404). Disposed.
+get-clip-playback-url 500 on placeholder bytes — FIXED by the integrator (redeployed v2, verified 404/200/403). Disposed.
+Native-only sliver — CARRIED per the founder full-autonomy directive (advisory above), not a blocker.
+```
+
+Verdict recorded by the cycle-1 biased approver. Gate PASSED. Phase-close may proceed.
+
