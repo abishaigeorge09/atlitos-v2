@@ -35,6 +35,22 @@ Every function in v1's `services/api.ts` contract (`PLAN-2-3-api-contract-and-ll
 |---|---|---|---|---|
 | `aiSearch` | POST `/search` | Edge Function | `ai-search` | v1 heuristic (keyword to entityTypes, weighted distance/price/rating score) ported verbatim behind the same request/response contract; LLM re-rank is a drop-in swap inside this one function, per PLAN.md |
 
+### `ai-search`, as built (AT-144 / AT-145)
+
+`POST { query, entityTypes?, sport?, priceMax?, lat?, lng?, city?, limit? }` with the caller's own JWT (`verify_jwt` true). Search is public discovery, so a guest is a valid caller: it passes its anonymous session token, like `get-clip-playback-url`. Only `query` is required; every other field is an optional narrowing the client already holds (its location store, a tapped segment) and is advisory, the server re-derives intent from `query` regardless (`parseIntent`), so a field a client sets can never widen what it sees.
+
+Response `{ query, parsedIntent, results: SearchHit[] }` sorted `rankScore` desc. `parsedIntent` is `{ entityTypes, sport, priceMax?, timeWindow?, keywords }`.
+
+**Entity types.** The three the v1 `SearchEntityType` union names: `gear` (products), `coach` (coach_profiles), `court` (courts). Drills, UPAs and clips are not in that union nor in the `SearchResult.snapshot` type, so they are out of the ported contract.
+
+**Result shape (deviation, recorded).** The v1 `SearchResult` carried a full domain `snapshot` (a whole `Product | CoachProfile | Court`). The real endpoint returns a lean `SearchHit` (`entityType, entityId, title, subtitle, imageUrl?, sport?, price?, distanceKm?, rankScore, rankReason`) carrying exactly what a result card renders plus what routing needs, keeping the query cheap and the RLS surface small. Both types live in `packages/types` (`SearchHit`, `SearchResponse`, `SearchInput`); the heavy `SearchResult` is retained but unused.
+
+**Scoring.** Per candidate, four signals combine to a 0..1 `rankScore`: text (fraction of content keywords present in the row's searchable blob, weight 0.40), rating (weight 0.25, real only for coaches, courts have no rating column and gear none), price (weight 0.20, `priceMax`-relative when a ceiling was parsed else cheaper-is-better normalized within the entity type), distance (weight 0.15, haversine for courts from venue lat/lng, city-equality for coaches, gear ships so neutral). `rankReason` is the dominant *real* contributor, so a tag never claims a signal that did not apply.
+
+**Visibility (the non-negotiable).** Two independent guards, per CLAUDE.md "RLS is a floor, not scoping": every table is read through the caller's own JWT client (`userScopedClient`, never `serviceRoleClient`, search has no money leg), AND every query carries its own explicit public filter, so even a privileged caller gets only the public set out of this endpoint: coaches from the `coach_profiles_public` view (`status = 'verified'` baked in), courts `active = true` with a `venues!inner` asserting `venues.status = 'verified'`, products `active = true`. Proven live (AT-144): a guest search never returns an inactive product, and an active court placed under a `pending` venue (cheapest, would rank first if it leaked) is absent while the 5 public courts return.
+
+**LLM re-rank seam.** `rerank(query, hits)` is a pure post-processing pass over the already heuristically scored, sorted candidates, today the identity function. Swapping in an LLM re-rank replaces only that one function body; the request/response contract and the visibility queries are untouched.
+
 ## coaches
 
 | v1 fn | v1 route | v2 lane | Function / RPC | Note |
