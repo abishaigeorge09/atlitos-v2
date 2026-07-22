@@ -128,3 +128,15 @@ Track A first and strictly in order: AT-89 gates everything; AT-90 and AT-91 nee
 ## Handoff notes owed at phase close
 
 Phase close must record: whether the on device capture to autoplay round trip actually closed at the gate or is carried; the state of AT-93 across the reconcile arm (observed to have run, not just scheduled); confirmation that no column stores a resolved URL; and the Cloudflare Stream swap surface for a future phase (the `cf_stream_uid` slot, the two edge function contracts, and the real `stream-reconcile` poller that becomes live only when Stream is enabled).
+
+## Integrator note (2026-07-22)
+
+Merged main confirmed coherent for the biased approver gate.
+
+- **Build**: `pnpm turbo typecheck build lint` green, 24 successful / 24 total.
+- **Migrations**: 0041-0047 (clutch schema, RLS, state machine, engagement RPCs, stranded reconcile, two grant fixes) all applied to remote `syzzfgaudpifwvbpycyi`, versions `20260721085830`-`20260721090618`, matching `supabase/migrations/`. No drift.
+- **Edge functions**: all four Clutch functions ACTIVE: `stream-upload-url` (v2), `stream-webhook` (v1), `get-clip-playback-url`, `get-clip-moderation-url` (v2, the F2 404 fix).
+- **Tracks in HEAD**: Track A schema/RPCs (0041-0047), Track B edge functions, Track C mobile clutch screens + `useClutch` (`packages/api/src/hooks.ts`), Track D admin moderation/reports queues (`apps/admin`), Track E fixtures. F1 render-loop fix present at `8121af5` (`useClutch` memoized), F2 moderation-url 404 fix present.
+- **Cleanup done**: redeployed `get-clip-playback-url` (now v2, ACTIVE, verify_jwt=false) so it shares the fixed `_shared/clip-access.ts` and returns 404 (not 500) for an absent/placeholder storage object, consistent with the already-fixed `get-clip-moderation-url`. No source change (source already imported the shared helper); this was a stale-bundle remote redeploy only. Verified against the live function as guest: placeholder-byte published clips `535154a7` and `f481b1d4` -> 404 `NOT_FOUND`; real-bytes published `04651620` -> 200 with a signed URL that fetches 9409 bytes `video/mp4`; removed `67bdf7a9` -> 403 `FORBIDDEN`. Auth/privacy unchanged (terminal + owner/admin gates run before the mint). Raw public storage path refused (private bucket).
+- **p5-web evidence present**: `docs/phases/evidence/p5-web/VERIFICATION.md`, `clutch-feed-light.png`, `clutch-feed-dark.png`, `atlitos-clip.mp4`.
+
