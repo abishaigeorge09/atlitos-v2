@@ -158,6 +158,75 @@ Assembled from every PHASE-N-STATUS open-defects section. Live advisor counts fr
 - **P9 native verification pass** burns the RE-DEFER list above: run the app on iOS sim/device, verify every money-consequential confirm, the native Razorpay sheet (success AND failure), camera + gallery, react-native-video autoplay, haptics, device push delivery through `notify-dispatch`'s stubbed seam. Needs the founder's device time + the ClaudeCode.app accessibility/screen-recording grant.
 - **P10 TestFlight ship** needs the founder's Apple Developer account ($99/yr, 24 to 48h to activate). Start enrollment early; it is the critical-path external dependency.
 
+## Integrator note (2026-07-22, HEAD b8a239b)
+
+Merged main is coherent and gate-ready.
+
+- **Build**: `pnpm turbo typecheck build lint` GREEN, 24/24 tasks (24 cached, exit 0). Mobile `.expo/types/router.d.ts` route types for `/home/search`, `/notifications`, `/notifications/preferences` resolve cleanly; no regeneration needed this pass.
+- **Migrations**: 0062-0069 all applied to remote `syzzfgaudpifwvbpycyi` (list_migrations vs migrations dir reconcile clean). 0066 is applied as `verification_decision_notification`, 0067 as `donation_donor_name_snapshot` (the doc-cited numbering; confirmed same content). 0062-0064 RLS burn-down, 0065 user-status lock, 0068 FK indexes, 0069 dropped-redundant-indexes.
+- **All 7 P8 tracks present in HEAD**: A RLS burn-down (0062-0064 + RLS.md disposition), B states pass + status lock (0065), C ai-search fn + mobile surface, D notify-dispatch + in-app surface, E carried debt (AT-88 refund via BillSummary, donor snapshot 0067, AT-150 verifications), F perf (0068-0069 + admin chunk split), G docs freeze + SHIP-HANDOFF.md.
+- **Evidence**: `docs/phases/evidence/p8-web/VERIFICATION.md` present (the 5-journey regression, transcribed-not-PNG; browser MCP could not write image files, so the proof is functional/SQL, which is what the gate rests on).
+- Working tree clean. Handed to biased approver.
+
+## Biased approver verdict (cycle 1, 2026-07-22)
+
+# APPROVE
+
+The P8 gate (G1-G6, the founder-approved amendment per the P3 Route-deferral precedent) passes. Every gate condition is met and the crux of P8, that the 143-policy RLS burn-down did NOT change any access set, is independently re-derived below with read-only SQL run under real role/JWT context (not service role), ids asserted to DIFFER first. The regression track was not trusted; it was re-proven.
+
+## Independent verification (read-only SQL, RLS-enforced context)
+
+1. **RLS isolation (the #1 risk) HOLDS.** Two users asserted to differ first (A `58756043-...`, non-owner viewer B `dc6b14da-...`, `ids_differ=true`). Under B's authenticated JWT, B sees ZERO of A's rows on all 11 sensitive tables: orders 0, sessions 0, payment_intents 0, ledger_entries 0, donations 0, notifications 0, xp_events 0, drill_completions 0, cart_items 0, addresses 0, unpublished clips 0. Under anon, same zero across orders/sessions/pi/notifications/ledger/non-published-clips. Positive controls (too-few would mean a broken public read): B sees its own cart 1 / pi 1; public reads return rows for authenticated AND anon: verified coaches 2, active products 14, published clips 4, active drills 12, active courts 5, verified UPA 1. Neither broke. NON-VACUOUS and BALANCED.
+2. **Ledger balanced.** Whole-DB: 21 groups, 0 unbalanced, global net 0.00, 51 legs (signed debit/credit). Matches evidence exactly. All 10 donation ledger groups balanced.
+3. **States-lock fix (Track B) CLOSED.** Authenticated A updating own `users.status` active to suspended raises `FIELD_LOCKED` (P0001) via `lock_user_admin_fields`. The self-unsuspend privilege escalation is closed. (A same-value no-op is permitted by design; a real change is refused.)
+4. **Journey spot-checks.** Donations: 10 rows, all ledger groups balanced, funded_amount bump confirmed on item `2a1c55e4` (5000=5000). Order admin-advance: `31bffaf4` (#ATL00011) placed to shipped with audit trail present (audit_log 37 rows, order-related entries). Clip takedown: 4 removed clips exist, invisible to non-owner/anon (0 rows).
+5. **ai-search does not leak non-public rows.** Non-public rows exist (4 inactive products, 10 non-published clips, 3 non-verified UPAs); authenticated non-owner B sees ZERO of them (search reads through caller JWT + explicit public filter over RLS), 2 public coaches as positive control.
+6. **Notifications owner-scoped.** Non-owner B sees 0 of A's 9 notifications; forge INSERT under B's JWT is refused 42501. Client writes to ledger_entries and donations both refused 42501 (financial invariant intact).
+7. **Advisors match baseline + disposition.** Security: 3 ERROR, all `security_definer_view` (public_profiles, coach_profiles_public, product_variant_availability), exactly the unchanged KEEP-by-design set, 0 NEW ERROR. `function_search_path_mutable` 5 (down from 14). WARNs match the dispositioned KEEP set (61 anon sign-ins, 55+13 security-definer fns, 4 bucket-listing, 1 leaked-password). Performance: `auth_rls_initplan` 0 (down from 100), `multiple_permissive_policies` 21 (down from 43, all by-design public+owner/admin overlaps), unindexed_foreign_keys cleared, unused_index INFO only.
+
+House style + invariants spot-check on P8-touched code: no emoji, no hyphen/em-dash in the search/notifications copy strings, no client money/status writes in the new api files, notify-dispatch gated on SERVICE_ROLE_KEY with `deliverToDevice()` as the stubbed P9 seam, refund surface renders via shared `BillSummary`. Clean.
+
+## Gate conditions
+
+- **G1 (scope + integrator-green)**: MET. All 7 tracks in HEAD; turbo 24/24 green.
+- **G2 (advisor burn-down, semantics unchanged)**: MET. initplan 100 to 0, permissive 43 to 21, search_path 14 to 5; residual ERRORs/WARNs dispositioned in RLS.md; isolation re-proven non-vacuously (item 1), access set unchanged.
+- **G3 (no client-writable status field)**: MET. FIELD_LOCKED confirmed (item 3); money/status tables reject client writes.
+- **G4 (5-journey regression green)**: MET. Independently re-derived (items 1-6); no read broke, no isolation regressed.
+- **G5 (docs frozen)**: MET. SHIP-HANDOFF.md is a complete start-cold checklist; one doc drift (0066/0067 donor-snapshot numbering) already corrected in the freeze.
+- **G6 (founder-blocked items carried explicit, not silently green)**: MET. Enable Razorpay Route, delete `tmp-seed-demo-users`, ratify assumptions all carried as explicit pre-ship conditions in SHIP-HANDOFF.md and below.
+
+## Advisories (non-blocking, carried to phase-close, none dropped)
+
+```
+advisory harness-hygiene — verify-realtime.mjs prints a misleading red "FAILED" on Part 4
+  Ref: AT-153 VERIFICATION.md finding 2
+  Where: scripts/verify-realtime.mjs
+  Why: harness reuses a terminal `rated` session and drives an invalid reschedule; the DB correctly rejected it (INVALID_TRANSITION guard working, independently reconfirmed). Fixture-reset hygiene only, does not affect the gate.
+
+advisory data-state — donor-name snapshot mechanism intact but no live named donation
+  Ref: PRD-05 FR-17, AT-149
+  Where: donations.donor_display_name
+  Why: column present and AT-149-proven in a rolled-back txn; all live donors opted out/anonymous so the display path has no live named row. Mechanism verified, not a regression; ledger and funded_amount untouched.
+
+advisory by-design — ai-search is auth-only (guest 401 UNAUTHENTICATED)
+  Ref: API-MAPPING.md search lane
+  Where: supabase/functions/ai-search
+  Why: userScopedClient with no service role in search; guest discovery uses the direct discovery read path. Intentional, not a gap.
+
+advisory observation — some upa_wishlist_items.funded_amount exceed item-linked donation sums
+  Ref: none (not a P8 surface)
+  Where: upa_wishlist_items (e.g. ce0a9124 funded 2500 / 0 item donations, 976221c9 funded 2200 / 200)
+  Why: funded_amount also carries seed baselines and roundup/general-fund credits not tied to a specific item_id; whole-DB ledger fully balances. Pre-existing, not touched by P8. Noted so P9 does not mistake it for drift.
+```
+
+## Carried forward to P9/P10 (none dropped, per G6 and SHIP-HANDOFF.md)
+
+Three founder pre-ship actions: (1) enable Razorpay Route (503 ROUTE_UNAVAILABLE by design until on; before any real money moves), (2) delete `tmp-seed-demo-users` edge function (still ACTIVE and JWT-callable), (3) ratify platform fee rate + PRD-02/05/06 resolved-by-assumption decisions (coaching fee, cancel/reschedule window, transfer minimums/fee, analytics threshold, six PRD-05 + six PRD-06 assumptions incl. show_donor_name default). Cheap founder wins: `auth_leaked_password_protection` toggle, `public_bucket_allows_listing` tighten on 4 public buckets.
+
+P9 native-debt inventory (SHIP-HANDOFF.md): native screen coverage across all prior phases, react-native-video autoplay, native react-native-razorpay sheet incl. failure path, camera + gallery picker, expo-haptics, expo-location, splash, phone-width layout, iOS keyboard offsets, the 10 Alert.alert/AT-64 money confirms and ConfirmSheet replacements, device push transport through notify-dispatch's stubbed deliverToDevice() seam, native light/dark theme. P10: Apple Developer enrollment (critical-path external dependency, start early), signed EAS build, App Store Connect metadata + screenshots + privacy labels, Apple review to TestFlight.
+
+Evidence note: the p8-web regression is transcribed (VERIFICATION.md), not PNG, because the browser MCP could not write image files. The gate rests on functional/SQL proof, which this verdict independently re-derived; the missing screenshots are not a blocking `missing-evidence` finding under the founder-approved gate amendment.
+
 ## Mechanical mandates (held clean since P3, keep enforcing)
 
 - Every builder ticket runs `git merge main --no-edit` as step 0 inside its worktree (stale base misses prior migrations/types/edge functions).
