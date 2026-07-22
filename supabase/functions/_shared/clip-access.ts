@@ -110,7 +110,12 @@ export async function fetchLiveClip(
  * Mint a short lived (TTL 300s) signed download URL for a clip object path,
  * against the private `clips` bucket, under the service role. Never stored.
  * Throws NOT_FOUND if the clip has no object yet (a clip still `uploading`
- * whose bytes never landed), so a caller never receives a dangling URL.
+ * whose bytes never landed, or a fixture/placeholder-path row whose bytes were
+ * never uploaded), so a caller never receives a dangling URL. A missing
+ * storage object is an EXPECTED data condition for an un-uploaded clip, not a
+ * server fault, so it surfaces as a clean 404, not a 500 (F2 in the P5 web
+ * verification: get-clip-moderation-url used to 500 on a placeholder-byte
+ * clip). Only a genuinely unexpected storage failure stays a 500.
  */
 export async function mintSignedClipUrl(
   supabase: SupabaseClient,
@@ -124,6 +129,12 @@ export async function mintSignedClipUrl(
     .createSignedUrl(objectPath, SIGNED_URL_TTL_SECONDS);
 
   if (error || !data?.signedUrl) {
+    // supabase-storage reports an absent object as an "Object not found"
+    // StorageApiError (HTTP 400/404 from the storage API). That is the clip
+    // row existing while its bytes never landed, an expected 404, not a 500.
+    if (error && isObjectNotFoundError(error)) {
+      throw new AppError("NOT_FOUND", "Clip video is not available yet.", 404);
+    }
     throw new AppError(
       "INTERNAL",
       `Failed to mint signed url: ${error?.message ?? "unknown error"}`,
@@ -131,6 +142,21 @@ export async function mintSignedClipUrl(
     );
   }
   return data.signedUrl;
+}
+
+/**
+ * True when a storage error means the object does not exist (as opposed to a
+ * real outage or misconfig). supabase-storage's StorageApiError carries a
+ * `statusCode` (string) and a message; a missing object is `"Object not found"`.
+ * Matched primarily on the message so it is robust to the storage API's status
+ * quirks, with an explicit 404 status as a secondary signal. A bare 400 is NOT
+ * treated as not-found, so a genuine bad request still surfaces as a 500.
+ */
+function isObjectNotFoundError(error: { message?: string; statusCode?: string; status?: number }): boolean {
+  const message = (error.message ?? "").toLowerCase();
+  if (message.includes("not found") || message.includes("not_found")) return true;
+  const status = error.statusCode ?? (typeof error.status === "number" ? String(error.status) : undefined);
+  return status === "404";
 }
 
 export { serviceRoleClient };

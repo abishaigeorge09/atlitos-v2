@@ -1,3 +1,5 @@
+import { useMemo } from "react";
+
 import type { Session, SupabaseClient } from "@supabase/supabase-js";
 import type {
   AppRole,
@@ -782,8 +784,17 @@ export interface UploadClipInput {
 
 const CLUTCH_PAGE_SIZE = 10;
 
+// NOTE: the column is `thumb_path` on `clips` (0042; the same column
+// stream-webhook writes and get-clip-playback-url/get-clip-moderation-url
+// read). The select previously named a non-existent `thumb_url`, so every
+// feed/detail/creator/profile read 400'd ("column clips.thumb_url does not
+// exist"); under F1's unmemoized-hook render loop those 400s were queued
+// behind the storm and surfaced as perpetually-"pending" requests rather than
+// a visible error, which is why the feed never left its spinner. Selecting the
+// real column lets the feed populate; the row is mapped to `Clip.thumbUrl`
+// below (a poster path the card resolves, not a signed URL).
 const CLIP_FEED_SELECT =
-  "id, owner_id, caption, sport, status, likes_count, comment_count, created_at, thumb_url, users:owner_id ( name, channel_name, avatar_url )";
+  "id, owner_id, caption, sport, status, likes_count, comment_count, created_at, thumb_path, users:owner_id ( name, channel_name, avatar_url )";
 
 const CLIP_COMMENT_SELECT =
   "id, clip_id, user_id, text, created_at, users:user_id ( name, channel_name )";
@@ -803,7 +814,7 @@ interface ClipFeedRow {
   likes_count: number;
   comment_count: number;
   created_at: string;
-  thumb_url: string | null;
+  thumb_path: string | null;
   users: ClipUserJoin | null;
 }
 
@@ -839,7 +850,7 @@ function mapClipRow(row: ClipFeedRow, likedByMe: boolean): Clip {
     channel: channelOf(row.users),
     // videoUrl is deliberately absent here: playback is a fresh signed URL
     // minted per visible card via getPlaybackUrl, never carried on the row.
-    thumbUrl: row.thumb_url ?? undefined,
+    thumbUrl: row.thumb_path ?? undefined,
     caption: row.caption,
     sport: row.sport,
     status: row.status,
@@ -862,6 +873,25 @@ function mapCommentRow(row: ClipCommentJoinRow): Comment {
 }
 
 export function useClutch(client: AtlitosClient) {
+  // Memoize the returned api object on [client] so it keeps a STABLE identity
+  // across renders. The Clutch screens consume it as
+  // `const clutch = useClutch(supabase); const load = useCallback(..., [clutch]);
+  // useEffect(load, [load])`. Before this memo `useClutch` returned a fresh
+  // object literal every render, so `clutch` changed identity every render,
+  // `load` changed with it, and the effect refired forever, an unbounded
+  // ~55 req/s render/request loop (F1 in the P5 web verification, systemic
+  // across feed/detail/creator/profile and native). `supabase` is a module
+  // singleton with a stable identity, so this memo resolves once and never
+  // recomputes; every inner function lives inside the builder and is stable
+  // for the same reason. This is the single root-cause fix, so none of the
+  // four consuming screens change. The sibling hooks (useShop/useCourts/...)
+  // do not memoize because their consumers never feed the returned object into
+  // an effect dependency array; the Clutch screens do, which is why the fix
+  // belongs here.
+  return useMemo(() => makeClutchApi(client), [client]);
+}
+
+function makeClutchApi(client: AtlitosClient) {
   // See TYPING NOTE above: the clutch tables/RPCs are not yet in the
   // generated `Database` type on this branch. `db` is the same client with
   // its schema generic widened so `from`/`rpc` accept the clutch relations;

@@ -90,6 +90,37 @@ detail on web are in an infinite render/request loop (details in Findings).
 ## Findings, ranked by severity
 
 ### F1 — HIGH — Clutch feed and post detail infinite render/request loop on web
+**RESOLVED (2026-07-22, integrator). Witnessed on web, before and after, in the connected Chrome against the running Expo web server (port 8090) with a script-minted `player@atlitos.dev` fixture session injected into localStorage (no credential typed).**
+
+Root-cause fix: `useClutch(client)` in `packages/api/src/hooks.ts` now memoizes its
+returned api object with `useMemo(() => makeClutchApi(client), [client])` (the body
+was extracted into a module-level `makeClutchApi` builder so every inner function is
+stable). `supabase` is a module singleton, so the memo resolves once and the object
+identity never changes; the four consuming screens' `useCallback(load, [clutch])` +
+`useEffect(load, [load])` therefore fire the load effect exactly once. This is a
+single systemic fix at the root; none of the four screens
+(`clutch/index.tsx`, `post/[id].tsx`, `creator/[id].tsx`, `profile.tsx`) changed.
+The sibling hooks (`useShop`/`useCourts`/`useProfile`) are unmemoized and do not
+loop because their consumers never feed the returned object into an effect
+dependency array; the Clutch screens do, which is why the fix belongs in the hook.
+(`packages/api` gained `react` as a peer/dev dependency and `"types": ["react"]`,
+matching `@atlitos/ui-native`.)
+
+Second, contributing bug found and fixed while witnessing F1: `CLIP_FEED_SELECT`
+selected a non-existent column `thumb_url` (the real column is `clips.thumb_path`),
+so every feed/detail/creator/profile read 400'd. Under the render loop those 400s
+queued behind the storm and surfaced as perpetually-"pending" requests (matching the
+original "167 pending, zero console errors, stuck spinner" observation) rather than a
+visible error. Corrected to `thumb_path` (also `ClipFeedRow.thumb_path` and
+`mapClipRow`), which lets the feed populate. The loop itself is independent of this:
+it fires whether `getFeed` resolves or rejects.
+
+Before/after request-rate evidence (same running server, toggling only the memo):
+- BEFORE (unmemoized `return makeClutchApi(client)`): the `GET /rest/v1/clips?...status=eq.published` feed request loops without bound. Measured **38 feed fetches initiated in 2 s on the clips endpoint alone (19 req/s)**, still climbing (resource-timing entries 256 -> 301 over a later 4 s window), sustained, not a one-time burst. With the per-iteration `auth.getUser()` + `clip_likes` reads this is the ~55 req/s the original pass recorded. Browser connection-pool throttling (~6/host) is why completed entries lag initiated.
+- AFTER (memoized): **exactly 1 `/rest/v1/clips` request total, 0 req/s** over a 5 s window; 3 total `get-clip-playback-url` mints (active card + prefetch + one refresh), a small finite number. Feed populates and stays stable; the real-bytes clip `04651620` renders with its signed `clips/...` URL in a `<video>` (playing). **Zero `<button> cannot contain a nested <button>` console errors** on the feed (pressable-overlay pattern holds). Light+dark feed screenshots captured with the theme class asserted before each write: `clutch-feed-light.png` (dark=false), `clutch-feed-dark.png` (dark=true).
+
+---
+
 The feed never resolves out of its loading spinner; it fires the same
 `GET /rest/v1/clips?...status=eq.published` query in an unbounded loop.
 - Measured: **167 identical feed requests in 3 s** (~55 req/s), all `statusCode: pending`, ZERO console errors. Post detail: **60 clip + 61 comment requests in 3 s**. Buffer-cleared counts, so ongoing, not a one-time burst.
@@ -99,6 +130,31 @@ The feed never resolves out of its loading spinner; it fires the same
 - Fix (for integrator, not applied here): memoize `useClutch`'s return (`useMemo` keyed on `client`), or memoize the consuming screens' `load` off stable primitives instead of the `clutch` object.
 
 ### F2 — MEDIUM — `get-clip-moderation-url` returns 500 (not a clean 4xx) for a placeholder-byte clip
+**RESOLVED (2026-07-22, integrator). Redeployed via MCP (version 2, ACTIVE, verify_jwt=true).**
+
+Fix: `mintSignedClipUrl` in `supabase/functions/_shared/clip-access.ts` now detects an
+absent storage object (a `"Object not found"` storage error, matched on message with a
+404-status secondary signal) and throws `AppError("NOT_FOUND", ..., 404)` instead of
+the previous blanket `INTERNAL` 500. A missing object is an expected data condition for
+an un-uploaded / fixture (placeholder-path) clip, not a server fault. A bare 400 is NOT
+treated as not-found, so a genuine bad request still surfaces as 500. The
+admin/moderator gate and the removed/rejected refusal are untouched (both run before the
+mint), so auth/privacy is not weakened.
+
+Verified against the deployed function (admin/non-admin tokens minted by script):
+- Admin + placeholder-byte `ready` clip `dbc6f83f` (object absent): **404 `NOT_FOUND` "Clip video is not available yet."** (was 500 INTERNAL).
+- Admin + real-bytes published clip `04651620` (object present): **200** with a signed `clips/...` URL, `expiresIn:300`.
+- Non-admin (`player@atlitos.dev`) + real clip: **403 `FORBIDDEN` "Admin or moderator role required."**
+- Admin + `rejected` clip `04af7f0f`: **403 `FORBIDDEN` "This clip is not available."**
+- Admin + `removed` clip `67bdf7a9`: **403 `FORBIDDEN`.**
+
+Note (out of F2 scope, not changed): `get-clip-playback-url` shares `mintSignedClipUrl` in
+source but is a separately deployed bundle still carrying the old inline copy, so it still
+500s on a placeholder-byte clip. Redeploying it would fix it consistently; left as an
+advisory since F2 named only `get-clip-moderation-url`.
+
+---
+
 On the fixture `ready` clip `dbc6f83f` (placeholder path, no bytes), admin
 `get-clip-moderation-url` → **500 INTERNAL "Failed to mint signed url: Object not found"**.
 Authorization passes (admin); the failure is at the storage sign step because the
