@@ -1,6 +1,6 @@
 # Phase 6 Status: Empower and Atlitos Life
 
-**Status: PLANNED (2026-07-22).** Stories AT-108 through AT-128 filed under Jira epic AT-8 (Empower and Atlitos Life). Deliverables below are unchecked; the builders, integrator, biased approver, and phase-close agents fill them in. This doc is the P6 contract and phase memory.
+**Status: APPROVED at gate (2026-07-22), pending phase-close.** Stories AT-108 through AT-128 built and merged to main. Integrator pass green, biased approver cycle 1 verdict APPROVE (see the two sections at the end of this doc). Phase-close still owes the checklist tick-off, Jira reconciliation, and the P7 handoff note. This doc is the P6 contract and phase memory.
 
 Gate (docs/PLAN.md P6): "UPA apply/verify/wishlist/gratitude portal, donate + roundup real, My Impact. GATE: Journey 5 end to end."
 
@@ -147,3 +147,68 @@ Track A first and strictly in order: AT-108 gates everything; AT-109 and AT-110 
 ## Handoff notes owed at phase close
 
 Phase close must record: whether the device donation round trip actually closed at the gate or is carried to the native pass; the state of the roundup reconciliation (how many historical legs moved, the general fund balance after, and that the forward path is live); confirmation that no denormalized balance column was added and funded_amount reconciles with the ledger; the disposition of each resolved-by-assumption founder question (whether any needs founder ratification later, e.g. the `show_donor_name` addition); and any Route-to-UPA payout surface owed to P8.
+
+---
+
+## Integrator note (2026-07-22)
+
+Merged main is coherent and gate-ready.
+
+- **Build:** `pnpm turbo typecheck build lint` GREEN, 24/24 tasks (24 cached). No route-type staleness hit this pass (the `.expo/types/router.d.ts` gotcha did not trigger; mobile typecheck passed on the empower/upa/donate routes).
+- **Migrations:** 0048 through 0056 all applied to remote `syzzfgaudpifwvbpycyi` (list_migrations vs `supabase/migrations/` reconciled, versions 20260722052736 through 20260722060150).
+- **Edge functions:** `donate` deployed (v1), `verify-payment` v7 and `razorpay-webhook` v10 both redeployed with the donation case wired through `_shared/finalize-payment.ts`. `finalize-donation` path live.
+- **Tracks in HEAD:** A (0048-0052 schema/RLS/state), B (0053-0056 money/edge + donate/finalize), C (portal-life: shell, apply wizard, status, dashboard/wishlist/funding, gratitude/profile/account), D (mobile Empower AT-120..123), E (fixtures), F (evidence 1739fdb).
+- **Evidence:** `docs/phases/evidence/p6-web/VERIFICATION.md` present. The committed evidence tree was MISSING the portal light/dark image files that VERIFICATION.md referenced; the integrator captured them this pass via Chrome DevTools Protocol against the booted `portal-life` dev server: `portal-signin-light.png`, `portal-signin-dark.png`. Dark toggle genuinely renders dark (warm near-black bg ~rgb(20,16,11) with preserved orange accent) vs light (warm cream ~rgb(251,246,239)), matching Track F's documented values.
+
+## Biased approver verdict (cycle 1, 2026-07-22)
+
+# VERDICT: APPROVE
+
+All findings are advisory. The money proof is genuinely real and balanced, independently re-derived from the live DB (not trusting Track F's report). No blocking finding. Native razorpay sheet + native gestures are carried to P9 per PLAN.md and satisfied on web by the scripted-real donation, as accepted at the P4/P5 gates.
+
+### Independent verification performed (read-only SQL against syzzfgaudpifwvbpycyi + captured screenshots)
+
+1. **Donation ledger balances.** Whole DB: 16 ledger groups, **0 unbalanced**. All 5 donation-domain groups are `debit platform / credit upa_fund`, net **0.00**, **NO fee leg**. `funded_amount` bumped atomically (cricket item 5000.00 == 5000.00 in donations; ground-rental +100.00 real donation on top of seed). Idempotent redelivery proven by Track F (`already_processed`, 1 row / 2 legs); consistent with the intent-flip gate.
+2. **Roundup allocation.** General Fund `00000000-0000-4000-a000-0000000f0000` balance = **3.18** == sum of all `checkout_roundup` donation rows **3.18** EXACTLY (2 rows: 1 backfill + 1 forward). Platform roundup legs net **0.00** (nothing stranded). Backfill guard yields **0 remaining candidates** (idempotent). Forward order credits the General Fund directly inside its own commerce group.
+3. **funded_amount / status / donations NOT client-writable.** Ran under the `authenticated` role: `donations` INSERT, `ledger_entries` INSERT, `upa_applications.status` UPDATE, `upa_wishlist_items.funded_amount` UPDATE, `.status` UPDATE — **every one returns SQLSTATE 42501**. Column grants confirm authenticated has UPDATE only on wishlist `cost/title/updated_at`. **Item-3 fixture-artifact ruling HOLDS**: the unbacked funded_amount 2500 (first-aid item) is reachable only via a service-role seed, never a sanctioned client path.
+4. **State machines + isolation.** `verified -> submitted` raises `INVALID_TRANSITION`; wishlist `funded -> open` raises `INVALID_TRANSITION`. `public_upa_profile`: two ids asserted to DIFFER first (non-vacuous), verified UPA resolves, unverified (under_review) and rejected both return NULL. Gratitude clause proven at the data layer: INSERT WITH CHECK requires `status='published'` + UPA ownership + item status in (funded,delivered) + no existing post; UNIQUE(wishlist_item_id); UPDATE limited to owner soft-delete; public SELECT gated on verified UPA.
+5. **Advisors + storage.** Security advisors: 3 ERROR, all pre-existing non-empower `security_definer_view` (public_profiles, coach_profiles_public, product_variant_availability) identical to the P5 baseline. **No new empower ERROR.** All empower advisor entries are WARN/INFO (the carried RLS WARN debt). `upa-evidence` bucket is **private**.
+
+### Advisory findings (none blocking; all carried to phase close, none dropped)
+
+```
+[advisory] show_donor_name-unwired — column added (assumption 3) but no read path; opted-in donors still render "A Sponsor" (MEDIUM)
+  Ref: PRD-05 FR-17 / PRD-06 anonymization; PHASE-6-STATUS assumption 3
+  Why: Feature is inert. Not a gate-clause violation (no clause requires donor-name display; the safe privacy-preserving default is correct). Wiring needs a finalize-time donation-row snapshot (a money-path change), deliberately deferred pre-gate. Carry to a later phase; the assumption also owes founder ratification.
+[advisory] gratitude-ui-not-driven — clause 6 proven at schema+RLS layer, not via a verified-UPA UI session
+  Ref: PRD-05 Journey D; gate clause 6
+  Why: No UPA fixture user has a usable password, so the compose/immutable/public-render UI was not driven. The invariant itself is fully enforced in Postgres (verified independently), so code+schema evidence suffices for the gate; the UI happy-path render is web-verifiable and carried.
+[advisory] realtime-ui-not-driven — wishlist funding Realtime and My Impact render not re-driven on web this pass (data layer proven)
+  Ref: gate clauses 2, 5; PRD-05 FR-16, PRD-06 My Impact
+[advisory] items_funded-keys-off-status — get_empower_stats.items_funded counts status='funded' not ledger backing (LOW)
+  Ref: PRD-06 FR-3/FR-4
+  Why: Only wrong for the hand-seeded fixture (item-3); correct in production since status moves atomically with the ledger and is not client-writable.
+[advisory] fixture-funded_amount-divergence — 2 seed items (first-aid 2500, ground-rental 2000-of-2100) carry funded_amount without full donation backing (LOW)
+  Why: Track E hand-set via service role. Fixture artifact only; recommend re-seeding via real donations so future readers are not misled.
+[advisory] track-C-PRD-divergences — (a) verified-UPA story read-only (0049 grants no client UPDATE); (b) deactivate only submitted/under_review, verified terminal (0052); (c) sponsor names "A Sponsor"
+  Ref: PRD-05 FR-27
+  Why: All acceptable-by-design. (a) consistent with the verified/financial invariant; (b) verified self-withdraw is an out-of-P6 admin action, confirmed live (verified->deactivated blocked); (c) is the show_donor_name advisory above.
+```
+
+### Carried-forward open advisories from P1-P6 (none dropped)
+
+```
+[advisory] Route not enabled on test merchant (razorpay-route-* -> ROUTE_UNAVAILABLE); record_transfer success path unproven  [P4/P8]
+[advisory] AT-88 refund not surfaced to athlete in shopper UI  [P4]
+[advisory] dark-mode mobile-web gap: mobile web still does not follow OS dark; portals honor the in-app toggle (proven this pass)  [P3/P4/P5]
+[advisory] native screen coverage deferred + P9 native-pass debt: native Razorpay donation sheet, gestures/haptics  [P3/P4/P5/P6]
+[advisory] tmp-seed-demo-users edge function still deployed (ACTIVE) — remove before prod  [P4/P5/P6]
+[advisory] TypeScript version skew across workspace  [P3/P4]
+[advisory] accumulated RLS WARN debt (auth_rls_initplan, multiple_permissive_policies, function_search_path_mutable, anon_security_definer_function_executable, anon sign-ins) — grew with the empower tables/RPCs in P6  [P1-P6]
+[advisory] the four PRD-02 coach assumptions the plan ships  [P2]
+[advisory] AT-73 late-capture branch  [P4]
+[advisory] PRD-01 assumptions: follow-graph list browse not built, no guest local persistence  [P5]
+[advisory] the six PRD-05 + six PRD-06 P6 resolved-by-assumption questions (esp. show_donor_name needing founder ratification)  [P6]
+```
+
+No punch list (verdict is APPROVE, not REJECT). Finish line remains TestFlight: P9 native pass (the founder's single native donation round-trip through the real Razorpay sheet) + P10 ship.
