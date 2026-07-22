@@ -1,5 +1,5 @@
 import { useLogout, useGetIdentity } from "@refinedev/core";
-import { Building2, CalendarClock, Film, Flag, LayoutGrid, LogOut, Package, Percent, ShieldCheck, ShoppingBag, Users } from "lucide-react";
+import { Building2, CalendarClock, Film, Flag, GraduationCap, LayoutGrid, LogOut, Package, Percent, ShieldCheck, ShoppingBag, Users } from "lucide-react";
 import type { ReactNode } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 
@@ -15,6 +15,7 @@ const navItems = [
   { to: "/bookings", label: "Bookings", icon: CalendarClock },
   { to: "/products", label: "Catalog", icon: Package },
   { to: "/orders", label: "Orders", icon: ShoppingBag },
+  { to: "/drills", label: "Drills", icon: GraduationCap },
   { to: "/moderation", label: "Moderation queue", icon: Film },
   { to: "/reports", label: "Reports queue", icon: Flag },
   { to: "/fee-config", label: "Fee config", icon: Percent },

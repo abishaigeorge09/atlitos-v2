@@ -10,6 +10,9 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import { Shell } from "./layout/Shell";
 import { BookingsList } from "./pages/bookings/list";
+import { DrillCreate } from "./pages/drills/create";
+import { DrillShow } from "./pages/drills/show";
+import { DrillsList } from "./pages/drills/list";
 import { FeeConfigList } from "./pages/fee-config/list";
 import { LoginPage } from "./pages/login";
 import { ModerationList } from "./pages/moderation/list";
@@ -59,6 +62,13 @@ export function App() {
             list: "/orders",
             show: "/orders/show/:id",
             meta: { label: "Orders" },
+          },
+          {
+            name: "drills",
+            list: "/drills",
+            create: "/drills/create",
+            show: "/drills/show/:id",
+            meta: { label: "Drills" },
           },
           {
             name: "clips",
@@ -113,6 +123,9 @@ export function App() {
             <Route path="/products/show/:id" element={<ProductShow />} />
             <Route path="/orders" element={<OrdersList />} />
             <Route path="/orders/show/:id" element={<OrderShow />} />
+            <Route path="/drills" element={<DrillsList />} />
+            <Route path="/drills/create" element={<DrillCreate />} />
+            <Route path="/drills/show/:id" element={<DrillShow />} />
             <Route path="/moderation" element={<ModerationList />} />
             <Route path="/moderation/show/:id" element={<ModerationShow />} />
             <Route path="/reports" element={<ReportsList />} />
