@@ -1180,6 +1180,98 @@ export type Database = {
           },
         ]
       }
+      drill_completions: {
+        Row: {
+          completed_at: string
+          drill_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string
+          drill_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string
+          drill_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "drill_completions_drill_id_fkey"
+            columns: ["drill_id"]
+            isOneToOne: false
+            referencedRelation: "drills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "drill_completions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "drill_completions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "drill_completions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      drills: {
+        Row: {
+          active: boolean
+          created_at: string
+          description: string
+          difficulty: Database["public"]["Enums"]["drill_difficulty"]
+          id: string
+          media_url: string | null
+          skill_category: string
+          sport: Database["public"]["Enums"]["sport"]
+          title: string
+          updated_at: string
+          xp_value: number
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          description: string
+          difficulty: Database["public"]["Enums"]["drill_difficulty"]
+          id?: string
+          media_url?: string | null
+          skill_category: string
+          sport: Database["public"]["Enums"]["sport"]
+          title: string
+          updated_at?: string
+          xp_value: number
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          description?: string
+          difficulty?: Database["public"]["Enums"]["drill_difficulty"]
+          id?: string
+          media_url?: string | null
+          skill_category?: string
+          sport?: Database["public"]["Enums"]["sport"]
+          title?: string
+          updated_at?: string
+          xp_value?: number
+        }
+        Relationships: []
+      }
       feature_flags: {
         Row: {
           created_at: string
@@ -1398,6 +1490,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      milestones: {
+        Row: {
+          created_at: string
+          criteria: Json
+          description: string
+          icon_name: string
+          id: string
+          key: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          criteria: Json
+          description: string
+          icon_name: string
+          id?: string
+          key: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          criteria?: Json
+          description?: string
+          icon_name?: string
+          id?: string
+          key?: string
+          name?: string
+        }
+        Relationships: []
       }
       notification_prefs: {
         Row: {
@@ -2299,6 +2421,30 @@ export type Database = {
           },
         ]
       }
+      roadmap_stages: {
+        Row: {
+          id: string
+          name: string
+          sport: Database["public"]["Enums"]["sport"]
+          stage_order: number
+          xp_threshold: number
+        }
+        Insert: {
+          id?: string
+          name: string
+          sport: Database["public"]["Enums"]["sport"]
+          stage_order: number
+          xp_threshold: number
+        }
+        Update: {
+          id?: string
+          name?: string
+          sport?: Database["public"]["Enums"]["sport"]
+          stage_order?: number
+          xp_threshold?: number
+        }
+        Relationships: []
+      }
       session_types: {
         Row: {
           active: boolean
@@ -2781,6 +2927,56 @@ export type Database = {
           },
         ]
       }
+      user_milestones: {
+        Row: {
+          earned_at: string
+          id: string
+          milestone_id: string
+          user_id: string
+        }
+        Insert: {
+          earned_at?: string
+          id?: string
+          milestone_id: string
+          user_id: string
+        }
+        Update: {
+          earned_at?: string
+          id?: string
+          milestone_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_milestones_milestone_id_fkey"
+            columns: ["milestone_id"]
+            isOneToOne: false
+            referencedRelation: "milestones"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_milestones_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "user_milestones_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_milestones_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -3108,6 +3304,62 @@ export type Database = {
           processed_at?: string
         }
         Relationships: []
+      }
+      xp_events: {
+        Row: {
+          created_at: string
+          drill_id: string | null
+          id: string
+          source: Database["public"]["Enums"]["xp_source"]
+          user_id: string
+          xp_amount: number
+        }
+        Insert: {
+          created_at?: string
+          drill_id?: string | null
+          id?: string
+          source: Database["public"]["Enums"]["xp_source"]
+          user_id: string
+          xp_amount: number
+        }
+        Update: {
+          created_at?: string
+          drill_id?: string | null
+          id?: string
+          source?: Database["public"]["Enums"]["xp_source"]
+          user_id?: string
+          xp_amount?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "xp_events_drill_id_fkey"
+            columns: ["drill_id"]
+            isOneToOne: false
+            referencedRelation: "drills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "xp_events_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "xp_events_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "xp_events_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
@@ -3952,6 +4204,7 @@ export type Database = {
         }[]
       }
       get_empower_stats: { Args: never; Returns: Json }
+      get_learn_home: { Args: never; Returns: Json }
       get_my_impact_summary: { Args: never; Returns: Json }
       get_my_transactions: {
         Args: { p_kind?: string; p_limit?: number; p_offset?: number }
@@ -4608,6 +4861,7 @@ export type Database = {
         | "pending_payment"
         | "expired"
       donation_method: "standalone" | "checkout_roundup"
+      drill_difficulty: "beginner" | "intermediate" | "advanced"
       fee_value_type: "percentage" | "flat"
       ledger_account_type:
         | "platform"
@@ -4671,6 +4925,7 @@ export type Database = {
       user_status: "active" | "suspended"
       venue_status: "pending" | "verified" | "rejected"
       verification_status: "pending_review" | "approved" | "rejected"
+      xp_source: "drill_complete" | "milestone" | "other"
     }
     CompositeTypes: {
       cart_mutation_result: {
@@ -4835,6 +5090,7 @@ export const Constants = {
         "expired",
       ],
       donation_method: ["standalone", "checkout_roundup"],
+      drill_difficulty: ["beginner", "intermediate", "advanced"],
       fee_value_type: ["percentage", "flat"],
       ledger_account_type: [
         "platform",
@@ -4905,6 +5161,7 @@ export const Constants = {
       user_status: ["active", "suspended"],
       venue_status: ["pending", "verified", "rejected"],
       verification_status: ["pending_review", "approved", "rejected"],
+      xp_source: ["drill_complete", "milestone", "other"],
     },
   },
 } as const

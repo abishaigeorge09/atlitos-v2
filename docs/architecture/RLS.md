@@ -259,6 +259,12 @@ Landed in `0048` (schema + the `general_fund_account_ref()` anchor + the `upa-ev
 | `xp_events` | own rows | **no** `authenticated` write; written by the same transaction as `drill_completions` insert via a trigger, so XP cannot be granted without a real completion row |
 | `user_milestones` | own rows | **no** `authenticated` write; a trigger on `xp_events`/`drill_completions` insert evaluates `milestones.criteria` and inserts here, so a milestone cannot be self-awarded |
 
+**Shipped in `0058_learn_rls.sql` (AT-130).** Enforced exactly as above, twice (policy + grant, the `0049` house pattern):
+
+- `drills`/`roadmap_stages`/`milestones` carry an `anon`-inclusive public `SELECT` (all rows) and an `has_role('admin')` `FOR ALL` write policy; admin CRUD actually flows through Track B's SECURITY DEFINER `admin_upsert_drill`/`admin_set_drill_active` RPCs (which bypass RLS and write `audit_log`), the admin policy being the belt to that braces. **Permissive-OR contract (gate clause 8):** an unscoped `select * from drills` returns every drill including inactive ones, so every consumer read carries its own `.eq('active', true)`; the admin Drill List sees all, by design. Verified non-vacuously: the public catalog is readable to a second user while that user sees zero of the first user's owner-scoped rows.
+- `drill_completions`: own `SELECT` + own `INSERT` only; `update`/`delete` are revoked from `authenticated` at grant level, so no mutate path exists even if a future policy is careless. `UNIQUE(user_id, drill_id)` (`0057`) is the idempotency guard.
+- `xp_events` and `user_milestones`: owner `SELECT`, and **no write grant of any kind** for `anon`/`authenticated` (revoked, no write policy). A direct client `INSERT` into either returns `42501` (verified). The `0059` SECURITY DEFINER trigger is the sole writer; its `execute` is revoked from `public`/`anon`/`authenticated` (a trigger fires as owner regardless, the `0037`/`0047` advisor fix).
+
 ### chat
 
 | Table | `SELECT` | `INSERT`/`UPDATE`/`DELETE` |

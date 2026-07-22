@@ -858,6 +858,13 @@ Indexes: `idx_xp_events_user_id` on `user_id` (roadmap stage is `sum(xp_amount)`
 
 Constraints: `UNIQUE(user_id, milestone_id)`.
 
+**Shipped in `0057_learn_schema.sql` (AT-129), `0058_learn_rls.sql` (AT-130), `0059_learn_xp_engine.sql` (AT-131), `0060_learn_read_layer.sql` (AT-132).** Faithful to this spec, with these enforced additions recorded here:
+
+- `xp_events.xp_amount` carries `CHECK (xp_amount > 0)` and `roadmap_stages.xp_threshold` carries `CHECK (xp_threshold >= 0)` (a drill can never grant non-positive XP; a stage can never gate on negative XP).
+- Owner-read indexes `idx_drill_completions_user_id`, `idx_user_milestones_user_id`, and `idx_roadmap_stages_sport (sport, xp_threshold)` beside the specified `idx_drills_sport_active` / `idx_xp_events_user_id`.
+- **The XP engine (`0059`).** An `AFTER INSERT ON drill_completions` trigger (`grant_xp_on_drill_completion()`, SECURITY DEFINER) appends exactly one `xp_events` row in the same transaction with `xp_amount` read server side from `drills.xp_value` (never from client input; `drill_completions` has no XP column, so there is no channel to supply one), then unlocks each newly met milestone (`criteria` `xp_threshold` against the derived `sum(xp_amount)`, `drill_count` against the completion count), idempotent via `ON CONFLICT (user_id, milestone_id) DO NOTHING`. Verified: a real own-row completion yields exactly one event whose amount equals the drill's `xp_value`; a duplicate completion fails `UNIQUE(user_id, drill_id)` and writes no second event; a direct client `INSERT` into `xp_events`/`user_milestones` returns `42501`.
+- **The read layer (`0060`).** `get_learn_home()` (SECURITY DEFINER, self-scoped to `auth.uid()`) returns the caller's derived `xp_total = sum(xp_amount)` (no counter column), the primary-sport (`athlete_sports.is_primary`) roadmap `current_stage`/`next_stage`/`stages` as a pure function of the total, and every milestone flagged earned vs locked. A caller with no sport gets `sport: null` (the FR-48 empty state), never a zero-filled roadmap.
+
 ---
 
 ## Domain: chat
