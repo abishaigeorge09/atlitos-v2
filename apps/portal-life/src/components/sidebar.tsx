@@ -4,9 +4,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { cn } from "@/lib/utils";
-import { navItems } from "@/components/nav-items";
+import { preVerifiedNav, verifiedNav } from "@/components/nav-items";
 
 interface SidebarProps {
+  // A plain boolean crosses the server to client boundary fine (unlike a
+  // LucideIcon component reference), so the server layout tells the client
+  // sidebar which nav set to render, per PRD-05 FR-9.
+  verified: boolean;
   brandLabel: string;
   // A rendered node, not a `LucideIcon` component reference: this component
   // is a Client Component, and `DashboardLayout` (its caller) is a Server
@@ -18,8 +22,9 @@ interface SidebarProps {
   children?: React.ReactNode;
 }
 
-export function Sidebar({ brandLabel, brandIcon, children }: SidebarProps) {
+export function Sidebar({ verified, brandLabel, brandIcon, children }: SidebarProps) {
   const pathname = usePathname();
+  const navItems = verified ? verifiedNav : preVerifiedNav;
 
   return (
     <aside className="flex h-full w-64 shrink-0 flex-col border-r border-border bg-card">
@@ -35,9 +40,7 @@ export function Sidebar({ brandLabel, brandIcon, children }: SidebarProps) {
       <nav className="flex flex-1 flex-col gap-1 p-3">
         {navItems.map((item) => {
           const active =
-            item.href === "/dashboard"
-              ? pathname === "/dashboard"
-              : pathname.startsWith(item.href);
+            pathname === item.href || pathname.startsWith(`${item.href}/`);
           const Icon = item.icon;
           return (
             <Link

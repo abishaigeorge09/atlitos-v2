@@ -40,7 +40,7 @@ export function AuthForm({ mode }: AuthFormProps) {
       return;
     }
 
-    const next = searchParams.get("next") ?? "/dashboard";
+    const next = searchParams.get("next") ?? "/home";
     router.push(next);
     router.refresh();
   }

@@ -8,12 +8,16 @@ interface CookieToSet {
   options?: CookieOptions;
 }
 
+// Routes reachable without a session: the marketing landing and the auth
+// pages. Everything else in the Life portal (apply, status, home, wishlist,
+// gratitude, profile, account) requires an authenticated user.
+const PUBLIC_PATHS = ["/", "/signin", "/signup"];
+
 /**
- * Refreshes the Supabase session cookie on every request and gates
- * /dashboard routes behind an authenticated session, per PRD-03 3.1 (auth
- * and onboarding) and FR-7 (a partner cannot reach authenticated routes
- * without a session). Unauthenticated dashboard requests redirect to
- * /signin with the original path preserved as a redirect target.
+ * Refreshes the Supabase session cookie on every request and gates every
+ * authenticated route behind a session, per PRD-05 FR-9 and FR-25.
+ * Unauthenticated requests to a protected path redirect to /signin with the
+ * original path preserved as a redirect target.
  */
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -43,11 +47,12 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isDashboardRoute = request.nextUrl.pathname.startsWith("/dashboard");
+  const { pathname } = request.nextUrl;
+  const isPublic = PUBLIC_PATHS.includes(pathname);
 
-  if (isDashboardRoute && !user) {
+  if (!isPublic && !user) {
     const signInUrl = new URL("/signin", request.url);
-    signInUrl.searchParams.set("next", request.nextUrl.pathname);
+    signInUrl.searchParams.set("next", pathname);
     return NextResponse.redirect(signInUrl);
   }
 

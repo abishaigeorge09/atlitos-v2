@@ -1,28 +1,26 @@
-import { redirect } from "next/navigation";
 import { HeartHandshake } from "lucide-react";
 
-import { createClient } from "@/lib/supabase/server";
+import { requireUser, getOwnApplication } from "@/lib/empower";
 import { Sidebar } from "@/components/sidebar";
 import { UserMenu } from "@/components/user-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
 
-export default async function DashboardLayout({
+export default async function AppLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  // Middleware already redirects unauthenticated /dashboard requests, this
-  // is the belt and suspenders check for a direct server render.
-  if (!user) {
-    redirect("/signin");
-  }
+  // Middleware already redirects unauthenticated requests; this belt and
+  // suspenders check also gives us the user for the nav and the verified gate.
+  const user = await requireUser();
+  const application = await getOwnApplication(user.id);
+  const verified = application?.status === "verified";
 
   return (
     <div className="flex min-h-screen w-full bg-background">
-      <Sidebar brandLabel="Atlitos Life" brandIcon={<HeartHandshake className="size-4" strokeWidth={1.75} />}>
+      <Sidebar
+        verified={verified}
+        brandLabel="Atlitos Life"
+        brandIcon={<HeartHandshake className="size-4" strokeWidth={1.75} />}
+      >
         <div className="flex items-center gap-2">
           <div className="min-w-0 flex-1">
             <UserMenu email={user.email ?? "Signed in"} />
