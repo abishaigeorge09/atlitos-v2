@@ -104,7 +104,7 @@ function CoachAnalyticsScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-      <AppBar variant="backTitle" title="Analytics" onPressBack={() => router.back()} />
+      <AppBar variant="backTitle" title="Video Analytics" onPressBack={() => router.back()} />
       <TrainingsSubNav role="coach" active="analytics" onChange={(tab) => navigateSubNav(tab)} />
 
       {state === 'loading' ? (

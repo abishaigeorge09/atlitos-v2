@@ -83,3 +83,21 @@ The Trainings tab's athlete branch was a placeholder ("warming up, next phase");
 - `(tabs)/trainings/session/[id]` now hands a player viewer off to `(tabs)/coaching/booking/[id]` when the coach scoped read returns null and the caller is the session's own player.
 
 Verified live on the iOS simulator as player@atlitos.dev (11 real sessions): stat grid, request row, milestone rail, coaches row, 11 payment rows and thread list all render real data. `ui/input.tsx` TextInput now carries "<label> input" as accessibilityLabel (fields were unaddressable by VoiceOver/automation). A second agent reconciles coach screens next.
+
+## Post-P8 addendum: coach Trainings design reconciliation (2026-07-25)
+
+Coach module reconciled against the founder's coach IA spec (Figma file on08qE5ahPOXBYekeQt9nk, coach bottom nav node 728:5521: Stats, Trainees, Earnings, Chat, Video Analytics). The Figma MCP hit the Starter plan tool call limit before any coach frame (1073:18189 dashboard, 1073:20014 earnings, chat and sessions frames) could be rendered or read as metadata, so the pixel level pass could not happen; the reconciliation below is against the IA spec plus PRD-02 section 3, which encodes the same design. Someone with Figma access should do a one pass visual diff when the limit resets.
+
+What changed:
+
+- `ui/trainings-sub-nav.tsx`: coach fifth tab label is now "Video Analytics" per 728:5521 (route key stays `analytics`, player label stays "Analytics").
+- `(tabs)/trainings/analytics.tsx`: coach branch AppBar title now "Video Analytics" to match the tab.
+- `(tabs)/trainings/index.tsx` coach dashboard: section order now stat grid, Upcoming sessions, Session requests per PRD-02 3.3, and the Upcoming sessions header carries a persistent "Availability" entry into `(tabs)/trainings/availability`. Before this, the availability screen was only reachable from the zero sessions empty state, so any coach with a session could never open it.
+
+Verified live as coach1@atlitos.dev on the iOS simulator: coach branch renders (the earlier "verified coach sees the player placeholder" report did not reproduce; `getMe` maps `coach_profiles.status` to `coachStatus` and coach1 resolves `verified`), stat tiles show 1 player, 5.0 rating, 2 sessions, Rs 990 this month, requests carry Accept and Decline, trainees shows Athlete with 11 sessions, earnings shows Rs 990 balance and the month grouped ledger rows, chat lists the two 1:1 threads. Screenshots in /tmp/coach-trainings on the build machine.
+
+Known gaps, scoped follow ups, not built:
+
+- PRD-02 3.3 lists a Milestones section on the coach dashboard; there is no coach scoped milestones read (`get_learn_home()` is player XP), so building it would have meant inventing data. Needs an API decision first.
+- Founder question about chat and "the group": `chat_threads` (0022) is strictly 1:1, `participant_a < participant_b` with a session linked pair check in RLS, so any group chat or group session concept in the coach chat frames cannot ship without new schema (members table, policy rework, group aware thread list). The Figma chat frames could not be inspected because of the rate limit, so whether the design actually shows a group is unconfirmed. Do not invent schema for it; it needs a founder decision plus a migration.
+- One suspicious spot worth watching if the "coach sees player dashboard" report ever comes back: `packages/api/src/hooks.ts` `getMe` ignores the `coach_profiles` select error, so an RLS denial there would silently downgrade a coach to the player branch instead of surfacing an error.
