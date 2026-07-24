@@ -11,10 +11,12 @@
 //
 // Epic AT-3, story AT-144. The v1 heuristic ported verbatim behind the same
 // request/response contract: a keyword parse routes the query to entity types
-// (gear|coach|court), then a weighted distance/price/rating/text score ranks
-// the rows. The three entity types are the whole v1 `SearchEntityType` union
-// (packages/types enums.ts); drills/UPAs/clips are not in that union nor in the
-// `SearchResult.snapshot` type, so they are out of the ported contract.
+// (gear|coach|court|athlete|clip), then a weighted distance/price/rating/text
+// score ranks the rows. Track E extended the v1 three-type union with
+// athletes (verified UPAs, PRD-06) and clips (published Clutch posts,
+// PRD-01) behind the identical `SearchHit` shape; `SearchEntityType`
+// (packages/types enums.ts) carries all five now. Drills remain out of the
+// contract (no PRD asks for them in search).
 //
 // VISIBILITY (CLAUDE.md: "RLS is a floor, not scoping"). Two independent guards
 // keep a non-public row from ever reaching a caller:
@@ -29,6 +31,12 @@
 //        - courts: `active = true` AND an inner join asserting
 //          `venues.status = 'verified'`.
 //        - products: `active = true`.
+//        - athletes: `upa_applications.status = 'verified'`, the same
+//          explicit scope use-empower.ts's `listUpas` applies (that table
+//          also carries an own-row policy for the applicant, any status).
+//        - clips: `clips.status = 'published'`, the same explicit scope
+//          hooks.ts's `getFeed` applies (own-row policy covers the uploader's
+//          non-published clips otherwise).
 //   The service-role client is deliberately never constructed here; search has
 //   no money leg and must not bypass RLS.
 //
@@ -46,7 +54,7 @@ import { userScopedClient } from "../_shared/supabase.ts";
 const SPORTS = ["football", "cricket", "badminton", "tennis"] as const;
 type Sport = (typeof SPORTS)[number];
 
-const ENTITY_TYPES = ["gear", "coach", "court"] as const;
+const ENTITY_TYPES = ["gear", "coach", "court", "athlete", "clip"] as const;
 type EntityType = (typeof ENTITY_TYPES)[number];
 
 // --------------------------------------------------------------------------
@@ -124,6 +132,8 @@ const ROUTER_TOKENS: Record<EntityType, string[]> = {
   coach: ["coach", "coaches", "coaching", "trainer", "trainers", "train", "training", "lesson", "lessons", "academy", "mentor", "mentoring"],
   court: ["court", "courts", "venue", "venues", "ground", "grounds", "turf", "turfs", "field", "fields", "pitch", "pitches", "slot", "slots", "booking"],
   gear: ["gear", "buy", "shop", "equipment", "kit", "product", "products", "racket", "rackets", "racquet", "bat", "bats", "ball", "balls", "shuttlecock", "shuttlecocks", "shoe", "shoes", "jersey", "glove", "gloves", "socks", "wristband", "helmet", "cone", "cones", "legguard", "legguards"],
+  athlete: ["athlete", "athletes", "upa", "upas", "donate", "donation", "donations", "support", "sponsor", "sponsoring", "fund", "funding"],
+  clip: ["clip", "clips", "video", "videos", "watch", "highlight", "highlights", "reel", "reels", "clutch"],
 };
 
 const SPORT_SYNONYMS: Record<string, Sport> = {
@@ -496,6 +506,81 @@ async function fetchProducts(supabase: any, intent: ParsedIntent): Promise<Candi
   }));
 }
 
+// deno-lint-ignore no-explicit-any
+async function fetchAthletes(supabase: any, intent: ParsedIntent): Promise<Candidate[]> {
+  // Same view/filter the empower hooks read for the UPA hub (use-empower.ts
+  // listUpas): `upa_applications` explicitly scoped to `status = 'verified'`,
+  // the RLS-is-not-scoping guard, because the table also carries an own-row
+  // policy for the applicant in any status.
+  let q = supabase
+    .from("upa_applications")
+    .select("id, story_headline, sport, region, state, photo_url")
+    .eq("status", "verified")
+    .limit(50);
+  if (intent.sport !== "general") q = q.eq("sport", intent.sport);
+
+  const { data, error } = await q;
+  if (error) throw new AppError("INTERNAL", `Failed to load athletes: ${error.message}`, 500);
+  const rows = (data ?? []) as Array<Record<string, unknown>>;
+
+  return rows.map((r): Candidate => {
+    const region = (r.region as string) ?? "";
+    const state = (r.state as string) ?? "";
+    return {
+      entityType: "athlete",
+      entityId: r.id as string,
+      title: (r.story_headline as string) ?? "Athlete",
+      subtitle: [capitalize((r.sport as string) ?? ""), region || state].filter(Boolean).join(" . "),
+      imageUrl: typeof r.photo_url === "string" ? r.photo_url : undefined,
+      sport: r.sport as Sport,
+      // No price or distance term applies to an athlete to support: text and
+      // rating (absent, so neutral) rank these, not a purchase/proximity axis.
+      rating: undefined,
+      distanceKm: undefined,
+      text: [r.story_headline, r.sport, region, state].filter(Boolean).join(" ").toLowerCase(),
+    };
+  });
+}
+
+// deno-lint-ignore no-explicit-any
+async function fetchClips(supabase: any, intent: ParsedIntent): Promise<Candidate[]> {
+  // Published only, the same RLS-is-not-scoping guard the Clutch feed hook
+  // applies (useClutch.getFeed): `clips` also carries an own-row policy for
+  // the uploader in any status.
+  let q = supabase
+    .from("clips")
+    .select("id, caption, sport, likes_count, thumb_path")
+    .eq("status", "published")
+    .limit(50);
+  if (intent.sport !== "general") q = q.eq("sport", intent.sport);
+
+  const { data, error } = await q;
+  if (error) throw new AppError("INTERNAL", `Failed to load clips: ${error.message}`, 500);
+  const rows = (data ?? []) as Array<Record<string, unknown>>;
+
+  // likes_count stands in for the rating signal (no 0..5 rating on a clip);
+  // normalize onto the same 0..5 scale scoreCandidates expects so it weighs
+  // consistently against coaches' real ratings.
+  const maxLikes = Math.max(1, ...rows.map((r) => Number(r.likes_count) || 0));
+
+  return rows.map((r): Candidate => {
+    const thumb = r.thumb_path as string | null;
+    return {
+      entityType: "clip",
+      entityId: r.id as string,
+      title: (r.caption as string) ?? "Clip",
+      subtitle: capitalize((r.sport as string) ?? "Clip"),
+      // thumb_path is a private-bucket storage key, not a loadable URL (see
+      // hooks.ts mapClipRow); only pass through an already-absolute URL.
+      imageUrl: typeof thumb === "string" && /^https?:\/\//.test(thumb) ? thumb : undefined,
+      sport: r.sport as Sport,
+      rating: (Math.min(1, (Number(r.likes_count) || 0) / maxLikes) * 5) || undefined,
+      distanceKm: undefined,
+      text: [r.caption, r.sport].filter(Boolean).join(" ").toLowerCase(),
+    };
+  });
+}
+
 function capitalize(s: string): string {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
@@ -527,13 +612,15 @@ Deno.serve((req) =>
     });
 
     const want = new Set(intent.entityTypes);
-    const [coaches, courts, products] = await Promise.all([
+    const [coaches, courts, products, athletes, clips] = await Promise.all([
       want.has("coach") ? fetchCoaches(supabase, intent, body.city) : Promise.resolve([]),
       want.has("court") ? fetchCourts(supabase, intent, body.lat, body.lng) : Promise.resolve([]),
       want.has("gear") ? fetchProducts(supabase, intent) : Promise.resolve([]),
+      want.has("athlete") ? fetchAthletes(supabase, intent) : Promise.resolve([]),
+      want.has("clip") ? fetchClips(supabase, intent) : Promise.resolve([]),
     ]);
 
-    const candidates = [...coaches, ...courts, ...products];
+    const candidates = [...coaches, ...courts, ...products, ...athletes, ...clips];
     const scored = scoreCandidates(candidates, intent).sort((a, b) => b.rankScore - a.rankScore);
     const ranked = (await rerank(body.query, scored)).slice(0, body.limit);
 
