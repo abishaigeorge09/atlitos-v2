@@ -12,8 +12,9 @@ import { EmptyState } from '@/components/organisms/EmptyState';
 import { LoginGateModal } from '@/components/organisms/LoginGateModal';
 import { FindCoachCard } from '@/components/organisms/trainings/FindCoachCard';
 import { MilestonesRail } from '@/components/organisms/trainings/MilestonesRail';
+import { MySportsCard } from '@/components/organisms/trainings/MySportsCard';
 import { PlayerSessionRequests } from '@/components/organisms/trainings/PlayerSessionRequests';
-import { PlayerStatsRow } from '@/components/organisms/trainings/PlayerStatsRow';
+import { PlayerStatsGrid } from '@/components/organisms/trainings/PlayerStatsGrid';
 import { PlayerUpcomingSessions } from '@/components/organisms/trainings/PlayerUpcomingSessions';
 import { Button } from '@/components/ui/button';
 import { SessionCard } from '@/components/ui/session-card';
@@ -30,6 +31,11 @@ import { useThemeColors } from '@/theme/use-theme-colors';
 type LoadState = 'loading' | 'populated' | 'error';
 
 const REQUEST_PREVIEW_COUNT = 3;
+const UPCOMING_PREVIEW_COUNT = 3;
+
+/** Sessions that were actually paid for and not declined or cancelled,
+ * mirroring the coaching bookings list's stat definitions (PRD-01 FR-27). */
+const LIVE_STATUSES: Session['status'][] = ['requested', 'accepted', 'completed', 'rescheduled', 'rated'];
 
 function goToSession(sessionId: string) {
   router.push({ pathname: '/(tabs)/trainings/session/[id]', params: { id: sessionId } });
@@ -201,27 +207,37 @@ export default function TrainingsScreen() {
   const showLoading = status === 'signed_in' && meLoading && !me;
 
   // Athlete derivations, all from the player's own rows (FR-27: real
-  // history, never cached estimates). Held sessions are the ones that
-  // actually happened; a pending request never inflates hours trained.
+  // history, never cached estimates). Same stat definitions as the
+  // coaching bookings list (its own documented judgment call): total and
+  // this month count every paid, not declined or cancelled session; hours
+  // and payments only count sessions that actually happened, so a pending
+  // request never inflates hours trained or payments done.
+  const liveSessions = mySessions.filter((session) => LIVE_STATUSES.includes(session.status));
+  const today = todayISO();
+  const liveThisMonth = liveSessions.filter((session) => session.date.slice(0, 7) === today.slice(0, 7));
   const heldSessions = mySessions.filter((session) => session.status === 'completed' || session.status === 'rated');
   const heldMinutes = heldSessions.reduce(
     (sum, session) => sum + (timeToMinutes(session.slot.to) - timeToMinutes(session.slot.from)),
     0,
   );
   const hoursTrained = Math.round((heldMinutes / 60) * 10) / 10;
-  const today = todayISO();
+  const paymentsDone = heldSessions.reduce((sum, session) => sum + session.total, 0);
   const upcomingSessions = mySessions.filter((session) => session.status === 'accepted' && session.date >= today).sort(bySoonest);
   const requestedSessions = mySessions.filter((session) => session.status === 'requested').sort(bySoonest);
   const hasAnySession = mySessions.length > 0;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-      {isVerifiedCoach ? (
+      {isVerifiedCoach || isPlayer ? (
         <>
           <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.lg }}>
             <Text style={[textStyle('h1'), { color: colors.text }]}>Trainings</Text>
           </View>
-          <TrainingsSubNav role="coach" active="stats" onChange={(tab) => navigateSubNav(tab)} />
+          <TrainingsSubNav
+            role={isVerifiedCoach ? 'coach' : 'player'}
+            active="stats"
+            onChange={(tab) => navigateSubNav(tab)}
+          />
         </>
       ) : null}
 
@@ -233,7 +249,9 @@ export default function TrainingsScreen() {
           ) : undefined
         }
       >
-        {!isVerifiedCoach ? <Text style={[textStyle('h1'), { color: colors.text }]}>Trainings</Text> : null}
+        {!isVerifiedCoach && !isPlayer ? (
+          <Text style={[textStyle('h1'), { color: colors.text }]}>Trainings</Text>
+        ) : null}
 
         {showLoading ? (
           <View style={{ gap: spacing.sm }}>
@@ -381,13 +399,35 @@ export default function TrainingsScreen() {
           />
         ) : (
           <View style={{ gap: spacing.lg }}>
-            <PlayerStatsRow
-              sessionsCompleted={heldSessions.length}
+            <View style={{ gap: spacing.xs }}>
+              <Text style={[textStyle('h2'), { color: colors.text }]}>Your trainings at a glance</Text>
+              <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
+                Your growth, goals and game, all in one place.
+              </Text>
+            </View>
+            <PlayerStatsGrid
+              totalSessions={liveSessions.length}
+              sessionsThisMonth={liveThisMonth.length}
               hoursTrained={hoursTrained}
-              xpTotal={learnHome ? learnHome.xpTotal : null}
+              paymentsDone={paymentsDone}
             />
+            {me?.sports?.length ? <MySportsCard sports={me.sports} /> : null}
             {!hasAnySession ? <FindCoachCard /> : null}
-            <PlayerUpcomingSessions sessions={upcomingSessions} onPressSession={goToSession} />
+            <View style={{ gap: spacing.sm }}>
+              {upcomingSessions.length > UPCOMING_PREVIEW_COUNT ? (
+                <View className="flex-row items-center justify-between">
+                  <Text style={[textStyle('h3'), { color: colors.text }]}>Upcoming sessions</Text>
+                  <Button variant="text" size="sm" onPress={() => router.push('/(tabs)/coaching/bookings')}>
+                    <Text style={{ color: colors.accent }}>View all</Text>
+                  </Button>
+                </View>
+              ) : null}
+              <PlayerUpcomingSessions
+                sessions={upcomingSessions.slice(0, UPCOMING_PREVIEW_COUNT)}
+                onPressSession={goToSession}
+                hideHeader={upcomingSessions.length > UPCOMING_PREVIEW_COUNT}
+              />
+            </View>
             <PlayerSessionRequests sessions={requestedSessions} />
             <MilestonesRail milestones={learnHome ? learnHome.milestones : null} />
             {hasAnySession ? <FindCoachCard /> : null}
@@ -407,6 +447,12 @@ function navigateSubNav(tab: string) {
       return;
     case 'earnings':
       router.push('/(tabs)/trainings/earnings');
+      return;
+    case 'coaches':
+      router.push('/(tabs)/trainings/coaches');
+      return;
+    case 'payments':
+      router.push('/(tabs)/trainings/payments');
       return;
     case 'chat':
       router.push('/(tabs)/trainings/chat');

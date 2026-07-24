@@ -21,14 +21,17 @@ import { useThemeColors } from '@/theme/use-theme-colors';
 export interface PlayerUpcomingSessionsProps {
   sessions: Session[];
   onPressSession: (sessionId: string) => void;
+  /** The Stats tab renders its own header row when a View all link is
+   * needed; set to avoid a doubled heading. */
+  hideHeader?: boolean;
 }
 
-export function PlayerUpcomingSessions({ sessions, onPressSession }: PlayerUpcomingSessionsProps) {
+export function PlayerUpcomingSessions({ sessions, onPressSession, hideHeader }: PlayerUpcomingSessionsProps) {
   const colors = useThemeColors();
 
   return (
     <View style={{ gap: spacing.sm }}>
-      <Text style={[textStyle('h3'), { color: colors.text }]}>Upcoming sessions</Text>
+      {hideHeader ? null : <Text style={[textStyle('h3'), { color: colors.text }]}>Upcoming sessions</Text>}
       {sessions.length === 0 ? (
         <EmptyState
           icon={CalendarClock}
