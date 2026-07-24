@@ -55,6 +55,11 @@ const Input = forwardRef<TextInput, InputProps>(function Input(
       >
         <TextInput
           ref={ref}
+          // The visible label above is a sibling Text, not associated with
+          // the field in the accessibility tree; labeling the input itself
+          // ("<label> input") makes it addressable for VoiceOver and UI
+          // automation. Callers can still override via props.
+          accessibilityLabel={label ? `${label} input` : undefined}
           className={cn('flex-1 font-sans text-base text-text', isMultiline && 'min-h-16', className)}
           placeholderTextColor={colors.textTertiary}
           secureTextEntry={secure}
