@@ -37,6 +37,7 @@ export default function CourtsIndexScreen() {
   const colors = useThemeColors();
   const courts = useCourts(supabase);
   const isGuest = useSessionStore((state) => state.status === 'guest');
+  const profileCity = useSessionStore((state) => state.me?.city ?? null);
   const [gateVisible, setGateVisible] = useState(false);
 
   const locationStatus = useLocationStore((state) => state.status);
@@ -70,7 +71,10 @@ export default function CourtsIndexScreen() {
 
   useEffect(() => {
     if (!locationRequested) {
-      void requestLocation();
+      // Track D defect 8: hand the store the athlete's own profile city so a
+      // denied/unavailable permission shows their real city (with no faked
+      // coords) instead of always pretending Hyderabad.
+      void requestLocation(profileCity);
     }
   }, []);
 
