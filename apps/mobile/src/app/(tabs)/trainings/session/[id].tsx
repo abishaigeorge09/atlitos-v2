@@ -1,4 +1,4 @@
-import { useCoachSessions } from '@atlitos/api';
+import { useCoaching, useCoachSessions } from '@atlitos/api';
 import { canTransition, SESSION_TRANSITIONS } from '@atlitos/types';
 import type { ApiError, Session } from '@atlitos/types';
 import { radii, spacing } from '@atlitos/theme';
@@ -50,6 +50,7 @@ function todayISO(): string {
 export default function CoachSessionDetailScreen() {
   const colors = useThemeColors();
   const coachSessions = useCoachSessions(supabase);
+  const coaching = useCoaching(supabase);
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const [state, setState] = useState<ScreenState>('loading');
@@ -76,6 +77,17 @@ export default function CoachSessionDetailScreen() {
     try {
       const result = await coachSessions.getSession(id);
       if (!result) {
+        // Not this caller's session as coach. The athlete dashboard links
+        // its own sessions here too (PRD-01 3.3); when the caller is the
+        // session's player, render the player perspective on the coaching
+        // booking detail (cancel with refund, reschedule, rate all live
+        // there) instead of rebuilding it in this coach screen.
+        const mine = await coaching.getSession(id);
+        const { data: authData } = await supabase.auth.getUser();
+        if (mine && authData.user && mine.playerId === authData.user.id) {
+          router.replace({ pathname: '/(tabs)/coaching/booking/[id]', params: { id } });
+          return;
+        }
         setError({ code: 'NOT_FOUND', message: 'This session could not be found.', status: 404 });
         setState('error');
         return;
