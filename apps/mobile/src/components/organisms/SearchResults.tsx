@@ -6,7 +6,7 @@ import * as Haptics from 'expo-haptics';
 import { ChevronRight } from 'lucide-react-native';
 import { FlatList, Image, Pressable, Text, View } from 'react-native';
 
-export type SearchSegment = 'gear' | 'coaches' | 'courts';
+export type SearchSegment = 'gear' | 'coaches' | 'courts' | 'athletes' | 'clips';
 
 export interface SearchResultItem {
   id: string;
@@ -35,6 +35,8 @@ const SEGMENT_LABEL: Record<SearchSegment, string> = {
   gear: 'Gear',
   coaches: 'Coaches',
   courts: 'Courts',
+  athletes: 'Athletes',
+  clips: 'Clips',
 };
 
 export function SearchResults({

@@ -155,5 +155,5 @@ export type TransactionKind = (typeof TRANSACTION_KINDS)[number];
 // Domain-level union used by get_my_transactions() (API-MAPPING.md); note
 // 'commerce' here where v1 used 'gear', matching v2's payment_domain naming.
 
-export const SEARCH_ENTITY_TYPES = ['gear', 'coach', 'court'] as const;
+export const SEARCH_ENTITY_TYPES = ['gear', 'coach', 'court', 'athlete', 'clip'] as const;
 export type SearchEntityType = (typeof SEARCH_ENTITY_TYPES)[number];
