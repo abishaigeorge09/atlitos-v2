@@ -318,6 +318,35 @@ export default function TrainingsScreen() {
                 </View>
               ) : null}
 
+              {/* PRD-02 3.3 dashboard order: stat grid, Upcoming sessions,
+                  Session Requests. Availability keeps a persistent entry
+                  here; the empty state CTA was its only route in before. */}
+              <View style={{ gap: spacing.sm }}>
+                <View className="flex-row items-center justify-between">
+                  <Text style={[textStyle('h3'), { color: colors.text }]}>Upcoming sessions</Text>
+                  <Button variant="text" size="sm" onPress={() => router.push('/(tabs)/trainings/availability')}>
+                    <Text style={{ color: colors.accent }}>Availability</Text>
+                  </Button>
+                </View>
+                {upcoming.length === 0 ? (
+                  <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>No upcoming sessions</Text>
+                ) : (
+                  upcoming.map((session) => (
+                    <SessionCard
+                      key={session.id}
+                      variant="upcoming"
+                      date={session.date}
+                      timeSlot={`${session.slot.from} to ${session.slot.to}`}
+                      personName={session.playerName ?? 'Athlete'}
+                      sessionType={session.sessionTypeName ?? ''}
+                      focusArea={session.focusArea || 'No focus area noted'}
+                      location={session.location || 'Location to be confirmed'}
+                      onPress={() => goToSession(session.id)}
+                    />
+                  ))
+                )}
+              </View>
+
               <View style={{ gap: spacing.sm }}>
                 <View className="flex-row items-center justify-between">
                   <Text style={[textStyle('h3'), { color: colors.text }]}>Session requests</Text>
@@ -352,27 +381,6 @@ export default function TrainingsScreen() {
                         </Text>
                       ) : null}
                     </View>
-                  ))
-                )}
-              </View>
-
-              <View style={{ gap: spacing.sm }}>
-                <Text style={[textStyle('h3'), { color: colors.text }]}>Upcoming sessions</Text>
-                {upcoming.length === 0 ? (
-                  <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>No upcoming sessions</Text>
-                ) : (
-                  upcoming.map((session) => (
-                    <SessionCard
-                      key={session.id}
-                      variant="upcoming"
-                      date={session.date}
-                      timeSlot={`${session.slot.from} to ${session.slot.to}`}
-                      personName={session.playerName ?? 'Athlete'}
-                      sessionType={session.sessionTypeName ?? ''}
-                      focusArea={session.focusArea || 'No focus area noted'}
-                      location={session.location || 'Location to be confirmed'}
-                      onPress={() => goToSession(session.id)}
-                    />
                   ))
                 )}
               </View>
