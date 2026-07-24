@@ -1,5 +1,3 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
-
 import type { AtlitosClient } from "./client";
 import { mapPostgrestError } from "./errors";
 
@@ -39,17 +37,11 @@ interface PromoBannerRow {
 }
 
 export function useHome(client: AtlitosClient) {
-  // Widen the schema generic so `from` accepts `promo_banners`: it lands in
-  // 0071, not yet in the generated `Database` type on this branch (the same
-  // escape hatch use-learn.ts/use-empower.ts document). The result is
-  // re-narrowed through `PromoBannerRow`/`PromoBanner` above.
-  const db = client as unknown as SupabaseClient;
-
   return {
     /** Active promo banners, sorted low to high. Empty on a read error rather
      * than throwing, the Home carousel hides itself on an empty list. */
     async listPromoBanners(): Promise<PromoBanner[]> {
-      const { data, error } = await db
+      const { data, error } = await client
         .from("promo_banners")
         .select("id, title, body, cta_label, cta_route, image_path, sort")
         .eq("active", true)

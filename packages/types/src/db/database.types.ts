@@ -2246,6 +2246,42 @@ export type Database = {
           },
         ]
       }
+      promo_banners: {
+        Row: {
+          active: boolean
+          body: string | null
+          created_at: string
+          cta_label: string | null
+          cta_route: string | null
+          id: string
+          image_path: string | null
+          sort: number
+          title: string
+        }
+        Insert: {
+          active?: boolean
+          body?: string | null
+          created_at?: string
+          cta_label?: string | null
+          cta_route?: string | null
+          id?: string
+          image_path?: string | null
+          sort?: number
+          title: string
+        }
+        Update: {
+          active?: boolean
+          body?: string | null
+          created_at?: string
+          cta_label?: string | null
+          cta_route?: string | null
+          id?: string
+          image_path?: string | null
+          sort?: number
+          title?: string
+        }
+        Relationships: []
+      }
       push_tokens: {
         Row: {
           created_at: string
@@ -3807,6 +3843,28 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      admin_set_drill_active: {
+        Args: { p_active: boolean; p_id: string }
+        Returns: {
+          active: boolean
+          created_at: string
+          description: string
+          difficulty: Database["public"]["Enums"]["drill_difficulty"]
+          id: string
+          media_url: string | null
+          skill_category: string
+          sport: Database["public"]["Enums"]["sport"]
+          title: string
+          updated_at: string
+          xp_value: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "drills"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       admin_set_product_active: {
         Args: { p_active: boolean; p_id: string }
         Returns: {
@@ -3913,6 +3971,37 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "product_variants"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      admin_upsert_drill: {
+        Args: {
+          p_description: string
+          p_difficulty: Database["public"]["Enums"]["drill_difficulty"]
+          p_id: string
+          p_media_url?: string
+          p_skill_category: string
+          p_sport: Database["public"]["Enums"]["sport"]
+          p_title: string
+          p_xp_value: number
+        }
+        Returns: {
+          active: boolean
+          created_at: string
+          description: string
+          difficulty: Database["public"]["Enums"]["drill_difficulty"]
+          id: string
+          media_url: string | null
+          skill_category: string
+          sport: Database["public"]["Enums"]["sport"]
+          title: string
+          updated_at: string
+          xp_value: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "drills"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -4460,6 +4549,7 @@ export type Database = {
         Returns: {
           amount: number
           created_at: string
+          donor_display_name: string | null
           donor_id: string
           id: string
           item_id: string | null
