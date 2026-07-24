@@ -1,3 +1,4 @@
+import { spacing } from '@atlitos/theme';
 import type { Clip } from '@atlitos/types';
 import * as Haptics from 'expo-haptics';
 import { Heart, MessageCircle, Share2 } from 'lucide-react-native';
@@ -114,7 +115,7 @@ export function ClutchPostCard({
 
       {/* 4. Caption block. box-none so empty space falls through to overlay
           (3); the inner "View all comments" Pressable still captures taps. */}
-      <View pointerEvents="box-none" className="absolute inset-x-0 bottom-0 gap-xs p-md" style={{ right: 72 }}>
+      <View pointerEvents="box-none" className="absolute inset-x-0 bottom-0 gap-xs p-md" style={{ right: spacing['6xl'] }}>
         <View className="flex-row items-center gap-sm">
           <Text className="font-sans-semibold text-text-inverse">{clip.channel}</Text>
           <Text className="font-mono text-xs text-text-inverse opacity-80">{timeAgo(clip.createdAt)}</Text>

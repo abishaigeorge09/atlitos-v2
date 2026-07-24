@@ -10,6 +10,7 @@ export const spacing = {
   "3xl": 32,
   "4xl": 40,
   "5xl": 56,
+  "6xl": 72,
 } as const;
 
 export type SpacingToken = keyof typeof spacing;
