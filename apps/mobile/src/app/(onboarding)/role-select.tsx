@@ -6,6 +6,8 @@ import type { LucideIcon } from 'lucide-react-native';
 import { Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Button } from '@/components/ui/button';
+import { setOnboardingDeferred } from '@/lib/onboarding-deferred';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
 
@@ -44,6 +46,14 @@ export default function RoleSelectScreen() {
       // Haptics unavailable, not fatal.
     });
     router.push(href);
+  }
+
+  function handleExploreFirst() {
+    // Track D defect 2: onboarding must not trap. Remember the choice so
+    // splash stops forcing this screen on later launches; Home's
+    // finish-setup card stays as the nudge until a city is set.
+    void setOnboardingDeferred();
+    router.replace('/(tabs)');
   }
 
   return (
@@ -96,6 +106,10 @@ export default function RoleSelectScreen() {
             );
           })}
         </View>
+
+        <Button variant="text" onPress={handleExploreFirst}>
+          <Text style={[textStyle('label'), { color: colors.textSecondary }]}>Explore the app first</Text>
+        </Button>
       </View>
     </SafeAreaView>
   );

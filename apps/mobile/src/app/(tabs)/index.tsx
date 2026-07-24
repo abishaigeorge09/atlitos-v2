@@ -1,7 +1,7 @@
 import { useNotifications, useShop, type ShopProduct } from '@atlitos/api';
 import { spacing, radii } from '@atlitos/theme';
 import { router, useFocusEffect } from 'expo-router';
-import { ChevronRight, GraduationCap, Heart, LayoutGrid } from 'lucide-react-native';
+import { ChevronRight, GraduationCap, Heart, LayoutGrid, X } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -39,6 +39,7 @@ export default function HomeScreen() {
   const [gateVisible, setGateVisible] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
+  const [setupCardDismissed, setSetupCardDismissed] = useState(false);
 
   const notifications = useNotifications(supabase);
   const shop = useShop(supabase);
@@ -103,10 +104,19 @@ export default function HomeScreen() {
     try {
       await signOut();
       await continueAsGuest();
+    } catch {
+      // Guest re-sign-in failed (e.g. anonymous sign ins disabled): never
+      // leave a signed_out user stranded inside tabs; splash owns the
+      // signed_out state and its login entry points (Track D defect 10).
+      router.replace('/(auth)/splash');
     } finally {
       setLoggingOut(false);
     }
   }
+
+  // Track D defect 2: after "Explore the app first", Home nudges (never
+  // forces) finishing onboarding while the profile still has no city.
+  const showFinishSetup = status === 'signed_in' && me != null && !me.city && !setupCardDismissed;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
@@ -147,6 +157,40 @@ export default function HomeScreen() {
                   : 'Coaches, courts, gear and clips roll out here over the next phases.'}
               </Text>
             </View>
+
+            {showFinishSetup ? (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: spacing.md,
+                  padding: spacing.md,
+                  borderRadius: radii.lg,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: colors.card,
+                }}
+              >
+                <Pressable
+                  accessibilityRole="button"
+                  style={{ flex: 1, gap: spacing.xs }}
+                  onPress={() => router.push('/(onboarding)/role-select')}
+                >
+                  <Text style={[textStyle('label'), { color: colors.text }]}>Finish setting up</Text>
+                  <Text style={[textStyle('caption'), { color: colors.textSecondary }]}>
+                    Pick your role and city to unlock coaches, courts and Learn near you.
+                  </Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Dismiss finish setup"
+                  hitSlop={8}
+                  onPress={() => setSetupCardDismissed(true)}
+                >
+                  <X size={16} color={colors.textTertiary} strokeWidth={1.75} />
+                </Pressable>
+              </View>
+            ) : null}
 
             {shopProducts.length > 0 ? (
               <View style={{ gap: spacing.sm }}>
