@@ -12,6 +12,7 @@ import { AppBar } from '@/components/ui/app-bar';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
+import { recordProductView } from '@/lib/recently-viewed';
 import { supabase } from '@/lib/supabase';
 import { useGuestWishlist } from '@/store/guest-wishlist';
 import { useSessionStore } from '@/store/session-store';
@@ -88,6 +89,12 @@ export default function ProductDetailScreen() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Home's "Recently viewed" rail (PRD-01 3.2). Fire and forget local ring
+  // buffer write, never blocks or errors the PDP itself.
+  useEffect(() => {
+    void recordProductView(params.id);
+  }, [params.id]);
 
   useEffect(() => {
     if (isGuest) {

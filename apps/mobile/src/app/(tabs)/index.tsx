@@ -1,69 +1,55 @@
-import { useNotifications, useShop, type ShopProduct } from '@atlitos/api';
-import { spacing, radii } from '@atlitos/theme';
+import { useNotifications } from '@atlitos/api';
+import { spacing } from '@atlitos/theme';
 import { router, useFocusEffect } from 'expo-router';
-import { ChevronRight, GraduationCap, Heart, LayoutGrid } from 'lucide-react-native';
-import { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { LayoutGrid } from 'lucide-react-native';
+import { useCallback, useState } from 'react';
+import { RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { LoginGateModal } from '@/components/organisms/LoginGateModal';
+import { BrandFooter } from '@/components/organisms/home/BrandFooter';
+import { CategoriesRow } from '@/components/organisms/home/CategoriesRow';
+import { ClutchPreviewCard } from '@/components/organisms/home/ClutchPreviewCard';
+import { EmpowerRail } from '@/components/organisms/home/EmpowerRail';
+import { LocationRow } from '@/components/organisms/home/LocationRow';
+import { PromoCarousel } from '@/components/organisms/home/PromoCarousel';
+import { RecentlyViewedRail } from '@/components/organisms/home/RecentlyViewedRail';
 import { AppBar } from '@/components/ui/app-bar';
 import { Button } from '@/components/ui/button';
-import { ProductCard } from '@/components/ui/product-card';
 import { SearchBar } from '@/components/ui/search-bar';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Text } from '@/components/ui/text';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
-import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
 
 /**
- * Home tab. PRD-01 3.2 locks the full Home layout (AppBar, SearchBar,
- * LocationBar, category chips, ad carousel, Clutch preview, empower rail,
- * Shop/Learn entries), but every one of those sections reads from a domain
- * (search, clutch, empower, commerce) that is still `TODO(PN)` in
- * packages/api/src/hooks.ts, owned by a later phase. This screen ships what
- * AT-3 owns honestly: a real AppBar wired to real session state, one real
- * guest gate on a mutating tap (FR-3), and the dev-only link to the
- * component showcase this task calls for. States: loading (profile still
- * resolving for a signed-in session), populated (guest or signed-in).
+ * Home tab, rebuilt to PRD-01 3.2's approved mockup layout. Order:
+ * AppBar + SearchBar + LocationRow, categories row, promo carousel,
+ * recently viewed (falling back to Shop), Clutch preview, Donate to
+ * Empower rail, brand footer. Each section is its own small component under
+ * `components/organisms/home/`, reading its own domain hook and hiding
+ * itself quietly on an empty result or a read error, so a slow or missing
+ * domain (Clutch, Empower, promo banners) never blocks the sections that
+ * did load. One ScrollView, pull to refresh reloads every section via
+ * `reloadKey`, matching the loading skeleton contract each section already
+ * carries individually.
  */
 export default function HomeScreen() {
   const colors = useThemeColors();
   const status = useSessionStore((state) => state.status);
   const me = useSessionStore((state) => state.me);
-  const meLoading = useSessionStore((state) => state.meLoading);
+  const isGuest = status === 'guest';
+
   const signOut = useSessionStore((state) => state.signOut);
   const continueAsGuest = useSessionStore((state) => state.continueAsGuest);
 
   const [gateVisible, setGateVisible] = useState(false);
-  const [loggingOut, setLoggingOut] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const notifications = useNotifications(supabase);
-  const shop = useShop(supabase);
-  const isGuest = status === 'guest';
-
-  // Real Shop rail (PRD-01 3.2). Public browse, no owner scope and no login
-  // gate: a guest sees gear here too. Failure leaves the rail hidden rather
-  // than blocking Home. First page only, the rail links through to the full
-  // catalog for the rest.
-  const [shopProducts, setShopProducts] = useState<ShopProduct[]>([]);
-  useEffect(() => {
-    let active = true;
-    shop
-      .listProducts()
-      .then((rows) => {
-        if (active) setShopProducts(rows.slice(0, 8));
-      })
-      .catch(() => {
-        if (active) setShopProducts([]);
-      });
-    return () => {
-      active = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Refresh the bell badge whenever Home regains focus (returning from the
   // notifications screen where the user may have marked things read).
@@ -89,8 +75,6 @@ export default function HomeScreen() {
       };
     }, [status]),
   );
-  const greetingName = me?.name?.trim().split(/\s+/)[0];
-  const showLoading = status === 'signed_in' && meLoading && !me;
 
   function openGate() {
     setGateVisible(true);
@@ -98,7 +82,10 @@ export default function HomeScreen() {
 
   async function handleLogout() {
     // FR-65: logout clears the session and returns the app to guest mode at
-    // Home, not to the login screen.
+    // Home, not to the login screen. The mockup's own layout has no sign out
+    // affordance and nothing elsewhere in the app exposes one yet, so this
+    // stays as a quiet text row at the very end of the scroll rather than
+    // being dropped along with the rest of the old placeholder layout.
     setLoggingOut(true);
     try {
       await signOut();
@@ -106,6 +93,15 @@ export default function HomeScreen() {
     } finally {
       setLoggingOut(false);
     }
+  }
+
+  function onRefresh() {
+    setRefreshing(true);
+    setReloadKey((key) => key + 1);
+    // Each section reloads itself off `reloadKey`; there is no single
+    // "everything settled" promise across five independent domain reads, so
+    // the spinner clears optimistically rather than waiting on all of them.
+    setTimeout(() => setRefreshing(false), 600);
   }
 
   return (
@@ -126,122 +122,41 @@ export default function HomeScreen() {
         }}
       />
 
-      <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.xl, paddingBottom: spacing['4xl'] }}>
-        <SearchBar variant="ai" onPress={() => router.push('/home/search')} />
+      <ScrollView
+        contentContainerStyle={{ padding: spacing.lg, gap: spacing.xl, paddingBottom: spacing['4xl'] }}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
+        }
+      >
+        <View style={{ gap: spacing.sm }}>
+          <SearchBar variant="ai" onPress={() => router.push('/home/search')} />
+          <LocationRow />
+        </View>
 
-        {showLoading ? (
-          <View style={{ gap: spacing.sm }}>
-            <Skeleton shape="line" width="60%" />
-            <Skeleton shape="line" width="90%" />
-            <Skeleton shape="card" />
-          </View>
-        ) : (
-          <>
-            <View style={{ gap: spacing.xs }}>
-              <Text style={[textStyle('h1'), { color: colors.text }]}>
-                {greetingName ? `Welcome back, ${greetingName}.` : 'Welcome to Atlitos.'}
-              </Text>
-              <Text style={[textStyle('body'), { color: colors.textSecondary }]}>
-                {isGuest
-                  ? 'Browsing as a guest. Log in to book, buy and post.'
-                  : 'Coaches, courts, gear and clips roll out here over the next phases.'}
-              </Text>
-            </View>
+        <CategoriesRow />
 
-            {shopProducts.length > 0 ? (
-              <View style={{ gap: spacing.sm }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Text style={[textStyle('h3'), { color: colors.text }]}>Shop</Text>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="See all gear"
-                    onPress={() => router.push('/shop')}
-                    style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}
-                  >
-                    <Text style={[textStyle('label'), { color: colors.accent }]}>See all</Text>
-                    <ChevronRight size={16} color={colors.accent} strokeWidth={1.75} />
-                  </Pressable>
-                </View>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ gap: spacing.md }}
-                >
-                  {shopProducts.map((product) => (
-                    <ProductCard
-                      key={product.id}
-                      variant="row"
-                      className="w-64"
-                      imageUri={product.imageUrl}
-                      title={product.title}
-                      price={product.priceFrom}
-                      onPress={() =>
-                        router.push({ pathname: '/shop/product/[id]', params: { id: product.id } })
-                      }
-                    />
-                  ))}
-                </ScrollView>
-              </View>
-            ) : null}
+        <PromoCarousel reloadKey={reloadKey} />
 
-            <View
-              style={{
-                gap: spacing.sm,
-                padding: spacing.lg,
-                borderRadius: radii.xl,
-                borderWidth: 1,
-                borderColor: colors.border,
-                backgroundColor: colors.card,
-              }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-                <Heart size={20} color={colors.accent} strokeWidth={1.75} />
-                <Text style={[textStyle('h3'), { color: colors.text }]}>Support an athlete</Text>
-              </View>
-              <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
-                Fund a verified athlete's gear or fees directly through Empower.
-              </Text>
-              <Button variant="secondary" onPress={() => router.push('/home/empower')}>
-                <Text style={[textStyle('label'), { color: colors.text }]}>Explore Empower</Text>
-              </Button>
-            </View>
+        <RecentlyViewedRail reloadKey={reloadKey} />
 
-            <View
-              style={{
-                gap: spacing.sm,
-                padding: spacing.lg,
-                borderRadius: radii.xl,
-                borderWidth: 1,
-                borderColor: colors.border,
-                backgroundColor: colors.card,
-              }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-                <GraduationCap size={20} color={colors.accent} strokeWidth={1.75} />
-                <Text style={[textStyle('h3'), { color: colors.text }]}>Train and level up</Text>
-              </View>
-              <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
-                Complete drills to earn XP, climb your roadmap and unlock milestones.
-              </Text>
-              <Button variant="secondary" onPress={() => router.push('/learn')}>
-                <Text style={[textStyle('label'), { color: colors.text }]}>Open Learn</Text>
-              </Button>
-            </View>
+        <ClutchPreviewCard reloadKey={reloadKey} />
 
-            {__DEV__ ? (
-              <Button variant="text" onPress={() => router.push('/dev')}>
-                <LayoutGrid size={16} color={colors.accent} strokeWidth={1.75} />
-                <Text style={[textStyle('label'), { color: colors.accent }]}>Component showcase</Text>
-              </Button>
-            ) : null}
+        <EmpowerRail reloadKey={reloadKey} />
 
-            {status === 'signed_in' ? (
-              <Button variant="text" loading={loggingOut} onPress={() => void handleLogout()}>
-                <Text style={[textStyle('label'), { color: colors.textSecondary }]}>Log out</Text>
-              </Button>
-            ) : null}
-          </>
-        )}
+        <BrandFooter />
+
+        {__DEV__ ? (
+          <Button variant="text" onPress={() => router.push('/dev')}>
+            <LayoutGrid size={16} color={colors.accent} strokeWidth={1.75} />
+            <Text style={{ color: colors.accent }}>Component showcase</Text>
+          </Button>
+        ) : null}
+
+        {status === 'signed_in' ? (
+          <Button variant="text" loading={loggingOut} onPress={() => void handleLogout()}>
+            <Text style={{ color: colors.textSecondary }}>Log out</Text>
+          </Button>
+        ) : null}
       </ScrollView>
 
       <LoginGateModal visible={gateVisible} onClose={() => setGateVisible(false)} />

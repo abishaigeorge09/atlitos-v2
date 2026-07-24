@@ -613,6 +613,28 @@ Scheduled with `pg_cron` as job `expire-stale-holds`, `*/5 * * * *`. A session i
 
 ---
 
+## Domain: home
+
+### `promo_banners`
+
+Backs the Home tab promo carousel (PRD-01 3.2, Track B of this phase). Reference content, no per-user data, the same class as `categories`: public browse gated only by `active`, no per-user rows to scope by owner.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `uuid` | PK, default `gen_random_uuid()` |
+| `title` | `text` | not null |
+| `body` | `text` | nullable |
+| `cta_label` | `text` | nullable |
+| `cta_route` | `text` | nullable, an in-app route the carousel card's CTA navigates to |
+| `image_path` | `text` | nullable, a storage path resolved through the public `product-media` bucket's `getPublicUrl` (0071), not a second bucket |
+| `sort` | `int` | not null default `0` |
+| `active` | `boolean` | not null default `true` |
+| `created_at` | `timestamptz` | not null default `now()` |
+
+Migration `0071_promo_banners.sql`. Admin write access (creating/editing banners) is out of scope for this phase; there is deliberately no client write policy yet, writes are service role only until PRD-04's admin catalog CRUD phase picks this up. See RLS.md for the read policy and API-MAPPING.md for `useHome().listPromoBanners`.
+
+---
+
 ## Domain: clutch
 
 ### `clips`

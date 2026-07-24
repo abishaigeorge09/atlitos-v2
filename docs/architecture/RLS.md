@@ -116,6 +116,7 @@ The guest experience (PRD-01 section 3, FR-1 through FR-5) needs `anon` to read 
 | `clip_comments` | comments on a `published` clip |
 | `upa_applications`, `upa_wishlist_items`, `gratitude_posts` | `upa_applications.status = 'verified'` rows only |
 | `drills`, `roadmap_stages`, `milestones` | all rows (public reference content, no per-user data) |
+| `promo_banners` | `active = true` (0071, Home promo carousel, PRD-01 3.2; public reference content, no per-user data) |
 
 Everything else, `users` beyond the caller's own row, `sessions`, `court_bookings`, `orders`, `cart_items`, `donations`, `payment_intents`, `ledger_entries`, `notifications`, `chat_threads`/`chat_messages`, `verification_requests`, `audit_log`, requires `authenticated` at minimum and is further scoped by ownership or role below. Any mutating action a guest attempts against a write-guarded table returns a Postgres/PostgREST permission error, which the client intercepts and renders as `LoginGateSheet` per PRD-01 FR-3, never a raw 403 shown to the user.
 

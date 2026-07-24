@@ -29,6 +29,12 @@ Every function in v1's `services/api.ts` contract (`PLAN-2-3-api-contract-and-ll
 | `setupPlayer` | POST `/me/setup/player` | RPC | `complete_player_setup(sports, avatar_url, city, state)` | writes `users` fields and the `player` `user_roles` row in one transaction; raises `ALREADY_SETUP` if the role already exists |
 | `setupCoach` | POST `/me/setup/coach` | RPC | `submit_coach_verification(payload jsonb)` | writes `coach_profiles`, `coach_certificates`, `session_types`, `coach_availability_windows`, and the `verification_requests` row atomically; raises `ALREADY_SETUP` if a `pending_review` or `verified` profile exists |
 
+## home
+
+| v2 lane | Function | Note |
+|---|---|---|
+| PostgREST | `useHome().listPromoBanners()` | Home promo carousel (PRD-01 3.2, Track B). Reads `promo_banners` (0071) `.eq("active", true)` ordered by `sort`, resolves `image_path` through the public `product-media` bucket's `getPublicUrl`, the same resolver `use-shop.ts`'s `resolveMediaUrls` uses. Public browse, no owner filter, same class as `categories`. Returns `[]` on an empty table or a read error rather than throwing; the carousel hides itself. Every other Home section (categories, recently viewed, Clutch preview, Empower rail) reads through its own existing domain hook (`useShop`, `useClutch`, `useEmpower`), nothing new there |
+
 ## search
 
 | v1 fn | v1 route | v2 lane | Function / RPC | Note |
