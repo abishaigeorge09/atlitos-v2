@@ -859,12 +859,9 @@ interface ClipCommentJoinRow {
 }
 
 interface CreatorStatsRow {
-  id: string;
-  name: string | null;
-  channel_name: string | null;
-  avatar_url: string | null;
-  clip_count: number;
-  follower_count: number;
+  user_id: string;
+  published_clips_count: number;
+  followers_count: number;
   following_count: number;
 }
 
@@ -1071,13 +1068,23 @@ function makeClutchApi(client: AtlitosClient) {
      * (public read). `followedByMe` is a separate own-scoped `follows`
      * existence check (a guest is never following anyone). */
     async getCreator(creatorId: string): Promise<CreatorProfile | null> {
+      // creator_stats (0041) exposes ONLY the aggregate columns keyed by
+      // `user_id`; the display fields (name/channel_name/avatar_url) live on
+      // `users`, which the view does not carry, so they are read separately.
       const { data, error } = await db
         .from("creator_stats")
-        .select("id, name, channel_name, avatar_url, clip_count, follower_count, following_count")
-        .eq("id", creatorId)
+        .select("user_id, published_clips_count, followers_count, following_count")
+        .eq("user_id", creatorId)
         .maybeSingle<CreatorStatsRow>();
       if (error) throw mapPostgrestError(error);
       if (!data) return null;
+
+      const { data: userRow, error: userError } = await db
+        .from("users")
+        .select("name, channel_name, avatar_url")
+        .eq("id", creatorId)
+        .maybeSingle<ClipUserJoin>();
+      if (userError) throw mapPostgrestError(userError);
 
       let followedByMe = false;
       const { data: authData } = await client.auth.getUser();
@@ -1092,12 +1099,12 @@ function makeClutchApi(client: AtlitosClient) {
       }
 
       return {
-        id: data.id,
-        name: data.name ?? "Athlete",
-        channel: data.channel_name ?? data.name ?? "Athlete",
-        avatarUrl: data.avatar_url,
-        clipCount: data.clip_count,
-        followerCount: data.follower_count,
+        id: data.user_id,
+        name: userRow?.name ?? "Athlete",
+        channel: userRow?.channel_name ?? userRow?.name ?? "Athlete",
+        avatarUrl: userRow?.avatar_url ?? null,
+        clipCount: data.published_clips_count,
+        followerCount: data.followers_count,
         followingCount: data.following_count,
         followedByMe,
       };
