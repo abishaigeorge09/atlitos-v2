@@ -1,0 +1,5 @@
+{
+  "buildCommand": "pnpm gen-tokens && tsc --noEmit && vite build",
+  "outputDirectory": "dist",
+  "installCommand": "cd ../.. && pnpm install --filter=@atlitos/admin"
+}
