@@ -1,4 +1,4 @@
-import { spacing } from '@atlitos/theme';
+import { duration, spacing } from '@atlitos/theme';
 import { Portal } from '@rn-primitives/portal';
 import { router } from 'expo-router';
 import { useEffect, useRef } from 'react';
@@ -80,7 +80,7 @@ function SlideUp({ children }: { children: React.ReactNode }) {
   const translateY = useRef(new Animated.Value(height)).current;
 
   useEffect(() => {
-    Animated.timing(translateY, { toValue: 0, duration: 220, useNativeDriver: true }).start();
+    Animated.timing(translateY, { toValue: 0, duration: duration.base, useNativeDriver: true }).start();
   }, [translateY]);
 
   return (

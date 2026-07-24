@@ -108,7 +108,17 @@ export function StarRating({ mode = 'display', value, count, onChange, size = 20
 // StatusPill, stands in for the locked `StatusPill` atom.
 export type StatusPillTone = 'success' | 'warning' | 'info' | 'danger' | 'neutral';
 
-export function StatusPill({ label, tone = 'neutral' }: { label: string; tone?: StatusPillTone }) {
+export function StatusPill({
+  label,
+  tone = 'neutral',
+  numeric = false,
+}: {
+  label: string;
+  tone?: StatusPillTone;
+  /** Set when the label carries a numeric readout (distance, price, count):
+   * renders in JetBrains Mono tabular per the house numerals rule. */
+  numeric?: boolean;
+}) {
   const colors = useThemeColors();
   const toneColor: Record<StatusPillTone, { bg: string; fg: string }> = {
     success: { bg: colors.successTint, fg: colors.success },
@@ -120,7 +130,7 @@ export function StatusPill({ label, tone = 'neutral' }: { label: string; tone?: 
   const { bg, fg } = toneColor[tone];
   return (
     <View style={{ backgroundColor: bg, borderRadius: radii.pill, paddingHorizontal: spacing.md, paddingVertical: spacing.xs }}>
-      <Text style={[textStyle('label'), { color: fg }]}>{label}</Text>
+      <Text style={[textStyle(numeric ? 'numericSm' : 'label'), { color: fg }]}>{label}</Text>
     </View>
   );
 }

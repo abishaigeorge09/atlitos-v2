@@ -130,7 +130,7 @@ export function SearchResults({
               <Text style={[textStyle('caption'), { color: colors.textSecondary }]} numberOfLines={1}>
                 {item.subtitle}
               </Text>
-              {item.rankReason ? <StatusPill label={item.rankReason} tone="info" /> : null}
+              {item.rankReason ? <StatusPill label={item.rankReason} tone="info" numeric /> : null}
             </View>
             {item.price ? (
               <Text style={[textStyle('numericBase'), { color: colors.text }]}>{item.price}</Text>

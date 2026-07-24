@@ -299,13 +299,16 @@ export function useProfile(client: AtlitosClient) {
     /** Live handle availability for the edit screen. Reads the public
      * `public_profiles` view case-insensitively (`ilike` with no wildcard is
      * case-insensitive equality) and excludes the caller's own row so keeping
-     * your current handle always reads as available. */
+     * your current handle always reads as available. `%` and `_` are LIKE
+     * wildcards, so they are escaped: an unescaped `_` in a handle would make
+     * `a_c` match `abc` and misreport a free handle as taken. */
     async isHandleAvailable(handle: string): Promise<boolean> {
       const normalized = handle.trim().toLowerCase();
       if (!normalized) return false;
       const { data: authData } = await client.auth.getUser();
 
-      let query = client.from("public_profiles").select("id").ilike("handle", normalized).limit(1);
+      const pattern = normalized.replace(/[\\%_]/g, "\\$&");
+      let query = client.from("public_profiles").select("id").ilike("handle", pattern).limit(1);
       if (authData.user) query = query.neq("id", authData.user.id);
 
       const { data, error } = await query;
