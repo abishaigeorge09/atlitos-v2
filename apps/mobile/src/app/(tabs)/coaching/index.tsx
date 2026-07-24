@@ -76,99 +76,112 @@ export default function CoachingIndexScreen() {
     setRefreshing(false);
   }
 
-  return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-      <View style={{ padding: spacing.lg, gap: spacing.sm }}>
-        <View className="flex-row items-center justify-between">
-          <Text style={[textStyle('h1'), { color: colors.text }]}>Coaches</Text>
-          <Pressable
-            accessibilityRole="button"
-            className="min-h-11 flex-row items-center gap-xs rounded-pill px-md active:bg-surface-muted"
-            onPress={() => {
-              if (isGuest) {
-                setGateVisible(true);
-                return;
-              }
-              router.push('/(tabs)/coaching/bookings');
-            }}
-          >
-            <CalendarClock size={18} strokeWidth={1.75} color={colors.accent} />
-            <Text className="font-sans-semibold text-sm text-accent">My sessions</Text>
-          </Pressable>
-        </View>
-
-        <View className="flex-row items-center gap-xs">
-          <MapPin size={14} strokeWidth={1.75} color={colors.textTertiary} />
-          <Text className="font-sans text-sm text-text-secondary">
-            {locationStatus === 'loading' ? 'Finding your location...' : `Showing coaches near ${city}`}
-          </Text>
-        </View>
-
-        <FlatList
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          data={SPORT_FILTERS}
-          keyExtractor={(item) => item}
-          contentContainerStyle={{ gap: spacing.sm, paddingVertical: spacing.xs }}
-          ListHeaderComponent={
-            <Chip label="All sports" variant="filter" selected={sport === null} onPress={() => setSport(null)} />
-          }
-          ItemSeparatorComponent={() => <View style={{ width: spacing.sm }} />}
-          renderItem={({ item }) => (
-            <Chip
-              label={SPORT_LABEL[item]}
-              variant="filter"
-              selected={sport === item}
-              onPress={() => setSport(item)}
-            />
-          )}
-        />
+  const header = (
+    <View style={{ padding: spacing.lg, gap: spacing.sm }}>
+      <View className="flex-row items-center justify-between">
+        <Text style={[textStyle('h1'), { color: colors.text }]}>Coaches</Text>
+        <Pressable
+          accessibilityRole="button"
+          className="min-h-11 flex-row items-center gap-xs rounded-pill px-md active:bg-surface-muted"
+          onPress={() => {
+            if (isGuest) {
+              setGateVisible(true);
+              return;
+            }
+            router.push('/(tabs)/coaching/bookings');
+          }}
+        >
+          <CalendarClock size={18} strokeWidth={1.75} color={colors.accent} />
+          <Text className="font-sans-semibold text-sm text-accent">My sessions</Text>
+        </Pressable>
       </View>
 
+      <View className="flex-row items-center gap-xs">
+        <MapPin size={14} strokeWidth={1.75} color={colors.textTertiary} />
+        <Text className="font-sans text-sm text-text-secondary">
+          {locationStatus === 'loading' ? 'Finding your location...' : `Showing coaches near ${city}`}
+        </Text>
+      </View>
+
+      <FlatList
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        data={SPORT_FILTERS}
+        keyExtractor={(item) => item}
+        style={{ flexGrow: 0 }}
+        contentContainerStyle={{ gap: spacing.sm, paddingVertical: spacing.xs }}
+        ListHeaderComponent={
+          <Chip label="All sports" variant="filter" selected={sport === null} onPress={() => setSport(null)} />
+        }
+        ItemSeparatorComponent={() => <View style={{ width: spacing.sm }} />}
+        renderItem={({ item }) => (
+          <Chip
+            label={SPORT_LABEL[item]}
+            variant="filter"
+            selected={sport === item}
+            onPress={() => setSport(item)}
+          />
+        )}
+      />
+    </View>
+  );
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       {state === 'loading' ? (
-        <View style={{ padding: spacing.lg, gap: spacing.lg }}>
-          <Skeleton shape="card" height={110} />
-          <Skeleton shape="card" height={110} />
-          <Skeleton shape="card" height={110} />
+        <View>
+          {header}
+          <View style={{ padding: spacing.lg, gap: spacing.lg }}>
+            <Skeleton shape="card" height={110} />
+            <Skeleton shape="card" height={110} />
+            <Skeleton shape="card" height={110} />
+          </View>
         </View>
       ) : state === 'error' ? (
-        <View style={{ flex: 1, padding: spacing.lg, justifyContent: 'center', alignItems: 'center', gap: spacing.md }}>
-          <TriangleAlert size={40} color={colors.danger} strokeWidth={1.75} />
-          <Text style={[textStyle('h3'), { color: colors.text, textAlign: 'center' }]}>Couldn't load coaches</Text>
-          <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
-            {error?.message ?? 'Something went wrong. Please try again.'}
-          </Text>
-          <Button variant="secondary" onPress={() => void load()}>
-            <RefreshCw size={16} strokeWidth={1.75} color={colors.text} />
-            <Text style={{ color: colors.text }}>Retry</Text>
-          </Button>
+        <View>
+          {header}
+          <View style={{ flex: 1, padding: spacing.lg, justifyContent: 'center', alignItems: 'center', gap: spacing.md }}>
+            <TriangleAlert size={40} color={colors.danger} strokeWidth={1.75} />
+            <Text style={[textStyle('h3'), { color: colors.text, textAlign: 'center' }]}>Couldn't load coaches</Text>
+            <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
+              {error?.message ?? 'Something went wrong. Please try again.'}
+            </Text>
+            <Button variant="secondary" onPress={() => void load()}>
+              <RefreshCw size={16} strokeWidth={1.75} color={colors.text} />
+              <Text style={{ color: colors.text }}>Retry</Text>
+            </Button>
+          </View>
         </View>
       ) : state === 'empty' ? (
-        <View style={{ flex: 1, padding: spacing.lg, justifyContent: 'center', alignItems: 'center', gap: spacing.md }}>
-          <View
-            style={{
-              height: 80,
-              width: 80,
-              borderRadius: radii.pill,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: colors.surfaceMuted,
-            }}
-          >
-            <Users size={48} color={colors.textTertiary} strokeWidth={1.75} />
+        <View>
+          {header}
+          <View style={{ flex: 1, padding: spacing.lg, justifyContent: 'center', alignItems: 'center', gap: spacing.md }}>
+            <View
+              style={{
+                height: 80,
+                width: 80,
+                borderRadius: radii.pill,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: colors.surfaceMuted,
+              }}
+            >
+              <Users size={48} color={colors.textTertiary} strokeWidth={1.75} />
+            </View>
+            <Text style={[textStyle('h3'), { color: colors.text, textAlign: 'center' }]}>No coaches found</Text>
+            <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
+              {sport
+                ? `No verified ${SPORT_LABEL[sport].toLowerCase()} coaches near ${city} right now. Try another sport.`
+                : `No verified coaches near ${city} right now. Check back soon.`}
+            </Text>
           </View>
-          <Text style={[textStyle('h3'), { color: colors.text, textAlign: 'center' }]}>No coaches found</Text>
-          <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
-            {sport
-              ? `No verified ${SPORT_LABEL[sport].toLowerCase()} coaches near ${city} right now. Try another sport.`
-              : `No verified coaches near ${city} right now. Check back soon.`}
-          </Text>
         </View>
       ) : (
         <FlatList
           data={items}
           keyExtractor={(item) => item.userId}
-          contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}
+          ListHeaderComponent={header}
+          contentContainerStyle={{ gap: spacing.md, paddingBottom: spacing.lg }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} />}
           renderItem={({ item }) => (
             <CoachCard

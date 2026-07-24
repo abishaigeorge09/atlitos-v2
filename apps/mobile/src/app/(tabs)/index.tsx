@@ -1,7 +1,7 @@
 import { useNotifications, useShop, type ShopProduct } from '@atlitos/api';
 import { spacing, radii } from '@atlitos/theme';
 import { router, useFocusEffect } from 'expo-router';
-import { ChevronRight, GraduationCap, Heart, LayoutGrid } from 'lucide-react-native';
+import { ChevronRight, GraduationCap, Heart } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -24,8 +24,7 @@ import { useThemeColors } from '@/theme/use-theme-colors';
  * (search, clutch, empower, commerce) that is still `TODO(PN)` in
  * packages/api/src/hooks.ts, owned by a later phase. This screen ships what
  * AT-3 owns honestly: a real AppBar wired to real session state, one real
- * guest gate on a mutating tap (FR-3), and the dev-only link to the
- * component showcase this task calls for. States: loading (profile still
+ * guest gate on a mutating tap (FR-3). States: loading (profile still
  * resolving for a signed-in session), populated (guest or signed-in).
  */
 export default function HomeScreen() {
@@ -227,13 +226,6 @@ export default function HomeScreen() {
                 <Text style={[textStyle('label'), { color: colors.text }]}>Open Learn</Text>
               </Button>
             </View>
-
-            {__DEV__ ? (
-              <Button variant="text" onPress={() => router.push('/dev')}>
-                <LayoutGrid size={16} color={colors.accent} strokeWidth={1.75} />
-                <Text style={[textStyle('label'), { color: colors.accent }]}>Component showcase</Text>
-              </Button>
-            ) : null}
 
             {status === 'signed_in' ? (
               <Button variant="text" loading={loggingOut} onPress={() => void handleLogout()}>
