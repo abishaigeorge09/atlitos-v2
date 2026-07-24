@@ -50,6 +50,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "5976cc18-8fc3-4a97-9a3d-c767ad542d69"
+      }
+    },
+    "owner": "synthorgtech"
   }
 }
