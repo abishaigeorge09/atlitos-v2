@@ -6,7 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { CircleCheck, FileText, Plus, Trash2 } from 'lucide-react-native';
 import { useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/ui/avatar';
@@ -14,6 +14,8 @@ import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { Input } from '@/components/ui/input';
 import { Stepper } from '@/components/ui/stepper';
+import { friendlyAuthMessage } from '@/lib/auth-copy';
+import { clearOnboardingDeferred } from '@/lib/onboarding-deferred';
 import { uploadAvatar, uploadCoachCertificate } from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
 import {
@@ -34,6 +36,28 @@ const SPORT_LABEL: Record<Sport, string> = {
   badminton: 'Badminton',
   tennis: 'Tennis',
 };
+
+const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** Track D defect 9: the wizard validates rows where they are edited, not by
+ * silently filtering them out at submit. A row that would be dropped shows
+ * why, inline, and blocks Next. */
+function sessionTypeIssue(sessionType: SessionTypeDraft): string | null {
+  if (!sessionType.name.trim() || !(Number(sessionType.price) > 0)) {
+    return 'Give this session a name and a price above zero.';
+  }
+  return null;
+}
+
+function availabilityIssue(window: AvailabilityWindowDraft): string | null {
+  if (!HHMM_RE.test(window.from) || !HHMM_RE.test(window.to)) {
+    return 'Use 24 hour times like 06:30 for From and To.';
+  }
+  if (window.from >= window.to) {
+    return 'From must be earlier than To.';
+  }
+  return null;
+}
 
 /**
  * Coach setup wizard. PRD-02 3.1: sport, profile photo, experience,
@@ -63,15 +87,19 @@ export default function CoachSetupStepScreen() {
   const [submitted, setSubmitted] = useState(false);
 
   const isLast = stepIndex === STEP_LABELS.length - 1;
+  // Defect 9: Certificates needs at least one REAL upload (a row whose
+  // storagePath exists, not just a picked-but-failed file); Pricing and
+  // Availability need every row valid, not just a non-empty array.
   const canGoNext =
     stepIndex === 0
       ? draft.sport !== null
       : stepIndex === 3
-        ? draft.certificates.length > 0
+        ? draft.certificates.some((cert) => cert.storagePath)
         : stepIndex === 4
-          ? draft.sessionTypes.length > 0
+          ? draft.sessionTypes.length > 0 && draft.sessionTypes.every((s) => sessionTypeIssue(s) === null)
           : stepIndex === 5
-            ? draft.availabilityWindows.length > 0
+            ? draft.availabilityWindows.length > 0 &&
+              draft.availabilityWindows.every((w) => availabilityIssue(w) === null)
             : stepIndex === 6
               ? draft.city.trim().length > 0
               : true;
@@ -187,6 +215,30 @@ export default function CoachSetupStepScreen() {
 
   async function handleFinish() {
     if (!draft.sport) return;
+
+    // Defect 9: submit refuses invalid rows out loud instead of silently
+    // filtering them away. The per-step gates normally prevent reaching here
+    // with bad rows; these guards cover deep links straight to the last step.
+    if (!draft.certificates.some((c) => c.storagePath)) {
+      setError('Add at least one certificate that uploaded successfully before you submit.');
+      return;
+    }
+    if (draft.certificates.some((c) => !c.storagePath)) {
+      setError('A certificate upload failed. Remove it or add it again before you submit.');
+      return;
+    }
+    if (draft.sessionTypes.length === 0 || draft.sessionTypes.some((s) => sessionTypeIssue(s) !== null)) {
+      setError('Every session type needs a name and a price above zero.');
+      return;
+    }
+    if (
+      draft.availabilityWindows.length === 0 ||
+      draft.availabilityWindows.some((w) => availabilityIssue(w) !== null)
+    ) {
+      setError('Check your availability times before you submit.');
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
     try {
@@ -197,12 +249,12 @@ export default function CoachSetupStepScreen() {
         bio: draft.bio.trim() || undefined,
         city: draft.city.trim(),
         state: draft.state.trim(),
-        certificates: draft.certificates
-          .filter((c) => c.storagePath)
-          .map((c) => ({ name: c.name, storagePath: c.storagePath })),
-        sessionTypes: draft.sessionTypes
-          .filter((s) => s.name && s.price)
-          .map((s) => ({ name: s.name, durationMinutes: Number(s.durationMinutes) || 60, price: Number(s.price) })),
+        certificates: draft.certificates.map((c) => ({ name: c.name, storagePath: c.storagePath })),
+        sessionTypes: draft.sessionTypes.map((s) => ({
+          name: s.name.trim(),
+          durationMinutes: Number(s.durationMinutes) || 60,
+          price: Number(s.price),
+        })),
         availabilityWindows: draft.availabilityWindows.map((w) => ({
           dayOfWeek: w.dayOfWeek,
           from: w.from,
@@ -210,9 +262,11 @@ export default function CoachSetupStepScreen() {
         })),
       });
       await refreshMe();
+      // Setup is complete; the explore-first deferral (if any) is done.
+      void clearOnboardingDeferred();
       setSubmitted(true);
     } catch (err) {
-      setError((err as ApiError).message);
+      setError(friendlyAuthMessage(err as ApiError));
     } finally {
       setSubmitting(false);
     }
@@ -243,7 +297,11 @@ export default function CoachSetupStepScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
-      <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.xl, flexGrow: 1 }}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView
+        contentContainerStyle={{ padding: spacing.lg, gap: spacing.xl, flexGrow: 1 }}
+        keyboardShouldPersistTaps="handled"
+      >
         <Stepper steps={STEP_LABELS} current={stepIndex} />
 
         <View style={{ flex: 1, gap: spacing.lg }}>
@@ -352,7 +410,10 @@ export default function CoachSetupStepScreen() {
                   Athletes will pay the price you set. You will receive it after our platform fee is deducted.
                 </Text>
               </View>
-              {draft.sessionTypes.map((sessionType, index) => (
+              {draft.sessionTypes.map((sessionType, index) => {
+                const issue = sessionTypeIssue(sessionType);
+                const touched = sessionType.name !== '' || sessionType.price !== '';
+                return (
                 <View
                   key={index}
                   style={{
@@ -360,7 +421,7 @@ export default function CoachSetupStepScreen() {
                     padding: spacing.md,
                     borderRadius: radii.md,
                     borderWidth: 1,
-                    borderColor: colors.border,
+                    borderColor: issue && touched ? colors.danger : colors.border,
                     backgroundColor: colors.card,
                   }}
                 >
@@ -392,8 +453,12 @@ export default function CoachSetupStepScreen() {
                       onChangeText={(price) => updateSessionType(index, { price })}
                     />
                   </View>
+                  {issue && touched ? (
+                    <Text style={[textStyle('caption'), { color: colors.danger }]}>{issue}</Text>
+                  ) : null}
                 </View>
-              ))}
+                );
+              })}
               <Button variant="secondary" onPress={addSessionType}>
                 <Plus size={18} color={colors.text} strokeWidth={1.75} />
                 <Text style={[textStyle('label'), { color: colors.text }]}>Add session type</Text>
@@ -404,7 +469,9 @@ export default function CoachSetupStepScreen() {
           {stepIndex === 5 ? (
             <View style={{ gap: spacing.md }}>
               <Text style={[textStyle('h2'), { color: colors.text }]}>Weekly availability.</Text>
-              {draft.availabilityWindows.map((window, index) => (
+              {draft.availabilityWindows.map((window, index) => {
+                const issue = availabilityIssue(window);
+                return (
                 <View
                   key={index}
                   style={{
@@ -412,7 +479,7 @@ export default function CoachSetupStepScreen() {
                     padding: spacing.md,
                     borderRadius: radii.md,
                     borderWidth: 1,
-                    borderColor: colors.border,
+                    borderColor: issue ? colors.danger : colors.border,
                     backgroundColor: colors.card,
                   }}
                 >
@@ -447,8 +514,12 @@ export default function CoachSetupStepScreen() {
                       onChangeText={(to) => updateAvailabilityWindow(index, { to })}
                     />
                   </View>
+                  {issue ? (
+                    <Text style={[textStyle('caption'), { color: colors.danger }]}>{issue}</Text>
+                  ) : null}
                 </View>
-              ))}
+                );
+              })}
               <Button variant="secondary" onPress={addAvailabilityWindow}>
                 <Plus size={18} color={colors.text} strokeWidth={1.75} />
                 <Text style={[textStyle('label'), { color: colors.text }]}>Add availability window</Text>
@@ -483,6 +554,7 @@ export default function CoachSetupStepScreen() {
           </Button>
         </View>
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

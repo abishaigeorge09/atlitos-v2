@@ -52,7 +52,7 @@ Source of truth for every table in the Supabase Postgres schema. One domain per 
 ## Domain: identity/roles
 
 ### `users`
-Extends `auth.users` with app profile fields. One row per Supabase Auth user, created by a trigger on `auth.users` insert.
+Extends `auth.users` with app profile fields. One row per Supabase Auth user, created by a trigger on `auth.users` insert. `handle_new_user()` (defined in `0001`, guest-hardened in `0008`, extended in `0073_signup_metadata.sql`) seeds `name`, `phone` and `dob` from `raw_user_meta_data` at signup time: with email confirmation enabled `signUp` returns no session, so a client-side follow-up write can never run, and the trigger is the only path that reliably captures phone/dob. The trigger drops a duplicate phone (unique column) and a malformed dob rather than aborting account creation; the client's post-session update remains as a best-effort fallback only.
 
 | Column | Type | Constraints |
 |---|---|---|

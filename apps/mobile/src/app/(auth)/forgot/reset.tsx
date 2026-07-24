@@ -3,11 +3,12 @@ import type { ApiError } from '@atlitos/types';
 import { spacing } from '@atlitos/theme';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { friendlyAuthMessage } from '@/lib/auth-copy';
 import { supabase } from '@/lib/supabase';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
@@ -33,7 +34,7 @@ export default function ResetPasswordScreen() {
       return;
     }
     if (password !== confirmPassword) {
-      setError('Passwords do not match');
+      setError('Both passwords need to match');
       return;
     }
 
@@ -42,7 +43,7 @@ export default function ResetPasswordScreen() {
       await auth.resetPassword(password);
       router.replace('/(auth)/splash');
     } catch (err) {
-      setError((err as ApiError).message);
+      setError(friendlyAuthMessage(err as ApiError));
     } finally {
       setSubmitting(false);
     }
@@ -50,7 +51,11 @@ export default function ResetPasswordScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
-      <View style={{ flex: 1, padding: spacing.lg, gap: spacing.lg, justifyContent: 'center' }}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1, padding: spacing.lg, gap: spacing.lg, justifyContent: 'center' }}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={{ gap: spacing.xs }}>
           <Text style={[textStyle('h1'), { color: colors.text }]}>Set a new password</Text>
           <Text style={[textStyle('body'), { color: colors.textSecondary }]}>
@@ -81,7 +86,8 @@ export default function ResetPasswordScreen() {
         <Button loading={submitting} onPress={() => void handleSubmit()}>
           <Text style={[textStyle('label'), { color: colors.inkOnAccent }]}>Save password</Text>
         </Button>
-      </View>
+      </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

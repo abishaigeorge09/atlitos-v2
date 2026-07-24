@@ -6,7 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Camera } from 'lucide-react-native';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/ui/avatar';
@@ -14,6 +14,8 @@ import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { Input } from '@/components/ui/input';
 import { Stepper } from '@/components/ui/stepper';
+import { friendlyAuthMessage } from '@/lib/auth-copy';
+import { clearOnboardingDeferred } from '@/lib/onboarding-deferred';
 import { supabase } from '@/lib/supabase';
 import { uploadAvatar } from '@/lib/storage';
 import { useOnboardingDraft } from '@/store/onboarding-draft';
@@ -129,9 +131,12 @@ export default function PlayerSetupStepScreen() {
       });
       await refreshMe();
       resetDraft();
+      // Setup is complete; the explore-first deferral (if any) has served
+      // its purpose, so future launches route normally.
+      void clearOnboardingDeferred();
       router.replace('/(tabs)');
     } catch (err) {
-      setError((err as ApiError).message);
+      setError(friendlyAuthMessage(err as ApiError));
     } finally {
       setSubmitting(false);
     }
@@ -139,7 +144,11 @@ export default function PlayerSetupStepScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
-      <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.xl, flexGrow: 1 }}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView
+        contentContainerStyle={{ padding: spacing.lg, gap: spacing.xl, flexGrow: 1 }}
+        keyboardShouldPersistTaps="handled"
+      >
         <Stepper steps={STEP_LABELS} current={stepIndex} />
 
         <View style={{ flex: 1, gap: spacing.lg }}>
@@ -150,16 +159,26 @@ export default function PlayerSetupStepScreen() {
                 Pick at least one sport to personalize your feed and coach search.
               </Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-                {SPORTS.map((sport) => (
-                  <Chip
-                    key={sport}
-                    label={SPORT_LABEL[sport]}
-                    variant="select"
-                    selected={draft.sports.includes(sport)}
-                    onPress={() => toggleSport(sport)}
-                  />
-                ))}
+                {SPORTS.map((sport) => {
+                  const isPrimary = draft.sports[0] === sport;
+                  return (
+                    <View key={sport} style={{ alignItems: 'center', gap: spacing.xs }}>
+                      <Chip
+                        label={SPORT_LABEL[sport]}
+                        variant="select"
+                        selected={draft.sports.includes(sport)}
+                        onPress={() => toggleSport(sport)}
+                      />
+                      {isPrimary ? (
+                        <Text style={[textStyle('caption'), { color: colors.accent }]}>Primary</Text>
+                      ) : null}
+                    </View>
+                  );
+                })}
               </View>
+              <Text style={[textStyle('caption'), { color: colors.textTertiary }]}>
+                Your first pick becomes your primary sport for Learn.
+              </Text>
             </View>
           ) : null}
 
@@ -218,6 +237,7 @@ export default function PlayerSetupStepScreen() {
           </Button>
         </View>
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

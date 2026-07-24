@@ -16,10 +16,16 @@ import { create } from 'zustand';
  * screen (a Text row above the permission prompt), not here, this store
  * only holds state and the platform call.
  *
- * Falls back to a fixed Hyderabad city/coordinate pair on denial or
- * failure, matching the v1 fixture data's "all Hyderabad-based" seed
- * (SPEC.md section 6's Seed data note) so distance sorting has something
- * real to compute against even before the athlete grants permission.
+ * Fallback (Track D defect 8): when permission is denied/unavailable, the
+ * caller may pass the athlete's own profile city (`me.city`); it becomes the
+ * DISPLAY city, with no coordinates faked for it (distance sort simply
+ * skips when coords are null). Only when no profile city exists does the
+ * store fall back to the fixed Hyderabad city AND coords, matching the v1
+ * fixture data's "all Hyderabad-based" seed (SPEC.md section 6's Seed data
+ * note) so distance sorting has something real to compute against. The
+ * profile city arrives as a call-site argument (courts/index.tsx reads it
+ * from session-store) rather than this store importing session-store, to
+ * keep the stores cycle-free.
  */
 
 export type LocationStatus = 'idle' | 'loading' | 'granted' | 'denied' | 'unavailable';
@@ -40,7 +46,10 @@ interface LocationState {
    * denied, or unavailable); lets a screen avoid re-requesting on every
    * mount while still allowing an explicit user-triggered retry. */
   requested: boolean;
-  requestLocation: () => Promise<void>;
+  /** `profileCity` is the athlete's own `me.city`, when known; used as the
+   * display city on denial/failure instead of pretending they are in
+   * Hyderabad. */
+  requestLocation: (profileCity?: string | null) => Promise<void>;
   setManualCity: (city: string) => void;
 }
 
@@ -50,14 +59,25 @@ export const useLocationStore = create<LocationState>((set, get) => ({
   city: FALLBACK_CITY,
   requested: false,
 
-  requestLocation: async () => {
+  requestLocation: async (profileCity) => {
     if (get().status === 'loading') return;
     set({ status: 'loading' });
+
+    // Denial/failure fallback: a real profile city is shown as itself with
+    // NO coordinates (never fake coords for a city we do not know); the
+    // Hyderabad coords remain only for the fully unknown case.
+    const fallBack = (status: LocationStatus) => {
+      if (profileCity) {
+        set({ status, coords: null, city: profileCity, requested: true });
+      } else {
+        set({ status, coords: FALLBACK_COORDS, city: FALLBACK_CITY, requested: true });
+      }
+    };
 
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        set({ status: 'denied', coords: FALLBACK_COORDS, requested: true });
+        fallBack('denied');
         return;
       }
 
@@ -83,7 +103,7 @@ export const useLocationStore = create<LocationState>((set, get) => ({
 
       set({ status: 'granted', coords, city, requested: true });
     } catch {
-      set({ status: 'unavailable', coords: FALLBACK_COORDS, requested: true });
+      fallBack('unavailable');
     }
   },
 

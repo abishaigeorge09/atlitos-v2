@@ -3,11 +3,12 @@ import type { ApiError } from '@atlitos/types';
 import { spacing } from '@atlitos/theme';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { friendlyAuthMessage } from '@/lib/auth-copy';
 import { supabase } from '@/lib/supabase';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
@@ -41,28 +42,33 @@ export default function ForgotPasswordScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
-      <View style={{ flex: 1, padding: spacing.lg, gap: spacing.lg, justifyContent: 'center' }}>
-        <View style={{ gap: spacing.xs }}>
-          <Text style={[textStyle('h1'), { color: colors.text }]}>Reset your password</Text>
-          <Text style={[textStyle('body'), { color: colors.textSecondary }]}>
-            Enter the email or phone on your account and we will send a code.
-          </Text>
-        </View>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1, padding: spacing.lg, gap: spacing.lg, justifyContent: 'center' }}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={{ gap: spacing.xs }}>
+            <Text style={[textStyle('h1'), { color: colors.text }]}>Reset your password</Text>
+            <Text style={[textStyle('body'), { color: colors.textSecondary }]}>
+              Enter the email or phone on your account and we will send a code.
+            </Text>
+          </View>
 
-        <Input
-          label="Email or phone"
-          required
-          autoCapitalize="none"
-          value={identifier}
-          onChangeText={setIdentifier}
-          error={error?.message}
-          editable={!submitting}
-        />
+          <Input
+            label="Email or phone"
+            required
+            autoCapitalize="none"
+            value={identifier}
+            onChangeText={setIdentifier}
+            error={error ? friendlyAuthMessage(error) : undefined}
+            editable={!submitting}
+          />
 
-        <Button loading={submitting} disabled={!identifier} onPress={() => void handleSubmit()}>
-          <Text style={[textStyle('label'), { color: colors.inkOnAccent }]}>Send code</Text>
-        </Button>
-      </View>
+          <Button loading={submitting} disabled={!identifier} onPress={() => void handleSubmit()}>
+            <Text style={[textStyle('label'), { color: colors.inkOnAccent }]}>Send code</Text>
+          </Button>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

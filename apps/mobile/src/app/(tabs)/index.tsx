@@ -1,8 +1,9 @@
 import { useNotifications } from '@atlitos/api';
-import { spacing } from '@atlitos/theme';
+import { radii, spacing } from '@atlitos/theme';
 import { router, useFocusEffect } from 'expo-router';
+import { X } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
-import { RefreshControl, ScrollView, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { LoginGateModal } from '@/components/organisms/LoginGateModal';
@@ -47,6 +48,7 @@ export default function HomeScreen() {
   const [reloadKey, setReloadKey] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [setupCardDismissed, setSetupCardDismissed] = useState(false);
 
   const notifications = useNotifications(supabase);
 
@@ -89,6 +91,11 @@ export default function HomeScreen() {
     try {
       await signOut();
       await continueAsGuest();
+    } catch {
+      // Guest re-sign-in failed (e.g. anonymous sign ins disabled): never
+      // leave a signed_out user stranded inside tabs; splash owns the
+      // signed_out state and its login entry points (Track D defect 10).
+      router.replace('/(auth)/splash');
     } finally {
       setLoggingOut(false);
     }
@@ -102,6 +109,10 @@ export default function HomeScreen() {
     // the spinner clears optimistically rather than waiting on all of them.
     setTimeout(() => setRefreshing(false), 600);
   }
+
+  // Track D defect 2: after "Explore the app first", Home nudges (never
+  // forces) finishing onboarding while the profile still has no city.
+  const showFinishSetup = status === 'signed_in' && me != null && !me.city && !setupCardDismissed;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
@@ -137,6 +148,40 @@ export default function HomeScreen() {
         </View>
 
         <CategoriesRow />
+
+        {showFinishSetup ? (
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: spacing.md,
+              padding: spacing.md,
+              borderRadius: radii.lg,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.card,
+            }}
+          >
+            <Pressable
+              accessibilityRole="button"
+              style={{ flex: 1, gap: spacing.xs }}
+              onPress={() => router.push('/(onboarding)/role-select')}
+            >
+              <Text style={{ color: colors.text }}>Finish setting up</Text>
+              <Text style={{ color: colors.textSecondary }}>
+                Pick your role and city to unlock coaches, courts and Learn near you.
+              </Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Dismiss finish setup"
+              hitSlop={8}
+              onPress={() => setSetupCardDismissed(true)}
+            >
+              <X size={16} color={colors.textTertiary} strokeWidth={1.75} />
+            </Pressable>
+          </View>
+        ) : null}
 
         <PromoCarousel reloadKey={reloadKey} />
 
