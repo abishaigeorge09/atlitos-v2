@@ -663,7 +663,7 @@ Migration `0071_promo_banners.sql`. Admin write access (creating/editing banners
 
 Indexes: `idx_clips_status_created_at` on `(status, created_at desc)` (feed query, `published` only), `idx_clips_owner_id` on `owner_id`.
 
-**`creator_stats` view** (`0041`): a display-only per-creator aggregate the Clutch profile reads (FR-47), `security_invoker = on`, exposing `published_clips_count`, `followers_count`, `following_count`, `total_likes` (over published clips only). Deterministic for every viewer because only `published` clips and public `follows` contribute; no private clip leaks. Tapping a count to browse the list is not built in v1.
+**`creator_stats` view** (`0041`, rebuilt `0074`): a display-only per-creator aggregate the Clutch profile reads (FR-47), `security_invoker = on`, exposing `published_clips_count`, `followers_count`, `following_count`, `total_likes` (over published clips only). Deterministic for every viewer because only `published` clips and public `follows` contribute; no private clip leaks. `0041` selected `FROM public.users`, whose own-row RLS zeroed the row set for anon and hid every creator except self from members; `0074` rebuilds the FROM over `public_profiles` (the definer cross-user surface) so every viewer sees every creator, with the clips/follows subqueries unchanged. Tapping a count to browse the list is not built in v1.
 
 ### `clip_likes`
 
