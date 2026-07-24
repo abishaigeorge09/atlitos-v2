@@ -1,18 +1,23 @@
 import { cn } from '@/lib/utils';
 import { formatINR } from '@atlitos/theme';
+import { HeartHandshake } from 'lucide-react-native';
 import { Image, View } from 'react-native';
 
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
+import { useThemeColors } from '@/theme/use-theme-colors';
 
 /**
  * Molecule 22: UPACard. photo, story headline, Donate + View Profile
  * actions. `hub` variant adds a funding progress bar (raised of goal).
+ * An empty/missing `photoUri` (a UPA with no seeded photo) renders a solid
+ * surface-muted block with a HeartHandshake glyph instead of a blank white
+ * gap, so a card never reads as broken.
  */
 export type UPACardVariant = 'home' | 'hub';
 
 export interface UPACardProps {
-  photoUri: string;
+  photoUri?: string;
   name: string;
   headline: string;
   variant?: UPACardVariant;
@@ -35,10 +40,17 @@ function UPACard({
   className,
 }: UPACardProps) {
   const clampedProgress = Math.min(1, Math.max(0, raisedAmount / Math.max(1, goalAmount)));
+  const colors = useThemeColors();
 
   return (
     <View className={cn('overflow-hidden rounded-xl border border-border bg-card', className)}>
-      <Image source={{ uri: photoUri }} className="h-40 w-full rounded-t-xl" resizeMode="cover" />
+      {photoUri ? (
+        <Image source={{ uri: photoUri }} className="h-40 w-full rounded-t-xl" resizeMode="cover" />
+      ) : (
+        <View className="h-40 w-full items-center justify-center rounded-t-xl bg-surface-muted">
+          <HeartHandshake size={32} color={colors.textTertiary} strokeWidth={1.75} />
+        </View>
+      )}
 
       <View className="gap-md p-lg">
         <View className="gap-xs">
@@ -69,10 +81,10 @@ function UPACard({
 
         <View className="flex-row gap-sm">
           <Button variant="primary" className="flex-1" onPress={onDonatePress}>
-            <Text>Donate</Text>
+            <Text numberOfLines={1}>Donate</Text>
           </Button>
           <Button variant="ghost" className="flex-1 border border-border-strong" onPress={onViewProfilePress}>
-            <Text>View profile</Text>
+            <Text numberOfLines={1}>View profile</Text>
           </Button>
         </View>
       </View>

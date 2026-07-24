@@ -49,8 +49,8 @@ export function EmpowerRail({ reloadKey }: { reloadKey: number }) {
       <View style={{ gap: spacing.sm }}>
         <Skeleton shape="line" width="50%" />
         <View style={{ flexDirection: 'row', gap: spacing.md }}>
-          <Skeleton shape="card" width={220} />
-          <Skeleton shape="card" width={220} />
+          <Skeleton shape="card" width={288} />
+          <Skeleton shape="card" width={288} />
         </View>
       </View>
     );
@@ -79,7 +79,7 @@ export function EmpowerRail({ reloadKey }: { reloadKey: number }) {
           <UPACard
             key={upa.id}
             variant="hub"
-            className="w-56"
+            className="w-72"
             photoUri={upa.photoUrl ?? ''}
             name={upa.name}
             headline={upa.headline}

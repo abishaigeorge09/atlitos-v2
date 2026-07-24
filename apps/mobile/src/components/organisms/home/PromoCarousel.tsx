@@ -85,11 +85,16 @@ export function PromoCarousel({ reloadKey }: { reloadKey: number }) {
             {item.imageUrl ? (
               <Image source={{ uri: item.imageUrl }} className="absolute inset-0 h-full w-full" resizeMode="cover" />
             ) : null}
+            {/* Bottom scrim only, not a full-card tint: keeps the branded
+                banner art visible while guaranteeing contrast for the
+                overlaid title/body/CTA against any image (contrast
+                insurance called for by the promo banner fix). */}
             <View
               pointerEvents="none"
-              className="absolute inset-0 justify-end gap-sm p-lg"
-              style={{ backgroundColor: colors.overlay }}
-            >
+              className="absolute inset-x-0 bottom-0"
+              style={{ height: '60%', backgroundColor: colors.overlay }}
+            />
+            <View pointerEvents="none" className="absolute inset-0 justify-end gap-sm p-lg">
               <Text className="font-sans-semibold text-lg text-text-inverse">{item.title}</Text>
               {item.body ? (
                 <Text className="text-sm text-text-inverse opacity-90" numberOfLines={2}>
