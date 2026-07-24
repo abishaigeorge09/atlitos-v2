@@ -3,13 +3,14 @@ import type { ApiError } from '@atlitos/types';
 import { spacing } from '@atlitos/theme';
 import { Link, router } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Chip } from '@/components/ui/chip';
 import { Input } from '@/components/ui/input';
 import { OTPInput } from '@/components/ui/otp-input';
 import { Button } from '@/components/ui/button';
+import { friendlyAuthMessage } from '@/lib/auth-copy';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
 import { textStyle } from '@/theme/text-style';
@@ -95,6 +96,7 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView
         contentContainerStyle={{ padding: spacing.lg, gap: spacing.xl, flexGrow: 1, justifyContent: 'center' }}
         keyboardShouldPersistTaps="handled"
@@ -117,7 +119,7 @@ export default function LoginScreen() {
             }}
           />
           <Chip
-            label="Email code"
+            label="Email or phone code"
             variant="select"
             selected={mode === 'otp'}
             onPress={() => {
@@ -157,7 +159,7 @@ export default function LoginScreen() {
           ) : null}
 
           {error ? (
-            <Text style={[textStyle('caption'), { color: colors.danger }]}>{error.message}</Text>
+            <Text style={[textStyle('caption'), { color: colors.danger }]}>{friendlyAuthMessage(error)}</Text>
           ) : null}
         </View>
 
@@ -198,6 +200,7 @@ export default function LoginScreen() {
           <Text style={[textStyle('label'), { color: colors.textSecondary }]}>Continue as guest</Text>
         </Button>
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

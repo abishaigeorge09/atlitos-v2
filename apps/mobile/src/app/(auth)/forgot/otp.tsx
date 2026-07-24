@@ -3,11 +3,12 @@ import type { ApiError } from '@atlitos/types';
 import { spacing } from '@atlitos/theme';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/button';
 import { OTPInput } from '@/components/ui/otp-input';
+import { friendlyAuthMessage } from '@/lib/auth-copy';
 import { supabase } from '@/lib/supabase';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
@@ -66,7 +67,11 @@ export default function ForgotPasswordOtpScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
-      <View style={{ flex: 1, padding: spacing.lg, gap: spacing.lg, justifyContent: 'center' }}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1, padding: spacing.lg, gap: spacing.lg, justifyContent: 'center' }}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={{ gap: spacing.xs }}>
           <Text style={[textStyle('h1'), { color: colors.text }]}>Enter the code</Text>
           <Text style={[textStyle('body'), { color: colors.textSecondary }]}>
@@ -76,7 +81,9 @@ export default function ForgotPasswordOtpScreen() {
 
         <OTPInput value={otp} onChange={setOtp} error={Boolean(error)} autoFocus />
 
-        {error ? <Text style={[textStyle('caption'), { color: colors.danger }]}>{error.message}</Text> : null}
+        {error ? (
+          <Text style={[textStyle('caption'), { color: colors.danger }]}>{friendlyAuthMessage(error)}</Text>
+        ) : null}
 
         <Button loading={submitting} disabled={otp.length < 6} onPress={() => void handleVerify()}>
           <Text style={[textStyle('label'), { color: colors.inkOnAccent }]}>Verify code</Text>
@@ -92,7 +99,8 @@ export default function ForgotPasswordOtpScreen() {
             {secondsLeft > 0 ? `Resend code in ${secondsLeft}s` : 'Resend code'}
           </Text>
         </Button>
-      </View>
+      </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
