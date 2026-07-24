@@ -1,0 +1,72 @@
+appId: com.atlitos.app
+---
+# Home -> category browse (apps/mobile/src/app/shop/category/[sport].tsx) ->
+# back chevron -> Home.
+#
+# APP BUG (recorded in the suite report, not fixed here per task scope):
+# CategoriesRow's per-sport icons on Home
+# (apps/mobile/src/components/organisms/home/CategoriesRow.tsx) failed to
+# navigate on every attempt across many repeated cold-launch runs (Football
+# and Badminton both tried, 3+ taps each, never navigated). The same
+# intermittent "tap does nothing" symptom was separately observed on the
+# Courts bottom tab (see courts-header.yaml) and once on the guest login
+# gate's Login button context, so this looks like a broader, not-always
+# reproducible navigation/touch-handling issue rather than something unique
+# to CategoriesRow, though CategoriesRow itself never once succeeded in
+# manual testing. This flow reaches the same screen through the reliable
+# "See all gear" Pressable (apps/mobile/src/components/organisms/home/
+# RecentlyViewedRail.tsx -> router.push('/shop') -> redirects to
+# /shop/category/all, apps/mobile/src/app/shop/index.tsx) and then taps the
+# in-screen "Badminton" filter chip (a different Pressable, router.setParams,
+# not router.push) to reach the same category state a CategoriesRow tap
+# would have. Both taps are wrapped in a short retry loop as a test-harness
+# defense against the same intermittent-tap symptom, not a fix for it. The
+# back Pressable already carries accessibilityLabel="Go back" in the
+# source, no code change needed there.
+- launchApp
+- runFlow:
+    when:
+      visible: "Continue as guest"
+    commands:
+      - tapOn: "Continue as guest"
+- scrollUntilVisible:
+    element:
+      text: "Log out"
+    direction: DOWN
+    timeout: 25000
+    speed: 60
+    optional: true
+- runFlow:
+    when:
+      visible: "Log out"
+    commands:
+      - tapOn: "Log out"
+      - waitForAnimationToEnd:
+          timeout: 3000
+- scrollUntilVisible:
+    element:
+      text: "What are you looking for..."
+    direction: UP
+    timeout: 10000
+    optional: true
+- assertVisible: "ATLITOS"
+- repeat:
+    times: 4
+    while:
+      notVisible: "Search gear"
+    commands:
+      - tapOn: "See all gear"
+      - waitForAnimationToEnd:
+          timeout: 1500
+- assertVisible: "Search gear"
+- assertVisible: "All gear"
+- repeat:
+    times: 3
+    commands:
+      - tapOn: "Badminton"
+      - waitForAnimationToEnd:
+          timeout: 1500
+- assertVisible: "Search gear"
+- tapOn: "Go back"
+- assertVisible: "ATLITOS"
+- assertVisible: "Badminton"

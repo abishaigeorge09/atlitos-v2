@@ -1,0 +1,76 @@
+appId: com.atlitos.app
+---
+# Home -> Clutch preview card (apps/mobile/src/components/organisms/home/ClutchPreviewCard.tsx)
+# -> tap Like (ClutchPostCard's like Pressable already carries
+# accessibilityLabel "Like"/"Unlike", apps/mobile/src/components/molecules/ClutchPostCard.tsx)
+# -> as a guest this raises LoginGateModal/LoginGateSheet, whose copy is
+# verbatim "Want to hit the spotlight?" -> dismiss via the sheet's "Close"
+# button.
+#
+# TESTABILITY FINDING (recorded in the suite report): LoginGateSheet is
+# rendered inside a native <Modal> (apps/mobile/src/components/organisms/
+# LoginGateModal.tsx). Everything in that sheet except the "Close" Pressable
+# (apps/mobile/src/components/organisms/LoginGateSheet.tsx) is invisible to
+# Maestro's iOS accessibility tree walk, confirmed even after adding explicit
+# accessibilityLabel/accessible props to the heading, subtitle and the
+# Login/Register buttons and reloading the bundle (verified the reload took
+# with a throwaway text marker). assertVisible/tapOn on "Want to hit the
+# spotlight?", "Login" or "Register" all fail to find the element, while
+# "Close" (a Pressable with an accessibilityLabel that predates this suite)
+# is found reliably. So this flow asserts the gate opened/closed via the
+# "Close" control (the one reliable proxy) and a screenshot carries the
+# literal copy for the human record instead of a text assertion.
+- launchApp
+- runFlow:
+    when:
+      visible: "Continue as guest"
+    commands:
+      - tapOn: "Continue as guest"
+- scrollUntilVisible:
+    element:
+      text: "Log out"
+    direction: DOWN
+    timeout: 25000
+    speed: 60
+    optional: true
+- runFlow:
+    when:
+      visible: "Log out"
+    commands:
+      - tapOn: "Log out"
+      - waitForAnimationToEnd:
+          timeout: 3000
+- scrollUntilVisible:
+    element:
+      text: "What are you looking for..."
+    direction: UP
+    timeout: 10000
+    optional: true
+- assertVisible: "ATLITOS"
+- scrollUntilVisible:
+    element:
+      text: "Open Clutch"
+    direction: DOWN
+    timeout: 15000
+- assertNotVisible: "Close"
+- repeat:
+    times: 3
+    while:
+      notVisible: "Close"
+    commands:
+      - runFlow:
+          when:
+            visible: "Like"
+          commands:
+            - tapOn: "Like"
+      - runFlow:
+          when:
+            visible: "Unlike"
+          commands:
+            - tapOn: "Unlike"
+      - waitForAnimationToEnd:
+          timeout: 1500
+- assertVisible: "Close"
+- takeScreenshot: /tmp/maestro-suite/clutch-like-gate-sheet
+- tapOn: "Close"
+- assertNotVisible: "Close"

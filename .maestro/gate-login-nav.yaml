@@ -1,0 +1,45 @@
+# Guest conversion path through the login gate (PRD-01 FR-3/FR-4).
+#
+# Opens the gate as a guest via the Home AppBar avatar (accessibilityLabel
+# "Profile", gated for guests in (tabs)/index.tsx), asserts the sheet's full
+# copy is present, taps Login, and asserts the real login screen renders.
+#
+# This flow doubles as the regression proof for two fixed bugs:
+# 1. The sheet used to render inside a native <Modal>, whose content
+#    (heading, subtitle, Login/Register) never entered the iOS accessibility
+#    tree, so "Want to hit the spotlight?" and "Login" below were unfindable
+#    by Maestro and invisible to VoiceOver. LoginGateModal now renders
+#    in-tree through the root PortalHost, so these assertions pass.
+# 2. Tapping Login used to dismiss the sheet without ever reaching the login
+#    screen (router.push swallowed by the native modal dismissal), so the
+#    "Email or phone" assertion below is the guest conversion proof.
+#
+# Ends by returning to guest state at Home via the login screen's own
+# "Continue as guest" link.
+appId: com.atlitos.app
+---
+- launchApp
+- runFlow:
+    when:
+      visible: "Continue as guest"
+    commands:
+      - tapOn: "Continue as guest"
+- extendedWaitUntil:
+    visible: "ATLITOS"
+    timeout: 15000
+- tapOn: "Profile"
+- extendedWaitUntil:
+    visible: "Want to hit the spotlight?"
+    timeout: 5000
+- assertVisible: "Login"
+- assertVisible: "Register"
+- tapOn: "Login"
+# The login form's field label renders as "Email or phone *" (required
+# marker), so match on the prefix.
+- extendedWaitUntil:
+    visible: "Email or phone.*"
+    timeout: 8000
+- tapOn: "Continue as guest"
+- extendedWaitUntil:
+    visible: "ATLITOS"
+    timeout: 15000

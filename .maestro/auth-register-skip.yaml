@@ -1,0 +1,96 @@
+appId: com.atlitos.app
+---
+# Walks Login and Register without ever submitting a form or creating an
+# account.
+#
+# APP BUG (recorded in the suite report, not fixed here per task scope): the
+# guest login gate's own "Login" button (apps/mobile/src/components/
+# organisms/LoginGateSheet.tsx -> onLogin -> LoginGateModal.handleLogin,
+# apps/mobile/src/components/organisms/LoginGateModal.tsx) does not
+# navigate to /(auth)/login. Tapping it (confirmed repeatedly, by exact
+# coordinate, since the button is not text-findable, see clutch-like-gate.yaml
+# for why) only closes the sheet and leaves the guest on Home. Every other
+# gate entry point in this suite (profile-gate.yaml, clutch-like-gate.yaml)
+# is therefore verified only up to the gate opening/closing, never through
+# to Login. This flow reaches Login and Register instead through the app's
+# own atlitos:// deep link scheme (app.json "scheme": "atlitos"), a real,
+# user-reachable capability (e.g. a marketing link), confirmed working.
+- launchApp
+- runFlow:
+    when:
+      visible: "Continue as guest"
+    commands:
+      - tapOn: "Continue as guest"
+- scrollUntilVisible:
+    element:
+      text: "Log out"
+    direction: DOWN
+    timeout: 25000
+    speed: 60
+    optional: true
+- runFlow:
+    when:
+      visible: "Log out"
+    commands:
+      - tapOn: "Log out"
+      - waitForAnimationToEnd:
+          timeout: 3000
+- scrollUntilVisible:
+    element:
+      text: "What are you looking for..."
+    direction: UP
+    timeout: 10000
+    optional: true
+- assertVisible: "ATLITOS"
+
+- openLink: "atlitos://login"
+- waitForAnimationToEnd:
+    timeout: 2000
+- assertVisible: "Log in"
+- assertVisible: "Email or phone *"
+- assertVisible: "Password *"
+- assertVisible: "Continue as guest"
+- repeat:
+    times: 3
+    while:
+      notVisible: "Create your account"
+    commands:
+      - tapOn: "Create account"
+      - waitForAnimationToEnd:
+          timeout: 1500
+
+# Register form fields, apps/mobile/src/app/(auth)/register.tsx.
+- assertVisible: "Create your account"
+- assertVisible: "Full name *"
+- assertVisible: "Email *"
+- assertVisible: "Phone *"
+- assertVisible: "Date of birth *"
+- assertVisible: "Password *"
+- assertVisible: "Confirm password *"
+
+# Back out without submitting or creating anything. Maestro's "back" command
+# does not reliably pop this native stack on this build (no visible back
+# control on auth screens per apps/mobile/src/app/(auth)/_layout.tsx's
+# headerShown: false, and the edge-swipe "back" gesture command did not
+# navigate in manual testing), so this uses Register's own working
+# "Log in" link instead, a real UI affordance one tap away from the same
+# destination.
+- repeat:
+    times: 3
+    while:
+      notVisible: "Email or phone *"
+    commands:
+      - tapOn: "Log in"
+      - waitForAnimationToEnd:
+          timeout: 1500
+- assertVisible: "Email or phone *"
+- repeat:
+    times: 3
+    while:
+      visible: "Email or phone *"
+    commands:
+      - tapOn: "Continue as guest"
+      - waitForAnimationToEnd:
+          timeout: 1500
+- assertVisible: "ATLITOS"
+- assertVisible: "Badminton"

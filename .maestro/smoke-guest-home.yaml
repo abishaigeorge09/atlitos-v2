@@ -1,0 +1,42 @@
+appId: com.atlitos.app
+---
+# Smoke test: guest can reach Home from a cold launch (either straight into
+# Home if a guest session already persisted, or via the splash screen's
+# "Continue as guest" button, apps/app/(auth)/splash.tsx) and the closing
+# BrandFooter tagline (apps/mobile/src/components/organisms/home/BrandFooter.tsx)
+# renders at the bottom of the scroll.
+- launchApp
+- runFlow:
+    when:
+      visible: "Continue as guest"
+    commands:
+      - tapOn: "Continue as guest"
+- scrollUntilVisible:
+    element:
+      text: "Log out"
+    direction: DOWN
+    timeout: 25000
+    speed: 60
+    optional: true
+- runFlow:
+    when:
+      visible: "Log out"
+    commands:
+      - tapOn: "Log out"
+      - waitForAnimationToEnd:
+          timeout: 3000
+- scrollUntilVisible:
+    element:
+      text: "What are you looking for..."
+    direction: UP
+    timeout: 10000
+    optional: true
+- assertVisible: "ATLITOS"
+- assertVisible: "Badminton"
+- scrollUntilVisible:
+    element:
+      text: "Built for Athletes. Backed by Tech. Powered by Purpose."
+    direction: DOWN
+    timeout: 20000
+- assertVisible: "Built for Athletes. Backed by Tech. Powered by Purpose."
+- takeScreenshot: /tmp/maestro-suite/smoke-guest-home-footer

@@ -1,0 +1,32 @@
+# Home categories row -> category browse (PRD-01 3.2, PRD-07 FR-1).
+#
+# Regression proof for a fixed dead-tap bug: the sport circles in
+# CategoriesRow carried an `active:bg-surface-muted` nativewind class on the
+# plain View INSIDE the Pressable; nativewind attaches its own interaction
+# handlers to the element carrying an `active:` variant, that child View
+# claimed the touch, and the Pressable's onPress never fired, so tapping any
+# sport circle silently did nothing. The pressed state now lives on the
+# Pressable's own render function and the tap navigates.
+appId: com.atlitos.app
+---
+- launchApp
+- runFlow:
+    when:
+      visible: "Continue as guest"
+    commands:
+      - tapOn: "Continue as guest"
+- extendedWaitUntil:
+    visible: "Football"
+    timeout: 15000
+- tapOn: "Football"
+# Category browse: search field plus the Football filter chip selected.
+- extendedWaitUntil:
+    visible: "Search gear"
+    timeout: 8000
+- assertVisible:
+    text: "Football"
+    selected: true
+- tapOn: "Go back"
+- extendedWaitUntil:
+    visible: "What are you looking for..."
+    timeout: 8000

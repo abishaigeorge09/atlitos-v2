@@ -1,0 +1,54 @@
+appId: com.atlitos.app
+---
+# Courts tab (apps/mobile/src/app/(tabs)/courts/index.tsx). Asserts the
+# "Courts" title and one seeded, currently verified court name
+# ("Turf B" on the Gachibowli Box Cricket Turf venue, confirmed live against
+# the syzzfgaudpifwvbpycyi project) so the header-overlap area has a real
+# reference point in the screenshot.
+#
+# APP BUG (recorded in the suite report): tapping the "Courts" bottom tab
+# from Home intermittently does nothing (confirmed by repeated manual runs;
+# same symptom independently found on CategoriesRow's per-sport icons, see
+# shop-back.yaml). The retry loop below is a test-harness workaround for
+# that flakiness, not a fix.
+- launchApp
+- runFlow:
+    when:
+      visible: "Continue as guest"
+    commands:
+      - tapOn: "Continue as guest"
+- scrollUntilVisible:
+    element:
+      text: "Log out"
+    direction: DOWN
+    timeout: 25000
+    speed: 60
+    optional: true
+- runFlow:
+    when:
+      visible: "Log out"
+    commands:
+      - tapOn: "Log out"
+      - waitForAnimationToEnd:
+          timeout: 3000
+- scrollUntilVisible:
+    element:
+      text: "What are you looking for..."
+    direction: UP
+    timeout: 10000
+    optional: true
+- assertVisible: "ATLITOS"
+- repeat:
+    times: 4
+    while:
+      notVisible: "My bookings"
+    commands:
+      - tapOn: "Courts"
+      - waitForAnimationToEnd:
+          timeout: 1500
+- assertVisible: "Courts"
+- extendedWaitUntil:
+    visible: "Turf B"
+    timeout: 10000
+- assertVisible: "Turf B"
+- takeScreenshot: /tmp/maestro-suite/courts-header

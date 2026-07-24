@@ -113,6 +113,7 @@ function AppBar({
           <Pressable
             onPress={onPressProfile}
             accessibilityRole="button"
+            accessibilityLabel="Profile"
             className="h-11 w-11 items-center justify-center rounded-pill active:opacity-80"
           >
             {avatarUri ? (

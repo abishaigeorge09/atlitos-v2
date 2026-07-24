@@ -1,0 +1,54 @@
+appId: com.atlitos.app
+---
+# Guest taps the AppBar avatar (apps/mobile/src/components/ui/app-bar.tsx);
+# accessibilityLabel="Profile" was added to that Pressable as part of this
+# suite (it had none before). onPressProfile in
+# apps/mobile/src/app/(tabs)/index.tsx opens LoginGateModal for a guest
+# instead of navigating to /profile.
+#
+# See clutch-like-gate.yaml for the recorded testability finding: the gate's
+# heading copy and Login/Register buttons are not visible to Maestro's iOS
+# accessibility walk (they live inside a native <Modal>), only the "Close"
+# Pressable is. This flow asserts on "Close" as the reliable proxy for the
+# gate being open, plus a screenshot for the human record.
+- launchApp
+- runFlow:
+    when:
+      visible: "Continue as guest"
+    commands:
+      - tapOn: "Continue as guest"
+- scrollUntilVisible:
+    element:
+      text: "Log out"
+    direction: DOWN
+    timeout: 25000
+    speed: 60
+    optional: true
+- runFlow:
+    when:
+      visible: "Log out"
+    commands:
+      - tapOn: "Log out"
+      - waitForAnimationToEnd:
+          timeout: 3000
+- scrollUntilVisible:
+    element:
+      text: "What are you looking for..."
+    direction: UP
+    timeout: 10000
+    optional: true
+- assertVisible: "ATLITOS"
+- assertNotVisible: "Close"
+- repeat:
+    times: 3
+    while:
+      notVisible: "Close"
+    commands:
+      - tapOn: "Profile"
+      - waitForAnimationToEnd:
+          timeout: 1500
+- assertVisible: "Close"
+- takeScreenshot: /tmp/maestro-suite/profile-gate-sheet
+- tapOn: "Close"
+- assertNotVisible: "Close"
+- assertVisible: "ATLITOS"

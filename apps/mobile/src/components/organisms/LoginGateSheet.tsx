@@ -41,19 +41,27 @@ export function LoginGateSheet({ onLogin, onRegister, onClose }: LoginGateSheetP
       ) : null}
 
       <View style={{ alignItems: 'center', gap: spacing.sm }}>
-        <Text style={[textStyle('h2'), { color: colors.text, textAlign: 'center' }]}>
+        <Text
+          accessible
+          accessibilityLabel="Want to hit the spotlight?"
+          style={[textStyle('h2'), { color: colors.text, textAlign: 'center' }]}
+        >
           Want to hit the spotlight?
         </Text>
-        <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
+        <Text
+          accessible
+          accessibilityLabel="Sign in to book sessions, track progress and join the community."
+          style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}
+        >
           Sign in to book sessions, track progress and join the community.
         </Text>
       </View>
 
       <View style={{ gap: spacing.sm }}>
-        <Button onPress={onLogin}>
+        <Button accessibilityLabel="Login" onPress={onLogin}>
           <Text style={[textStyle('label'), { color: colors.inkOnAccent }]}>Login</Text>
         </Button>
-        <Button variant="secondary" onPress={onRegister}>
+        <Button accessibilityLabel="Register" variant="secondary" onPress={onRegister}>
           <Text style={[textStyle('label'), { color: colors.text }]}>Register</Text>
         </Button>
       </View>

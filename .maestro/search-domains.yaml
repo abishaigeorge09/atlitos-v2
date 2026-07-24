@@ -1,0 +1,62 @@
+appId: com.atlitos.app
+---
+# Home -> search bar (apps/mobile/src/app/(tabs)/index.tsx SearchBar
+# variant="ai" navigates to /home/search) -> AI Search screen
+# (apps/mobile/src/app/home/search.tsx). Suggestion chips are the literal
+# SUGGESTIONS array in that file. The search input autoFocuses on that
+# screen, so typing after navigation needs no extra tap.
+- launchApp
+- runFlow:
+    when:
+      visible: "Continue as guest"
+    commands:
+      - tapOn: "Continue as guest"
+- scrollUntilVisible:
+    element:
+      text: "Log out"
+    direction: DOWN
+    timeout: 25000
+    speed: 60
+    optional: true
+- runFlow:
+    when:
+      visible: "Log out"
+    commands:
+      - tapOn: "Log out"
+      - waitForAnimationToEnd:
+          timeout: 3000
+- scrollUntilVisible:
+    element:
+      text: "What are you looking for..."
+    direction: UP
+    timeout: 10000
+    optional: true
+- assertVisible: "ATLITOS"
+- repeat:
+    times: 3
+    while:
+      notVisible: "Courts near me"
+    commands:
+      - tapOn: "What are you looking for..."
+      - waitForAnimationToEnd:
+          timeout: 1500
+- assertVisible: "Search"
+- assertVisible: "Courts near me"
+- assertVisible: "Badminton gear"
+- assertVisible: "Coaches under 500"
+- assertVisible: "Athletes to support"
+
+- inputText: "badminton"
+- extendedWaitUntil:
+    visible: 'Results for "badminton"'
+    timeout: 8000
+- assertVisible: 'Results for "badminton"'
+- takeScreenshot: /tmp/maestro-suite/search-badminton
+
+- eraseText: 20
+- inputText: "athlete"
+- extendedWaitUntil:
+    visible: 'Results for "athlete"'
+    timeout: 8000
+- assertVisible: 'Results for "athlete"'
+- takeScreenshot: /tmp/maestro-suite/search-athlete
