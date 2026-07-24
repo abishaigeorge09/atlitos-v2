@@ -1,4 +1,4 @@
-import { useCoachSessions, useCoachVerification } from '@atlitos/api';
+import { useCoaching, useCoachSessions, useCoachVerification, useLearn, type LearnHome } from '@atlitos/api';
 import type { ApiError, Session } from '@atlitos/types';
 import { spacing } from '@atlitos/theme';
 import { router } from 'expo-router';
@@ -10,6 +10,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CoachVerificationStatus } from '@/components/organisms/CoachVerificationStatus';
 import { EmptyState } from '@/components/organisms/EmptyState';
 import { LoginGateModal } from '@/components/organisms/LoginGateModal';
+import { FindCoachCard } from '@/components/organisms/trainings/FindCoachCard';
+import { MilestonesRail } from '@/components/organisms/trainings/MilestonesRail';
+import { PlayerSessionRequests } from '@/components/organisms/trainings/PlayerSessionRequests';
+import { PlayerStatsRow } from '@/components/organisms/trainings/PlayerStatsRow';
+import { PlayerUpcomingSessions } from '@/components/organisms/trainings/PlayerUpcomingSessions';
 import { Button } from '@/components/ui/button';
 import { SessionCard } from '@/components/ui/session-card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -30,21 +35,41 @@ function goToSession(sessionId: string) {
   router.push({ pathname: '/(tabs)/trainings/session/[id]', params: { id: sessionId } });
 }
 
+function timeToMinutes(time: string): number {
+  const [h = 0, m = 0] = time.split(':').map(Number);
+  return h * 60 + m;
+}
+
+function todayISO(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+function bySoonest(a: Session, b: Session): number {
+  return a.date === b.date ? a.slot.from.localeCompare(b.slot.from) : a.date.localeCompare(b.date);
+}
+
 /**
- * Trainings tab root. AT-45 (verification gating) plus AT-46 (Stats
- * dashboard, session requests accept/decline). Guest and player states carry
- * over their existing behaviour verbatim (Track D owns the player dashboard
- * build out, PRD-01 3.3); this task's real slice is everything from a
- * `me.coachStatus` onward: `pending_review`/`rejected` render Verification
- * Status instead of the dashboard (FR-7), `verified` renders the full Stats
- * dashboard. States: loading (skeleton), guest (locked preview), coach not
- * verified (verification status), error (profile or dashboard fetch
- * failed), populated (dashboard).
+ * Trainings tab root. AT-45 (verification gating) plus AT-46 (coach Stats
+ * dashboard, session requests accept/decline), and the athlete dashboard
+ * (PRD-01 3.3, Figma "Trainings - home": Stats, Upcoming sessions, Session
+ * Requests, Milestones and Rewards). Role branches: `pending_review`/
+ * `rejected` render Verification Status instead of the dashboard (FR-7),
+ * `verified` renders the coach Stats dashboard, any other signed in user is
+ * an athlete and gets the player dashboard: StatTiles computed from
+ * `listMySessions()` (explicitly `player_id` scoped, RLS is not scoping)
+ * plus `get_learn_home()`'s server derived XP (FR-27), upcoming accepted
+ * sessions, own pending requests (cancel lives on the coaching booking
+ * detail, FR-26), the Learn milestones rail (FR-51), and a find a coach
+ * entry into `/(tabs)/coaching`. States per role: loading (skeleton), guest
+ * (locked preview), error (retry), populated.
  */
 export default function TrainingsScreen() {
   const colors = useThemeColors();
   const coachSessions = useCoachSessions(supabase);
   const verification = useCoachVerification(supabase);
+  const coaching = useCoaching(supabase);
+  const learn = useLearn(supabase);
 
   const status = useSessionStore((state) => state.status);
   const me = useSessionStore((state) => state.me);
@@ -69,9 +94,15 @@ export default function TrainingsScreen() {
   const [actioningId, setActioningId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
+  const [playerState, setPlayerState] = useState<LoadState>('loading');
+  const [playerError, setPlayerError] = useState<ApiError | null>(null);
+  const [mySessions, setMySessions] = useState<Session[]>([]);
+  const [learnHome, setLearnHome] = useState<LearnHome | null>(null);
+
   const isGuest = status === 'guest';
   const isVerifiedCoach = me?.coachStatus === 'verified';
   const isPendingOrRejectedCoach = me?.coachStatus === 'pending_review' || me?.coachStatus === 'rejected';
+  const isPlayer = status === 'signed_in' && !!me && !isVerifiedCoach && !isPendingOrRejectedCoach;
 
   const loadDashboard = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -104,9 +135,38 @@ export default function TrainingsScreen() {
     if (isVerifiedCoach) void loadDashboard();
   }, [isVerifiedCoach, loadDashboard]);
 
+  // Athlete dashboard load. Sessions are the load bearing read: a failure
+  // there is the section's error state. The Learn read only feeds the XP
+  // tile and the milestones rail, so its failure degrades those two
+  // gracefully (no XP tile, milestones empty state) instead of blanking the
+  // whole dashboard, hence allSettled rather than all.
+  const loadPlayerDashboard = useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (!options?.silent) setPlayerState('loading');
+      setPlayerError(null);
+      const [sessionsResult, learnResult] = await Promise.allSettled([
+        coaching.listMySessions(),
+        learn.getLearnHome(),
+      ]);
+      setLearnHome(learnResult.status === 'fulfilled' ? learnResult.value : null);
+      if (sessionsResult.status === 'fulfilled') {
+        setMySessions(sessionsResult.value);
+        setPlayerState('populated');
+      } else {
+        setPlayerError(sessionsResult.reason as ApiError);
+        setPlayerState('error');
+      }
+    },
+    [learn],
+  );
+
+  useEffect(() => {
+    if (isPlayer) void loadPlayerDashboard();
+  }, [isPlayer, loadPlayerDashboard]);
+
   async function handleRefresh() {
     setRefreshing(true);
-    await loadDashboard({ silent: true });
+    await (isVerifiedCoach ? loadDashboard({ silent: true }) : loadPlayerDashboard({ silent: true }));
     setRefreshing(false);
   }
 
@@ -140,6 +200,20 @@ export default function TrainingsScreen() {
 
   const showLoading = status === 'signed_in' && meLoading && !me;
 
+  // Athlete derivations, all from the player's own rows (FR-27: real
+  // history, never cached estimates). Held sessions are the ones that
+  // actually happened; a pending request never inflates hours trained.
+  const heldSessions = mySessions.filter((session) => session.status === 'completed' || session.status === 'rated');
+  const heldMinutes = heldSessions.reduce(
+    (sum, session) => sum + (timeToMinutes(session.slot.to) - timeToMinutes(session.slot.from)),
+    0,
+  );
+  const hoursTrained = Math.round((heldMinutes / 60) * 10) / 10;
+  const today = todayISO();
+  const upcomingSessions = mySessions.filter((session) => session.status === 'accepted' && session.date >= today).sort(bySoonest);
+  const requestedSessions = mySessions.filter((session) => session.status === 'requested').sort(bySoonest);
+  const hasAnySession = mySessions.length > 0;
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       {isVerifiedCoach ? (
@@ -154,7 +228,9 @@ export default function TrainingsScreen() {
       <ScrollView
         contentContainerStyle={{ flexGrow: 1, padding: spacing.lg, gap: spacing.lg }}
         refreshControl={
-          isVerifiedCoach ? <RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} /> : undefined
+          isVerifiedCoach || isPlayer ? (
+            <RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} />
+          ) : undefined
         }
       >
         {!isVerifiedCoach ? <Text style={[textStyle('h1'), { color: colors.text }]}>Trainings</Text> : null}
@@ -284,13 +360,37 @@ export default function TrainingsScreen() {
               </View>
             </View>
           )
+        ) : playerState === 'loading' ? (
+          <View style={{ gap: spacing.lg }}>
+            <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+              <Skeleton shape="card" height={96} />
+              <Skeleton shape="card" height={96} />
+              <Skeleton shape="card" height={96} />
+            </View>
+            <Skeleton shape="card" height={140} />
+            <Skeleton shape="card" height={140} />
+            <Skeleton shape="card" height={72} />
+          </View>
+        ) : playerState === 'error' ? (
+          <EmptyState
+            icon={TriangleAlert}
+            title="Could not load your dashboard"
+            body={playerError?.message ?? 'Something went wrong. Please try again.'}
+            ctaLabel="Retry"
+            onCtaPress={() => void loadPlayerDashboard()}
+          />
         ) : (
-          <View style={{ flex: 1, justifyContent: 'center' }}>
-            <EmptyState
-              icon={Dumbbell}
-              title="Your training dashboard is warming up"
-              body="Session booking, stats and requests land here in the next phase."
+          <View style={{ gap: spacing.lg }}>
+            <PlayerStatsRow
+              sessionsCompleted={heldSessions.length}
+              hoursTrained={hoursTrained}
+              xpTotal={learnHome ? learnHome.xpTotal : null}
             />
+            {!hasAnySession ? <FindCoachCard /> : null}
+            <PlayerUpcomingSessions sessions={upcomingSessions} onPressSession={goToSession} />
+            <PlayerSessionRequests sessions={requestedSessions} />
+            <MilestonesRail milestones={learnHome ? learnHome.milestones : null} />
+            {hasAnySession ? <FindCoachCard /> : null}
           </View>
         )}
       </ScrollView>
