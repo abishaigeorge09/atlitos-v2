@@ -28,6 +28,10 @@ export interface ClutchPostCardProps {
   /** Short-lived signed MP4 URL for this card, minted by the feed per visible
    * card (feed variant only). Absent until minted; the poster carries it. */
   playbackUrl?: string;
+  /** Short-lived SIGNED poster URL, minted alongside the playback URL. The
+   * feed passes this rather than clip.thumbUrl because thumb_path is a raw
+   * private-bucket path that cannot load as an <Image> source. */
+  posterUrl?: string;
   /** True only for the single on-screen card, drives muted autoplay. */
   active?: boolean;
   onLike?: () => void;
@@ -50,6 +54,7 @@ export function ClutchPostCard({
   clip,
   variant = 'feed',
   playbackUrl,
+  posterUrl,
   active = false,
   onLike,
   onComment,
@@ -87,8 +92,10 @@ export function ClutchPostCard({
 
   return (
     <View className="h-full w-full overflow-hidden bg-text">
-      {/* 1. Playback surface (poster + video), non-interactive. */}
-      <ClipVideo url={playbackUrl} thumbUrl={clip.thumbUrl} active={active} />
+      {/* 1. Playback surface (poster + video), non-interactive. The poster is
+          the signed thumb URL from the feed, falling back to any absolute
+          clip.thumbUrl. */}
+      <ClipVideo url={playbackUrl} thumbUrl={posterUrl ?? clip.thumbUrl} active={active} />
 
       {/* 2. Bottom scrim for caption legibility, never a touch target. */}
       <View

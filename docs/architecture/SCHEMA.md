@@ -401,6 +401,8 @@ Indexes: `idx_products_category_active` on `(category_id, active)`, `idx_product
 Constraints: at most one `is_primary = true` row per `product_id`, enforced by a partial unique index `UNIQUE (product_id) WHERE is_primary`.
 Indexes: `idx_product_media_product_id` on `product_id`.
 
+`storage_path` is the object KEY in the PUBLIC `product-media` bucket (`0070`), path convention `{product_id}/{filename}`, resolved to a public URL by `use-shop.ts` `resolveMediaUrls`. The bucket was referenced from P4 but its provisioning (intended with AT-81 admin catalog CRUD) never landed, so it is created in `0070`: public read (guest browsable shop, same accepted "public bucket" pattern as `avatars`/`venue-media`), admin-scoped write (`has_role('admin')`, the catalog is admin managed, no per shopper ownership).
+
 ### `product_variants`
 
 | Column | Type | Constraints |

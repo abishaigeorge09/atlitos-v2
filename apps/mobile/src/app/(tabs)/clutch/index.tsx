@@ -51,6 +51,10 @@ export default function ClutchFeedScreen() {
   const [containerH, setContainerH] = useState(0);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [playbackUrls, setPlaybackUrls] = useState<Record<string, string>>({});
+  // Signed poster URL per card. thumb_path is a raw private-bucket path (blank
+  // as an <Image> source), so the poster the card shows is the SIGNED thumb URL
+  // get-clip-playback-url mints alongside the video, never clip.thumbUrl.
+  const [posterUrls, setPosterUrls] = useState<Record<string, string>>({});
 
   const activeIdRef = useRef<string | null>(null);
   const refreshTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -68,6 +72,9 @@ export default function ClutchFeedScreen() {
       try {
         const playback = await clutch.getPlaybackUrl(clipId);
         setPlaybackUrls((prev) => ({ ...prev, [clipId]: playback.url }));
+        if (playback.thumbUrl) {
+          setPosterUrls((prev) => ({ ...prev, [clipId]: playback.thumbUrl as string }));
+        }
         clearTimer(clipId);
         const refreshMs = Math.max(PLAYBACK_REFRESH_LEAD_S, playback.expiresIn - PLAYBACK_REFRESH_LEAD_S) * 1000;
         refreshTimers.current[clipId] = setTimeout(() => {
@@ -151,6 +158,15 @@ export default function ClutchFeedScreen() {
           changed = true;
           clearTimer(id);
         }
+      }
+      return changed ? nextUrls : prev;
+    });
+    setPosterUrls((prev) => {
+      let changed = false;
+      const nextUrls: Record<string, string> = {};
+      for (const [id, url] of Object.entries(prev)) {
+        if (keep.has(id)) nextUrls[id] = url;
+        else changed = true;
       }
       return changed ? nextUrls : prev;
     });
@@ -242,6 +258,7 @@ export default function ClutchFeedScreen() {
                 variant="feed"
                 active={item.id === activeId}
                 playbackUrl={playbackUrls[item.id]}
+                posterUrl={posterUrls[item.id]}
                 onOpen={() => openDetail(item.id)}
                 onComment={() => openDetail(item.id)}
                 onLike={() => void handleLike(item)}
