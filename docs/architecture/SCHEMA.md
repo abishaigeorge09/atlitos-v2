@@ -62,6 +62,9 @@ Extends `auth.users` with app profile fields. One row per Supabase Auth user, cr
 | `dob` | `date` | nullable |
 | `avatar_url` | `text` | nullable |
 | `channel_name` | `text` | nullable, Clutch creator display name |
+| `bio` | `text` | nullable, max 160 chars (`users_bio_length`), public profile bio (`0072`) |
+| `cover_url` | `text` | nullable, profile cover image URL, `avatars` bucket `cover/` prefix (`0072`) |
+| `handle` | `text` | nullable, lowercase slug `^[a-z0-9_]{1,30}$` (`users_handle_shape`), unique case-insensitively via `idx_users_handle_lower` on `lower(handle)`; backfilled in `0072` as slugified name with a numeric suffix on collision (citext is not enabled, so text + expression index) |
 | `city` | `text` | nullable |
 | `state` | `text` | nullable |
 | `sports` | `sport[]` | not null default `{}` |
@@ -70,7 +73,9 @@ Extends `auth.users` with app profile fields. One row per Supabase Auth user, cr
 | `show_donor_name` | `boolean` | not null default `false`, sponsor name opt-in read by `portal-life` |
 | `created_at`, `updated_at` | `timestamptz` | |
 
-Indexes: `idx_users_phone` on `phone`.
+Indexes: `idx_users_phone` on `phone`; `idx_users_handle_lower` unique on `lower(handle)` (`0072`).
+
+The cross-user read surface for this table is the `public_profiles` definer view (`0001`, extended in `0072`): `id, name, avatar_url, channel_name, handle, bio, cover_url`. App code never reads another user's `users` row directly.
 
 `status` and `suspended_reason` are moderation fields set only by an admin. The row is self-editable through `users_update_own` (WITH CHECK `id = auth.uid()`), so a member updates their own `name`, `avatar_url`, `show_donor_name`, etc. freely, but the `users_lock_admin_fields` trigger (`lock_user_admin_fields`, `0065`, states pass AT-143) raises `FIELD_LOCKED` if `status` or `suspended_reason` change and the caller is not `has_role('admin')`. Same admin-lock pattern as `lock_venue_admin_fields` / `lock_coach_profile_admin_fields`. Before `0065` a member could lift their own suspension by a direct `update users set status='active' where id=auth.uid()`; that was the one client-writable status leak the states pass found and closed.
 
