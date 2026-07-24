@@ -874,6 +874,13 @@ function channelOf(user: ClipUserJoin | null): string {
   return user?.channel_name ?? user?.name ?? "Athlete";
 }
 
+/** True only for an absolute http(s) URL an <Image> can actually load. A bare
+ * Supabase storage path (the shape thumb_path holds) is not one, and must not
+ * reach an Image source, or it renders blank/broken. */
+function isHttpUrl(value: string | null | undefined): boolean {
+  return typeof value === "string" && /^https?:\/\//.test(value);
+}
+
 function mapClipRow(row: ClipFeedRow, likedByMe: boolean): Clip {
   return {
     id: row.id,
@@ -881,7 +888,13 @@ function mapClipRow(row: ClipFeedRow, likedByMe: boolean): Clip {
     channel: channelOf(row.users),
     // videoUrl is deliberately absent here: playback is a fresh signed URL
     // minted per visible card via getPlaybackUrl, never carried on the row.
-    thumbUrl: row.thumb_path ?? undefined,
+    // thumb_path is a private-`clips`-bucket storage path, not a loadable URL:
+    // handing a bare path straight to <Image source={{uri}}> renders a blank
+    // (native) or broken (web) poster, the "unbundled path" symptom. Only pass
+    // it through if it is already an absolute http(s) URL; a raw storage path
+    // stays undefined so the card shows its solid poster surface, never a
+    // broken image, until a signed-thumb seam mints a real URL.
+    thumbUrl: isHttpUrl(row.thumb_path) ? (row.thumb_path as string) : undefined,
     caption: row.caption,
     sport: row.sport,
     status: row.status,

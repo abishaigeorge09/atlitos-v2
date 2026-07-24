@@ -10,7 +10,7 @@
     "ios": {
       "icon": "./assets/expo.icon",
       "supportsTablet": true,
-      "bundleIdentifier": "com.synthorgtech.atlitos-mobile"
+      "bundleIdentifier": "com.atlitos.app"
     },
     "android": {
       "adaptiveIcon": {
