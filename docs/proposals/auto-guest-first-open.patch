@@ -1,0 +1,191 @@
+diff --git a/apps/mobile/src/app/(auth)/register.tsx b/apps/mobile/src/app/(auth)/register.tsx
+index 33ba50f..ad36f2b 100644
+--- a/apps/mobile/src/app/(auth)/register.tsx
++++ b/apps/mobile/src/app/(auth)/register.tsx
+@@ -48,9 +48,13 @@ function isRealDate(iso: string): boolean {
+ /**
+  * Register. PRD-01 FR-6/FR-7: name, email, phone, DOB, password (twice, must
+  * match); a duplicate email/phone surfaces a field-level error; success
+- * proceeds to Role select. States: populated, error (field validation,
+- * email/phone taken), submitting, confirmation pending (email confirmation
+- * on, with resend and a log in shortcut).
++ * lands straight in Home, never a forced Role select. Onboarding (role
++ * select) is offered later, not gated here: Home's "Finish setting up" card
++ * nudges a signed-in user with no city set to pick a role and city when
++ * they are ready (`apps/mobile/src/app/(tabs)/index.tsx` showFinishSetup).
++ * States: populated, error (field validation, email/phone taken),
++ * submitting, confirmation pending (email confirmation on, with resend and
++ * a log in shortcut).
+  */
+ export default function RegisterScreen() {
+   const colors = useThemeColors();
+@@ -106,7 +110,7 @@ export default function RegisterScreen() {
+         return;
+       }
+ 
+-      router.replace('/(onboarding)/role-select');
++      router.replace('/(tabs)');
+     } catch (err) {
+       const apiError = err as ApiError;
+       if (apiError.code === 'EMAIL_TAKEN') {
+diff --git a/apps/mobile/src/app/(auth)/splash.tsx b/apps/mobile/src/app/(auth)/splash.tsx
+index 7a8ef0c..90c0170 100644
+--- a/apps/mobile/src/app/(auth)/splash.tsx
++++ b/apps/mobile/src/app/(auth)/splash.tsx
+@@ -1,12 +1,11 @@
+ import { spacing } from '@atlitos/theme';
+ import { router } from 'expo-router';
+-import { useEffect, useState } from 'react';
++import { useEffect, useRef, useState } from 'react';
+ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+ import { SafeAreaView } from 'react-native-safe-area-context';
+ 
+ import { Button } from '@/components/ui/button';
+ import { friendlyAuthMessage } from '@/lib/auth-copy';
+-import { getOnboardingDeferred } from '@/lib/onboarding-deferred';
+ import { useSessionStore } from '@/store/session-store';
+ import { textStyle } from '@/theme/text-style';
+ import { useThemeColors } from '@/theme/use-theme-colors';
+@@ -14,65 +13,81 @@ import { useThemeColors } from '@/theme/use-theme-colors';
+ /**
+  * Splash. PRD-01 3.1: "loading only (auto-route)... Routes by session:
+  * authenticated to Home, guest-continued to Home, neither to Login". This
+- * screen resolves that in two steps:
+- *   1. While `hydrated` is false, show only the wordmark/tagline (the
+- *      "loading" state the PRD table lists, no forced login screen yet).
+- *   2. Once hydrated: `signed_in`/`guest` auto-route to (tabs) or
+- *      (onboarding) as appropriate; `signed_out` stays here and offers
+- *      "Continue as guest" front and center (PRD-01 FR-1: a first open with
+- *      no session must not force login or registration) alongside a Log in
+- *      link for returning users.
++ * screen resolves in one step: while `hydrated` is false, show only the
++ * wordmark/tagline (the "loading" state the PRD table lists). Once
++ * hydrated, EVERY status routes straight to `/(tabs)`:
++ *   - `guest`/`signed_in` were already there before this change.
++ *   - `signed_out` (first-ever open, or after a real sign out) now
++ *     silently starts a guest session and routes to `/(tabs)` too, with
++ *     zero login prompt in the way. There is no first-run choice screen
++ *     any more; Login, Register and onboarding are never forced at launch,
++ *     only offered later exactly where they are relevant:
++ *       - Login/Register: the guest gate (`LoginGateModal`) any gated tap
++ *         raises (book a court, like a clip, open a wallet, etc).
++ *       - Onboarding (role select): Home's "Finish setting up" nudge card,
++ *         shown to a signed-in user who has not set a city yet
++ *         (`apps/mobile/src/app/(tabs)/index.tsx` `showFinishSetup`).
++ *     `continueAsGuest` failing outright (e.g. anonymous sign-ins disabled
++ *     on the Supabase project) is the one case this screen still shows UI
++ *     for, since a guest with no working path into the app has nowhere
++ *     else to go.
+  *
+- * Track D hardening:
++ * Track D hardening carried over:
+  *   - A signed-in session whose profile fetch FAILED (meError, me null) no
+  *     longer routes to tabs as if fully onboarded; it shows a retry state
+  *     wired to `refreshMe` instead (defect 3).
+- *   - Onboarding is only FORCED once: after the user chooses "Explore the
+- *     app first" on role select, the `onboarding_deferred` flag routes them
+- *     straight to tabs on later launches; Home's finish-setup card is the
+- *     ongoing nudge (defect 2).
+  */
+ export default function SplashScreen() {
+   const colors = useThemeColors();
+   const [guestError, setGuestError] = useState<string | null>(null);
+-  const [deferred, setDeferred] = useState<boolean | null>(null);
+   const status = useSessionStore((state) => state.status);
+   const hydrated = useSessionStore((state) => state.hydrated);
+   const me = useSessionStore((state) => state.me);
+   const meLoading = useSessionStore((state) => state.meLoading);
+   const meError = useSessionStore((state) => state.meError);
+-  const needsOnboarding = useSessionStore((state) => state.needsOnboarding);
+   const continueAsGuest = useSessionStore((state) => state.continueAsGuest);
+   const refreshMe = useSessionStore((state) => state.refreshMe);
+ 
+-  useEffect(() => {
+-    let active = true;
+-    getOnboardingDeferred().then((value) => {
+-      if (active) setDeferred(value);
+-    });
+-    return () => {
+-      active = false;
+-    };
+-  }, []);
++  // Guards against firing continueAsGuest more than once while its promise
++  // is still in flight (status stays 'signed_out' until onAuthStateChange
++  // resolves it), and against retrying forever after a hard failure without
++  // the "Try again" tap below.
++  const guestAttempted = useRef(false);
+ 
+   useEffect(() => {
+-    if (!hydrated || deferred === null) return;
++    if (!hydrated) return;
+ 
+     if (status === 'guest') {
++      guestAttempted.current = false;
+       router.replace('/(tabs)');
+       return;
+     }
+ 
+     if (status === 'signed_in') {
++      guestAttempted.current = false;
+       if (meLoading) return; // wait for profile to resolve before deciding
+       if (!me && meError) return; // profile fetch failed: retry state below, never route as fake-onboarded
+-      router.replace(needsOnboarding() && !deferred ? '/(onboarding)/role-select' : '/(tabs)');
++      router.replace('/(tabs)');
++      return;
+     }
+-  }, [status, hydrated, me, meLoading, meError, needsOnboarding, deferred]);
+ 
+-  const showGuestSplash = hydrated && status === 'signed_out';
++    if (status === 'signed_out' && !guestAttempted.current) {
++      guestAttempted.current = true;
++      setGuestError(null);
++      continueAsGuest().catch((e: unknown) => {
++        // Surfaces infra failures (e.g. anonymous sign ins disabled on the
++        // Supabase project) instead of a silent, stuck spinner.
++        guestAttempted.current = false;
++        setGuestError(friendlyAuthMessage(e));
++      });
++    }
++  }, [status, hydrated, me, meLoading, meError, continueAsGuest]);
++
+   const showMeRetry = hydrated && status === 'signed_in' && !meLoading && !me && meError != null;
+-  const showSpinner = (!hydrated || (status === 'signed_in' && meLoading)) && !showMeRetry;
++  const showGuestRetry = hydrated && status === 'signed_out' && guestError != null;
++  const showSpinner =
++    (!hydrated || (status === 'signed_in' && meLoading) || (status === 'signed_out' && !guestError)) &&
++    !showMeRetry;
+ 
+   return (
+     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
+@@ -97,25 +112,23 @@ export default function SplashScreen() {
+           </View>
+         ) : null}
+ 
+-        {showGuestSplash ? (
++        {showGuestRetry ? (
+           <View style={styles.actions}>
++            <Text style={[textStyle('caption'), { color: colors.danger, textAlign: 'center' }]}>{guestError}</Text>
+             <Button
+               onPress={() => {
++                guestAttempted.current = true;
+                 setGuestError(null);
+                 continueAsGuest().catch((e: unknown) => {
+-                  // Surfaces infra failures (e.g. anonymous sign ins disabled
+-                  // on the Supabase project) instead of a silent no op.
++                  guestAttempted.current = false;
+                   setGuestError(friendlyAuthMessage(e));
+                 });
+               }}
+             >
+-              <Text style={[textStyle('label'), { color: colors.inkOnAccent }]}>Continue as guest</Text>
++              <Text style={[textStyle('label'), { color: colors.inkOnAccent }]}>Try again</Text>
+             </Button>
+-            {guestError ? (
+-              <Text style={[textStyle('caption'), { color: colors.danger, textAlign: 'center' }]}>{guestError}</Text>
+-            ) : null}
+             <Button variant="text" onPress={() => router.push('/(auth)/login')}>
+-              <Text style={[textStyle('label'), { color: colors.accent }]}>Log in</Text>
++              <Text style={[textStyle('label'), { color: colors.accent }]}>Log in instead</Text>
+             </Button>
+           </View>
+         ) : null}
