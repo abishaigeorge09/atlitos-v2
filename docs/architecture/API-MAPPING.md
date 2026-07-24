@@ -14,7 +14,8 @@ Every function in v1's `services/api.ts` contract (`PLAN-2-3-api-contract-and-ll
 | v1 fn | v1 route | v2 lane | Function / RPC | Note |
 |---|---|---|---|---|
 | `login` | POST `/auth/login` | Supabase Auth | `signInWithPassword` | email or phone, native GoTrue error maps to `401 INVALID_CREDENTIALS` |
-| `register` | POST `/auth/register` | Supabase Auth + trigger | `signUp` then DB trigger `handle_new_user()` | trigger inserts the `public.users` row; role stays unset until Role select calls `setupPlayer`/`setupCoach` |
+| `register` | POST `/auth/register` | Supabase Auth + trigger | `signUp` then DB trigger `handle_new_user()` | trigger inserts the `public.users` row, copying `name`/`phone`/`dob` from `raw_user_meta_data` (`0073`); role stays unset until Role select calls `setupPlayer`/`setupCoach` |
+| `resendSignupEmail` | (v2 only) | Supabase Auth | `auth.resend({ type: "signup" })` | register confirmation screen's Resend email; NOT `signInWithOtp`, which sends a login code an unconfirmed account cannot use |
 | `requestOtp` | POST `/auth/otp/request` | Supabase Auth | `signInWithOtp` | phone or email OTP, GoTrue owns rate limiting (`429 RATE_LIMITED`) |
 | `verifyOtp` | POST `/auth/otp/verify` | Supabase Auth | `verifyOtp` | returns a session; client treats it as the v1 `resetToken` |
 | `resetPassword` | POST `/auth/password/reset` | Supabase Auth | `updateUser({ password })` | called on the session `verifyOtp` established |
