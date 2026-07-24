@@ -68,10 +68,13 @@ export function useAuth(client: AtlitosClient) {
       return data.session;
     },
 
-    /** v1 `register`. `handle_new_user()` (0001_identity.sql) seeds the
-     * `public.users` row (name only) and the default `player` role on
-     * insert; this hook follows up with phone/dob once a session exists,
-     * since those two columns are not populated by the trigger. */
+    /** v1 `register`. `handle_new_user()` (0001_identity.sql, updated in
+     * 0073_signup_metadata.sql) seeds the `public.users` row, copying name,
+     * phone and dob from `raw_user_meta_data`, plus the default `player`
+     * role. The post-session update below is a best-effort fallback for
+     * environments where 0073 has not been applied; it must never fail the
+     * registration itself (when email confirmation is on there is no session
+     * here at all, and the trigger is the only path that runs). */
     async register(input: RegisterInput): Promise<AuthResult> {
       const { data, error } = await client.auth.signUp({
         email: input.email,
@@ -84,13 +87,25 @@ export function useAuth(client: AtlitosClient) {
         return { session: null, needsEmailConfirmation: true };
       }
 
-      const { error: profileError } = await client
+      // Best-effort: the trigger already wrote phone/dob (0073). Ignore the
+      // result; a unique-phone conflict or a pre-0073 environment must not
+      // turn a successful signup into an error.
+      await client
         .from("users")
         .update({ phone: input.phone, dob: input.dob })
         .eq("id", data.session.user.id);
-      if (profileError) throw mapPostgrestError(profileError);
 
       return { session: data.session, needsEmailConfirmation: false };
+    },
+
+    /** Resend the signup confirmation email for an account that registered
+     * but has not confirmed yet. NOT `requestOtp`: `signInWithOtp` with
+     * `shouldCreateUser: false` sends a login code, which an unconfirmed
+     * account cannot use; `auth.resend({ type: "signup" })` re-sends the
+     * actual confirmation link. */
+    async resendSignupEmail(email: string): Promise<void> {
+      const { error } = await client.auth.resend({ type: "signup", email });
+      if (error) throw mapAuthError(error);
     },
 
     /** v1 `requestOtp`. Used for both the forgot-password flow (existing
