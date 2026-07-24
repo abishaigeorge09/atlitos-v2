@@ -1,14 +1,15 @@
-import { useNotifications } from '@atlitos/api';
+import { useNotifications, useShop, type ShopProduct } from '@atlitos/api';
 import { spacing, radii } from '@atlitos/theme';
 import { router, useFocusEffect } from 'expo-router';
-import { GraduationCap, Heart, LayoutGrid } from 'lucide-react-native';
-import { useCallback, useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { ChevronRight, GraduationCap, Heart, LayoutGrid } from 'lucide-react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { LoginGateModal } from '@/components/organisms/LoginGateModal';
 import { AppBar } from '@/components/ui/app-bar';
 import { Button } from '@/components/ui/button';
+import { ProductCard } from '@/components/ui/product-card';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { supabase } from '@/lib/supabase';
@@ -40,7 +41,29 @@ export default function HomeScreen() {
   const [hasUnread, setHasUnread] = useState(false);
 
   const notifications = useNotifications(supabase);
+  const shop = useShop(supabase);
   const isGuest = status === 'guest';
+
+  // Real Shop rail (PRD-01 3.2). Public browse, no owner scope and no login
+  // gate: a guest sees gear here too. Failure leaves the rail hidden rather
+  // than blocking Home. First page only, the rail links through to the full
+  // catalog for the rest.
+  const [shopProducts, setShopProducts] = useState<ShopProduct[]>([]);
+  useEffect(() => {
+    let active = true;
+    shop
+      .listProducts()
+      .then((rows) => {
+        if (active) setShopProducts(rows.slice(0, 8));
+      })
+      .catch(() => {
+        if (active) setShopProducts([]);
+      });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Refresh the bell badge whenever Home regains focus (returning from the
   // notifications screen where the user may have marked things read).
@@ -124,6 +147,42 @@ export default function HomeScreen() {
                   : 'Coaches, courts, gear and clips roll out here over the next phases.'}
               </Text>
             </View>
+
+            {shopProducts.length > 0 ? (
+              <View style={{ gap: spacing.sm }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Text style={[textStyle('h3'), { color: colors.text }]}>Shop</Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="See all gear"
+                    onPress={() => router.push('/shop')}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}
+                  >
+                    <Text style={[textStyle('label'), { color: colors.accent }]}>See all</Text>
+                    <ChevronRight size={16} color={colors.accent} strokeWidth={1.75} />
+                  </Pressable>
+                </View>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: spacing.md }}
+                >
+                  {shopProducts.map((product) => (
+                    <ProductCard
+                      key={product.id}
+                      variant="row"
+                      className="w-64"
+                      imageUri={product.imageUrl}
+                      title={product.title}
+                      price={product.priceFrom}
+                      onPress={() =>
+                        router.push({ pathname: '/shop/product/[id]', params: { id: product.id } })
+                      }
+                    />
+                  ))}
+                </ScrollView>
+              </View>
+            ) : null}
 
             <View
               style={{
