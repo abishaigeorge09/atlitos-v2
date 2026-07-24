@@ -59,6 +59,9 @@ export interface UserRow {
   dob: ISODate | null;
   avatar_url: string | null;
   channel_name: string | null;
+  bio: string | null;
+  cover_url: string | null;
+  handle: string | null;
   city: string | null;
   state: string | null;
   sports: Sport[];

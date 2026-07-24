@@ -33,6 +33,18 @@ export async function uploadAvatar(userId: string, localUri: string): Promise<st
   return data.publicUrl;
 }
 
+/** Profile cover image. Same public `avatars` bucket and `{ownerId}/...`
+ * owner-scoped path convention as uploadAvatar (the bucket policies key on
+ * the first folder segment), under a `cover/` prefix inside the owner's
+ * folder so avatar and cover never collide. */
+export async function uploadCover(userId: string, localUri: string): Promise<string> {
+  const extension = localUri.split('.').pop()?.split('?')[0] || 'jpg';
+  const path = `${userId}/cover/cover.${extension}`;
+  await uploadToBucket('avatars', path, localUri, `image/${extension === 'jpg' ? 'jpeg' : extension}`);
+  const { data } = supabase.storage.from('avatars').getPublicUrl(path);
+  return data.publicUrl;
+}
+
 export async function uploadCoachCertificate(
   coachId: string,
   localUri: string,

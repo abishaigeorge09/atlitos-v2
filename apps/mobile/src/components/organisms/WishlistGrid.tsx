@@ -1,4 +1,5 @@
 import type { ReactElement } from 'react';
+import type { RefreshControlProps } from 'react-native';
 
 import { Button } from '@/components/organisms/_shared';
 import { textStyle } from '@/theme/text-style';
@@ -56,9 +57,12 @@ export interface WishlistGridProps {
   header?: ReactElement;
   /** Shown when `items` is empty (the profile with no wishlist yet). */
   emptyComponent?: ReactElement;
+  /** Passed straight to the FlatList so a screen using this grid as its one
+   * scroller (the unified profile's wishlist tab) can offer pull to refresh. */
+  refreshControl?: ReactElement<RefreshControlProps>;
 }
 
-export function WishlistGrid({ variant, items, numColumns = 2, header, emptyComponent }: WishlistGridProps) {
+export function WishlistGrid({ variant, items, numColumns = 2, header, emptyComponent, refreshControl }: WishlistGridProps) {
   const colors = useThemeColors();
 
   return (
@@ -69,6 +73,7 @@ export function WishlistGrid({ variant, items, numColumns = 2, header, emptyComp
       keyExtractor={(item) => item.id}
       ListHeaderComponent={header}
       ListEmptyComponent={emptyComponent}
+      refreshControl={refreshControl}
       columnWrapperStyle={numColumns > 1 ? { gap: spacing.md } : undefined}
       contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}
       renderItem={({ item }) => (

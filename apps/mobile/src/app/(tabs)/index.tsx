@@ -117,7 +117,11 @@ export default function HomeScreen() {
           router.push('/notifications');
         }}
         onPressProfile={() => {
-          if (isGuest) openGate();
+          if (isGuest) {
+            openGate();
+            return;
+          }
+          router.push('/profile');
         }}
       />
 

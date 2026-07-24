@@ -2,6 +2,7 @@ import { useMemo } from "react";
 
 import type { Session, SupabaseClient } from "@supabase/supabase-js";
 import type {
+  ApiError,
   AppRole,
   BookingSource,
   Clip,
@@ -150,11 +151,23 @@ export interface MeRow {
   phone: string | null;
   dob: string | null;
   avatarUrl: string | null;
+  bio: string | null;
+  coverUrl: string | null;
+  handle: string | null;
   city: string | null;
   state: string | null;
   sports: Sport[];
   roles: AppRole[];
   coachStatus: "pending_review" | "verified" | "rejected" | null;
+}
+
+/** Own-profile edit payload (0072 columns + avatar). Every field is optional;
+ * only the fields present are written. `null` clears a nullable column. */
+export interface UpdateProfileInput {
+  bio?: string | null;
+  coverUrl?: string | null;
+  avatarUrl?: string | null;
+  handle?: string;
 }
 
 export interface CompletePlayerSetupInput {
@@ -209,6 +222,9 @@ export function useProfile(client: AtlitosClient) {
         phone: userRow.phone,
         dob: userRow.dob,
         avatarUrl: userRow.avatar_url,
+        bio: userRow.bio,
+        coverUrl: userRow.cover_url,
+        handle: userRow.handle,
         city: userRow.city,
         state: userRow.state,
         sports: userRow.sports ?? [],
@@ -231,6 +247,55 @@ export function useProfile(client: AtlitosClient) {
         p_state: input.state,
       });
       if (error) throw mapPostgrestError(error);
+    },
+
+    /** Own-row profile edit (0072: bio, cover_url, handle; avatar_url from
+     * 0001). Explicit `.eq("id", me)` owner filter per CLAUDE.md scoping rule
+     * even though `users_update_own` would scope it anyway. The unique index
+     * `idx_users_handle_lower` surfaces a duplicate handle as Postgres 23505,
+     * mapped here to a friendly VALIDATION error instead of a raw constraint
+     * string. */
+    async updateProfile(input: UpdateProfileInput): Promise<void> {
+      const { data: authData, error: authError } = await client.auth.getUser();
+      if (authError) throw mapAuthError(authError);
+      if (!authData.user) throw mapAuthError({ message: "Sign in to edit your profile.", status: 401 });
+
+      const patch: { bio?: string | null; cover_url?: string | null; avatar_url?: string | null; handle?: string } =
+        {};
+      if (input.bio !== undefined) patch.bio = input.bio;
+      if (input.coverUrl !== undefined) patch.cover_url = input.coverUrl;
+      if (input.avatarUrl !== undefined) patch.avatar_url = input.avatarUrl;
+      if (input.handle !== undefined) patch.handle = input.handle.trim().toLowerCase();
+
+      const { error } = await client.from("users").update(patch).eq("id", authData.user.id);
+      if (error) {
+        if (error.code === "23505" || /idx_users_handle_lower|duplicate key/i.test(error.message)) {
+          const friendly: ApiError = {
+            code: "VALIDATION",
+            message: "That handle is taken. Try another one.",
+            status: 409,
+          };
+          throw friendly;
+        }
+        throw mapPostgrestError(error);
+      }
+    },
+
+    /** Live handle availability for the edit screen. Reads the public
+     * `public_profiles` view case-insensitively (`ilike` with no wildcard is
+     * case-insensitive equality) and excludes the caller's own row so keeping
+     * your current handle always reads as available. */
+    async isHandleAvailable(handle: string): Promise<boolean> {
+      const normalized = handle.trim().toLowerCase();
+      if (!normalized) return false;
+      const { data: authData } = await client.auth.getUser();
+
+      let query = client.from("public_profiles").select("id").ilike("handle", normalized).limit(1);
+      if (authData.user) query = query.neq("id", authData.user.id);
+
+      const { data, error } = await query;
+      if (error) throw mapPostgrestError(error);
+      return (data ?? []).length === 0;
     },
 
     /** v1 `setupCoach` -> `submit_coach_verification` RPC. Returns the new
@@ -755,16 +820,30 @@ export interface ClutchCommentPage {
   nextCursor: string | null;
 }
 
-/** Creator/own profile header aggregate, from the `creator_stats` view. */
+/** Creator/own profile header aggregate, from the `creator_stats` view plus
+ * the `public_profiles` display columns (0072: handle, bio, cover_url). */
 export interface CreatorProfile {
   id: string;
   name: string;
   channel: string;
   avatarUrl: string | null;
+  handle: string | null;
+  bio: string | null;
+  coverUrl: string | null;
   clipCount: number;
   followerCount: number;
   followingCount: number;
+  totalLikes: number;
   followedByMe: boolean;
+}
+
+/** One row of a Following/Followers list: the followed or following user's
+ * public display columns from `public_profiles`. */
+export interface FollowListEntry {
+  id: string;
+  name: string;
+  handle: string | null;
+  avatarUrl: string | null;
 }
 
 /** `stream-upload-url` response. The client PUTs the MP4 to `uploadUrl`, or
@@ -863,6 +942,17 @@ interface CreatorStatsRow {
   published_clips_count: number;
   followers_count: number;
   following_count: number;
+  total_likes: number | null;
+}
+
+interface PublicProfileRow {
+  id: string;
+  name: string | null;
+  channel_name: string | null;
+  avatar_url: string | null;
+  handle: string | null;
+  bio: string | null;
+  cover_url: string | null;
 }
 
 /** users.channel_name is the display channel; fall back to the display name,
@@ -930,6 +1020,26 @@ export function useClutch(client: AtlitosClient) {
   // an effect dependency array; the Clutch screens do, which is why the fix
   // belongs here.
   return useMemo(() => makeClutchApi(client), [client]);
+}
+
+/** Hydrates an ordered follow id list into FollowListEntry rows through the
+ * `public_profiles` view, preserving the follows ordering. An id whose
+ * profile row is missing (account deleted racing the read) is dropped rather
+ * than rendered as a blank row. */
+async function followProfiles(db: SupabaseClient, ids: string[]): Promise<FollowListEntry[]> {
+  if (ids.length === 0) return [];
+  const { data, error } = await db
+    .from("public_profiles")
+    .select("id, name, avatar_url, handle")
+    .in("id", ids)
+    .returns<Pick<PublicProfileRow, "id" | "name" | "avatar_url" | "handle">[]>();
+  if (error) throw mapPostgrestError(error);
+
+  const byId = new Map((data ?? []).map((row) => [row.id, row]));
+  return ids
+    .map((id) => byId.get(id))
+    .filter((row): row is Pick<PublicProfileRow, "id" | "name" | "avatar_url" | "handle"> => row != null)
+    .map((row) => ({ id: row.id, name: row.name ?? "Athlete", handle: row.handle, avatarUrl: row.avatar_url }));
 }
 
 function makeClutchApi(client: AtlitosClient) {
@@ -1069,22 +1179,25 @@ function makeClutchApi(client: AtlitosClient) {
      * existence check (a guest is never following anyone). */
     async getCreator(creatorId: string): Promise<CreatorProfile | null> {
       // creator_stats (0041) exposes ONLY the aggregate columns keyed by
-      // `user_id`; the display fields (name/channel_name/avatar_url) live on
-      // `users`, which the view does not carry, so they are read separately.
+      // `user_id`; the display fields (name/channel_name/avatar_url and the
+      // 0072 handle/bio/cover_url) come from the `public_profiles` definer
+      // view, the sole cross-user read surface for `users` (the base table's
+      // RLS is own-row/admin, so a direct `users` read here would silently
+      // return null for every creator who is not the caller).
       const { data, error } = await db
         .from("creator_stats")
-        .select("user_id, published_clips_count, followers_count, following_count")
+        .select("user_id, published_clips_count, followers_count, following_count, total_likes")
         .eq("user_id", creatorId)
         .maybeSingle<CreatorStatsRow>();
       if (error) throw mapPostgrestError(error);
       if (!data) return null;
 
-      const { data: userRow, error: userError } = await db
-        .from("users")
-        .select("name, channel_name, avatar_url")
+      const { data: profileRow, error: profileError } = await db
+        .from("public_profiles")
+        .select("id, name, channel_name, avatar_url, handle, bio, cover_url")
         .eq("id", creatorId)
-        .maybeSingle<ClipUserJoin>();
-      if (userError) throw mapPostgrestError(userError);
+        .maybeSingle<PublicProfileRow>();
+      if (profileError) throw mapPostgrestError(profileError);
 
       let followedByMe = false;
       const { data: authData } = await client.auth.getUser();
@@ -1100,14 +1213,73 @@ function makeClutchApi(client: AtlitosClient) {
 
       return {
         id: data.user_id,
-        name: userRow?.name ?? "Athlete",
-        channel: userRow?.channel_name ?? userRow?.name ?? "Athlete",
-        avatarUrl: userRow?.avatar_url ?? null,
+        name: profileRow?.name ?? "Athlete",
+        channel: profileRow?.channel_name ?? profileRow?.name ?? "Athlete",
+        avatarUrl: profileRow?.avatar_url ?? null,
+        handle: profileRow?.handle ?? null,
+        bio: profileRow?.bio ?? null,
+        coverUrl: profileRow?.cover_url ?? null,
         clipCount: data.published_clips_count,
         followerCount: data.followers_count,
         followingCount: data.following_count,
+        totalLikes: Number(data.total_likes ?? 0),
         followedByMe,
       };
+    },
+
+    /** The accounts `userId` follows, newest follow first, capped at 100 for
+     * v1 (no pagination). Two reads rather than a PostgREST embed: `follows`
+     * with an EXPLICIT `follower_id` filter (public-read table, CLAUDE.md
+     * scoping rule), then the display columns from `public_profiles`. */
+    async listFollowing(userId: string): Promise<FollowListEntry[]> {
+      const { data, error } = await db
+        .from("follows")
+        .select("followee_id, created_at")
+        .eq("follower_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(100)
+        .returns<{ followee_id: string; created_at: string }[]>();
+      if (error) throw mapPostgrestError(error);
+      return followProfiles(db, (data ?? []).map((r) => r.followee_id));
+    },
+
+    /** The accounts following `userId`, newest first, capped at 100. Same
+     * two-read shape as listFollowing with the EXPLICIT `followee_id` filter. */
+    async listFollowers(userId: string): Promise<FollowListEntry[]> {
+      const { data, error } = await db
+        .from("follows")
+        .select("follower_id, created_at")
+        .eq("followee_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(100)
+        .returns<{ follower_id: string; created_at: string }[]>();
+      if (error) throw mapPostgrestError(error);
+      return followProfiles(db, (data ?? []).map((r) => r.follower_id));
+    },
+
+    /** The caller's liked clips for the profile's liked grid, newest like
+     * first. EXPLICIT owner filter on `clip_likes` (public-read table) AND an
+     * explicit `clips.status = 'published'` on the inner join (RLS is
+     * permissive-OR: without it the caller's like on their own since-removed
+     * clip would surface into the grid). Rows come back in the same shape as
+     * the feed select so ClutchPostCard's thumb variant renders unchanged;
+     * likedByMe is true by construction. */
+    async listLikedClips(): Promise<Clip[]> {
+      const { data: authData, error: authError } = await client.auth.getUser();
+      if (authError) throw mapAuthError(authError);
+      if (!authData.user || authData.user.is_anonymous) return [];
+
+      const { data, error } = await db
+        .from("clip_likes")
+        .select(`created_at, clips!inner ( ${CLIP_FEED_SELECT} )`)
+        .eq("user_id", authData.user.id)
+        .eq("clips.status", "published")
+        .order("created_at", { ascending: false })
+        .limit(100)
+        .returns<{ created_at: string; clips: ClipFeedRow }[]>();
+      if (error) throw mapPostgrestError(error);
+
+      return (data ?? []).map((row) => mapClipRow(row.clips, true));
     },
 
     /** A creator's public grid: their `published` clips, newest first. The

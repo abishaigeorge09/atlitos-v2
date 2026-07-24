@@ -3026,10 +3026,13 @@ export type Database = {
       users: {
         Row: {
           avatar_url: string | null
+          bio: string | null
           channel_name: string | null
           city: string | null
+          cover_url: string | null
           created_at: string
           dob: string | null
+          handle: string | null
           id: string
           name: string
           phone: string | null
@@ -3042,10 +3045,13 @@ export type Database = {
         }
         Insert: {
           avatar_url?: string | null
+          bio?: string | null
           channel_name?: string | null
           city?: string | null
+          cover_url?: string | null
           created_at?: string
           dob?: string | null
+          handle?: string | null
           id: string
           name: string
           phone?: string | null
@@ -3058,10 +3064,13 @@ export type Database = {
         }
         Update: {
           avatar_url?: string | null
+          bio?: string | null
           channel_name?: string | null
           city?: string | null
+          cover_url?: string | null
           created_at?: string
           dob?: string | null
+          handle?: string | null
           id?: string
           name?: string
           phone?: string | null
@@ -3482,19 +3491,28 @@ export type Database = {
       public_profiles: {
         Row: {
           avatar_url: string | null
+          bio: string | null
           channel_name: string | null
+          cover_url: string | null
+          handle: string | null
           id: string | null
           name: string | null
         }
         Insert: {
           avatar_url?: string | null
+          bio?: string | null
           channel_name?: string | null
+          cover_url?: string | null
+          handle?: string | null
           id?: string | null
           name?: string | null
         }
         Update: {
           avatar_url?: string | null
+          bio?: string | null
           channel_name?: string | null
+          cover_url?: string | null
+          handle?: string | null
           id?: string | null
           name?: string | null
         }
