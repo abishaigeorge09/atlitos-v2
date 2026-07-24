@@ -918,11 +918,18 @@ const CLUTCH_PAGE_SIZE = 10;
 // a visible error, which is why the feed never left its spinner. Selecting the
 // real column lets the feed populate; the row is mapped to `Clip.thumbUrl`
 // below (a poster path the card resolves, not a signed URL).
+// NOTE: creator/commenter identity embeds go through the `public_profiles`
+// definer view (0072: the ONLY cross-user read surface for users), never the
+// base `users` table. Base-table RLS is own-row/admin only, and PostgREST
+// embeds enforce the embedded table's RLS, so a `users:owner_id` embed came
+// back null for every row not owned by the caller and the whole feed rendered
+// the "Athlete" fallback. The `!owner_id`/`!user_id` hints resolve the FK to
+// users through the view; the `users:` alias preserves the row shapes below.
 const CLIP_FEED_SELECT =
-  "id, owner_id, caption, sport, status, likes_count, comment_count, created_at, thumb_path, users:owner_id ( name, channel_name, avatar_url )";
+  "id, owner_id, caption, sport, status, likes_count, comment_count, created_at, thumb_path, users:public_profiles!owner_id ( name, channel_name, avatar_url )";
 
 const CLIP_COMMENT_SELECT =
-  "id, clip_id, user_id, text, created_at, users:user_id ( name, channel_name )";
+  "id, clip_id, user_id, text, created_at, users:public_profiles!user_id ( name, channel_name )";
 
 interface ClipUserJoin {
   name: string | null;
