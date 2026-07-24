@@ -1,7 +1,6 @@
 import { useNotifications } from '@atlitos/api';
 import { spacing } from '@atlitos/theme';
 import { router, useFocusEffect } from 'expo-router';
-import { LayoutGrid } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -144,13 +143,6 @@ export default function HomeScreen() {
         <EmpowerRail reloadKey={reloadKey} />
 
         <BrandFooter />
-
-        {__DEV__ ? (
-          <Button variant="text" onPress={() => router.push('/dev')}>
-            <LayoutGrid size={16} color={colors.accent} strokeWidth={1.75} />
-            <Text style={{ color: colors.accent }}>Component showcase</Text>
-          </Button>
-        ) : null}
 
         {status === 'signed_in' ? (
           <Button variant="text" loading={loggingOut} onPress={() => void handleLogout()}>

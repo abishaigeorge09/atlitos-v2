@@ -2,7 +2,7 @@ import { useShop, useWishlist, toApiError, type ShopProduct } from '@atlitos/api
 import type { ApiError } from '@atlitos/types';
 import { spacing } from '@atlitos/theme';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Heart, RefreshCw, ShoppingBag, ShoppingCart, TriangleAlert } from 'lucide-react-native';
+import { ChevronLeft, Heart, RefreshCw, ShoppingBag, ShoppingCart, TriangleAlert } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -144,7 +144,17 @@ export default function CategoryBrowseScreen() {
   const header = (
     <View style={{ padding: spacing.lg, gap: spacing.md }}>
       <View className="flex-row items-center justify-between">
-        <Text style={[textStyle('h1'), { color: colors.text }]}>{activeCategoryName}</Text>
+        <View className="flex-row items-center gap-sm flex-1">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            className="h-11 w-11 items-center justify-center rounded-pill active:bg-surface-muted -ml-2"
+            onPress={() => router.back()}
+          >
+            <ChevronLeft size={24} strokeWidth={1.75} color={colors.text} />
+          </Pressable>
+          <Text style={[textStyle('h1'), { color: colors.text }]}>{activeCategoryName}</Text>
+        </View>
         <View className="flex-row items-center">
           <Pressable
             accessibilityRole="button"

@@ -20,8 +20,7 @@ import { useColorScheme } from 'nativewind';
  * could disagree on web, producing wrong-theme colors (e.g. light-mode ink
  * on a dark-mode surface) on any StyleSheet-driven text or icon. Follows
  * system light/dark by default, per the design language (dark is first
- * class, not an inverted afterthought); see ThemeToggle in
- * src/app/dev/gallery.tsx for the manual override control.
+ * class, not an inverted afterthought).
  */
 export function useThemeColors(): ColorPalette {
   const { colorScheme } = useColorScheme();
