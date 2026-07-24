@@ -68,3 +68,18 @@ None of these can be self-served in-repo; each is a founder dashboard/account/de
 ## Gate carry-forward (from PHASE-8-STATUS.md G6)
 
 The P8 gate passed on autonomous hardening + a green 5-journey regression + the advisor burn-down. This document IS the record that the three founder-blocked items and the native-debt inventory were carried as explicit P9/P10 conditions rather than dropped. P9 starts at "Enabler" above; P10 starts at the Apple Developer enrollment.
+
+---
+
+## Post-P8 addendum: athlete Trainings module built (2026-07-25)
+
+The Trainings tab's athlete branch was a placeholder ("warming up, next phase"); it is now the full athlete module per the founder's design correction pointing at the high-fi Figma frames (file on08qE5ahPOXBYekeQt9nk, section 1642:35541 "Player Profile", frames named "player - training", Stats reference 1642:37833). Structure mirrors the coach side's internal TrainingsSubNav, athlete tabs Stats / Coaches / Payments / Chat / Analytics:
+
+- Stats: 2x2 StatTile grid (Total sessions, This month, Hours trained, Payments done), My sports card from `users.sports` with Add sport, Upcoming sessions preview with View all, Session requests (cancel routes to the coaching booking detail, FR-26), Learn milestones rail (`get_learn_home()`), Find a coach card. All numbers from the player scoped `listMySessions()` (RLS is not scoping) per FR-27.
+- Coaches: my coaches grouped from own sessions + entry into the `(tabs)/coaching` browse.
+- Payments: read only session payment history (paid for sessions held / booked ahead totals, per session rows into the booking detail). No client money writes.
+- Analytics: role aware `(tabs)/trainings/analytics`, athlete branch renders monthly session and hour bars from held sessions plus server derived XP; insufficient data below 3 held sessions.
+- Chat: existing shared redirect to `(tabs)/chat` serves both roles unchanged.
+- `(tabs)/trainings/session/[id]` now hands a player viewer off to `(tabs)/coaching/booking/[id]` when the coach scoped read returns null and the caller is the session's own player.
+
+Verified live on the iOS simulator as player@atlitos.dev (11 real sessions): stat grid, request row, milestone rail, coaches row, 11 payment rows and thread list all render real data. `ui/input.tsx` TextInput now carries "<label> input" as accessibilityLabel (fields were unaddressable by VoiceOver/automation). A second agent reconciles coach screens next.
