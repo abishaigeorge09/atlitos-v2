@@ -2,7 +2,7 @@ import { useCoaching, useCoachSessions, useCoachVerification, useGroups, useLear
 import type { ApiError, Session } from '@atlitos/types';
 import { spacing } from '@atlitos/theme';
 import { router } from 'expo-router';
-import { CalendarClock, Dumbbell, IndianRupee, Lock, Star, Users, TriangleAlert } from 'lucide-react-native';
+import { CalendarClock, ChevronRight, Dumbbell, Film, IndianRupee, Lock, Star, Users, TriangleAlert } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 
@@ -494,6 +494,17 @@ export default function TrainingsScreen() {
             </View>
             <PlayerSessionRequests sessions={requestedSessions} />
             <MilestonesRail milestones={learnHome ? learnHome.milestones : null} />
+            <Button
+              variant="secondary"
+              onPress={() => router.push('/(tabs)/trainings/my-videos')}
+              style={{ justifyContent: 'space-between' }}
+            >
+              <View className="flex-row items-center gap-sm">
+                <Film size={18} strokeWidth={1.75} color={colors.text} />
+                <Text style={{ color: colors.text }}>My review videos</Text>
+              </View>
+              <ChevronRight size={18} strokeWidth={1.75} color={colors.textTertiary} />
+            </Button>
             {hasAnySession ? <FindCoachCard /> : null}
           </View>
         )}
