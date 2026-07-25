@@ -1,0 +1,103 @@
+# Coach browse embedded inline in the Trainings Coaches tab (founder
+# report): browsing coaches used to push the athlete onto the separate
+# `(tabs)/coaching` bottom nav tab, yanking them out of the Trainings
+# module. Now the CoachBrowseList organism (shared with the standalone
+# coaching tab) renders inline below "My coaches", and a tapped coach opens
+# as a drill in above the Trainings shell (`trainings/coach/[id]`, a
+# re-export of the coaching profile screen) rather than switching tabs.
+#
+# Proves, with the shell title visible at every step:
+# 1. The Coaches tab renders "Browse coaches" plus real CoachCard rows
+#    (sport filter chips included) inside the Trainings shell, not a link
+#    out.
+# 2. Tapping a coach card opens the coach profile as a drill in above the
+#    shell (sub nav hidden).
+# 3. Backing out returns to the Coaches tab with the shell (module title +
+#    sub nav) intact.
+appId: com.atlitos.app
+---
+- launchApp
+- runFlow:
+    when:
+      visible: "Save Password.*"
+    commands:
+      - tapOn: "Not Now"
+- openLink: atlitos://login
+- extendedWaitUntil:
+    visible: "Email or phone.*"
+    timeout: 10000
+- tapOn: "Email or phone input"
+- inputText: "player@atlitos.dev"
+- tapOn: "Password input"
+- inputText: "AtlitosDemo!2026"
+- tapOn:
+    text: "Log in"
+    index: 1
+- extendedWaitUntil:
+    visible: "Hyderabad|Save Password.*"
+    timeout: 20000
+- runFlow:
+    when:
+      visible: "Save Password.*"
+    commands:
+      - tapOn: "Not Now"
+- extendedWaitUntil:
+    visible: "Hyderabad"
+    timeout: 10000
+
+- openLink: atlitos://trainings
+- extendedWaitUntil:
+    visible: "Your trainings at a glance"
+    timeout: 15000
+- assertVisible: "Trainings"
+- assertVisible: "Stats"
+
+# Coaches tab: shell stays fixed, browse list renders inline below "My
+# coaches" instead of pushing away to the coaching tab.
+- tapOn: "Coaches"
+- extendedWaitUntil:
+    visible: "My coaches"
+    timeout: 10000
+- assertVisible: "Trainings"
+- assertVisible: "Stats"
+- assertVisible: "Coaches"
+- scrollUntilVisible:
+    element:
+      text: "Browse coaches"
+    direction: DOWN
+- assertVisible: "Trainings"
+- assertVisible: "Stats"
+- assertVisible: "All sports"
+# The browse list fetches after the chip row renders; give it a moment to
+# populate before scrolling for a card.
+- waitForAnimationToEnd:
+    timeout: 4000
+- scrollUntilVisible:
+    element:
+      text: ".*Demo Coach One.*"
+    direction: DOWN
+    timeout: 25000
+- assertVisible: "Trainings"
+- assertVisible: "Stats"
+- takeScreenshot: /tmp/coach-browse-embedded
+
+# Tap the coach card: opens the coach profile as a drill in above the
+# shell (sub nav hidden, module title gone since AppBar owns the header
+# there instead).
+- tapOn:
+    text: ".*Demo Coach One.*"
+    index: 0
+- extendedWaitUntil:
+    visible: "Session type"
+    timeout: 10000
+- assertNotVisible: "Stats"
+- takeScreenshot: /tmp/coach-browse-detail
+
+# Back out: returns to the Coaches tab with the shell intact.
+- tapOn: "Back"
+- extendedWaitUntil:
+    visible: "My coaches"
+    timeout: 10000
+- assertVisible: "Trainings"
+- assertVisible: "Stats"
+- assertVisible: "Coaches"

@@ -2,12 +2,12 @@ import { useCoaching } from '@atlitos/api';
 import type { ApiError, Session } from '@atlitos/types';
 import { radii, spacing } from '@atlitos/theme';
 import { router } from 'expo-router';
-import { Search, TriangleAlert, Users } from 'lucide-react-native';
+import { TriangleAlert, Users } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 
+import { CoachBrowseList } from '@/components/organisms/coaching/CoachBrowseList';
 import { EmptyState } from '@/components/organisms/EmptyState';
-import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
 import { supabase } from '@/lib/supabase';
@@ -31,14 +31,20 @@ function todayISO(): string {
 
 /**
  * Athlete Trainings module, Coaches tab (Figma "player - training"
- * 1642:38349 "My Coaches" + 1642:38910 browse entry). The athlete's own
- * coaches, derived from `listMySessions()` (explicitly player scoped, RLS
- * is not scoping) grouped by coach: sessions till date, the next accepted
- * session if one exists. The find and hire surface itself is the existing
- * coaching browse; this tab links into it rather than duplicating it.
- * States: loading, empty (guides to the browse), populated, error.
- * Renders as tab content inside the Trainings shell layout, which owns the
- * module header and TrainingsSubNav.
+ * 1642:38349 "My Coaches" + 1642:38910 browse entry). "My coaches" is the
+ * athlete's own history, derived from `listMySessions()` (explicitly
+ * player scoped, RLS is not scoping) grouped by coach: sessions till date,
+ * the next accepted session if one exists. Below it, the shared
+ * CoachBrowseList organism (also used by the standalone /coaching tab)
+ * renders the find and hire surface inline, so browsing coaches never
+ * yanks the athlete out of the Trainings module onto the separate
+ * coaching bottom nav tab; a tapped coach opens as a drill in above this
+ * shell (`trainings/coach/[id]`, a re-export of the coaching profile
+ * screen) and backs out to this tab with the shell intact, same pattern as
+ * `trainings/booking/[id]`. One outer ScrollView owns both sections so
+ * there is only ever one scroller. States: loading, error for "My
+ * coaches"; CoachBrowseList carries its own loading/empty/populated/error
+ * quartet for the browse section.
  */
 export default function PlayerCoachesScreen() {
   const colors = useThemeColors();
@@ -72,106 +78,77 @@ export default function PlayerCoachesScreen() {
     setRefreshing(false);
   }
 
-  return (
-    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+  const myCoachesSection = (
+    <View style={{ gap: spacing.md }}>
+      <Text style={[textStyle('h3'), { color: colors.text }]}>My coaches</Text>
 
       {state === 'loading' ? (
-        <View style={{ padding: spacing.lg, gap: spacing.md }}>
+        <View style={{ gap: spacing.md }}>
           <Skeleton shape="card" height={72} />
           <Skeleton shape="card" height={120} />
           <Skeleton shape="card" height={120} />
         </View>
       ) : state === 'error' ? (
-        <View style={{ flex: 1, justifyContent: 'center' }}>
-          <EmptyState
-            icon={TriangleAlert}
-            title="Could not load your coaches"
-            body={error?.message ?? 'Something went wrong. Please try again.'}
-            ctaLabel="Retry"
-            onCtaPress={() => void load()}
-          />
-        </View>
+        <EmptyState
+          icon={TriangleAlert}
+          title="Could not load your coaches"
+          body={error?.message ?? 'Something went wrong. Please try again.'}
+          ctaLabel="Retry"
+          onCtaPress={() => void load()}
+        />
+      ) : rows.length === 0 ? (
+        <EmptyState icon={Users} title="No coaches yet" body="Book your first session and your coaches will show up here. Browse coaches below to get started." />
       ) : (
-        <ScrollView
-          contentContainerStyle={{ padding: spacing.lg, gap: spacing.md, paddingBottom: spacing['4xl'] }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} />}
-        >
+        rows.map((row) => (
           <Pressable
+            key={row.coachId}
             accessibilityRole="button"
-            accessibilityLabel="Browse coaches"
-            onPress={() => router.push('/(tabs)/coaching')}
+            accessibilityLabel={`Coach ${row.name}`}
+            onPress={() => router.push({ pathname: '/(tabs)/trainings/coach/[id]', params: { id: row.coachId } })}
             style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: spacing.md,
               borderRadius: radii.xl,
               borderWidth: 1,
-              borderColor: colors.accent,
-              backgroundColor: colors.accentTint,
+              borderColor: colors.border,
+              backgroundColor: colors.card,
               padding: spacing.lg,
+              gap: spacing.xs,
             }}
           >
-            <Search size={22} strokeWidth={1.75} color={colors.accent} />
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text style={[textStyle('label'), { color: colors.text }]}>Browse coaches</Text>
-              <Text style={[textStyle('caption'), { color: colors.textSecondary }]}>
-                Search by sport, compare pricing and book your next session.
+            <Text style={[textStyle('h3'), { color: colors.text }]}>{row.name}</Text>
+            <View className="flex-row items-center justify-between">
+              <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>Sessions till date</Text>
+              <Text style={[textStyle('numericSm'), { color: colors.text }]}>{row.sessionCount}</Text>
+            </View>
+            <View className="flex-row items-center justify-between">
+              <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
+                {row.nextSessionDate ? 'Next session' : 'Last session'}
+              </Text>
+              <Text style={[textStyle('numericSm'), { color: colors.text }]}>
+                {row.nextSessionDate ?? row.lastSessionDate}
               </Text>
             </View>
           </Pressable>
-
-          <Text style={[textStyle('h3'), { color: colors.text }]}>My coaches</Text>
-
-          {rows.length === 0 ? (
-            <EmptyState
-              icon={Users}
-              title="No coaches yet"
-              body="Book your first session and your coaches will show up here."
-              ctaLabel="Find a coach"
-              onCtaPress={() => router.push('/(tabs)/coaching')}
-            />
-          ) : (
-            rows.map((row) => (
-              <Pressable
-                key={row.coachId}
-                accessibilityRole="button"
-                accessibilityLabel={`Coach ${row.name}`}
-                onPress={() =>
-                  router.push({ pathname: '/(tabs)/coaching/coach/[id]', params: { id: row.coachId } })
-                }
-                style={{
-                  borderRadius: radii.xl,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  backgroundColor: colors.card,
-                  padding: spacing.lg,
-                  gap: spacing.xs,
-                }}
-              >
-                <Text style={[textStyle('h3'), { color: colors.text }]}>{row.name}</Text>
-                <View className="flex-row items-center justify-between">
-                  <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>Sessions till date</Text>
-                  <Text style={[textStyle('numericSm'), { color: colors.text }]}>{row.sessionCount}</Text>
-                </View>
-                <View className="flex-row items-center justify-between">
-                  <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
-                    {row.nextSessionDate ? 'Next session' : 'Last session'}
-                  </Text>
-                  <Text style={[textStyle('numericSm'), { color: colors.text }]}>
-                    {row.nextSessionDate ?? row.lastSessionDate}
-                  </Text>
-                </View>
-              </Pressable>
-            ))
-          )}
-
-          {rows.length > 0 ? (
-            <Button variant="secondary" onPress={() => router.push('/(tabs)/coaching')}>
-              <Text style={{ color: colors.text }}>Find another coach</Text>
-            </Button>
-          ) : null}
-        </ScrollView>
+        ))
       )}
+
+      <Text style={[textStyle('h3'), { color: colors.text }]}>Browse coaches</Text>
+    </View>
+  );
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: spacing['4xl'] }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} />}
+      >
+        <CoachBrowseList
+          header={myCoachesSection}
+          scrollEnabled={false}
+          onOpenCoach={(coachId) =>
+            router.push({ pathname: '/(tabs)/trainings/coach/[id]', params: { id: coachId } })
+          }
+        />
+      </ScrollView>
     </View>
   );
 }
