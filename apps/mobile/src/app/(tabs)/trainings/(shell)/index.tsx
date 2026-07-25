@@ -1,4 +1,4 @@
-import { useCoaching, useCoachSessions, useCoachVerification, useLearn, type LearnHome } from '@atlitos/api';
+import { useCoaching, useCoachSessions, useCoachVerification, useGroups, useLearn, type GroupMembership, type LearnHome } from '@atlitos/api';
 import type { ApiError, Session } from '@atlitos/types';
 import { spacing } from '@atlitos/theme';
 import { router } from 'expo-router';
@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/organisms/EmptyState';
 import { LoginGateModal } from '@/components/organisms/LoginGateModal';
 import { FindCoachCard } from '@/components/organisms/trainings/FindCoachCard';
 import { MilestonesRail } from '@/components/organisms/trainings/MilestonesRail';
+import { MyGroupsCard } from '@/components/organisms/trainings/MyGroupsCard';
 import { MySportsCard } from '@/components/organisms/trainings/MySportsCard';
 import { PlayerSessionRequests } from '@/components/organisms/trainings/PlayerSessionRequests';
 import { PlayerStatsGrid } from '@/components/organisms/trainings/PlayerStatsGrid';
@@ -21,6 +22,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { StatTile } from '@/components/ui/stat-tile';
 import { Text } from '@/components/ui/text';
 import { formatINR } from '@atlitos/theme';
+import { fetchMyGroupSessions, type MyGroupSessionEntry } from '@/lib/group-sessions';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
 import { textStyle } from '@/theme/text-style';
@@ -75,6 +77,7 @@ export default function TrainingsScreen() {
   const coachSessions = useCoachSessions(supabase);
   const verification = useCoachVerification(supabase);
   const coaching = useCoaching(supabase);
+  const groups = useGroups(supabase);
   const learn = useLearn(supabase);
 
   const status = useSessionStore((state) => state.status);
@@ -106,6 +109,8 @@ export default function TrainingsScreen() {
   const [playerError, setPlayerError] = useState<ApiError | null>(null);
   const [mySessions, setMySessions] = useState<Session[]>([]);
   const [learnHome, setLearnHome] = useState<LearnHome | null>(null);
+  const [myMemberships, setMyMemberships] = useState<GroupMembership[]>([]);
+  const [myGroupSessions, setMyGroupSessions] = useState<MyGroupSessionEntry[]>([]);
 
   const isGuest = status === 'guest';
   const isVerifiedCoach = me?.coachStatus === 'verified';
@@ -178,9 +183,46 @@ export default function TrainingsScreen() {
     if (isPlayer) void loadPlayerDashboard();
   }, [isPlayer, loadPlayerDashboard]);
 
+  // Groups: my memberships (My groups card + renew prompts) and, once those
+  // resolve, the group sessions they unlock for the Upcoming sessions list.
+  // Explicitly player scoped through `myMemberships()` (player_id = me,
+  // RLS is not scoping); a failure here degrades to no groups shown rather
+  // than blocking the rest of the dashboard, same allSettled posture as the
+  // Learn read above.
+  const loadGroups = useCallback(async () => {
+    try {
+      const memberships = await groups.myMemberships();
+      setMyMemberships(memberships);
+      const sessions = await fetchMyGroupSessions(supabase, memberships);
+      setMyGroupSessions(sessions);
+    } catch {
+      setMyMemberships([]);
+      setMyGroupSessions([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isPlayer) void loadGroups();
+  }, [isPlayer, loadGroups]);
+
+  function handleRenewMembership(membership: GroupMembership) {
+    router.push({
+      pathname: '/(tabs)/coaching/group/renew',
+      params: {
+        membershipId: membership.id,
+        groupName: membership.group?.name ?? 'Group',
+        monthlyFee: String(membership.group?.monthlyFee ?? membership.price),
+      },
+    });
+  }
+
   async function handleRefresh() {
     setRefreshing(true);
-    await (isVerifiedCoach ? loadDashboard({ silent: true }) : loadPlayerDashboard({ silent: true }));
+    if (isVerifiedCoach) {
+      await loadDashboard({ silent: true });
+    } else {
+      await Promise.all([loadPlayerDashboard({ silent: true }), loadGroups()]);
+    }
     setRefreshing(false);
   }
 
@@ -233,6 +275,15 @@ export default function TrainingsScreen() {
   const upcomingSessions = mySessions.filter((session) => session.status === 'accepted' && session.date >= today).sort(bySoonest);
   const requestedSessions = mySessions.filter((session) => session.status === 'requested').sort(bySoonest);
   const hasAnySession = mySessions.length > 0;
+
+  // Group sessions upcoming for the same "accepted future" window as 1:1
+  // sessions above (`in_progress` also counts, the coach may already have
+  // started it; a group session skips `requested` entirely, see 0076).
+  const upcomingGroupSessions = myGroupSessions.filter(
+    (entry) =>
+      entry.session.date >= today && (entry.session.status === 'accepted' || entry.session.status === 'in_progress'),
+  );
+  const totalUpcomingCount = upcomingSessions.length + upcomingGroupSessions.length;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -422,9 +473,10 @@ export default function TrainingsScreen() {
               paymentsDone={paymentsDone}
             />
             {me?.sports?.length ? <MySportsCard sports={me.sports} /> : null}
+            <MyGroupsCard memberships={myMemberships} onRenew={handleRenewMembership} />
             {!hasAnySession ? <FindCoachCard /> : null}
             <View style={{ gap: spacing.sm }}>
-              {upcomingSessions.length > UPCOMING_PREVIEW_COUNT ? (
+              {totalUpcomingCount > UPCOMING_PREVIEW_COUNT ? (
                 <View className="flex-row items-center justify-between">
                   <Text style={[textStyle('h3'), { color: colors.text }]}>Upcoming sessions</Text>
                   <Button variant="text" size="sm" onPress={() => router.push('/(tabs)/coaching/bookings')}>
@@ -433,9 +485,11 @@ export default function TrainingsScreen() {
                 </View>
               ) : null}
               <PlayerUpcomingSessions
-                sessions={upcomingSessions.slice(0, UPCOMING_PREVIEW_COUNT)}
+                sessions={upcomingSessions}
+                groupSessions={upcomingGroupSessions}
+                maxItems={UPCOMING_PREVIEW_COUNT}
                 onPressSession={goToSession}
-                hideHeader={upcomingSessions.length > UPCOMING_PREVIEW_COUNT}
+                hideHeader={totalUpcomingCount > UPCOMING_PREVIEW_COUNT}
               />
             </View>
             <PlayerSessionRequests sessions={requestedSessions} />

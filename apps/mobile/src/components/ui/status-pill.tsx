@@ -20,7 +20,11 @@ export type Status =
   | 'accepted'
   | 'inProgress'
   | 'declined'
-  | 'rated';
+  | 'rated'
+  // group_memberships.status (0076 Trainings Groups fares model): a live
+  // membership vs one that ran past period_end without a manual renewal.
+  | 'membershipActive'
+  | 'membershipLapsed';
 
 interface StatusConfig {
   label: string;
@@ -65,6 +69,8 @@ const STATUS_CONFIG: Record<Status, StatusConfig> = {
   inProgress: { label: 'In progress', bgClass: 'bg-info-tint', textClass: 'text-info' },
   declined: { label: 'Declined', bgClass: 'bg-danger-tint', textClass: 'text-danger' },
   rated: { label: 'Rated', bgClass: 'bg-success-tint', textClass: 'text-success' },
+  membershipActive: { label: 'Active', bgClass: 'bg-success-tint', textClass: 'text-success' },
+  membershipLapsed: { label: 'Lapsed', bgClass: 'bg-danger-tint', textClass: 'text-danger' },
 };
 
 export interface StatusPillProps {

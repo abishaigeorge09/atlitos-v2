@@ -1,8 +1,8 @@
-import { computeAvailableSessionSlots, useCoaching } from '@atlitos/api';
+import { computeAvailableSessionSlots, useCoaching, useGroups, type GroupMembership, type TrainingGroup } from '@atlitos/api';
 import type { ApiError, CoachProfile, SessionFrequency, SessionTypeOption, TimeSlot } from '@atlitos/types';
 import { formatINR, radii, spacing } from '@atlitos/theme';
 import { router, useLocalSearchParams } from 'expo-router';
-import { TriangleAlert } from 'lucide-react-native';
+import { TriangleAlert, Users } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -27,6 +27,7 @@ import { useThemeColors } from '@/theme/use-theme-colors';
 
 type ScreenState = 'loading' | 'populated' | 'error';
 type SlotsState = 'loading' | 'empty' | 'populated' | 'error';
+type GroupsState = 'loading' | 'populated' | 'error';
 
 const FREQUENCIES: SessionFrequency[] = ['one_time', 'weekly', 'monthly'];
 
@@ -58,13 +59,20 @@ function addDaysISO(iso: string, days: number): string {
 export default function CoachProfileScreen() {
   const colors = useThemeColors();
   const coaching = useCoaching(supabase);
+  const groups = useGroups(supabase);
   const { id } = useLocalSearchParams<{ id: string }>();
-  const isGuest = useSessionStore((state) => state.status === 'guest');
+  const status = useSessionStore((state) => state.status);
+  const isGuest = status === 'guest';
+  const isSignedIn = status === 'signed_in';
 
   const [state, setState] = useState<ScreenState>('loading');
   const [coach, setCoach] = useState<CoachProfile | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [gateVisible, setGateVisible] = useState(false);
+
+  const [groupsState, setGroupsState] = useState<GroupsState>('loading');
+  const [coachGroups, setCoachGroups] = useState<TrainingGroup[]>([]);
+  const [myMemberships, setMyMemberships] = useState<GroupMembership[]>([]);
 
   const [sessionType, setSessionType] = useState<SessionTypeOption | undefined>(undefined);
   const [frequency, setFrequency] = useState<SessionFrequency | undefined>(undefined);
@@ -98,6 +106,31 @@ export default function CoachProfileScreen() {
     void loadCoach();
   }, [loadCoach]);
 
+  // Groups section: this coach's active groups (public discovery read,
+  // explicitly coach scoped even though the browse policy is also public,
+  // RLS IS NOT SCOPING) plus, when signed in, the athlete's own memberships
+  // to know which groups already show Joined instead of a Join button. The
+  // membership read fails closed to "no memberships known" on error rather
+  // than blocking the groups list itself.
+  useEffect(() => {
+    setGroupsState('loading');
+    groups
+      .listGroupsForCoach(id)
+      .then((result) => {
+        setCoachGroups(result);
+        setGroupsState('populated');
+      })
+      .catch(() => setGroupsState('error'));
+  }, [id]);
+
+  useEffect(() => {
+    if (!isSignedIn) return;
+    groups
+      .myMemberships()
+      .then(setMyMemberships)
+      .catch(() => setMyMemberships([]));
+  }, [isSignedIn, id]);
+
   useEffect(() => {
     if (!sessionType) return;
     setSlotsState('loading');
@@ -119,6 +152,23 @@ export default function CoachProfileScreen() {
     if (!coach || !sessionType) return [];
     return computeAvailableSessionSlots(coach.availability, sessionType.durationMinutes, date, busySlots);
   }, [coach, sessionType, date, busySlots]);
+
+  function handleJoinGroup(group: TrainingGroup) {
+    if (isGuest) {
+      setGateVisible(true);
+      return;
+    }
+    router.push({
+      pathname: '/(tabs)/coaching/group/join',
+      params: {
+        groupId: group.id,
+        groupName: group.name,
+        coachName: coach?.user?.name ?? 'this coach',
+        monthlyFee: String(group.monthlyFee),
+        attendancePolicy: group.attendancePolicy ?? '',
+      },
+    });
+  }
 
   function handleContinue() {
     if (!coach || !sessionType || !frequency || !selectedSlot) return;
@@ -205,6 +255,84 @@ export default function CoachProfileScreen() {
             </View>
           ) : null}
         </View>
+
+        {groupsState === 'populated' && coachGroups.length > 0 ? (
+          <View style={{ paddingHorizontal: spacing.lg, gap: spacing.md }}>
+            <Text style={[textStyle('h3'), { color: colors.text }]}>Groups</Text>
+            <View style={{ gap: spacing.sm }}>
+              {coachGroups.map((group) => {
+                const spotsLeft = group.capacity - (group.activeMembers ?? 0);
+                const membership = myMemberships.find((m) => m.groupId === group.id);
+                const isMember = membership?.status === 'active' || membership?.status === 'pending';
+                const isLapsed = membership?.status === 'lapsed';
+
+                return (
+                  <View
+                    key={group.id}
+                    style={{
+                      borderRadius: radii.lg,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      backgroundColor: colors.card,
+                      padding: spacing.lg,
+                      gap: spacing.sm,
+                    }}
+                  >
+                    <View className="flex-row items-center justify-between">
+                      <View className="flex-1 flex-row items-center gap-xs">
+                        <Users size={16} strokeWidth={1.75} color={colors.textTertiary} />
+                        <Text style={[textStyle('label'), { color: colors.text }]} numberOfLines={1}>
+                          {group.name}
+                        </Text>
+                      </View>
+                      <Text style={[textStyle('numericBase'), { color: colors.text }]}>
+                        {formatINR(group.monthlyFee)}/mo
+                      </Text>
+                    </View>
+
+                    <Text style={[textStyle('caption'), { color: colors.textSecondary }]}>
+                      {spotsLeft > 0 ? `${spotsLeft} of ${group.capacity} spots left` : 'Group is full'}
+                    </Text>
+
+                    {group.attendancePolicy ? (
+                      <Text style={[textStyle('caption'), { color: colors.textTertiary }]} numberOfLines={2}>
+                        {group.attendancePolicy}
+                      </Text>
+                    ) : null}
+
+                    {isMember ? (
+                      <Button variant="secondary" size="sm" disabled>
+                        <Text style={{ color: colors.textSecondary }}>
+                          {membership?.status === 'pending' ? 'Payment pending' : 'Joined'}
+                        </Text>
+                      </Button>
+                    ) : isLapsed && membership ? (
+                      <Button
+                        size="sm"
+                        onPress={() =>
+                          router.push({
+                            pathname: '/(tabs)/coaching/group/renew',
+                            params: {
+                              membershipId: membership.id,
+                              groupName: group.name,
+                              monthlyFee: String(group.monthlyFee),
+                            },
+                          })
+                        }
+                      >
+                        <Text style={{ color: colors.inkOnAccent }}>Renew membership</Text>
+                      </Button>
+                    ) : (
+                      <Button size="sm" disabled={spotsLeft <= 0} onPress={() => handleJoinGroup(group)}>
+                        <Text style={{ color: colors.inkOnAccent }}>{spotsLeft <= 0 ? 'Full' : 'Join, month 1'}</Text>
+                      </Button>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
 
         <View style={{ paddingHorizontal: spacing.lg, gap: spacing.md }}>
           <Text style={[textStyle('h3'), { color: colors.text }]}>Session type</Text>
