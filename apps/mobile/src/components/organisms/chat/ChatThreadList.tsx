@@ -89,7 +89,13 @@ export function ChatThreadList({ onOpenThread, title }: ChatThreadListProps) {
         setThreads((previous) => {
           const next = previous.map((thread) =>
             thread.id === message.threadId
-              ? { ...thread, lastMessage: message.text, lastMessageAt: message.createdAt }
+              ? // `message.senderName` never arrives on a Realtime payload
+                // (postgres_changes ships the raw table row, no PostgREST
+                // embed), so a group row's sender prefix is cleared here
+                // rather than left showing the PREVIOUS message's sender
+                // against the new text; the next full load/refresh
+                // (listThreads, which does join the name) restores it.
+                { ...thread, lastMessage: message.text, lastMessageAt: message.createdAt, lastSenderName: message.senderName }
               : thread,
           );
           return [...next].sort(
@@ -199,6 +205,15 @@ function relativeTimestamp(iso: string): string {
 }
 
 function ThreadRow({ thread, onPress }: { thread: ChatThread; onPress: () => void }) {
+  // Group rows prefix the preview with the sender's name ("Rohan: Okay,
+  // let's..."), per COACH-TRAININGS-GAP.md screen 17. A 1:1 preview never
+  // carries a sender name, so it renders exactly as before.
+  const preview = thread.lastMessage
+    ? thread.isGroup && thread.lastSenderName
+      ? `${thread.lastSenderName}: ${thread.lastMessage}`
+      : thread.lastMessage
+    : 'Start the conversation.';
+
   return (
     <Pressable
       onPress={onPress}
@@ -214,8 +229,13 @@ function ThreadRow({ thread, onPress }: { thread: ChatThread; onPress: () => voi
           <Text className="font-mono text-xs text-text-tertiary">{relativeTimestamp(thread.lastMessageAt)}</Text>
         </View>
         <Text className="text-sm text-text-secondary" numberOfLines={1}>
-          {thread.lastMessage || 'Start the conversation.'}
+          {preview}
         </Text>
+        {thread.isGroup ? (
+          <Text className="font-mono text-xs text-text-tertiary">
+            {thread.memberCount ?? 0} {thread.memberCount === 1 ? 'member' : 'members'}
+          </Text>
+        ) : null}
       </View>
     </Pressable>
   );

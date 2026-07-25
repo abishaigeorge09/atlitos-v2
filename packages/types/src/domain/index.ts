@@ -432,14 +432,39 @@ export interface ChatThread {
   lastMessage: string;
   lastMessageAt: string;
   unreadCount: number;
+  /** True for a training group's thread (0078_group_chat_and_notes.sql).
+   * `participantId`/`participantName`/`participantAvatarUrl` above hold the
+   * group's own name in place of a single counterpart's identity, so a
+   * caller that only reads those three fields (unaware of groups) still
+   * renders something sane. */
+  isGroup: boolean;
+  /** Group threads only, the training_groups.name this thread belongs to. */
+  groupName?: string;
+  /** Group threads only, live (non lapsed) seat count from
+   * chat_thread_members. */
+  memberCount?: number;
+  /** Group threads only, the sender name to prefix onto `lastMessage`
+   * ("Rohan: Okay, let's..."), per COACH-TRAININGS-GAP.md screen 17. */
+  lastSenderName?: string;
 }
 
 export interface ChatMessage {
   id: string;
   threadId: string;
   senderId: string;
+  /** Populated on group threads (each bubble shows who sent it); left
+   * undefined on 1:1 threads, which never render a sender name. */
+  senderName?: string;
   text: string;
   createdAt: string;
+}
+
+/** One seated member of a group thread (chat_thread_members joined to
+ * users), for the members sheet on a group conversation screen. */
+export interface ChatThreadMember {
+  id: string;
+  name: string;
+  avatarUrl?: string;
 }
 
 // ---------------------------------------------------------------------------
