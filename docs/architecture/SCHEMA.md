@@ -245,6 +245,14 @@ Founder-ratified fares model: monthly subscription per group, manual renewal in 
 - Group chat (0078): `chat_threads.context_type` gained 'group'; the pair columns are nullable ONLY for group rows (`chat_threads_shape` CHECK keeps every non-group row on the old canonical two-party form), one thread per group (partial unique on context_id where context_type='group'), and `chat_thread_members` (pk thread_id, user_id) is the group participant set, synced by triggers: group creation seats the coach, a membership turning active seats the player, turning lapsed unseats them. Clients never write chat_thread_members.
 - RLS predicates live in SECURITY DEFINER helpers (0081: `is_verified_coach` reused from 0030, `is_group_member_live`, `is_group_coach`, `is_session_coach`, `is_session_participant`) because policy subqueries are subject to the referenced table's RLS: the naive cross-table policies recursed (42P17) and the anon discovery policy silently matched nothing.
 
+### `coach_trainee_videos` (0082, Track F, WRITTEN NOT APPLIED)
+
+Player Profile "Video Analytics" tab (design node `1047:16588`, `docs/design/COACH-TRAININGS-GAP.md` gap #8/#18). A coach's review videos for one trainee. id, coach_id -> coach_profiles(user_id), player_id -> users(id), storage_path (nullable, an object KEY in the existing private `clips` bucket under a `coach-videos/{coach_id}/{player_id}/` prefix, never a resolved URL, same discipline as `clips.storage_path`), caption (nullable text), created_at. Not a money table, so writes go through a direct owner-scoped RLS policy rather than an RPC: coach select/insert/delete own (`coach_trainee_videos_coach_*`), player select own (`coach_trainee_videos_player_select`), no update grant at all (immutable once posted), no anon access. No new storage bucket and no new `storage.objects` policy: it rides the `clips` bucket's existing "public = false, zero direct-access policies, signed URL only" shape from 0042.
+
+Two sibling edge functions, mirroring the Clutch clip-access pair, also written but NOT deployed: `coach-trainee-video-upload-url` (verifies the target player is actually this coach's trainee via a `sessions` row, creates the row, mints a signed upload URL) and `get-coach-trainee-video-url` (mints a short lived, TTL 300s, signed playback URL for the coach owner or the player owner only, no public path at all unlike Clutch playback).
+
+Integrator TODO: apply `0082_coach_trainee_videos.sql`, deploy both functions, regenerate the `Database` type (packages/api's `use-coach.ts` widens the client's schema generic to `SupabaseClient` for this table in the meantime, the same escape hatch `hooks.ts`'s Clutch lane used pre-merge; delete that widening once the type lands).
+
 ## Domain: courts
 
 ### `venues`

@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   AvailabilityWindow,
   CoachStatus,
@@ -509,6 +510,157 @@ export function useCoachTrainees(client: AtlitosClient) {
 }
 
 export type UseCoachTraineesResult = ReturnType<typeof useCoachTrainees>;
+
+// ---------------------------------------------------------------------------
+// trainee video review (Track F). Player Profile "Video Analytics" tab,
+// design node 1047:16588, docs/design/COACH-TRAININGS-GAP.md gap #8/#18.
+// Table `coach_trainee_videos` (0082, NOT yet applied by this track, see
+// that migration's header) stores only a PATH into the private `clips`
+// bucket; playback is always a fresh short lived signed URL from the
+// get-coach-trainee-video-url edge function, mirroring Clutch's clip-access
+// pattern, never a stored/cached URL.
+// ---------------------------------------------------------------------------
+
+export interface CoachTraineeVideo {
+  id: string;
+  coachId: string;
+  playerId: string;
+  caption: string | null;
+  createdAt: string;
+}
+
+export interface CoachTraineeVideoUploadTicket {
+  videoId: string;
+  uploadUrl: string;
+  token: string;
+  path: string;
+  bucket: string;
+}
+
+export interface CoachTraineeVideoPlayback {
+  videoId: string;
+  url: string;
+  expiresIn: number;
+}
+
+interface CoachTraineeVideoRow {
+  id: string;
+  coach_id: string;
+  player_id: string;
+  caption: string | null;
+  created_at: string;
+}
+
+const COACH_TRAINEE_VIDEO_SELECT = "id, coach_id, player_id, caption, created_at";
+
+function mapCoachTraineeVideoRow(row: CoachTraineeVideoRow): CoachTraineeVideo {
+  return {
+    id: row.id,
+    coachId: row.coach_id,
+    playerId: row.player_id,
+    caption: row.caption,
+    createdAt: row.created_at,
+  };
+}
+
+/** Coach side: upload, list, and delete review videos for one trainee.
+ * Every read below carries an explicit `coach_id = auth.uid()` filter
+ * (never left to RLS alone, RLS.md's "not scoping" rule), even though the
+ * table's own owner-scoped policy already enforces it.
+ *
+ * TYPING NOTE: `coach_trainee_videos` lands in migration 0082 (this track),
+ * NOT YET APPLIED (see that migration's header), so it is not in the
+ * generated `Database` type on this branch. `db` widens the same client's
+ * schema generic so `from` accepts the relation; swap back to `client` and
+ * delete this note once the migration is applied and types regenerated
+ * (same escape hatch `hooks.ts`'s Clutch lane used before Track A merged). */
+export function useCoachTraineeVideos(client: AtlitosClient) {
+  const db = client as unknown as SupabaseClient;
+  return {
+    /** All of this coach's review videos for one trainee, newest first. */
+    async listForTrainee(playerId: string): Promise<CoachTraineeVideo[]> {
+      const userId = await requireUserId(client);
+      const { data, error } = await db
+        .from("coach_trainee_videos")
+        .select(COACH_TRAINEE_VIDEO_SELECT)
+        .eq("coach_id", userId)
+        .eq("player_id", playerId)
+        .order("created_at", { ascending: false })
+        .returns<CoachTraineeVideoRow[]>();
+      if (error) throw mapPostgrestError(error);
+      return (data ?? []).map(mapCoachTraineeVideoRow);
+    },
+
+    /** Step 1: coach-trainee-video-upload-url edge function. Verifies the
+     * player is actually this coach's trainee, creates the row, and mints a
+     * signed upload URL for the private clips bucket. The client then PUTs
+     * the video file to `uploadUrl` (or `uploadToSignedUrl(path, token,
+     * file)`); the row is never written from the client directly. */
+    async requestUploadUrl(playerId: string, caption?: string): Promise<CoachTraineeVideoUploadTicket> {
+      const { data, error } = await client.functions.invoke("coach-trainee-video-upload-url", {
+        body: { player_id: playerId, caption },
+      });
+      if (error) throw await mapEdgeFunctionError(error);
+      return data as CoachTraineeVideoUploadTicket;
+    },
+
+    /** get-coach-trainee-video-url edge function. Short lived (300s) signed
+     * playback URL; call fresh per view, never store or hardcode it. */
+    async getPlaybackUrl(videoId: string): Promise<CoachTraineeVideoPlayback> {
+      const { data, error } = await client.functions.invoke("get-coach-trainee-video-url", {
+        body: { video_id: videoId },
+      });
+      if (error) throw await mapEdgeFunctionError(error);
+      return data as CoachTraineeVideoPlayback;
+    },
+
+    /** Own-row delete, explicit coach_id filter on top of the table's owner
+     * policy. */
+    async deleteVideo(videoId: string): Promise<void> {
+      const userId = await requireUserId(client);
+      const { error } = await db
+        .from("coach_trainee_videos")
+        .delete()
+        .eq("id", videoId)
+        .eq("coach_id", userId);
+      if (error) throw mapPostgrestError(error);
+    },
+  };
+}
+
+export type UseCoachTraineeVideosResult = ReturnType<typeof useCoachTraineeVideos>;
+
+/** Athlete side: read only list of a trainee's own review videos, reachable
+ * from their profile (least invasive spot per the Track F brief; there is no
+ * existing athlete "trainings" detail screen to hang a tab off of). Same
+ * TYPING NOTE as useCoachTraineeVideos above: `db` widens the schema generic
+ * until 0082 is applied and types regenerated. */
+export function useMyTraineeVideos(client: AtlitosClient) {
+  const db = client as unknown as SupabaseClient;
+  return {
+    async list(): Promise<CoachTraineeVideo[]> {
+      const userId = await requireUserId(client);
+      const { data, error } = await db
+        .from("coach_trainee_videos")
+        .select(COACH_TRAINEE_VIDEO_SELECT)
+        .eq("player_id", userId)
+        .order("created_at", { ascending: false })
+        .returns<CoachTraineeVideoRow[]>();
+      if (error) throw mapPostgrestError(error);
+      return (data ?? []).map(mapCoachTraineeVideoRow);
+    },
+
+    async getPlaybackUrl(videoId: string): Promise<CoachTraineeVideoPlayback> {
+      const { data, error } = await client.functions.invoke("get-coach-trainee-video-url", {
+        body: { video_id: videoId },
+      });
+      if (error) throw await mapEdgeFunctionError(error);
+      return data as CoachTraineeVideoPlayback;
+    },
+  };
+}
+
+export type UseMyTraineeVideosResult = ReturnType<typeof useMyTraineeVideos>;
 
 // ---------------------------------------------------------------------------
 // availability windows. FR-22, FR-23.
