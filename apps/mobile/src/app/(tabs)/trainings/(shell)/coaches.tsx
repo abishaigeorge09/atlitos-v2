@@ -5,15 +5,11 @@ import { router } from 'expo-router';
 import { Search, TriangleAlert, Users } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/organisms/EmptyState';
-import { AppBar } from '@/components/ui/app-bar';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
-import { TrainingsSubNav } from '@/components/ui/trainings-sub-nav';
-import { navigatePlayerSubNav } from '@/lib/trainings-player-nav';
 import { supabase } from '@/lib/supabase';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
@@ -41,6 +37,8 @@ function todayISO(): string {
  * session if one exists. The find and hire surface itself is the existing
  * coaching browse; this tab links into it rather than duplicating it.
  * States: loading, empty (guides to the browse), populated, error.
+ * Renders as tab content inside the Trainings shell layout, which owns the
+ * module header and TrainingsSubNav.
  */
 export default function PlayerCoachesScreen() {
   const colors = useThemeColors();
@@ -75,9 +73,7 @@ export default function PlayerCoachesScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-      <AppBar variant="backTitle" title="Coaches" onPressBack={() => router.back()} />
-      <TrainingsSubNav role="player" active="coaches" onChange={navigatePlayerSubNav} />
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
 
       {state === 'loading' ? (
         <View style={{ padding: spacing.lg, gap: spacing.md }}>
@@ -176,7 +172,7 @@ export default function PlayerCoachesScreen() {
           ) : null}
         </ScrollView>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 

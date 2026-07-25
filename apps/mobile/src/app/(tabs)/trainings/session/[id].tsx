@@ -81,11 +81,14 @@ export default function CoachSessionDetailScreen() {
         // its own sessions here too (PRD-01 3.3); when the caller is the
         // session's player, render the player perspective on the coaching
         // booking detail (cancel with refund, reschedule, rate all live
-        // there) instead of rebuilding it in this coach screen.
+        // there) instead of rebuilding it in this coach screen. The
+        // trainings/booking route reuses that same screen INSIDE the
+        // trainings Stack, so back still returns to the Trainings tab that
+        // opened it instead of falling out of the module.
         const mine = await coaching.getSession(id);
         const { data: authData } = await supabase.auth.getUser();
         if (mine && authData.user && mine.playerId === authData.user.id) {
-          router.replace({ pathname: '/(tabs)/coaching/booking/[id]', params: { id } });
+          router.replace({ pathname: '/(tabs)/trainings/booking/[id]', params: { id } });
           return;
         }
         setError({ code: 'NOT_FOUND', message: 'This session could not be found.', status: 404 });

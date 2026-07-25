@@ -5,16 +5,12 @@ import { router } from 'expo-router';
 import { ChartNoAxesCombined, TriangleAlert } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { ScrollView, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/organisms/EmptyState';
-import { AppBar } from '@/components/ui/app-bar';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
-import { TrainingsSubNav } from '@/components/ui/trainings-sub-nav';
 import { StatTile } from '@/components/ui/stat-tile';
-import { navigatePlayerSubNav } from '@/lib/trainings-player-nav';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
 import { textStyle } from '@/theme/text-style';
@@ -61,7 +57,9 @@ function BarRow({
  * sessions total renders the insufficient data state instead of a one or
  * two point chart (FR-33; the assumed threshold, PHASE-3-STATUS.md "What
  * the founder must do", open question 6). States: loading, empty
- * (insufficient data), populated, error.
+ * (insufficient data), populated, error. Both role branches render as tab
+ * content inside the Trainings shell layout, which owns the module header
+ * and TrainingsSubNav.
  */
 export default function TrainingsAnalyticsScreen() {
   const me = useSessionStore((state) => state.me);
@@ -103,9 +101,7 @@ function CoachAnalyticsScreen() {
   const maxEarnings = Math.max(1, ...months.map((month) => month.earnings));
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-      <AppBar variant="backTitle" title="Video Analytics" onPressBack={() => router.back()} />
-      <TrainingsSubNav role="coach" active="analytics" onChange={(tab) => navigateSubNav(tab)} />
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
 
       {state === 'loading' ? (
         <View style={{ padding: spacing.lg, gap: spacing.lg }}>
@@ -184,7 +180,7 @@ function CoachAnalyticsScreen() {
           ))}
         </ScrollView>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -266,9 +262,7 @@ function PlayerAnalyticsScreen() {
   const maxHours = Math.max(1, ...months.map((month) => month.hours));
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-      <AppBar variant="backTitle" title="Analytics" onPressBack={() => router.back()} />
-      <TrainingsSubNav role="player" active="analytics" onChange={navigatePlayerSubNav} />
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
 
       {state === 'loading' ? (
         <View style={{ padding: spacing.lg, gap: spacing.lg }}>
@@ -336,25 +330,6 @@ function PlayerAnalyticsScreen() {
           ))}
         </ScrollView>
       )}
-    </SafeAreaView>
+    </View>
   );
-}
-
-function navigateSubNav(tab: string) {
-  switch (tab) {
-    case 'stats':
-      router.push('/(tabs)/trainings');
-      return;
-    case 'trainees':
-      router.push('/(tabs)/trainings/trainees');
-      return;
-    case 'earnings':
-      router.push('/(tabs)/trainings/earnings');
-      return;
-    case 'chat':
-      router.push('/(tabs)/trainings/chat');
-      return;
-    default:
-      return;
-  }
 }

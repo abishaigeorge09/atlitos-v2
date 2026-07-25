@@ -123,7 +123,7 @@ export default function CoachTransferScreen() {
             <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
               {resultMessage}
             </Text>
-            <Button onPress={() => router.replace('/(tabs)/trainings/earnings')}>
+            <Button onPress={() => router.navigate('/trainings/earnings')}>
               <Text style={{ color: colors.inkOnAccent }}>Back to earnings</Text>
             </Button>
           </View>

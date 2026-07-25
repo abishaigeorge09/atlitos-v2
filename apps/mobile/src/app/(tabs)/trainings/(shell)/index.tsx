@@ -5,7 +5,6 @@ import { router } from 'expo-router';
 import { CalendarClock, Dumbbell, IndianRupee, Lock, Star, Users, TriangleAlert } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CoachVerificationStatus } from '@/components/organisms/CoachVerificationStatus';
 import { EmptyState } from '@/components/organisms/EmptyState';
@@ -21,7 +20,6 @@ import { SessionCard } from '@/components/ui/session-card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatTile } from '@/components/ui/stat-tile';
 import { Text } from '@/components/ui/text';
-import { TrainingsSubNav } from '@/components/ui/trainings-sub-nav';
 import { formatINR } from '@atlitos/theme';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
@@ -68,7 +66,9 @@ function bySoonest(a: Session, b: Session): number {
  * sessions, own pending requests (cancel lives on the coaching booking
  * detail, FR-26), the Learn milestones rail (FR-51), and a find a coach
  * entry into `/(tabs)/coaching`. States per role: loading (skeleton), guest
- * (locked preview), error (retry), populated.
+ * (locked preview), error (retry), populated. Renders as the Stats tab
+ * content inside the Trainings shell layout, which owns the module title
+ * and TrainingsSubNav; this screen renders no header of its own.
  */
 export default function TrainingsScreen() {
   const colors = useThemeColors();
@@ -227,20 +227,7 @@ export default function TrainingsScreen() {
   const hasAnySession = mySessions.length > 0;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-      {isVerifiedCoach || isPlayer ? (
-        <>
-          <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.lg }}>
-            <Text style={[textStyle('h1'), { color: colors.text }]}>Trainings</Text>
-          </View>
-          <TrainingsSubNav
-            role={isVerifiedCoach ? 'coach' : 'player'}
-            active="stats"
-            onChange={(tab) => navigateSubNav(tab)}
-          />
-        </>
-      ) : null}
-
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <ScrollView
         contentContainerStyle={{ flexGrow: 1, padding: spacing.lg, gap: spacing.lg }}
         refreshControl={
@@ -249,10 +236,6 @@ export default function TrainingsScreen() {
           ) : undefined
         }
       >
-        {!isVerifiedCoach && !isPlayer ? (
-          <Text style={[textStyle('h1'), { color: colors.text }]}>Trainings</Text>
-        ) : null}
-
         {showLoading ? (
           <View style={{ gap: spacing.sm }}>
             <Skeleton shape="tile" width="40%" height={24} />
@@ -444,31 +427,6 @@ export default function TrainingsScreen() {
       </ScrollView>
 
       <LoginGateModal visible={gateVisible} onClose={() => setGateVisible(false)} />
-    </SafeAreaView>
+    </View>
   );
-}
-
-function navigateSubNav(tab: string) {
-  switch (tab) {
-    case 'trainees':
-      router.push('/(tabs)/trainings/trainees');
-      return;
-    case 'earnings':
-      router.push('/(tabs)/trainings/earnings');
-      return;
-    case 'coaches':
-      router.push('/(tabs)/trainings/coaches');
-      return;
-    case 'payments':
-      router.push('/(tabs)/trainings/payments');
-      return;
-    case 'chat':
-      router.push('/(tabs)/trainings/chat');
-      return;
-    case 'analytics':
-      router.push('/(tabs)/trainings/analytics');
-      return;
-    default:
-      return;
-  }
 }

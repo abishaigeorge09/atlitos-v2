@@ -36,15 +36,18 @@ function IconButton({
   onPress,
   children,
   className,
+  accessibilityLabel,
 }: {
   onPress?: () => void;
   children: ReactNode;
   className?: string;
+  accessibilityLabel?: string;
 }) {
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
       className={cn('h-11 w-11 items-center justify-center rounded-pill active:bg-surface-muted', className)}
     >
       {children}
@@ -77,7 +80,7 @@ function AppBar({
     <View className={cn('h-14 flex-row items-center justify-between bg-bg px-lg', className)}>
       <View className="flex-row items-center gap-sm">
         {showBack ? (
-          <IconButton onPress={handleBack} className="-ml-2">
+          <IconButton onPress={handleBack} accessibilityLabel="Back" className="-ml-2">
             <ChevronLeft size={24} strokeWidth={1.75} color={colors.text} />
           </IconButton>
         ) : null}

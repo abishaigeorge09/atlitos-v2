@@ -1,32 +1,28 @@
-import { spacing } from '@atlitos/theme';
 import { router } from 'expo-router';
-import { useEffect } from 'react';
 import { View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Skeleton } from '@/components/ui/skeleton';
+import { ChatThreadList } from '@/components/organisms/chat/ChatThreadList';
 import { useThemeColors } from '@/theme/use-theme-colors';
 
 /**
- * Coach entry point for chat (PRD-02 3.8). The chat organism itself (thread
- * list + thread screen, Realtime, reconnect state) is Track E's build at
- * `/(tabs)/chat`, shared by both roles per that route's own header comment
- * ("the coach tab links here"). This screen only wires the coach side
- * navigation into it, so `TrainingsSubNav`'s Chat tab has somewhere to land
- * without this track building or duplicating chat UI.
+ * Trainings module Chat tab (PRD-01 FR-58 to FR-60, PRD-02 3.8). Embeds
+ * the shared ChatThreadList organism inline as tab content inside the
+ * Trainings shell, no redirect to the standalone /chat surface anymore, so
+ * switching to Chat swaps only the content below the fixed module header
+ * and sub nav. Tapping a thread pushes the conversation full screen above
+ * the module (trainings/chat-thread/[id] on the trainings Stack); backing
+ * out of it returns here with the shell intact.
  */
-export default function TrainingsChatRedirect() {
+export default function TrainingsChatTab() {
   const colors = useThemeColors();
 
-  useEffect(() => {
-    router.replace('/(tabs)/chat');
-  }, []);
-
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
-      <View style={{ flex: 1, padding: spacing.lg }}>
-        <Skeleton shape="card" height={120} />
-      </View>
-    </SafeAreaView>
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <ChatThreadList
+        onOpenThread={(threadId) =>
+          router.push({ pathname: '/(tabs)/trainings/chat-thread/[id]', params: { id: threadId } })
+        }
+      />
+    </View>
   );
 }

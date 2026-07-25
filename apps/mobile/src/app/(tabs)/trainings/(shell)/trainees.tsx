@@ -5,14 +5,11 @@ import { router } from 'expo-router';
 import { TriangleAlert, Users } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/ui/avatar';
-import { AppBar } from '@/components/ui/app-bar';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
-import { TrainingsSubNav } from '@/components/ui/trainings-sub-nav';
 import { supabase } from '@/lib/supabase';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
@@ -24,7 +21,8 @@ type ScreenState = 'loading' | 'empty' | 'populated' | 'error';
  * this coach, any status, deduplicated. Row: avatar, name, session count,
  * last session date, status chip (an upcoming accepted/rescheduled session
  * reads as an active relationship). States: loading, empty (no trainees
- * yet), populated, error.
+ * yet), populated, error. Renders as tab content inside the Trainings
+ * shell layout, which owns the module header and TrainingsSubNav.
  */
 export default function CoachTraineesScreen() {
   const colors = useThemeColors();
@@ -59,9 +57,7 @@ export default function CoachTraineesScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-      <AppBar variant="backTitle" title="Trainees" onPressBack={() => router.back()} />
-      <TrainingsSubNav role="coach" active="trainees" onChange={(tab) => navigateSubNav(tab)} />
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
 
       {state === 'loading' ? (
         <View style={{ padding: spacing.lg, gap: spacing.md }}>
@@ -146,25 +142,6 @@ export default function CoachTraineesScreen() {
           )}
         />
       )}
-    </SafeAreaView>
+    </View>
   );
-}
-
-function navigateSubNav(tab: string) {
-  switch (tab) {
-    case 'stats':
-      router.push('/(tabs)/trainings');
-      return;
-    case 'earnings':
-      router.push('/(tabs)/trainings/earnings');
-      return;
-    case 'chat':
-      router.push('/(tabs)/trainings/chat');
-      return;
-    case 'analytics':
-      router.push('/(tabs)/trainings/analytics');
-      return;
-    default:
-      return;
-  }
 }

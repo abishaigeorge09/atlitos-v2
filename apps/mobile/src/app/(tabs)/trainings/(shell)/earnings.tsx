@@ -5,16 +5,13 @@ import { router } from 'expo-router';
 import { TriangleAlert, Wallet } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/organisms/EmptyState';
 import { EarningsHeader } from '@/components/organisms/EarningsHeader';
-import { AppBar } from '@/components/ui/app-bar';
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
-import { TrainingsSubNav } from '@/components/ui/trainings-sub-nav';
 import { TransactionRow } from '@/components/molecules/TransactionRow';
 import { supabase } from '@/lib/supabase';
 import { textStyle } from '@/theme/text-style';
@@ -49,7 +46,10 @@ function groupByMonth(transactions: Transaction[]): { month: string; label: stri
  * money is sent (Payout Account Setup), "Transfer" opens the amount entry
  * flow (FR-27 gates it there, not here, on `payout_accounts.status`).
  * Transaction list grouped by month, filterable by kind. States: loading,
- * empty (no earnings yet), populated, error.
+ * empty (no earnings yet), populated, error. Renders as tab content
+ * inside the Trainings shell layout, which owns the module header and
+ * TrainingsSubNav; payout setup and transfer stay push screens above the
+ * module on the trainings Stack.
  */
 export default function CoachEarningsScreen() {
   const colors = useThemeColors();
@@ -95,9 +95,7 @@ export default function CoachEarningsScreen() {
   const groups = groupByMonth(transactions);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-      <AppBar variant="backTitle" title="Earnings" onPressBack={() => router.back()} />
-      <TrainingsSubNav role="coach" active="earnings" onChange={(tab) => navigateSubNav(tab)} />
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
 
       {state === 'loading' ? (
         <View style={{ padding: spacing.lg, gap: spacing.lg }}>
@@ -167,25 +165,6 @@ export default function CoachEarningsScreen() {
           )}
         </ScrollView>
       )}
-    </SafeAreaView>
+    </View>
   );
-}
-
-function navigateSubNav(tab: string) {
-  switch (tab) {
-    case 'stats':
-      router.push('/(tabs)/trainings');
-      return;
-    case 'trainees':
-      router.push('/(tabs)/trainings/trainees');
-      return;
-    case 'chat':
-      router.push('/(tabs)/trainings/chat');
-      return;
-    case 'analytics':
-      router.push('/(tabs)/trainings/analytics');
-      return;
-    default:
-      return;
-  }
 }

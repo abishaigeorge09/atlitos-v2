@@ -5,18 +5,14 @@ import { router } from 'expo-router';
 import { ReceiptIndianRupee, TriangleAlert, Wallet } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/organisms/EmptyState';
-import { AppBar } from '@/components/ui/app-bar';
 import { PriceText } from '@/components/ui/price-text';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatTile } from '@/components/ui/stat-tile';
 import { StatusPill } from '@/components/ui/status-pill';
 import { Text } from '@/components/ui/text';
-import { TrainingsSubNav } from '@/components/ui/trainings-sub-nav';
 import { SESSION_STATUS_PILL } from '@/lib/session-display';
-import { navigatePlayerSubNav } from '@/lib/trainings-player-nav';
 import { supabase } from '@/lib/supabase';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
@@ -32,7 +28,9 @@ type ScreenState = 'loading' | 'populated' | 'error';
  * or status (CLAUDE.md financial invariant). Cancelled and declined rows
  * stay visible with their status pill, since their refunds are part of the
  * money story; the session detail carries the authoritative refund state.
- * Amounts render mono via PriceText/StatTile.
+ * Amounts render mono via PriceText/StatTile. Renders as tab content
+ * inside the Trainings shell layout, which owns the module header and
+ * TrainingsSubNav.
  */
 export default function PlayerPaymentsScreen() {
   const colors = useThemeColors();
@@ -82,9 +80,7 @@ export default function PlayerPaymentsScreen() {
   }, [sessions]);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-      <AppBar variant="backTitle" title="Payments" onPressBack={() => router.back()} />
-      <TrainingsSubNav role="player" active="payments" onChange={navigatePlayerSubNav} />
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
 
       {state === 'loading' ? (
         <View style={{ padding: spacing.lg, gap: spacing.md }}>
@@ -133,7 +129,9 @@ export default function PlayerPaymentsScreen() {
               accessibilityRole="button"
               accessibilityLabel={`Payment to ${session.coachName ?? 'Coach'} on ${session.date}`}
               onPress={() =>
-                router.push({ pathname: '/(tabs)/coaching/booking/[id]', params: { id: session.id } })
+                // trainings/booking, not coaching/booking: the detail pushes
+                // above the module so back returns to this Payments tab.
+                router.push({ pathname: '/(tabs)/trainings/booking/[id]', params: { id: session.id } })
               }
               style={{
                 borderRadius: radii.xl,
@@ -158,6 +156,6 @@ export default function PlayerPaymentsScreen() {
           ))}
         </ScrollView>
       )}
-    </SafeAreaView>
+    </View>
   );
 }

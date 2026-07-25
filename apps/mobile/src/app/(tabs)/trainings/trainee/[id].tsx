@@ -98,7 +98,7 @@ export default function CoachTraineeDetailScreen() {
                   {sessions.length} {sessions.length === 1 ? 'session' : 'sessions'} together
                 </Text>
               </View>
-              <Button variant="secondary" size="sm" onPress={() => router.push('/(tabs)/trainings/chat')}>
+              <Button variant="secondary" size="sm" onPress={() => router.navigate('/trainings/chat')}>
                 <MessageCircle size={16} strokeWidth={1.75} color={colors.text} />
                 <Text style={{ color: colors.text }}>Message</Text>
               </Button>
