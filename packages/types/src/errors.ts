@@ -97,6 +97,18 @@ export type ApiErrorCode =
   // Track C (AT-50) for the coach payout setup and transfer screens
   | 'ROUTE_UNAVAILABLE'
   | 'PAYMENT_NOT_CAPTURED'
+  // groups (0079_group_rpcs.sql, join-group/renew-group-membership edge
+  // functions, _shared/app-error.ts): this file's vocabulary was not
+  // extended when that migration landed, backfilled here by the athlete
+  // side groups Track D screens that need to render these. GROUP_FULL /
+  // ALREADY_MEMBER fire from the capacity guarded insert inside join-group
+  // BEFORE Razorpay is ever called; GROUP_INACTIVE guards a coach
+  // deactivated group; NOT_A_MEMBER guards mark_attendance against a
+  // non-member player id.
+  | 'GROUP_FULL'
+  | 'ALREADY_MEMBER'
+  | 'GROUP_INACTIVE'
+  | 'NOT_A_MEMBER'
   // generic
   | 'INTERNAL';
 

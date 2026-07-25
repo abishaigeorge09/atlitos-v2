@@ -1,4 +1,4 @@
-import { useCoaching } from '@atlitos/api';
+import { useCoaching, useGroups } from '@atlitos/api';
 import type { ApiError, Session } from '@atlitos/types';
 import { formatINR, radii, spacing } from '@atlitos/theme';
 import { router } from 'expo-router';
@@ -14,6 +14,7 @@ import { StatTile } from '@/components/ui/stat-tile';
 import { StatusPill } from '@/components/ui/status-pill';
 import { Text } from '@/components/ui/text';
 import { AppBar } from '@/components/ui/app-bar';
+import { fetchMyGroupSessions, type MyGroupSessionEntry } from '@/lib/group-sessions';
 import { SESSION_STATUS_PILL } from '@/lib/session-display';
 import { supabase } from '@/lib/supabase';
 import { textStyle } from '@/theme/text-style';
@@ -21,11 +22,19 @@ import { useThemeColors } from '@/theme/use-theme-colors';
 
 type ScreenState = 'loading' | 'empty' | 'populated' | 'error';
 
+type BookingRow =
+  | { kind: 'session'; date: string; from: string; session: Session }
+  | { kind: 'group'; date: string; from: string; entry: MyGroupSessionEntry };
+
 const LIVE_STATUSES: Session['status'][] = ['requested', 'accepted', 'completed', 'rescheduled', 'rated'];
 
 function timeToMinutes(time: string): number {
   const [h, m] = time.split(':').map(Number);
   return h * 60 + m;
+}
+
+function byMostRecent(a: BookingRow, b: BookingRow): number {
+  return a.date === b.date ? b.from.localeCompare(a.from) : b.date.localeCompare(a.date);
 }
 
 /**
@@ -50,9 +59,11 @@ function timeToMinutes(time: string): number {
 export default function CoachingBookingsListScreen() {
   const colors = useThemeColors();
   const coaching = useCoaching(supabase);
+  const groups = useGroups(supabase);
 
   const [state, setState] = useState<ScreenState>('loading');
   const [items, setItems] = useState<Session[]>([]);
+  const [groupItems, setGroupItems] = useState<MyGroupSessionEntry[]>([]);
   const [error, setError] = useState<ApiError | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -62,7 +73,17 @@ export default function CoachingBookingsListScreen() {
     try {
       const result = await coaching.listMySessions();
       setItems(result);
-      setState(result.length === 0 ? 'empty' : 'populated');
+      // Group sessions degrade gracefully: a failure here still shows the
+      // 1:1 session history, it just misses the Group labeled rows.
+      let groupResult: MyGroupSessionEntry[] = [];
+      try {
+        const memberships = await groups.myMemberships();
+        groupResult = await fetchMyGroupSessions(supabase, memberships);
+      } catch {
+        groupResult = [];
+      }
+      setGroupItems(groupResult);
+      setState(result.length === 0 && groupResult.length === 0 ? 'empty' : 'populated');
     } catch (err) {
       setError(err as ApiError);
       setState('error');
@@ -100,6 +121,22 @@ export default function CoachingBookingsListScreen() {
       totalPayments,
     };
   }, [items]);
+
+  // Merged, most recent first, for the FlatList; the stat tiles above stay
+  // 1:1 only (documented judgment call in this file's header comment: group
+  // rows carry price 0/total 0, the membership fare moves on the
+  // group_memberships row instead, see 0076), the list itself is where
+  // "group sessions appear ... labeled Group" per the ticket.
+  const rows: BookingRow[] = useMemo(
+    () =>
+      [
+        ...items.map((session): BookingRow => ({ kind: 'session', date: session.date, from: session.slot.from, session })),
+        ...groupItems.map(
+          (entry): BookingRow => ({ kind: 'group', date: entry.session.date, from: entry.session.slotStart, entry }),
+        ),
+      ].sort(byMostRecent),
+    [items, groupItems],
+  );
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
@@ -148,8 +185,8 @@ export default function CoachingBookingsListScreen() {
         </View>
       ) : (
         <FlatList
-          data={items}
-          keyExtractor={(item) => item.id}
+          data={rows}
+          keyExtractor={(row) => (row.kind === 'session' ? row.session.id : row.entry.session.id)}
           contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} />}
           ListHeaderComponent={
@@ -164,33 +201,59 @@ export default function CoachingBookingsListScreen() {
               </View>
             </View>
           }
-          renderItem={({ item }) => (
-            <Pressable
-              onPress={() => router.push({ pathname: '/(tabs)/coaching/booking/[id]', params: { id: item.id } })}
-              style={{
-                borderRadius: radii.xl,
-                borderWidth: 1,
-                borderColor: colors.border,
-                backgroundColor: colors.card,
-                padding: spacing.lg,
-                gap: spacing.xs,
-              }}
-            >
-              <View className="flex-row items-center justify-between">
-                <Text style={[textStyle('h3'), { color: colors.text }]}>{item.sessionTypeName ?? 'Session'}</Text>
-                <StatusPill status={SESSION_STATUS_PILL[item.status]} />
+          renderItem={({ item: row }) =>
+            row.kind === 'session' ? (
+              <Pressable
+                onPress={() =>
+                  router.push({ pathname: '/(tabs)/coaching/booking/[id]', params: { id: row.session.id } })
+                }
+                style={{
+                  borderRadius: radii.xl,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: colors.card,
+                  padding: spacing.lg,
+                  gap: spacing.xs,
+                }}
+              >
+                <View className="flex-row items-center justify-between">
+                  <Text style={[textStyle('h3'), { color: colors.text }]}>{row.session.sessionTypeName ?? 'Session'}</Text>
+                  <StatusPill status={SESSION_STATUS_PILL[row.session.status]} />
+                </View>
+                {row.session.coachName ? (
+                  <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>with {row.session.coachName}</Text>
+                ) : null}
+                <View className="flex-row items-center justify-between pt-xs">
+                  <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
+                    {row.session.date}, {row.session.slot.from} to {row.session.slot.to}
+                  </Text>
+                  <PriceText amount={row.session.total} size="sm" />
+                </View>
+              </Pressable>
+            ) : (
+              <View
+                style={{
+                  borderRadius: radii.xl,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: colors.card,
+                  padding: spacing.lg,
+                  gap: spacing.xs,
+                }}
+              >
+                <View className="flex-row items-center justify-between">
+                  <Text style={[textStyle('h3'), { color: colors.text }]}>{row.entry.groupName}</Text>
+                  <StatusPill status={SESSION_STATUS_PILL[row.entry.session.status]} />
+                </View>
+                <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>Group</Text>
+                <View className="flex-row items-center justify-between pt-xs">
+                  <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
+                    {row.entry.session.date}, {row.entry.session.slotStart} to {row.entry.session.slotEnd}
+                  </Text>
+                </View>
               </View>
-              {item.coachName ? (
-                <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>with {item.coachName}</Text>
-              ) : null}
-              <View className="flex-row items-center justify-between pt-xs">
-                <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
-                  {item.date}, {item.slot.from} to {item.slot.to}
-                </Text>
-                <PriceText amount={item.total} size="sm" />
-              </View>
-            </Pressable>
-          )}
+            )
+          }
         />
       )}
     </SafeAreaView>
