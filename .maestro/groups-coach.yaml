@@ -1,0 +1,143 @@
+# Trainings Groups, coach side (PRD-02, groups phase). Logs in as the
+# seeded coach1 account, walks Trainees -> Group filter chips -> the
+# seeded "Cric Squad" group card -> group detail (Overview member list,
+# Attendance rate tile, attendance policy text) -> Sessions tab -> the
+# seeded group session -> Start session -> mark attendance -> End session
+# -> Completed.
+#
+# MUTATES SEEDED STATE: the seeded group session starts as `accepted`
+# with all participants unmarked. Running this flow moves it to
+# `completed` with attendance rows set. The flow itself cannot undo this
+# (no client write path exists for a money-adjacent status transition,
+# by design, CLAUDE.md financial invariant), so the runner resets the
+# seed row directly in Postgres after the flow passes:
+#
+#   update sessions set status = 'accepted' where id = '967f197c-b4ea-48f8-9596-666f760b6117';
+#   update session_participants set attendance_status = null, marked_at = null
+#     where session_id = '967f197c-b4ea-48f8-9596-666f760b6117';
+#
+# verified after each run with a SELECT before the flow is considered
+# re-runnable.
+appId: com.atlitos.app
+---
+# Fresh app state every run: a leftover logged-in session from a prior
+# flow makes the atlitos://login deep link a no-op (it just lands on
+# Home already authenticated), which is not what this flow is proving.
+- launchApp:
+    clearState: true
+- runFlow:
+    when:
+      visible: "Save Password.*"
+    commands:
+      - tapOn: "Not Now"
+- openLink: atlitos://login
+- extendedWaitUntil:
+    visible: "Email or phone.*"
+    timeout: 10000
+- tapOn: "Email or phone input"
+- inputText: "coach1@atlitos.dev"
+- tapOn: "Password input"
+- inputText: "AtlitosDemo!2026"
+- tapOn:
+    text: "Log in"
+    index: 1
+- extendedWaitUntil:
+    visible: "Hyderabad|Save Password.*"
+    timeout: 20000
+- runFlow:
+    when:
+      visible: "Save Password.*"
+    commands:
+      - tapOn: "Not Now"
+- extendedWaitUntil:
+    visible: "Hyderabad"
+    timeout: 10000
+
+- openLink: atlitos://trainings
+- extendedWaitUntil:
+    visible: "Players coached"
+    timeout: 15000
+- assertVisible: "Trainings"
+- assertVisible: "Stats"
+- assertVisible: "Trainees"
+
+# Trainees tab: filter chips, and the seeded Cric Squad group card. The
+# card is one grouped accessibility element (name + caption + pill all
+# collapse into a single accessibilityText), so match it as a substring
+# regex rather than an exact string.
+- tapOn: "Trainees"
+- extendedWaitUntil:
+    visible: ".*Cric Squad.*"
+    timeout: 15000
+- assertVisible: "All"
+- assertVisible: "One on one"
+- assertVisible: "Group"
+- assertVisible: "Online"
+- assertVisible: ".*Cric Squad.*"
+- takeScreenshot: /tmp/groups-verify/coach-trainees
+
+# Open the group.
+- tapOn: ".*Cric Squad.*"
+- extendedWaitUntil:
+    visible: "Overview"
+    timeout: 10000
+- assertVisible: "Sessions"
+- assertVisible: "Team members"
+- assertVisible: "Attendance rate"
+- assertVisible: "Total sessions"
+- assertVisible: "Attendance policy"
+- assertVisible: "Be on the ground 10 minutes before the session starts.*"
+- takeScreenshot: /tmp/groups-verify/coach-group-overview
+
+# Sessions tab: the seeded accepted session.
+- tapOn: "Sessions"
+- extendedWaitUntil:
+    visible: ".*Batting drills and fielding.*"
+    timeout: 10000
+- assertVisible: ".*Accepted.*"
+- takeScreenshot: /tmp/groups-verify/coach-group-sessions
+
+# Open the session, start it, mark attendance, end it.
+- tapOn: ".*Batting drills and fielding.*"
+- extendedWaitUntil:
+    visible: "Start session"
+    timeout: 10000
+- assertVisible: ".*Group session.*"
+- takeScreenshot: /tmp/groups-verify/coach-session-pre-start
+- tapOn: "Start session"
+- extendedWaitUntil:
+    visible: "Attendance"
+    timeout: 10000
+- assertVisible: "Mark attendance"
+- takeScreenshot: /tmp/groups-verify/coach-session-attendance-open
+
+# Toggle presence on all 3 seeded member rows. "Present" is a repeated
+# label (one pill per row), so each row's pill is addressed by index;
+# selecting one does not remove its label from the match set, it only
+# flips accessibilityState.selected, so the indices stay stable across
+# taps.
+- tapOn:
+    text: "Present"
+    index: 0
+- tapOn:
+    text: "Present"
+    index: 1
+- tapOn:
+    text: "Present"
+    index: 2
+- takeScreenshot: /tmp/groups-verify/coach-session-attendance-toggled
+
+- tapOn: "Mark attendance"
+- extendedWaitUntil:
+    visible: ".*of 3 present.*"
+    timeout: 10000
+- assertVisible: ".*3 of 3 present.*"
+- takeScreenshot: /tmp/groups-verify/coach-session-attendance-marked
+
+- tapOn: "End session"
+- extendedWaitUntil:
+    visible: ".*Completed.*"
+    timeout: 10000
+- assertNotVisible: "Mark attendance"
+- assertNotVisible: "End session"
+- takeScreenshot: /tmp/groups-verify/coach-session-completed

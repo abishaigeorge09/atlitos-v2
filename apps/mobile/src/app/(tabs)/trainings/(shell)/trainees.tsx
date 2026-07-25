@@ -178,6 +178,8 @@ export default function CoachTraineesScreen() {
                   onPress={() =>
                     router.push({ pathname: '/(tabs)/trainings/group/[id]', params: { id: item.entry.group.id } })
                   }
+                  accessibilityRole="button"
+                  accessibilityLabel={`${item.entry.group.name}, group, open group profile`}
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',

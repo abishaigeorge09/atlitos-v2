@@ -1,0 +1,89 @@
+# Trainings Groups, guest guard (PRD-01 FR-2/FR-3, groups phase). A
+# guest can browse coach1's profile and see the Cric Squad group card,
+# but tapping "Join, month 1" must raise the login gate rather than ever
+# reaching the group join/payment screen: guests cannot pay, and the
+# money path (Razorpay order creation, PRICE_MISMATCH revalidation) is
+# already probe-proven server side, not something Maestro should touch.
+#
+# Writes nothing: guest browse only, gate opens and is dismissed via
+# "Close", never Login/Register.
+appId: com.atlitos.app
+---
+# TESTABILITY FINDING: `launchApp: clearState: true` clears the app's own
+# storage but NOT the iOS Keychain, and the Supabase session lives in the
+# Keychain (expo-secure-store). Run this flow right after another flow in
+# the same suite invocation that logged in as coach1 or player (every
+# other groups-*.yaml flow does), and the app silently rehydrates that
+# session on next launch instead of landing on "Continue as guest": this
+# flow is then NOT actually a guest, `isGuest` is false, and tapping
+# "Join, month 1" reaches the real group join screen instead of the login
+# gate (observed once as "Couldn't reserve this membership: Invalid or
+# expired session" from the stale token). Same pattern profile-gate.yaml
+# and clutch-like-gate.yaml already guard against: scroll for a possible
+# "Log out" control and tap it before trusting the guest landing state.
+- launchApp:
+    clearState: true
+- runFlow:
+    when:
+      visible: "Continue as guest"
+    commands:
+      - tapOn: "Continue as guest"
+- scrollUntilVisible:
+    element:
+      text: "Log out"
+    direction: DOWN
+    timeout: 25000
+    speed: 60
+    optional: true
+- runFlow:
+    when:
+      visible: "Log out"
+    commands:
+      - tapOn: "Log out"
+      - waitForAnimationToEnd:
+          timeout: 3000
+- scrollUntilVisible:
+    element:
+      text: "What are you looking for..."
+    direction: UP
+    timeout: 10000
+    optional: true
+- extendedWaitUntil:
+    visible: "ATLITOS"
+    timeout: 15000
+
+- openLink: atlitos://coaching
+- extendedWaitUntil:
+    visible: "Coaches"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 4000
+- scrollUntilVisible:
+    element:
+      text: ".*Demo Coach One.*"
+    direction: DOWN
+    timeout: 25000
+- tapOn:
+    text: ".*Demo Coach One.*"
+    index: 0
+- extendedWaitUntil:
+    visible: "Session type"
+    timeout: 10000
+- scrollUntilVisible:
+    element:
+      text: "Groups"
+    direction: DOWN
+    timeout: 15000
+- assertVisible: "Cric Squad"
+- assertVisible: "Join, month 1"
+- takeScreenshot: /tmp/groups-verify/guest-coach-groups-section
+
+- tapOn: "Join, month 1"
+- extendedWaitUntil:
+    visible: "Want to hit the spotlight?"
+    timeout: 8000
+- assertVisible: "Login"
+- assertVisible: "Register"
+- takeScreenshot: /tmp/groups-verify/guest-join-gate
+- tapOn: "Close"
+- assertNotVisible: "Want to hit the spotlight?"

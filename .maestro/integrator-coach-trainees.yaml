@@ -32,6 +32,6 @@ appId: com.atlitos.app
     timeout: 15000
 - tapOn: "Trainees"
 - extendedWaitUntil:
-    visible: "Cric Squad"
+    visible: ".*Cric Squad.*"
     timeout: 15000
 - takeScreenshot: /tmp/integrator-coach-trainees

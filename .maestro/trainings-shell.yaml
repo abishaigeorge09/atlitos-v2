@@ -64,9 +64,11 @@ appId: com.atlitos.app
             - tapOn: "Trainings"
             - waitForAnimationToEnd:
                 timeout: 3000
-- extendedWaitUntil:
-    visible: "Your trainings at a glance"
+- scrollUntilVisible:
+    element: "Your trainings at a glance"
+    direction: UP
     timeout: 15000
+    optional: false
 - assertVisible: "Trainings"
 - assertVisible: "Stats"
 - assertVisible: "Coaches"
@@ -132,11 +134,18 @@ appId: com.atlitos.app
 - takeScreenshot: /tmp/trainings-shell/player-analytics
 
 # Drill in: upcoming session card on Stats pushes Session detail above the
-# module; back returns to the Stats tab.
+# module; back returns to the Stats tab. The groups phase added a "My
+# groups" card above this session card, so it is no longer guaranteed to
+# be on screen without a scroll.
 - tapOn: "Stats"
 - extendedWaitUntil:
     visible: "Your trainings at a glance"
     timeout: 10000
+- scrollUntilVisible:
+    element:
+      text: "Demo Coach One, 2026-07-30.*"
+    direction: DOWN
+    timeout: 15000
 - tapOn:
     text: "Demo Coach One, 2026-07-30.*"
 - extendedWaitUntil:

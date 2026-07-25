@@ -1,0 +1,130 @@
+# Trainings Groups, athlete side (PRD-01, groups phase). Logs in as the
+# seeded player@ account (an active Cric Squad member): Stats tab shows
+# the My groups card, Chat tab shows the group thread row and sender
+# names on group message bubbles plus a fresh message send, and the
+# Coaches browse -> coach1 detail Groups section shows Cric Squad with
+# spots left and the monthly fee in mono.
+#
+# Writes one chat message ("Test from athlete flow") to the seeded Cric
+# Squad thread; that is additive content, not a state transition, so
+# there is nothing to reset afterward.
+appId: com.atlitos.app
+---
+# Fresh app state every run, see groups-coach.yaml for why.
+- launchApp:
+    clearState: true
+- runFlow:
+    when:
+      visible: "Save Password.*"
+    commands:
+      - tapOn: "Not Now"
+- openLink: atlitos://login
+- extendedWaitUntil:
+    visible: "Email or phone.*"
+    timeout: 10000
+- tapOn: "Email or phone input"
+- inputText: "player@atlitos.dev"
+- tapOn: "Password input"
+- inputText: "AtlitosDemo!2026"
+- tapOn:
+    text: "Log in"
+    index: 1
+- extendedWaitUntil:
+    visible: "Hyderabad|Save Password.*"
+    timeout: 20000
+- runFlow:
+    when:
+      visible: "Save Password.*"
+    commands:
+      - tapOn: "Not Now"
+- extendedWaitUntil:
+    visible: "Hyderabad"
+    timeout: 10000
+
+- openLink: atlitos://trainings
+- extendedWaitUntil:
+    visible: "Your trainings at a glance"
+    timeout: 15000
+- assertVisible: "Trainings"
+- assertVisible: "Stats"
+
+# Stats tab: My groups card, Cric Squad active until its seeded
+# period_end. Other seeded/probe groups (from unrelated test data) sit
+# above it in the list, so scroll to the Cric Squad row itself, not just
+# the "My groups" heading, or its date/fee line stays clipped below the
+# fold.
+- scrollUntilVisible:
+    element:
+      text: "My groups"
+    direction: DOWN
+    timeout: 10000
+- scrollUntilVisible:
+    element:
+      text: "Cric Squad"
+    direction: DOWN
+    timeout: 10000
+- assertVisible: "Cric Squad"
+- assertVisible: "Active until 25 Sep 2026"
+- takeScreenshot: /tmp/groups-verify/athlete-stats-my-groups
+
+# Chat tab: the group thread row (name + member count differentiator).
+# The row is one grouped accessibility element (name + timestamp +
+# preview + member count collapse to a single accessibilityText), so
+# match as a substring regex. Member count is 4 (coach1 plus the 3
+# active players), not the 3 active player rows shown on the group
+# roster.
+- tapOn: "Chat"
+- extendedWaitUntil:
+    visible: ".*Cric Squad.*"
+    timeout: 10000
+- assertVisible: ".*4 members.*"
+- takeScreenshot: /tmp/groups-verify/athlete-chat-thread-row
+
+# Open the group thread: sender names above bubbles, then send a message.
+- tapOn: ".*Cric Squad.*"
+- extendedWaitUntil:
+    visible: "Send message"
+    timeout: 10000
+- assertVisible: ".*4 members.*"
+- takeScreenshot: /tmp/groups-verify/athlete-chat-thread-open
+- tapOn: ".*Message.*"
+- inputText: "Test from athlete flow"
+- tapOn: "Send message"
+- extendedWaitUntil:
+    visible: "Test from athlete flow"
+    timeout: 10000
+- assertVisible: "Test from athlete flow"
+- takeScreenshot: /tmp/groups-verify/athlete-chat-message-sent
+- tapOn: "Back"
+
+# Coaches tab: browse to coach1's detail, Groups section.
+- tapOn: "Coaches"
+- extendedWaitUntil:
+    visible: "My coaches"
+    timeout: 10000
+- scrollUntilVisible:
+    element:
+      text: "Browse coaches"
+    direction: DOWN
+- waitForAnimationToEnd:
+    timeout: 4000
+- scrollUntilVisible:
+    element:
+      text: ".*Demo Coach One.*"
+    direction: DOWN
+    timeout: 25000
+- tapOn:
+    text: ".*Demo Coach One.*"
+    index: 0
+- extendedWaitUntil:
+    visible: "Session type"
+    timeout: 10000
+- scrollUntilVisible:
+    element:
+      text: "Groups"
+    direction: DOWN
+    timeout: 15000
+- assertVisible: ".*Cric Squad.*"
+- assertVisible: ".*of 8 spots left.*"
+- assertVisible: ".*2,000/mo.*"
+- takeScreenshot: /tmp/groups-verify/athlete-coach-groups-section
