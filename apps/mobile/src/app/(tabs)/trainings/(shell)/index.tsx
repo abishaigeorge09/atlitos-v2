@@ -91,8 +91,10 @@ export default function TrainingsScreen() {
   const [stats, setStats] = useState<{
     playersCoached: number;
     avgRating: number;
+    totalSessions: number;
     sessionsThisMonth: number;
     earningsThisMonth: number;
+    lifetimeEarnings: number;
   } | null>(null);
   const [requests, setRequests] = useState<Session[]>([]);
   const [upcoming, setUpcoming] = useState<Session[]>([]);
@@ -115,21 +117,27 @@ export default function TrainingsScreen() {
       if (!options?.silent) setDashState('loading');
       setDashError(null);
       try {
-        const [statsResult, requestsResult, upcomingResult] = await Promise.all([
+        // The Learn read only feeds the coach milestones rail (Figma node
+        // 1047:13282 shows it on the coach dashboard too), so its failure
+        // degrades that rail to its empty state instead of erroring the
+        // whole dashboard, mirroring the athlete load below.
+        const [statsResult, requestsResult, upcomingResult, learnResult] = await Promise.all([
           coachSessions.getStats(),
           coachSessions.listRequests(),
           coachSessions.listUpcoming(),
+          learn.getLearnHome().catch(() => null),
         ]);
         setStats(statsResult);
         setRequests(requestsResult);
         setUpcoming(upcomingResult);
+        setLearnHome(learnResult);
         setDashState('populated');
       } catch (err) {
         setDashError(err as ApiError);
         setDashState('error');
       }
     },
-    [],
+    [learn],
   );
 
   useEffect(() => {
@@ -295,7 +303,11 @@ export default function TrainingsScreen() {
                     <StatTile label="Avg rating" value={stats.avgRating.toFixed(1)} icon={Star} />
                   </View>
                   <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                    <StatTile label="Total sessions" value={stats.totalSessions} icon={Dumbbell} />
                     <StatTile label="Sessions this month" value={stats.sessionsThisMonth} icon={CalendarClock} />
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                    <StatTile label="Total earnings" value={formatINR(stats.lifetimeEarnings)} icon={IndianRupee} />
                     <StatTile label="Earnings this month" value={formatINR(stats.earningsThisMonth)} icon={IndianRupee} />
                   </View>
                 </View>
@@ -307,9 +319,14 @@ export default function TrainingsScreen() {
               <View style={{ gap: spacing.sm }}>
                 <View className="flex-row items-center justify-between">
                   <Text style={[textStyle('h3'), { color: colors.text }]}>Upcoming sessions</Text>
-                  <Button variant="text" size="sm" onPress={() => router.push('/(tabs)/trainings/availability')}>
-                    <Text style={{ color: colors.accent }}>Availability</Text>
-                  </Button>
+                  <View className="flex-row items-center">
+                    <Button variant="text" size="sm" onPress={() => router.push('/(tabs)/trainings/availability')}>
+                      <Text style={{ color: colors.accent }}>Availability</Text>
+                    </Button>
+                    <Button variant="text" size="sm" onPress={() => router.push('/(tabs)/trainings/upcoming')}>
+                      <Text style={{ color: colors.accent }}>View all</Text>
+                    </Button>
+                  </View>
                 </View>
                 {upcoming.length === 0 ? (
                   <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>No upcoming sessions</Text>
@@ -367,6 +384,8 @@ export default function TrainingsScreen() {
                   ))
                 )}
               </View>
+
+              <MilestonesRail milestones={learnHome ? learnHome.milestones : null} />
             </View>
           )
         ) : playerState === 'loading' ? (

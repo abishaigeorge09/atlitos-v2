@@ -1,4 +1,4 @@
-import { useCoachSessions } from '@atlitos/api';
+import { isOnlineSessionTypeName, useCoachSessions } from '@atlitos/api';
 import type { ApiError, Session } from '@atlitos/types';
 import { radii, spacing } from '@atlitos/theme';
 import { router } from 'expo-router';
@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { FlatList, RefreshControl, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { SessionFilterChips, type SessionFilterKey } from '@/components/organisms/trainings/SessionFilterChips';
 import { AppBar } from '@/components/ui/app-bar';
 import { Button } from '@/components/ui/button';
 import { SessionCard } from '@/components/ui/session-card';
@@ -19,11 +20,16 @@ import { useThemeColors } from '@/theme/use-theme-colors';
 type ScreenState = 'loading' | 'empty' | 'populated' | 'error';
 
 /**
- * AT-46, PRD-02 3.4. Dedicated Requests list, reached from the Stats
- * dashboard's "View all" link when there are more requests than the preview
- * count. Same Accept/Decline pair as the dashboard preview. States:
- * loading, empty (no pending requests), populated, error (action failed,
- * retry surfaces inline per request, matching the dashboard's pattern).
+ * AT-46, PRD-02 3.4, extended to the Figma Session Requests screen (node
+ * 1047:14952): the shared All / 1 on 1 / Group / Online filter chips over
+ * the pending list. Only 1:1 sessions can be in `requested` (group
+ * sessions are coach scheduled and insert `accepted`; joining a group is
+ * a payment, not a request, under the ratified fares model), so the Group
+ * filter honestly renders its explanatory empty text instead of inventing
+ * request rows. Same Accept/Decline pair as the dashboard preview.
+ * States: loading, empty (no pending requests), populated (with per
+ * filter empty text), error (action failed, retry surfaces inline per
+ * request, matching the dashboard's pattern).
  */
 export default function CoachRequestsScreen() {
   const colors = useThemeColors();
@@ -31,6 +37,7 @@ export default function CoachRequestsScreen() {
 
   const [state, setState] = useState<ScreenState>('loading');
   const [items, setItems] = useState<Session[]>([]);
+  const [filter, setFilter] = useState<SessionFilterKey>('all');
   const [error, setError] = useState<ApiError | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [actioningId, setActioningId] = useState<string | null>(null);
@@ -124,11 +131,29 @@ export default function CoachRequestsScreen() {
           <Text style={[textStyle('h3'), { color: colors.text, textAlign: 'center' }]}>No pending requests</Text>
         </View>
       ) : (
+        <>
+        <SessionFilterChips active={filter} onChange={setFilter} />
         <FlatList
-          data={items}
+          data={items.filter((item) => {
+            if (filter === 'one_on_one') return !isOnlineSessionTypeName(item.sessionTypeName);
+            if (filter === 'online') return isOnlineSessionTypeName(item.sessionTypeName);
+            if (filter === 'group') return false;
+            return true;
+          })}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}
+          contentContainerStyle={{ padding: spacing.lg, gap: spacing.md, flexGrow: 1 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} />}
+          ListEmptyComponent={
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing.lg }}>
+              <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
+                {filter === 'group'
+                  ? 'Group sessions have no requests. Athletes join a group the moment their payment goes through.'
+                  : filter === 'online'
+                    ? 'No pending online requests.'
+                    : 'No pending requests match this filter.'}
+              </Text>
+            </View>
+          }
           renderItem={({ item }) => (
             <View style={{ gap: spacing.xs }}>
               <SessionCard
@@ -153,6 +178,7 @@ export default function CoachRequestsScreen() {
             </View>
           )}
         />
+        </>
       )}
     </SafeAreaView>
   );

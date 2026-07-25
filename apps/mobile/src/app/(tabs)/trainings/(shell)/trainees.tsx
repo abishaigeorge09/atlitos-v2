@@ -1,4 +1,10 @@
-import { useCoachTrainees, type TraineeSummary } from '@atlitos/api';
+import {
+  useCoachTrainees,
+  useGroups,
+  type GroupSession,
+  type TraineeSummary,
+  type TrainingGroup,
+} from '@atlitos/api';
 import type { ApiError } from '@atlitos/types';
 import { radii, spacing } from '@atlitos/theme';
 import { router } from 'expo-router';
@@ -6,6 +12,7 @@ import { TriangleAlert, Users } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, View } from 'react-native';
 
+import { SessionFilterChips, type SessionFilterKey } from '@/components/organisms/trainings/SessionFilterChips';
 import { Avatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -16,20 +23,41 @@ import { useThemeColors } from '@/theme/use-theme-colors';
 
 type ScreenState = 'loading' | 'empty' | 'populated' | 'error';
 
+interface GroupListEntry {
+  group: TrainingGroup;
+  totalSessions: number;
+  nextSession: GroupSession | null;
+}
+
+type RosterItem =
+  | { kind: 'group'; key: string; entry: GroupListEntry }
+  | { kind: 'trainee'; key: string; trainee: TraineeSummary };
+
+function todayISO(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
 /**
- * AT-48, PRD-02 3.5, FR-20. Every athlete with at least one session against
- * this coach, any status, deduplicated. Row: avatar, name, session count,
- * last session date, status chip (an upcoming accepted/rescheduled session
- * reads as an active relationship). States: loading, empty (no trainees
- * yet), populated, error. Renders as tab content inside the Trainings
- * shell layout, which owns the module header and TrainingsSubNav.
+ * AT-48, PRD-02 3.5, FR-20, extended to the Figma My Trainees screen
+ * (node 1047:13612): filter chips All / 1 on 1 / Group / Online, group
+ * cards (name, member count, total sessions, next session) interleaved
+ * with the 1:1 trainee cards. Groups come from `useGroups.listMyGroups`
+ * (explicitly coach scoped, RLS is not scoping) with each group's
+ * sessions read for the two card figures; trainees keep the FR-20 read,
+ * now carrying online/in person flags for the chips. States: loading,
+ * empty, populated (with per filter empty text), error. Renders as tab
+ * content inside the Trainings shell layout.
  */
 export default function CoachTraineesScreen() {
   const colors = useThemeColors();
   const trainees = useCoachTrainees(supabase);
+  const groups = useGroups(supabase);
 
   const [state, setState] = useState<ScreenState>('loading');
-  const [items, setItems] = useState<TraineeSummary[]>([]);
+  const [traineeItems, setTraineeItems] = useState<TraineeSummary[]>([]);
+  const [groupItems, setGroupItems] = useState<GroupListEntry[]>([]);
+  const [filter, setFilter] = useState<SessionFilterKey>('all');
   const [error, setError] = useState<ApiError | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -37,9 +65,24 @@ export default function CoachTraineesScreen() {
     if (!options?.silent) setState('loading');
     setError(null);
     try {
-      const result = await trainees.listTrainees();
-      setItems(result);
-      setState(result.length === 0 ? 'empty' : 'populated');
+      const [traineeResult, groupResult] = await Promise.all([
+        trainees.listTrainees(),
+        groups.listMyGroups(),
+      ]);
+      const today = todayISO();
+      const sessionsPerGroup = await Promise.all(
+        groupResult.map((group) => groups.groupSessions(group.id)),
+      );
+      const entries: GroupListEntry[] = groupResult.map((group, index) => {
+        const sessions = (sessionsPerGroup[index] ?? []).filter((s) => s.status !== 'cancelled');
+        const upcoming = sessions
+          .filter((s) => s.date >= today && (s.status === 'accepted' || s.status === 'in_progress'))
+          .sort((a, b) => (a.date === b.date ? a.slotStart.localeCompare(b.slotStart) : a.date.localeCompare(b.date)));
+        return { group, totalSessions: sessions.length, nextSession: upcoming[0] ?? null };
+      });
+      setTraineeItems(traineeResult);
+      setGroupItems(entries);
+      setState(traineeResult.length === 0 && entries.length === 0 ? 'empty' : 'populated');
     } catch (err) {
       setError(err as ApiError);
       setState('error');
@@ -55,6 +98,21 @@ export default function CoachTraineesScreen() {
     await load({ silent: true });
     setRefreshing(false);
   }
+
+  const visibleGroups = filter === 'all' || filter === 'group' ? groupItems : [];
+  const visibleTrainees =
+    filter === 'group'
+      ? []
+      : traineeItems.filter((trainee) => {
+          if (filter === 'one_on_one') return trainee.hasInPerson;
+          if (filter === 'online') return trainee.hasOnline;
+          return true;
+        });
+
+  const items: RosterItem[] = [
+    ...visibleGroups.map((entry): RosterItem => ({ kind: 'group', key: `group-${entry.group.id}`, entry })),
+    ...visibleTrainees.map((trainee): RosterItem => ({ kind: 'trainee', key: `trainee-${trainee.playerId}`, trainee })),
+  ];
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -96,51 +154,120 @@ export default function CoachTraineesScreen() {
           </Text>
         </View>
       ) : (
-        <FlatList
-          data={items}
-          keyExtractor={(item) => item.playerId}
-          contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} />}
-          renderItem={({ item }) => (
-            <Pressable
-              onPress={() =>
-                router.push({ pathname: '/(tabs)/trainings/trainee/[id]', params: { id: item.playerId } })
-              }
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: spacing.md,
-                borderRadius: radii.xl,
-                borderWidth: 1,
-                borderColor: colors.border,
-                backgroundColor: colors.card,
-                padding: spacing.lg,
-              }}
-            >
-              <Avatar uri={item.avatarUrl ?? undefined} name={item.name} size={56} />
-              <View style={{ flex: 1, gap: spacing.xs }}>
-                <Text style={[textStyle('h3'), { color: colors.text }]}>{item.name}</Text>
-                <Text style={[textStyle('caption'), { color: colors.textTertiary }]}>
-                  {item.sessionCount} {item.sessionCount === 1 ? 'session' : 'sessions'}, last on {item.lastSessionDate}
+        <>
+          <SessionFilterChips active={filter} onChange={setFilter} />
+          <FlatList
+            data={items}
+            keyExtractor={(item) => item.key}
+            contentContainerStyle={{ padding: spacing.lg, gap: spacing.md, flexGrow: 1 }}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} />}
+            ListEmptyComponent={
+              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing.lg }}>
+                <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
+                  {filter === 'group'
+                    ? 'No training groups yet.'
+                    : filter === 'online'
+                      ? 'No online trainees yet.'
+                      : 'No trainees match this filter.'}
                 </Text>
               </View>
-              <View
-                style={{
-                  borderRadius: radii.pill,
-                  paddingHorizontal: spacing.md,
-                  paddingVertical: spacing.xs,
-                  backgroundColor: item.hasUpcoming ? colors.successTint : colors.surfaceMuted,
-                }}
-              >
-                <Text
-                  style={[textStyle('label'), { color: item.hasUpcoming ? colors.success : colors.textSecondary }]}
+            }
+            renderItem={({ item }) =>
+              item.kind === 'group' ? (
+                <Pressable
+                  onPress={() =>
+                    router.push({ pathname: '/(tabs)/trainings/group/[id]', params: { id: item.entry.group.id } })
+                  }
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: spacing.md,
+                    borderRadius: radii.xl,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: colors.card,
+                    padding: spacing.lg,
+                  }}
                 >
-                  {item.hasUpcoming ? 'Active' : 'No upcoming'}
-                </Text>
-              </View>
-            </Pressable>
-          )}
-        />
+                  <View
+                    style={{
+                      height: 56,
+                      width: 56,
+                      borderRadius: radii.pill,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: colors.accentTint,
+                    }}
+                  >
+                    <Users size={28} color={colors.accent} strokeWidth={1.75} />
+                  </View>
+                  <View style={{ flex: 1, gap: spacing.xs }}>
+                    <Text style={[textStyle('h3'), { color: colors.text }]}>{item.entry.group.name}</Text>
+                    <Text style={[textStyle('caption'), { color: colors.textTertiary }]}>
+                      {item.entry.group.activeMembers ?? 0} {(item.entry.group.activeMembers ?? 0) === 1 ? 'member' : 'members'}, {item.entry.totalSessions} {item.entry.totalSessions === 1 ? 'session' : 'sessions'}
+                    </Text>
+                    <Text style={[textStyle('caption'), { color: colors.textTertiary }]}>
+                      {item.entry.nextSession
+                        ? `Next on ${item.entry.nextSession.date} at ${item.entry.nextSession.slotStart}`
+                        : 'No upcoming session'}
+                    </Text>
+                  </View>
+                  <View
+                    style={{
+                      borderRadius: radii.pill,
+                      paddingHorizontal: spacing.md,
+                      paddingVertical: spacing.xs,
+                      backgroundColor: colors.accentTint,
+                    }}
+                  >
+                    <Text style={[textStyle('label'), { color: colors.accent }]}>Group</Text>
+                  </View>
+                </Pressable>
+              ) : (
+                <Pressable
+                  onPress={() =>
+                    router.push({ pathname: '/(tabs)/trainings/trainee/[id]', params: { id: item.trainee.playerId } })
+                  }
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: spacing.md,
+                    borderRadius: radii.xl,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: colors.card,
+                    padding: spacing.lg,
+                  }}
+                >
+                  <Avatar uri={item.trainee.avatarUrl ?? undefined} name={item.trainee.name} size={56} />
+                  <View style={{ flex: 1, gap: spacing.xs }}>
+                    <Text style={[textStyle('h3'), { color: colors.text }]}>{item.trainee.name}</Text>
+                    <Text style={[textStyle('caption'), { color: colors.textTertiary }]}>
+                      {item.trainee.sessionCount} {item.trainee.sessionCount === 1 ? 'session' : 'sessions'}, last on {item.trainee.lastSessionDate}
+                    </Text>
+                    {item.trainee.hasOnline ? (
+                      <Text style={[textStyle('caption'), { color: colors.textTertiary }]}>Trains online</Text>
+                    ) : null}
+                  </View>
+                  <View
+                    style={{
+                      borderRadius: radii.pill,
+                      paddingHorizontal: spacing.md,
+                      paddingVertical: spacing.xs,
+                      backgroundColor: item.trainee.hasUpcoming ? colors.successTint : colors.surfaceMuted,
+                    }}
+                  >
+                    <Text
+                      style={[textStyle('label'), { color: item.trainee.hasUpcoming ? colors.success : colors.textSecondary }]}
+                    >
+                      {item.trainee.hasUpcoming ? 'Active' : 'No upcoming'}
+                    </Text>
+                  </View>
+                </Pressable>
+              )
+            }
+          />
+        </>
       )}
     </View>
   );
