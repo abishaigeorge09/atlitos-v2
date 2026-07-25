@@ -18,6 +18,7 @@ export type Status =
   | 'expired'
   | 'requested'
   | 'accepted'
+  | 'inProgress'
   | 'declined'
   | 'rated';
 
@@ -60,6 +61,8 @@ const STATUS_CONFIG: Record<Status, StatusConfig> = {
   // court_booking_status equivalent above.
   requested: { label: 'Requested', bgClass: 'bg-warning-tint', textClass: 'text-warning' },
   accepted: { label: 'Accepted', bgClass: 'bg-success-tint', textClass: 'text-success' },
+  // 0077: coach driven Start Session (accepted -> in_progress -> completed).
+  inProgress: { label: 'In progress', bgClass: 'bg-info-tint', textClass: 'text-info' },
   declined: { label: 'Declined', bgClass: 'bg-danger-tint', textClass: 'text-danger' },
   rated: { label: 'Rated', bgClass: 'bg-success-tint', textClass: 'text-success' },
 };

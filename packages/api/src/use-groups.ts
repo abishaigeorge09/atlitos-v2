@@ -581,6 +581,30 @@ export function useGroups(client: AtlitosClient) {
       return (data ?? []).map(mapGroupSession);
     },
 
+    /** One group session by id, hydrated with its group. Explicitly scoped
+     * to my own coach rows AND group rows only (`group_id` not null):
+     * sessions is a permissive-OR table across coach and player policies,
+     * and a 1:1 session id passed here must return null, not a
+     * half-shaped group session. */
+    async getGroupSession(
+      sessionId: string,
+    ): Promise<{ session: GroupSession; group: TrainingGroup } | null> {
+      const userId = await requireUserId(client);
+      const { data, error } = await client
+        .from("sessions")
+        .select(
+          "id, group_id, coach_id, date, slot_start, slot_end, focus_area, location, status, " +
+            "training_groups ( id, coach_id, name, sport, skill_level, capacity, monthly_fee, attendance_policy, active, created_at )",
+        )
+        .eq("id", sessionId)
+        .eq("coach_id", userId)
+        .not("group_id", "is", null)
+        .maybeSingle<GroupSessionRow & { training_groups: GroupRow | null }>();
+      if (error) throw mapPostgrestError(error);
+      if (!data || !data.training_groups) return null;
+      return { session: mapGroupSession(data), group: mapGroup(data.training_groups) };
+    },
+
     /** Participants of one group session with profile hydration. The coach
      * sees the full roster; a member sees their own row. */
     async sessionParticipants(sessionId: string): Promise<SessionParticipant[]> {

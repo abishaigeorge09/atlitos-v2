@@ -199,8 +199,14 @@ export interface CoachStatsSummary {
   playersCoached: number;
   avgRating: number;
   ratingCount: number;
+  /** Completed or rated sessions, all time (Figma "Total Sessions"). */
+  totalSessions: number;
   sessionsThisMonth: number;
   earningsThisMonth: number;
+  /** `get_coach_wallet_balance().lifetime_earned`, the same figure the
+   * Earnings screen labels lifetime, so the two cannot drift (Figma
+   * "Total Earnings"). */
+  lifetimeEarnings: number;
 }
 
 function startOfCurrentMonthISO(): string {
@@ -228,13 +234,17 @@ export function useCoachSessions(client: AtlitosClient) {
     },
 
     /** Upcoming: `accepted` or `rescheduled` (FR-19's "rescheduled behaves
-     * like accepted going forward"), soonest first. */
+     * like accepted going forward"), soonest first. 1:1 rows only: group
+     * sessions (0076, NULL player_id) are also `accepted` on insert and
+     * would otherwise leak into this 1:1 shaped read; the groups domain
+     * reads them through `useGroups.groupSessions`. */
     async listUpcoming(): Promise<Session[]> {
       const userId = await requireUserId(client);
       const { data, error } = await client
         .from("sessions")
         .select(SESSION_SELECT)
         .eq("coach_id", userId)
+        .not("player_id", "is", null)
         .in("status", ["accepted", "rescheduled"])
         .order("date", { ascending: true })
         .order("slot_start", { ascending: true })
@@ -270,21 +280,25 @@ export function useCoachSessions(client: AtlitosClient) {
       if (sessionError) throw mapPostgrestError(sessionError);
       if (walletError) throw mapPostgrestError(walletError);
 
-      const rows = (sessionRows ?? []) as { player_id: string; date: string; status: SessionStatus }[];
-      const playersCoached = new Set(rows.map((row) => row.player_id)).size;
+      // 0076: group session rows live in the same table with a NULL
+      // player_id, so they count toward session totals but never toward the
+      // distinct trainee count.
+      const rows = (sessionRows ?? []) as { player_id: string | null; date: string; status: SessionStatus }[];
+      const playersCoached = new Set(rows.map((row) => row.player_id).filter((id): id is string => id !== null)).size;
       const monthStart = startOfCurrentMonthISO();
-      const sessionsThisMonth = rows.filter(
-        (row) => row.date >= monthStart && (row.status === "completed" || row.status === "rated"),
-      ).length;
+      const held = rows.filter((row) => row.status === "completed" || row.status === "rated");
+      const sessionsThisMonth = held.filter((row) => row.date >= monthStart).length;
 
-      const wallet = (walletRow as { this_month: number }[] | null)?.[0];
+      const wallet = (walletRow as { this_month: number; lifetime_earned: number }[] | null)?.[0];
 
       return {
         playersCoached,
         avgRating: coachRow?.rating ?? 0,
         ratingCount: coachRow?.rating_count ?? 0,
+        totalSessions: held.length,
         sessionsThisMonth,
         earningsThisMonth: wallet?.this_month ?? 0,
+        lifetimeEarnings: wallet?.lifetime_earned ?? 0,
       };
     },
 
@@ -293,11 +307,15 @@ export function useCoachSessions(client: AtlitosClient) {
      * through the permissive-OR policy. */
     async getSession(sessionId: string): Promise<Session | null> {
       const userId = await requireUserId(client);
+      // 1:1 rows only, same reasoning as listUpcoming: a group session id
+      // must return null here (its detail lives on the group session
+      // screen), never a Session with a runtime null playerId.
       const { data, error } = await client
         .from("sessions")
         .select(SESSION_SELECT)
         .eq("id", sessionId)
         .eq("coach_id", userId)
+        .not("player_id", "is", null)
         .maybeSingle<SessionQueryRow>();
       if (error) throw mapPostgrestError(error);
       if (!data) return null;
@@ -448,6 +466,19 @@ export interface TraineeSummary {
   sessionCount: number;
   lastSessionDate: string;
   hasUpcoming: boolean;
+  /** At least one session whose session type reads as online
+   * (`session_types.name` contains "online", the gap doc's chosen
+   * representation); feeds the Trainees Online filter chip. */
+  hasOnline: boolean;
+  /** At least one session with a non online session type; feeds the
+   * 1 on 1 filter chip (a trainee can be both). */
+  hasInPerson: boolean;
+}
+
+/** The gap doc's online representation: a session type whose name contains
+ * "online" (no dedicated flag column exists on session_types). */
+export function isOnlineSessionTypeName(name: string | null | undefined): boolean {
+  return !!name && name.toLowerCase().includes("online");
 }
 
 export function useCoachTrainees(client: AtlitosClient) {
@@ -456,10 +487,14 @@ export function useCoachTrainees(client: AtlitosClient) {
      * any status, deduplicated. */
     async listTrainees(): Promise<TraineeSummary[]> {
       const userId = await requireUserId(client);
+      // `.not("player_id", "is", null)`: group session rows (0076) share
+      // this table with a NULL player_id and must never surface as a
+      // phantom trainee.
       const { data, error } = await client
         .from("sessions")
-        .select("player_id, date, status, users!sessions_player_id_fkey ( name, avatar_url )")
+        .select("player_id, date, status, users!sessions_player_id_fkey ( name, avatar_url ), session_types ( name )")
         .eq("coach_id", userId)
+        .not("player_id", "is", null)
         .order("date", { ascending: false });
       if (error) throw mapPostgrestError(error);
 
@@ -468,12 +503,14 @@ export function useCoachTrainees(client: AtlitosClient) {
         date: string;
         status: SessionStatus;
         users: { name: string; avatar_url: string | null } | null;
+        session_types: { name: string } | null;
       }[];
 
       const byPlayer = new Map<string, TraineeSummary>();
       for (const row of rows) {
         const existing = byPlayer.get(row.player_id);
         const hasUpcoming = row.status === "accepted" || row.status === "rescheduled";
+        const online = isOnlineSessionTypeName(row.session_types?.name);
         if (!existing) {
           byPlayer.set(row.player_id, {
             playerId: row.player_id,
@@ -482,10 +519,14 @@ export function useCoachTrainees(client: AtlitosClient) {
             sessionCount: 1,
             lastSessionDate: row.date,
             hasUpcoming,
+            hasOnline: online,
+            hasInPerson: !online,
           });
         } else {
           existing.sessionCount += 1;
           existing.hasUpcoming = existing.hasUpcoming || hasUpcoming;
+          existing.hasOnline = existing.hasOnline || online;
+          existing.hasInPerson = existing.hasInPerson || !online;
         }
       }
       return Array.from(byPlayer.values());
