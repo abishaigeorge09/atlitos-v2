@@ -835,6 +835,69 @@ export type Database = {
           },
         ]
       }
+      coach_trainee_videos: {
+        Row: {
+          caption: string | null
+          coach_id: string
+          created_at: string
+          id: string
+          player_id: string
+          storage_path: string | null
+        }
+        Insert: {
+          caption?: string | null
+          coach_id: string
+          created_at?: string
+          id?: string
+          player_id: string
+          storage_path?: string | null
+        }
+        Update: {
+          caption?: string | null
+          coach_id?: string
+          created_at?: string
+          id?: string
+          player_id?: string
+          storage_path?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coach_trainee_videos_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coach_profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "coach_trainee_videos_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coach_profiles_public"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "coach_trainee_videos_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "coach_trainee_videos_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coach_trainee_videos_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       court_availability_windows: {
         Row: {
           close_time: string

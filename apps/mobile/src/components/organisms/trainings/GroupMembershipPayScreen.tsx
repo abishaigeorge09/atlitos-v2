@@ -210,7 +210,7 @@ export function GroupMembershipPayScreen({
           </View>
 
           <View style={{ gap: spacing.sm }}>
-            <Button onPress={() => router.replace('/(tabs)/trainings')}>
+            <Button onPress={() => router.replace('/(tabs)/trainings/(shell)')}>
               <Text style={{ color: colors.inkOnAccent }}>Go to my trainings</Text>
             </Button>
             <Button variant="secondary" onPress={() => router.replace('/(tabs)/coaching')}>

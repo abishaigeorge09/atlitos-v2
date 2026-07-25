@@ -1,4 +1,3 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   AvailabilityWindow,
   CoachStatus,
@@ -555,9 +554,8 @@ export type UseCoachTraineesResult = ReturnType<typeof useCoachTrainees>;
 // ---------------------------------------------------------------------------
 // trainee video review (Track F). Player Profile "Video Analytics" tab,
 // design node 1047:16588, docs/design/COACH-TRAININGS-GAP.md gap #8/#18.
-// Table `coach_trainee_videos` (0082, NOT yet applied by this track, see
-// that migration's header) stores only a PATH into the private `clips`
-// bucket; playback is always a fresh short lived signed URL from the
+// Table `coach_trainee_videos` (0082) stores only a PATH into the private
+// `clips` bucket; playback is always a fresh short lived signed URL from the
 // get-coach-trainee-video-url edge function, mirroring Clutch's clip-access
 // pattern, never a stored/cached URL.
 // ---------------------------------------------------------------------------
@@ -607,21 +605,13 @@ function mapCoachTraineeVideoRow(row: CoachTraineeVideoRow): CoachTraineeVideo {
 /** Coach side: upload, list, and delete review videos for one trainee.
  * Every read below carries an explicit `coach_id = auth.uid()` filter
  * (never left to RLS alone, RLS.md's "not scoping" rule), even though the
- * table's own owner-scoped policy already enforces it.
- *
- * TYPING NOTE: `coach_trainee_videos` lands in migration 0082 (this track),
- * NOT YET APPLIED (see that migration's header), so it is not in the
- * generated `Database` type on this branch. `db` widens the same client's
- * schema generic so `from` accepts the relation; swap back to `client` and
- * delete this note once the migration is applied and types regenerated
- * (same escape hatch `hooks.ts`'s Clutch lane used before Track A merged). */
+ * table's own owner-scoped policy already enforces it. */
 export function useCoachTraineeVideos(client: AtlitosClient) {
-  const db = client as unknown as SupabaseClient;
   return {
     /** All of this coach's review videos for one trainee, newest first. */
     async listForTrainee(playerId: string): Promise<CoachTraineeVideo[]> {
       const userId = await requireUserId(client);
-      const { data, error } = await db
+      const { data, error } = await client
         .from("coach_trainee_videos")
         .select(COACH_TRAINEE_VIDEO_SELECT)
         .eq("coach_id", userId)
@@ -659,7 +649,7 @@ export function useCoachTraineeVideos(client: AtlitosClient) {
      * policy. */
     async deleteVideo(videoId: string): Promise<void> {
       const userId = await requireUserId(client);
-      const { error } = await db
+      const { error } = await client
         .from("coach_trainee_videos")
         .delete()
         .eq("id", videoId)
@@ -673,15 +663,12 @@ export type UseCoachTraineeVideosResult = ReturnType<typeof useCoachTraineeVideo
 
 /** Athlete side: read only list of a trainee's own review videos, reachable
  * from their profile (least invasive spot per the Track F brief; there is no
- * existing athlete "trainings" detail screen to hang a tab off of). Same
- * TYPING NOTE as useCoachTraineeVideos above: `db` widens the schema generic
- * until 0082 is applied and types regenerated. */
+ * existing athlete "trainings" detail screen to hang a tab off of). */
 export function useMyTraineeVideos(client: AtlitosClient) {
-  const db = client as unknown as SupabaseClient;
   return {
     async list(): Promise<CoachTraineeVideo[]> {
       const userId = await requireUserId(client);
-      const { data, error } = await db
+      const { data, error } = await client
         .from("coach_trainee_videos")
         .select(COACH_TRAINEE_VIDEO_SELECT)
         .eq("player_id", userId)
