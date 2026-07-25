@@ -112,6 +112,19 @@ export interface TraineeNote {
   createdAt: string;
 }
 
+/** Player Profile Overview tab identity (Figma 1047:13934). Sourced from
+ * `public_profiles` only: `users` has no role/batting style/bowling style/
+ * skill level/playing frequency/gender columns for players (only
+ * `coach_profiles` carries sport specific fields, and only for coaches), so
+ * the design's cricket specific attribute rows are not buildable without a
+ * schema change and are intentionally not represented here. */
+export interface TraineeProfileInfo {
+  name: string;
+  avatarUrl?: string;
+  handle?: string;
+  bio?: string;
+}
+
 export interface JoinGroupResult {
   membershipId: string;
   groupId: string;
@@ -227,6 +240,14 @@ interface NoteRow {
   player_id: string;
   body: string;
   created_at: string;
+}
+
+interface TraineeProfileRow {
+  id: string;
+  name: string | null;
+  avatar_url: string | null;
+  handle: string | null;
+  bio: string | null;
 }
 
 interface TraineeSessionRow {
@@ -787,6 +808,26 @@ export function useGroups(client: AtlitosClient) {
     // -----------------------------------------------------------------
     // Trainee profile reads (Track C's tabs)
     // -----------------------------------------------------------------
+
+    /** Player Profile Overview tab identity, `public_profiles` only (the
+     * cross-user safe read surface, unlike the base `users` table which is
+     * own-row/admin only). Returns null for a bad id rather than throwing,
+     * the same "no such row" shape `maybeSingle` gives everywhere else. */
+    async getTraineeProfile(playerId: string): Promise<TraineeProfileInfo | null> {
+      const { data, error } = await client
+        .from("public_profiles")
+        .select("id, name, avatar_url, handle, bio")
+        .eq("id", playerId)
+        .maybeSingle<TraineeProfileRow>();
+      if (error) throw mapPostgrestError(error);
+      if (!data) return null;
+      return {
+        name: data.name ?? "Athlete",
+        avatarUrl: data.avatar_url ?? undefined,
+        handle: data.handle ?? undefined,
+        bio: data.bio ?? undefined,
+      };
+    },
 
     /** Per-trainee sessions split (upcoming vs all past), coach side.
      * Explicitly coach_id = me AND player_id = trainee: sessions is

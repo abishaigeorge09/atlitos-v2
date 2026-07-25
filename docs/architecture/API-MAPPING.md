@@ -300,6 +300,7 @@ Training groups with monthly subscription fares (founder-ratified: manual renewa
 | `getGroupThreadId` | `chat_threads` context_type 'group' | one thread per group, trigger-created; messages flow through the existing chat_messages surface, group SELECT/INSERT policies enforce membership (and Realtime enforces the SELECT per subscriber) |
 | `listMyTraineeNotes` / `addTraineeNote` / `deleteTraineeNote` | `coach_trainee_notes` | coach-private, insert gated by `coach_has_trainee`, no update ever |
 | `listTraineeSessions` / `listTraineePayments` | `sessions` (coach_id = me AND player_id = trainee) + memberships join | the trainee profile tabs; payments derive from coach-readable rows since payment_intents is owner-only |
+| `getTraineeProfile` | `public_profiles` | Track C, trainee profile Overview tab identity (name/handle/bio); `users` base table stays own-row/admin only so this never touches it |
 
 ## Edge functions not in the v1 contract
 

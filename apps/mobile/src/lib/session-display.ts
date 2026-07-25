@@ -7,6 +7,7 @@ import type { Status as StatusPillStatus } from '@/components/ui/status-pill';
 export const SESSION_STATUS_PILL: Record<SessionStatus, StatusPillStatus> = {
   requested: 'requested',
   accepted: 'accepted',
+  in_progress: 'inProgress',
   declined: 'declined',
   completed: 'completed',
   cancelled: 'cancelled',
