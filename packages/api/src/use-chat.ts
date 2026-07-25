@@ -232,13 +232,23 @@ export function useChat(client: AtlitosClient) {
      * (`chat_messages_select_participant`) is what Realtime evaluates per
      * subscriber before delivering a row (0022_chat.sql header); the
      * `thread_id=eq.` filter here is only about volume, not authorization.
-     * The caller unsubscribes on unmount via the returned channel's own
-     * `.unsubscribe()` in a cleanup effect. */
+     * The caller removes the channel on unmount (removeChannel, not just
+     * unsubscribe, so the named channel does not linger on the client). */
     subscribeToThread(
       threadId: string,
       onInsert: (message: ChatMessage) => void,
       onStatusChange?: (status: string) => void,
     ): RealtimeChannel {
+      // A channel object survives on the client under its name even after
+      // `.unsubscribe()`, and calling `.on("postgres_changes", ...)` on a
+      // channel that has already been subscribed once throws ("cannot add
+      // postgres_changes callbacks after subscribe()"). Reopening the same
+      // thread, or remounting the list, must therefore drop any stale
+      // instance before building a fresh one.
+      const staleThread = client
+        .getChannels()
+        .find((channel) => channel.topic === `realtime:chat:${threadId}`);
+      if (staleThread) void client.removeChannel(staleThread);
       return client
         .channel(`chat:${threadId}`)
         .on(
@@ -260,6 +270,11 @@ export function useChat(client: AtlitosClient) {
       onInsert: (message: ChatMessage) => void,
       onStatusChange?: (status: string) => void,
     ): RealtimeChannel {
+      // Same stale channel guard as subscribeToThread above.
+      const staleInbox = client
+        .getChannels()
+        .find((channel) => channel.topic === "realtime:chat:inbox");
+      if (staleInbox) void client.removeChannel(staleInbox);
       return client
         .channel("chat:inbox")
         .on(

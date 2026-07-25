@@ -95,7 +95,9 @@ export default function ChatThreadScreen() {
     );
 
     return () => {
-      channel.unsubscribe();
+      // removeChannel, not just unsubscribe: a lingering named channel on
+      // the singleton client crashes the next open of this same thread.
+      void supabase.removeChannel(channel);
     };
   }, [id]);
 
