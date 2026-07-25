@@ -319,6 +319,53 @@ export type Database = {
           },
         ]
       }
+      chat_thread_members: {
+        Row: {
+          created_at: string
+          thread_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          thread_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          thread_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_thread_members_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "chat_threads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_thread_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "chat_thread_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_thread_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_threads: {
         Row: {
           context_id: string
@@ -326,8 +373,8 @@ export type Database = {
           created_at: string
           id: string
           last_message_at: string | null
-          participant_a: string
-          participant_b: string
+          participant_a: string | null
+          participant_b: string | null
         }
         Insert: {
           context_id: string
@@ -335,8 +382,8 @@ export type Database = {
           created_at?: string
           id?: string
           last_message_at?: string | null
-          participant_a: string
-          participant_b: string
+          participant_a?: string | null
+          participant_b?: string | null
         }
         Update: {
           context_id?: string
@@ -344,8 +391,8 @@ export type Database = {
           created_at?: string
           id?: string
           last_message_at?: string | null
-          participant_a?: string
-          participant_b?: string
+          participant_a?: string | null
+          participant_b?: string | null
         }
         Relationships: [
           {
@@ -723,6 +770,66 @@ export type Database = {
             foreignKeyName: "coach_profiles_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      coach_trainee_notes: {
+        Row: {
+          body: string
+          coach_id: string
+          created_at: string
+          id: string
+          player_id: string
+        }
+        Insert: {
+          body: string
+          coach_id: string
+          created_at?: string
+          id?: string
+          player_id: string
+        }
+        Update: {
+          body?: string
+          coach_id?: string
+          created_at?: string
+          id?: string
+          player_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coach_trainee_notes_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coach_profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "coach_trainee_notes_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coach_profiles_public"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "coach_trainee_notes_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "coach_trainee_notes_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coach_trainee_notes_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
@@ -1440,6 +1547,87 @@ export type Database = {
             columns: ["wishlist_item_id"]
             isOneToOne: true
             referencedRelation: "upa_wishlist_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      group_memberships: {
+        Row: {
+          created_at: string
+          group_id: string
+          id: string
+          payment_intent_id: string | null
+          period_end: string | null
+          period_start: string | null
+          platform_fee: number
+          player_id: string
+          price: number
+          status: string
+          total: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          group_id: string
+          id?: string
+          payment_intent_id?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          platform_fee: number
+          player_id: string
+          price: number
+          status?: string
+          total: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          group_id?: string
+          id?: string
+          payment_intent_id?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          platform_fee?: number
+          player_id?: string
+          price?: number
+          status?: string
+          total?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_memberships_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "training_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_memberships_payment_intent_id_fkey"
+            columns: ["payment_intent_id"]
+            isOneToOne: false
+            referencedRelation: "payment_intents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_memberships_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "group_memberships_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_memberships_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -2484,6 +2672,56 @@ export type Database = {
         }
         Relationships: []
       }
+      session_participants: {
+        Row: {
+          attendance_status: string | null
+          marked_at: string | null
+          player_id: string
+          session_id: string
+        }
+        Insert: {
+          attendance_status?: string | null
+          marked_at?: string | null
+          player_id: string
+          session_id: string
+        }
+        Update: {
+          attendance_status?: string | null
+          marked_at?: string | null
+          player_id?: string
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_participants_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "session_participants_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "session_participants_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "session_participants_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       session_types: {
         Row: {
           active: boolean
@@ -2541,15 +2779,16 @@ export type Database = {
           decline_reason: string | null
           focus_area: string | null
           frequency: Database["public"]["Enums"]["session_frequency"]
+          group_id: string | null
           id: string
           location: string | null
           payment_intent_id: string | null
           platform_fee: number
-          player_id: string
+          player_id: string | null
           price: number
           rating: number | null
           remarks: string | null
-          session_type_id: string
+          session_type_id: string | null
           slot_end: string
           slot_start: string
           status: Database["public"]["Enums"]["session_status"]
@@ -2564,15 +2803,16 @@ export type Database = {
           decline_reason?: string | null
           focus_area?: string | null
           frequency: Database["public"]["Enums"]["session_frequency"]
+          group_id?: string | null
           id?: string
           location?: string | null
           payment_intent_id?: string | null
           platform_fee: number
-          player_id: string
+          player_id?: string | null
           price: number
           rating?: number | null
           remarks?: string | null
-          session_type_id: string
+          session_type_id?: string | null
           slot_end: string
           slot_start: string
           status?: Database["public"]["Enums"]["session_status"]
@@ -2587,15 +2827,16 @@ export type Database = {
           decline_reason?: string | null
           focus_area?: string | null
           frequency?: Database["public"]["Enums"]["session_frequency"]
+          group_id?: string | null
           id?: string
           location?: string | null
           payment_intent_id?: string | null
           platform_fee?: number
-          player_id?: string
+          player_id?: string | null
           price?: number
           rating?: number | null
           remarks?: string | null
-          session_type_id?: string
+          session_type_id?: string | null
           slot_end?: string
           slot_start?: string
           status?: Database["public"]["Enums"]["session_status"]
@@ -2616,6 +2857,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "coach_profiles_public"
             referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "sessions_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "training_groups"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "sessions_payment_intent_id_fkey"
@@ -2764,6 +3012,63 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      training_groups: {
+        Row: {
+          active: boolean
+          attendance_policy: string | null
+          capacity: number
+          coach_id: string
+          created_at: string
+          id: string
+          monthly_fee: number
+          name: string
+          skill_level: string | null
+          sport: Database["public"]["Enums"]["sport"]
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          attendance_policy?: string | null
+          capacity: number
+          coach_id: string
+          created_at?: string
+          id?: string
+          monthly_fee: number
+          name: string
+          skill_level?: string | null
+          sport: Database["public"]["Enums"]["sport"]
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          attendance_policy?: string | null
+          capacity?: number
+          coach_id?: string
+          created_at?: string
+          id?: string
+          monthly_fee?: number
+          name?: string
+          skill_level?: string | null
+          sport?: Database["public"]["Enums"]["sport"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_groups_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coach_profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "training_groups_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coach_profiles_public"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -3687,6 +3992,29 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      activate_group_membership_paid: {
+        Args: { p_membership_id: string }
+        Returns: {
+          created_at: string
+          group_id: string
+          id: string
+          payment_intent_id: string | null
+          period_end: string | null
+          period_start: string | null
+          platform_fee: number
+          player_id: string
+          price: number
+          status: string
+          total: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "group_memberships"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       add_to_cart: {
         Args: { p_qty?: number; p_variant_id: string }
         Returns: Database["public"]["CompositeTypes"]["cart_mutation_result"]
@@ -4053,6 +4381,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      coach_has_trainee: {
+        Args: { p_coach_id: string; p_player_id: string }
+        Returns: boolean
+      }
       complete_player_setup: {
         Args: {
           p_avatar_url: string
@@ -4220,6 +4552,75 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_group_session: {
+        Args: {
+          p_date: string
+          p_focus_area?: string
+          p_group_id: string
+          p_location?: string
+          p_slot_end: string
+          p_slot_start: string
+        }
+        Returns: {
+          cancellation_reason: string | null
+          coach_id: string
+          created_at: string
+          date: string
+          decline_reason: string | null
+          focus_area: string | null
+          frequency: Database["public"]["Enums"]["session_frequency"]
+          group_id: string | null
+          id: string
+          location: string | null
+          payment_intent_id: string | null
+          platform_fee: number
+          player_id: string | null
+          price: number
+          rating: number | null
+          remarks: string | null
+          session_type_id: string | null
+          slot_end: string
+          slot_start: string
+          status: Database["public"]["Enums"]["session_status"]
+          total: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "sessions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_training_group: {
+        Args: {
+          p_attendance_policy?: string
+          p_capacity: number
+          p_monthly_fee: number
+          p_name: string
+          p_skill_level?: string
+          p_sport: Database["public"]["Enums"]["sport"]
+        }
+        Returns: {
+          active: boolean
+          attendance_policy: string | null
+          capacity: number
+          coach_id: string
+          created_at: string
+          id: string
+          monthly_fee: number
+          name: string
+          skill_level: string | null
+          sport: Database["public"]["Enums"]["sport"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "training_groups"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
       deactivate_upa_application: {
         Args: { p_application_id: string }
@@ -4314,6 +4715,13 @@ export type Database = {
         }[]
       }
       get_empower_stats: { Args: never; Returns: Json }
+      get_group_member_counts: {
+        Args: { p_group_ids: string[] }
+        Returns: {
+          active_members: number
+          group_id: string
+        }[]
+      }
       get_learn_home: { Args: never; Returns: Json }
       get_my_impact_summary: { Args: never; Returns: Json }
       get_my_transactions: {
@@ -4336,13 +4744,71 @@ export type Database = {
       }
       has_role: { Args: { _role: string }; Returns: boolean }
       is_admin: { Args: never; Returns: boolean }
+      is_chat_thread_member: {
+        Args: { p_thread_id: string; p_user_id: string }
+        Returns: boolean
+      }
       is_court_partner_or_staff: {
         Args: { p_court_id: string }
         Returns: boolean
       }
+      is_group_coach: {
+        Args: { p_group_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      is_group_member_live: {
+        Args: { p_group_id: string; p_user_id: string }
+        Returns: boolean
+      }
       is_guest: { Args: never; Returns: boolean }
       is_moderator: { Args: never; Returns: boolean }
+      is_session_coach: {
+        Args: { p_session_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      is_session_participant: {
+        Args: { p_session_id: string; p_user_id: string }
+        Returns: boolean
+      }
       is_verified_coach: { Args: { _coach_id: string }; Returns: boolean }
+      join_training_group: {
+        Args: { p_actor_id: string; p_group_id: string }
+        Returns: {
+          created_at: string
+          group_id: string
+          id: string
+          payment_intent_id: string | null
+          period_end: string | null
+          period_start: string | null
+          platform_fee: number
+          player_id: string
+          price: number
+          status: string
+          total: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "group_memberships"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      mark_attendance: {
+        Args: { p_marks: Json; p_session_id: string }
+        Returns: {
+          attendance_status: string | null
+          marked_at: string | null
+          player_id: string
+          session_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "session_participants"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       mark_wishlist_item_delivered: {
         Args: { p_item_id: string }
         Returns: {
@@ -4358,6 +4824,29 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "upa_wishlist_items"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      membership_abandon_unpaid: {
+        Args: { p_membership_id: string }
+        Returns: {
+          created_at: string
+          group_id: string
+          id: string
+          payment_intent_id: string | null
+          period_end: string | null
+          period_start: string | null
+          platform_fee: number
+          player_id: string
+          price: number
+          status: string
+          total: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "group_memberships"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -4495,15 +4984,16 @@ export type Database = {
           decline_reason: string | null
           focus_area: string | null
           frequency: Database["public"]["Enums"]["session_frequency"]
+          group_id: string | null
           id: string
           location: string | null
           payment_intent_id: string | null
           platform_fee: number
-          player_id: string
+          player_id: string | null
           price: number
           rating: number | null
           remarks: string | null
-          session_type_id: string
+          session_type_id: string | null
           slot_end: string
           slot_start: string
           status: Database["public"]["Enums"]["session_status"]
@@ -4611,6 +5101,29 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      renew_group_membership: {
+        Args: { p_actor_id: string; p_membership_id: string }
+        Returns: {
+          created_at: string
+          group_id: string
+          id: string
+          payment_intent_id: string | null
+          period_end: string | null
+          period_start: string | null
+          platform_fee: number
+          player_id: string
+          price: number
+          status: string
+          total: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "group_memberships"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       reserve_stock_for_checkout: {
         Args: { p_lines: Json; p_payment_intent_id: string }
         Returns: {
@@ -4687,15 +5200,16 @@ export type Database = {
           decline_reason: string | null
           focus_area: string | null
           frequency: Database["public"]["Enums"]["session_frequency"]
+          group_id: string | null
           id: string
           location: string | null
           payment_intent_id: string | null
           platform_fee: number
-          player_id: string
+          player_id: string | null
           price: number
           rating: number | null
           remarks: string | null
-          session_type_id: string
+          session_type_id: string | null
           slot_end: string
           slot_start: string
           status: Database["public"]["Enums"]["session_status"]
@@ -4733,15 +5247,16 @@ export type Database = {
           decline_reason: string | null
           focus_area: string | null
           frequency: Database["public"]["Enums"]["session_frequency"]
+          group_id: string | null
           id: string
           location: string | null
           payment_intent_id: string | null
           platform_fee: number
-          player_id: string
+          player_id: string | null
           price: number
           rating: number | null
           remarks: string | null
-          session_type_id: string
+          session_type_id: string | null
           slot_end: string
           slot_start: string
           status: Database["public"]["Enums"]["session_status"]
@@ -4772,15 +5287,16 @@ export type Database = {
           decline_reason: string | null
           focus_area: string | null
           frequency: Database["public"]["Enums"]["session_frequency"]
+          group_id: string | null
           id: string
           location: string | null
           payment_intent_id: string | null
           platform_fee: number
-          player_id: string
+          player_id: string | null
           price: number
           rating: number | null
           remarks: string | null
-          session_type_id: string
+          session_type_id: string | null
           slot_end: string
           slot_start: string
           status: Database["public"]["Enums"]["session_status"]
@@ -4939,6 +5455,36 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      update_training_group: {
+        Args: {
+          p_active?: boolean
+          p_attendance_policy?: string
+          p_capacity?: number
+          p_group_id: string
+          p_monthly_fee?: number
+          p_name?: string
+          p_skill_level?: string
+        }
+        Returns: {
+          active: boolean
+          attendance_policy: string | null
+          capacity: number
+          coach_id: string
+          created_at: string
+          id: string
+          monthly_fee: number
+          name: string
+          skill_level: string | null
+          sport: Database["public"]["Enums"]["sport"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "training_groups"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       variant_available_stock: {
         Args: { p_variant_id: string }
         Returns: number
@@ -4996,7 +5542,13 @@ export type Database = {
         | "in_transit"
         | "delivered"
         | "cancelled"
-      payment_domain: "session" | "court" | "commerce" | "donation" | "payout"
+      payment_domain:
+        | "session"
+        | "court"
+        | "commerce"
+        | "donation"
+        | "payout"
+        | "membership"
       payment_intent_status:
         | "created"
         | "authorized"
@@ -5016,6 +5568,7 @@ export type Database = {
       session_status:
         | "requested"
         | "accepted"
+        | "in_progress"
         | "declined"
         | "completed"
         | "cancelled"
@@ -5228,7 +5781,14 @@ export const Constants = {
         "delivered",
         "cancelled",
       ],
-      payment_domain: ["session", "court", "commerce", "donation", "payout"],
+      payment_domain: [
+        "session",
+        "court",
+        "commerce",
+        "donation",
+        "payout",
+        "membership",
+      ],
       payment_intent_status: [
         "created",
         "authorized",
@@ -5250,6 +5810,7 @@ export const Constants = {
       session_status: [
         "requested",
         "accepted",
+        "in_progress",
         "declined",
         "completed",
         "cancelled",

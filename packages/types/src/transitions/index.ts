@@ -37,7 +37,13 @@ export function canTransition<S extends string>(map: TransitionMap<S>, from: S, 
  */
 export const SESSION_TRANSITIONS: TransitionMap<SessionStatus> = {
   requested: ['accepted', 'declined'],
-  accepted: ['completed', 'cancelled', 'rescheduled'],
+  // 0077: 'start' (coach-driven, no time gate) moves accepted to
+  // in_progress; the legacy accepted -> completed edge stays for the 1:1
+  // complete-session path, TOO_EARLY gated server side.
+  accepted: ['in_progress', 'completed', 'cancelled', 'rescheduled'],
+  // A started session only ever ends: no cancel or reschedule once running.
+  // Ending early is allowed (no TOO_EARLY gate from here).
+  in_progress: ['completed'],
   declined: [],
   rescheduled: ['completed', 'cancelled', 'rescheduled'],
   completed: ['rated'],

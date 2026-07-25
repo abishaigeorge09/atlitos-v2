@@ -17,6 +17,8 @@ export type Sport = (typeof SPORTS)[number];
 export const SESSION_STATUSES = [
   'requested',
   'accepted',
+  // 0077: coach-driven Start Session (accepted -> in_progress -> completed).
+  'in_progress',
   'declined',
   'completed',
   'cancelled',
@@ -90,7 +92,9 @@ export const PAYMENT_INTENT_STATUSES = [
 ] as const;
 export type PaymentIntentStatus = (typeof PAYMENT_INTENT_STATUSES)[number];
 
-export const PAYMENT_DOMAINS = ['session', 'court', 'commerce', 'donation'] as const;
+// 'membership' joined in 0076: the group fares domain (monthly training
+// group subscriptions riding the shared capture rails).
+export const PAYMENT_DOMAINS = ['session', 'court', 'commerce', 'donation', 'membership'] as const;
 export type PaymentDomain = (typeof PAYMENT_DOMAINS)[number];
 
 export const PAYOUT_ACCOUNT_STATUSES = ['not_started', 'pending', 'active', 'needs_attention', 'failed'] as const;

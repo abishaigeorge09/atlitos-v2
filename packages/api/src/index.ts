@@ -12,5 +12,6 @@ export * from "./use-learn";
 export * from "./use-chat";
 export * from "./use-notifications";
 export * from "./use-coach";
+export * from "./use-groups";
 export * from "./use-shop";
 export * from "./use-home";
