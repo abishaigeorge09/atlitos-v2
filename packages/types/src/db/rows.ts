@@ -593,11 +593,13 @@ export interface UserMilestoneRow {
 
 // ---- chat -------------------------------------------------------------
 
+// Group rows (0078_group_chat_and_notes.sql) null both participant columns;
+// the CHECK constraint enforces that as the only shape allowed to do so.
 export interface ChatThreadRow {
   id: UUID;
-  participant_a: UUID;
-  participant_b: UUID;
-  context_type: 'coaching' | 'clutch_creator';
+  participant_a: UUID | null;
+  participant_b: UUID | null;
+  context_type: 'coaching' | 'clutch_creator' | 'group';
   context_id: UUID;
   last_message_at: ISODateTime | null;
   created_at: ISODateTime;
@@ -608,6 +610,14 @@ export interface ChatMessageRow {
   thread_id: UUID;
   sender_id: UUID;
   text: string;
+  created_at: ISODateTime;
+}
+
+// Group threads only (0078_group_chat_and_notes.sql), the seated roster.
+// Never written by a client, see the table's header comment.
+export interface ChatThreadMemberRow {
+  thread_id: UUID;
+  user_id: UUID;
   created_at: ISODateTime;
 }
 
