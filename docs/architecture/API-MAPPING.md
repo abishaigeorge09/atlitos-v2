@@ -294,12 +294,15 @@ Training groups with monthly subscription fares (founder-ratified: manual renewa
 | `verifyMembershipPayment` | shared `verify-payment` | same function every domain uses; response gained a `membership_id` alias; capture activates the membership (period today .. +1 month IST, renewal extends) and writes the carve-out ledger group |
 | `myMemberships` | `group_memberships` read, player_id = me | hydrated with the member-readable group rows |
 | `groupSessions` / `sessionParticipants` | `sessions` (group_id filter) / `session_participants` | coach full, member self-scoped |
+| `getGroupSession` | `sessions` single read, id AND coach_id = me AND group_id not null, embeds `training_groups` | Track B's group session detail screen; a 1:1 id returns null here, mirroring how `useCoachSessions.getSession` returns null for a group id |
 | `createGroupSession` | `create_group_session` RPC | inserted `accepted`, zero money columns, participants seeded from active members, SLOT_TAKEN on a coach slot clash |
 | `startGroupSession` / `completeGroupSession` | `session_transition` `'start'` / `'complete'` | 0077: start is coach-only from accepted, no time gate; complete via the client door is allowed ONLY for group sessions (no money half), 1:1 stays on complete-session |
 | `markAttendance` | `mark_attendance` RPC | coach-only, session must be `in_progress` (INVALID_TRANSITION), marks only active members (NOT_A_MEMBER), no money effect |
 | `getGroupThreadId` | `chat_threads` context_type 'group' | one thread per group, trigger-created; messages flow through the existing chat_messages surface, group SELECT/INSERT policies enforce membership (and Realtime enforces the SELECT per subscriber) |
 | `listMyTraineeNotes` / `addTraineeNote` / `deleteTraineeNote` | `coach_trainee_notes` | coach-private, insert gated by `coach_has_trainee`, no update ever |
 | `listTraineeSessions` / `listTraineePayments` | `sessions` (coach_id = me AND player_id = trainee) + memberships join | the trainee profile tabs; payments derive from coach-readable rows since payment_intents is owner-only |
+
+**Group awareness retrofitted onto `useCoachSessions` / `useCoachTrainees` (Track B).** Group session rows share `sessions` with a NULL `player_id`/`session_type_id` (0076), so every 1:1 shaped coach read now scopes them out explicitly: `listUpcoming` and `getSession` add `player_id is not null` (an accepted group session must never render as a broken 1:1 card, and a group id passed to `getSession` returns null), `listTrainees` filters them out of the roster and additionally joins `session_types.name` to flag each trainee `hasOnline` / `hasInPerson` for the Figma filter chips (`isOnlineSessionTypeName`: a session type whose name contains "online", the gap doc's representation; no flag column exists). `getStats` counts group sessions in `totalSessions` / `sessionsThisMonth` but never in `playersCoached`, and now also returns `totalSessions` plus `lifetimeEarnings` (from `get_coach_wallet_balance().lifetime_earned`, same figure as the Earnings screen) for the dashboard's Total Sessions / Total Earnings tiles.
 
 ## Edge functions not in the v1 contract
 
