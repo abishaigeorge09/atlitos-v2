@@ -311,6 +311,19 @@ Covered in full under "The financial write prohibition" above. Read policies:
 | `audit_log` | `has_role('admin') OR has_role('moderator')` | **no** `authenticated`/`anon` write at all, ever; `service_role` `INSERT` only, and even `service_role`'s grants exclude `UPDATE`/`DELETE` at the table level (PRD-04 FR-54, enforced identically to `ledger_entries`) |
 | `support_tickets` | own rows; admin or moderator reads all | own row `INSERT`; `UPDATE` (resolve) restricted to `has_role('admin') OR has_role('moderator')` |
 
+### training groups (0076, 0078, 0081)
+
+SELECT-only for clients on all five tables; every write path is a SECURITY DEFINER RPC or a service-role edge function, and the write verbs are revoked at the grant level too (the ledger_entries precedent).
+
+- `training_groups`: PUBLIC browse (anon + authenticated) of `active` groups owned by verified coaches, the founder-wanted discovery surface; coach reads own rows in any state; a live (non-lapsed) member keeps reading their group; admin reads all. **This is a permissive-OR table exactly like venues: an unscoped select returns every active group in the product. Every app read must carry `.eq('coach_id', me)` or an explicit group id.**
+- `group_memberships`: coach reads every membership of their own groups; a player reads only their own rows; admin reads all. No cross-member visibility, so a members list is complete only on coach screens (member counts for discovery come from the definer RPC `get_group_member_counts`, counts only, no identities).
+- `session_participants`: the session's coach reads all rows, a player reads their own, admin all.
+- `sessions` gained `sessions_select_group_participant` (participant reads the group session rows they are part of; group rows match neither of the old party policies since player_id is null).
+- `coach_trainee_notes`: coach-only select/insert/delete of own rows; insert additionally gated by `coach_has_trainee`; the player has NO policy at all in v1 (zero rows, not an error); no UPDATE policy or grant.
+- Group chat: `chat_threads` 'group' rows and their `chat_messages` are readable/writable via `is_chat_thread_member` (per-subscriber SELECT is what Realtime enforces, so a lapsed member's socket goes silent the moment the membership trigger unseats them). `chat_thread_members` is readable by fellow members only and client-writable by nobody. The 0022 coaching-thread INSERT policy is untouched and still refuses `context_type = 'group'`, so group threads exist only via the training_groups trigger.
+
+**The 0081 lesson, now a rule for this domain: a subquery inside a policy runs under the referenced table's own RLS.** The naive 0076 policies cross-referenced training_groups and group_memberships and recursed (42P17, every non-owner read failed), and the public policy's `exists (coach_profiles ...)` was silently false for anon because coach_profiles has no anon SELECT on the base table. All five relationship predicates therefore live in SECURITY DEFINER boolean helpers (`is_verified_coach`, `is_group_member_live`, `is_group_coach`, `is_session_coach`, `is_session_participant`), the session_links_pair shape from 0022. Any future policy on these tables must go through a definer predicate, not an inline subquery.
+
 ## Storage
 
 Supabase Storage buckets get their own RLS-style policies on `storage.objects`, keyed by path prefix, following the same ownership pattern:

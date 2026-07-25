@@ -280,6 +280,27 @@ Both shipped in `0025_wallet_and_transactions_rpcs.sql`, both `security definer`
 
 **Deviation from the AT-44 ticket, recorded.** The ticket describes `get_my_transactions` as unioning `sessions`, `court_bookings`, `orders`, and `donations`. Two of those tables do not exist yet, and unioning domain tables would force an edit to this function every time a domain ships. `payment_intents` already carries `domain`, `entity_id`, `amount`, `status`, and `created_at` for every domain including the unbuilt ones, so commerce and donations will appear in this feed with no change here. The binding constraint, that every figure is derived and no stored balance column exists anywhere, holds either way.
 
+## groups (Groups phase, v2-only, no v1 mock)
+
+Training groups with monthly subscription fares (founder-ratified: manual renewal on the one-time payment rails, no autopay, capacity guarded in the join RPC). Client surface is `useGroups` in `packages/api/src/use-groups.ts`; schema 0076 to 0081, money path in `PAYMENTS.md` "Membership fares".
+
+| Client call | Backing | Note |
+|---|---|---|
+| `listMyGroups` / `listGroupsForCoach` | `training_groups` reads + `get_group_member_counts` RPC | training_groups is permissive-OR (public browse of active groups), so both carry explicit coach_id filters; counts come from the definer RPC, identities never leak |
+| `getGroup` | `training_groups` + `group_memberships` + `public_profiles` + `session_participants` | members list is complete for the coach, self-only for a member (RLS); attendance rate = present / (present + absent) over marked participant rows, per member and whole group |
+| `createGroup` / `updateGroup` | `create_training_group` / `update_training_group` RPCs (0080) | coach-owned; deactivate, never delete; capacity cannot drop below live members |
+| `joinGroup` | `join-group` edge function | `POST { group_id, expected_total }`, athlete JWT. Server re-prices (PRICE_MISMATCH 409), the RPC guards capacity under the group row lock (GROUP_FULL / ALREADY_MEMBER / GROUP_INACTIVE 409, all BEFORE Razorpay), returns `{ membership_id, group_id, status, razorpay_order_id, key_id, amount, currency, bill }` for the checkout sheet |
+| `renewMembership` | `renew-group-membership` edge function | `POST { membership_id, expected_total }`, same response shape; active memberships only (a lapsed member re-joins); re-snapshots the fare at today's price |
+| `verifyMembershipPayment` | shared `verify-payment` | same function every domain uses; response gained a `membership_id` alias; capture activates the membership (period today .. +1 month IST, renewal extends) and writes the carve-out ledger group |
+| `myMemberships` | `group_memberships` read, player_id = me | hydrated with the member-readable group rows |
+| `groupSessions` / `sessionParticipants` | `sessions` (group_id filter) / `session_participants` | coach full, member self-scoped |
+| `createGroupSession` | `create_group_session` RPC | inserted `accepted`, zero money columns, participants seeded from active members, SLOT_TAKEN on a coach slot clash |
+| `startGroupSession` / `completeGroupSession` | `session_transition` `'start'` / `'complete'` | 0077: start is coach-only from accepted, no time gate; complete via the client door is allowed ONLY for group sessions (no money half), 1:1 stays on complete-session |
+| `markAttendance` | `mark_attendance` RPC | coach-only, session must be `in_progress` (INVALID_TRANSITION), marks only active members (NOT_A_MEMBER), no money effect |
+| `getGroupThreadId` | `chat_threads` context_type 'group' | one thread per group, trigger-created; messages flow through the existing chat_messages surface, group SELECT/INSERT policies enforce membership (and Realtime enforces the SELECT per subscriber) |
+| `listMyTraineeNotes` / `addTraineeNote` / `deleteTraineeNote` | `coach_trainee_notes` | coach-private, insert gated by `coach_has_trainee`, no update ever |
+| `listTraineeSessions` / `listTraineePayments` | `sessions` (coach_id = me AND player_id = trainee) + memberships join | the trainee profile tabs; payments derive from coach-readable rows since payment_intents is owner-only |
+
 ## Edge functions not in the v1 contract
 
 PLAN.md's edge function roster includes several functions v1 never had a mock for, because v1 had no real payments or video pipeline. They exist to back the coach, court partner, and admin surfaces (PRD-02, PRD-03, PRD-04) and the payment/video internals every v1 endpoint above ultimately calls into.
