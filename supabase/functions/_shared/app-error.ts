@@ -102,6 +102,15 @@ const STATUS_BY_CODE: Record<string, number> = {
   // AT-82: admin-order-advance refusing to relay `placed -> cancelled`
   // because the refund path it would owe the shopper is not a P4 story.
   CANCEL_NOT_AVAILABLE: 409,
+  // Group fares (0079 RPCs, join-group / renew-group-membership). All 409:
+  // well-formed requests refused by the group's state. GROUP_FULL is the
+  // capacity guard's refusal (the join RPC counts live seats under the group
+  // row lock, before Razorpay is ever called); NOT_A_MEMBER is
+  // mark_attendance refusing a mark for someone outside the group.
+  GROUP_FULL: 409,
+  ALREADY_MEMBER: 409,
+  GROUP_INACTIVE: 409,
+  NOT_A_MEMBER: 409,
   // AT-111 (donate), the fourth payment domain. MIN_AMOUNT is a 422 (the
   // request was well formed but under the donation floor); ITEM_FUNDED is a 409
   // (the item's state refused a second sponsor, resolvable by picking another).

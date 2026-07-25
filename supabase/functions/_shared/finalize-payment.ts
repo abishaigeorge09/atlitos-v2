@@ -40,6 +40,10 @@ import {
   describeDonation,
   finalizeDonationCaptured,
 } from "./finalize-donation-payment.ts";
+import {
+  describeMembership,
+  finalizeMembershipCaptured,
+} from "./finalize-membership-payment.ts";
 
 export type FinalizeOutcome = "captured" | "already_processed";
 
@@ -138,6 +142,13 @@ export async function finalizePaymentCaptured(
       return await finalizeCourtBookingCaptured(supabase, intent);
     case "session":
       return await finalizeSessionCaptured(supabase, intent);
+    // Membership hands the gate an entity that already exists (join-group /
+    // renew-group-membership create the row before Razorpay is called), so
+    // it correctly sits AFTER the null entity_id check, with courts and
+    // sessions. Activation + the carve-out ledger group happen in the
+    // handler, once per captured charge.
+    case "membership":
+      return await finalizeMembershipCaptured(supabase, intent);
     default:
       return {
         outcome: "captured",
@@ -192,6 +203,8 @@ async function describeAlreadyProcessed(
       entityStatus = await describeOrder(supabase, existing.entity_id);
     } else if (existing.domain === "donation") {
       entityStatus = await describeDonation(supabase, existing.entity_id);
+    } else if (existing.domain === "membership") {
+      entityStatus = await describeMembership(supabase, existing.entity_id);
     }
   }
 

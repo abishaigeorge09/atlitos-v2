@@ -132,6 +132,10 @@ Deno.serve((req) =>
       // AT-72. Commerce's entity is created BY the gate, so this is the first
       // moment the order id exists; PRD-07 FR-23 gates Order Success on it.
       order_id: result.domain === "commerce" && result.entityId ? result.entityId : null,
+      // Group fares (join-group / renew-group-membership) ride the same
+      // shared gate; the membership-named alias keeps the client from
+      // switching on domain, same as the other aliases above.
+      membership_id: result.domain === "membership" ? result.entityId : null,
       status: result.entityStatus,
       outcome: result.outcome,
     });
