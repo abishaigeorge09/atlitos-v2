@@ -1,0 +1,37 @@
+# Integrator proof (groups phase, Tracks B-F merge): logs in as the seeded
+# coach1 account and lands on the coach Trainees tab, confirming the group
+# card renders with the seeded Cric Squad. Ephemeral verification flow, not
+# part of the tracked regression suite.
+appId: com.atlitos.app
+---
+- launchApp
+- runFlow:
+    when:
+      visible: "Save Password.*"
+    commands:
+      - tapOn: "Not Now"
+- openLink: atlitos://login
+- extendedWaitUntil:
+    visible: "Email or phone.*"
+    timeout: 10000
+- tapOn: "Email or phone input"
+- inputText: "coach1@atlitos.dev"
+- tapOn: "Password input"
+- inputText: "AtlitosDemo!2026"
+- tapOn:
+    text: "Log in"
+    index: 1
+- runFlow:
+    when:
+      visible: "Save Password.*"
+    commands:
+      - tapOn: "Not Now"
+- openLink: atlitos://trainings
+- extendedWaitUntil:
+    visible: "Trainings"
+    timeout: 15000
+- tapOn: "Trainees"
+- extendedWaitUntil:
+    visible: "Cric Squad"
+    timeout: 15000
+- takeScreenshot: /tmp/integrator-coach-trainees
