@@ -1,0 +1,310 @@
+# Trainings fixed shell verification, both roles (PRD-01 3.3, PRD-02 3.2
+# to 3.9). Proves the founder directive: the module title plus
+# TrainingsSubNav stay fixed while switching tabs (only the content below
+# swaps, no page push), the chat tab embeds the thread list inline instead
+# of redirecting to /chat, a thread and a drill in push ABOVE the module
+# and back returns to the tab that opened them, and tab switching never
+# piles up a back stack.
+#
+# Shell intact proof at every step: the "Trainings" module title AND the
+# sub nav's "Stats" tab label are both visible. On a pushed drill in the
+# sub nav must NOT be visible (the screen sits above the module).
+#
+# Signs in as the athlete demo account first, then the coach demo account,
+# via the atlitos://login deep link. Unlike the guest suite this flow signs
+# in, but it still writes no server state (taps only lists, tabs, back).
+appId: com.atlitos.app
+---
+# ---------- Athlete: player@atlitos.dev ----------
+# Fresh app process per run: three account switches in one long lived dev
+# process can flake the profile refresh, which is not what this flow is
+# proving.
+- launchApp
+# A Save Password dialog from an earlier aborted run may still be up.
+- runFlow:
+    when:
+      visible: "Save Password.*"
+    commands:
+      - tapOn: "Not Now"
+- openLink: atlitos://login
+- extendedWaitUntil:
+    visible: "Email or phone.*"
+    timeout: 10000
+- tapOn: "Email or phone input"
+- inputText: "player@atlitos.dev"
+- tapOn: "Password input"
+- inputText: "AtlitosDemo!2026"
+- tapOn:
+    text: "Log in"
+    index: 1
+# iOS may offer to save the just-typed password at any point after
+# submit; wait for either outcome, dismiss the dialog if it is the one
+# showing, then require Home.
+- extendedWaitUntil:
+    visible: "Hyderabad|Save Password.*"
+    timeout: 20000
+- runFlow:
+    when:
+      visible: "Save Password.*"
+    commands:
+      - tapOn: "Not Now"
+- extendedWaitUntil:
+    visible: "Hyderabad"
+    timeout: 10000
+
+# Enter the module. Stats is the root tab. The bottom nav tap can be
+# swallowed right after login, so retry until the sub nav shows.
+- repeat:
+    times: 3
+    commands:
+      - runFlow:
+          when:
+            notVisible: "Stats"
+          commands:
+            - tapOn: "Trainings"
+            - waitForAnimationToEnd:
+                timeout: 3000
+- extendedWaitUntil:
+    visible: "Your trainings at a glance"
+    timeout: 15000
+- assertVisible: "Trainings"
+- assertVisible: "Stats"
+- assertVisible: "Coaches"
+- assertVisible: "Payments"
+- takeScreenshot: /tmp/trainings-shell/player-stats
+
+# Coaches tab: shell stays, content swaps.
+- tapOn: "Coaches"
+- extendedWaitUntil:
+    visible: "My coaches"
+    timeout: 10000
+- assertVisible: "Browse coaches"
+- assertVisible: "Coach Demo Coach One"
+- assertVisible: "Trainings"
+- assertVisible: "Stats"
+- takeScreenshot: /tmp/trainings-shell/player-coaches
+
+# Payments tab.
+- tapOn: "Payments"
+- extendedWaitUntil:
+    visible: "Transactions"
+    timeout: 10000
+- assertVisible: "Paid for sessions held"
+- assertVisible: "Trainings"
+- assertVisible: "Stats"
+- takeScreenshot: /tmp/trainings-shell/player-payments
+
+# Chat tab: inline thread list, no redirect, shell intact. Thread rows
+# render the participant as ".*Atlitos user.*" (public profile name masking).
+- tapOn: "Chat"
+- extendedWaitUntil:
+    visible: ".*Atlitos user.*"
+    timeout: 10000
+- assertVisible: "Trainings"
+- assertVisible: "Stats"
+- takeScreenshot: /tmp/trainings-shell/player-chat
+
+# Open a thread: conversation pushes ABOVE the module (sub nav hidden),
+# back returns to the Chat tab with the shell intact.
+- tapOn:
+    text: ".*Atlitos user.*"
+    index: 0
+- extendedWaitUntil:
+    visible: "Send message"
+    timeout: 10000
+- assertNotVisible: "Stats"
+- takeScreenshot: /tmp/trainings-shell/player-chat-thread
+- tapOn: "Back"
+- extendedWaitUntil:
+    visible: ".*Atlitos user.*"
+    timeout: 10000
+- assertVisible: "Trainings"
+- assertVisible: "Stats"
+- assertVisible: "Chat"
+
+# Analytics tab (player has 2 held sessions, under the threshold of 3).
+- tapOn: "Analytics"
+- extendedWaitUntil:
+    visible: "Not enough sessions yet"
+    timeout: 10000
+- assertVisible: "Trainings"
+- assertVisible: "Stats"
+- takeScreenshot: /tmp/trainings-shell/player-analytics
+
+# Drill in: upcoming session card on Stats pushes Session detail above the
+# module; back returns to the Stats tab.
+- tapOn: "Stats"
+- extendedWaitUntil:
+    visible: "Your trainings at a glance"
+    timeout: 10000
+- tapOn:
+    text: "Demo Coach One, 2026-07-30.*"
+- extendedWaitUntil:
+    visible: "Session"
+    timeout: 10000
+- assertNotVisible: "Payments"
+- takeScreenshot: /tmp/trainings-shell/player-session-drillin
+- tapOn: "Back"
+- extendedWaitUntil:
+    visible: "Your trainings at a glance"
+    timeout: 10000
+- assertVisible: "Trainings"
+- assertVisible: "Stats"
+
+# No back stack pileup: after all that tab switching, one Home tap leaves
+# the module cleanly.
+- repeat:
+    times: 3
+    commands:
+      - runFlow:
+          when:
+            notVisible: "Hyderabad"
+          commands:
+            - tapOn: "Home"
+            - waitForAnimationToEnd:
+                timeout: 3000
+- assertVisible: "Hyderabad"
+
+# ---------- Coach: coach1@atlitos.dev ----------
+- openLink: atlitos://login
+- extendedWaitUntil:
+    visible: "Email or phone.*"
+    timeout: 10000
+- tapOn: "Email or phone input"
+- inputText: "coach1@atlitos.dev"
+- tapOn: "Password input"
+- inputText: "AtlitosDemo!2026"
+- tapOn:
+    text: "Log in"
+    index: 1
+# iOS may offer to save the just-typed password at any point after
+# submit; wait for either outcome, dismiss the dialog if it is the one
+# showing, then require Home.
+- extendedWaitUntil:
+    visible: "Hyderabad|Save Password.*"
+    timeout: 20000
+- runFlow:
+    when:
+      visible: "Save Password.*"
+    commands:
+      - tapOn: "Not Now"
+- extendedWaitUntil:
+    visible: "Hyderabad"
+    timeout: 10000
+
+# Coach Stats dashboard. Same retry as the athlete entry.
+- repeat:
+    times: 3
+    commands:
+      - runFlow:
+          when:
+            notVisible: "Stats"
+          commands:
+            - tapOn: "Trainings"
+            - waitForAnimationToEnd:
+                timeout: 3000
+- extendedWaitUntil:
+    visible: "Players coached"
+    timeout: 15000
+- assertVisible: "Trainings"
+- assertVisible: "Stats"
+- assertVisible: "Trainees"
+- assertVisible: "Earnings"
+# Session requests sits below the fold; the sub nav must stay fixed
+# while only the content scrolls.
+- scrollUntilVisible:
+    element:
+      text: "Session requests"
+    direction: DOWN
+- assertVisible: "Stats"
+- scrollUntilVisible:
+    element:
+      text: "Players coached"
+    direction: UP
+- takeScreenshot: /tmp/trainings-shell/coach-stats
+
+# Trainees tab (trainee renders masked as "Athlete" with a session count).
+- tapOn: "Trainees"
+- extendedWaitUntil:
+    visible: ".*sessions, last on.*"
+    timeout: 10000
+- assertVisible: "Trainings"
+- assertVisible: "Stats"
+- takeScreenshot: /tmp/trainings-shell/coach-trainees
+
+# Earnings tab (filter chips are its distinctive content).
+- tapOn: "Earnings"
+- extendedWaitUntil:
+    visible: "Session income"
+    timeout: 10000
+- assertVisible: "Transfer out"
+- assertVisible: "Trainings"
+- assertVisible: "Stats"
+- takeScreenshot: /tmp/trainings-shell/coach-earnings
+
+# Chat tab inline (participant renders as ".*Atlitos user.*").
+- tapOn: "Chat"
+- extendedWaitUntil:
+    visible: ".*Atlitos user.*"
+    timeout: 10000
+- assertVisible: "Trainings"
+- assertVisible: "Stats"
+- takeScreenshot: /tmp/trainings-shell/coach-chat
+
+# Open a thread and come back to the Chat tab.
+- tapOn:
+    text: ".*Atlitos user.*"
+    index: 0
+- extendedWaitUntil:
+    visible: "Send message"
+    timeout: 10000
+- assertNotVisible: "Stats"
+- takeScreenshot: /tmp/trainings-shell/coach-chat-thread
+- tapOn: "Back"
+- extendedWaitUntil:
+    visible: ".*Atlitos user.*"
+    timeout: 10000
+- assertVisible: "Trainings"
+- assertVisible: "Stats"
+- assertVisible: "Chat"
+
+# Video Analytics tab (coach has 2 completed sessions, under threshold).
+- tapOn: "Video Analytics"
+- extendedWaitUntil:
+    visible: "Not enough sessions yet"
+    timeout: 10000
+- assertVisible: "Trainings"
+- assertVisible: "Stats"
+- takeScreenshot: /tmp/trainings-shell/coach-analytics
+
+# Drill in: Availability pushes above the module from the Stats tab; back
+# returns to the Stats tab.
+- tapOn: "Stats"
+- extendedWaitUntil:
+    visible: "Players coached"
+    timeout: 10000
+- tapOn: "Availability"
+- extendedWaitUntil:
+    visible: "Availability"
+    timeout: 10000
+- assertNotVisible: "Trainees"
+- takeScreenshot: /tmp/trainings-shell/coach-availability-drillin
+- tapOn: "Back"
+- extendedWaitUntil:
+    visible: "Players coached"
+    timeout: 10000
+- assertVisible: "Trainings"
+- assertVisible: "Stats"
+
+# Clean exit to Home.
+- repeat:
+    times: 3
+    commands:
+      - runFlow:
+          when:
+            notVisible: "Hyderabad"
+          commands:
+            - tapOn: "Home"
+            - waitForAnimationToEnd:
+                timeout: 3000
+- assertVisible: "Hyderabad"
