@@ -7,16 +7,23 @@
   var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   var docEl = document.documentElement;
 
-  /* ---------- Nav: loads compact, expands ONCE past ~1.2 viewports, stays. ---------- */
+  /* ---------- Nav: collapses to the pill on scroll down, expands back on
+     any scroll up, always expanded near the top. ---------- */
   var header = document.getElementById("siteHeader");
-  var navExpanded = false;
+  var lastY = window.scrollY;
   var onScrollNav = function () {
     var y = window.scrollY;
     docEl.classList.toggle("scrolled", y > 90);
-    if (header && !navExpanded && y > window.innerHeight * 1.2) {
-      navExpanded = true;
-      header.classList.remove("compact");
+    if (header) {
+      if (y < 80) {
+        header.classList.remove("compact");
+      } else if (y > lastY + 2) {
+        header.classList.add("compact");
+      } else if (y < lastY - 2) {
+        header.classList.remove("compact");
+      }
     }
+    lastY = y;
   };
   window.addEventListener("scroll", onScrollNav, { passive: true });
   onScrollNav();
