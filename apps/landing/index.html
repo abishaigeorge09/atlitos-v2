@@ -33,13 +33,23 @@
   <!-- HERO. Renders complete with zero JS: full text in markup, nothing hidden. -->
   <section class="hero" id="top">
     <div class="shell hero-inner">
-      <div class="scoreboard" role="img" aria-label="Scoreboard reading: the way India plays is about to change forever">
+      <div class="scoreboard" id="scoreboard" role="img" aria-label="Screen reading: the way India plays is about to change forever">
         <div class="sb-topline mono"><span>ATLITOS ARENA</span><span>EVE 19:30</span></div>
         <div class="sb-screen">
-          <p class="sb-text mono"><span class="type" id="heroType">THE WAY INDIA PLAYS IS ABOUT TO CHANGE FOREVER</span><span class="caret" aria-hidden="true">_</span></p>
+          <p class="sb-text sb-beat1"><span class="type" id="heroType">The way India plays is about to change forever</span><span class="caret" aria-hidden="true">_</span></p>
+          <div class="sb-beat2" aria-hidden="true">
+            <svg class="beat-ball" viewBox="0 0 100 100" fill="none"><circle cx="50" cy="50" r="42" class="bb-face"/><path d="M8 50 H 92" class="bb-seam"/><path d="M50 8 C 30 30, 30 70, 50 92" class="bb-seam"/><path d="M50 8 C 70 30, 70 70, 50 92" class="bb-seam"/><circle cx="50" cy="50" r="42" class="bb-rim"/></svg>
+            <p class="sb-meet">Meet Atlitos.</p>
+          </div>
         </div>
-        <div class="sb-dots" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="sb-foot" aria-hidden="true">
+          <div class="sb-dots"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <div class="sb-slot">
+            <svg class="dock-ball" viewBox="0 0 100 100" fill="none"><circle cx="50" cy="50" r="42" class="bb-face"/><path d="M8 50 H 92" class="bb-seam"/><path d="M50 8 C 30 30, 30 70, 50 92" class="bb-seam"/><path d="M50 8 C 70 30, 70 70, 50 92" class="bb-seam"/><circle cx="50" cy="50" r="42" class="bb-rim"/></svg>
+          </div>
+        </div>
       </div>
+      <svg class="peek-ball" aria-hidden="true" viewBox="0 0 100 100" fill="none"><circle cx="50" cy="50" r="42" class="bb-face"/><path d="M8 50 H 92" class="bb-seam"/><path d="M50 8 C 30 30, 30 70, 50 92" class="bb-seam"/><path d="M50 8 C 70 30, 70 70, 50 92" class="bb-seam"/><circle cx="50" cy="50" r="42" class="bb-rim"/></svg>
       <p class="hero-sub">Courts. Coaches. Clips. Gear. Drills. One app for your whole game.</p>
       <div class="cta-row">
         <a class="btn-pill btn-lg" href="https://atlitos-app.vercel.app">Try the web app</a>
@@ -161,6 +171,37 @@
     </div>
   </section>
 
+  <!-- FEATURES. Full bleed marigold band, looping typewriter, notifications slide in. -->
+  <section class="features" aria-labelledby="features-title">
+    <div class="shell features-inner">
+      <h2 id="features-title" class="serif-line"><span class="type" data-type-loop>Atlitos works while you play and comes to you with your game</span><span class="caret" aria-hidden="true">_</span></h2>
+      <div class="feat-screen">
+        <div class="notif-col">
+          <div class="notif">
+            <p class="notif-title">Slot open Saturday, 7 am</p>
+            <p class="notif-sub">Smash Arena has your usual court free. One tap to rebook.</p>
+            <p class="notif-val mono">&#8377;400</p>
+          </div>
+          <div class="notif">
+            <p class="notif-title">Coach Priya sent a drill</p>
+            <p class="notif-sub">Footwork ladder, made for your level. XP waiting.</p>
+            <p class="notif-val mono">12 min</p>
+          </div>
+          <div class="notif">
+            <p class="notif-title">Your clip is live on Clutch</p>
+            <p class="notif-sub">That match point winner is out. Share it with your crew.</p>
+            <p class="notif-val mono">CLIP</p>
+          </div>
+          <div class="notif">
+            <p class="notif-title">Your roundup landed</p>
+            <p class="notif-sub">Spare change from your gear order reached a young athlete.</p>
+            <p class="notif-val mono">+ &#8377;7</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- DIFFERENT. Sticky stage, phases recolor semicircle, ball and tags. -->
   <section class="pin-scene" id="different" aria-labelledby="different-title">
     <div class="pin-stage phase-0" id="pinStage">
@@ -216,6 +257,7 @@
         </svg>
         <span class="burst burst-marigold mono">+ &#8377;7</span>
         <span class="burst burst-paper">GAME ON</span>
+        <svg class="stage-ball" viewBox="0 0 100 100" fill="none"><circle cx="50" cy="50" r="42" class="bb-face"/><path d="M8 50 H 92" class="bb-seam"/><path d="M50 8 C 30 30, 30 70, 50 92" class="bb-seam"/><path d="M50 8 C 70 30, 70 70, 50 92" class="bb-seam"/><circle cx="50" cy="50" r="42" class="bb-rim"/></svg>
         <span class="orbit"></span>
       </div>
       <p class="roundup-line mono"><span class="ru">&#8377;293</span> order. <span class="ru">&#8377;7</span> rounded up. <span class="ru">&#8377;7</span> to an athlete.</p>

@@ -5,7 +5,7 @@
 
   var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  /* Nav morph: full bar to floating pill */
+  /* Nav morph: flush full width strip to floating pill */
   var header = document.getElementById("siteHeader");
   if (header) {
     var onScroll = function () {
@@ -17,58 +17,101 @@
 
   if (reduced) { return; }
 
-  /* Typewriter. Text already complete in markup; clear and retype on first view. */
-  var typeEls = [document.getElementById("heroType")].concat(
-    Array.prototype.slice.call(document.querySelectorAll("[data-type]"))
-  ).filter(Boolean);
-
-  typeEls.forEach(function (el) {
+  /* Typewriter, one shot. Text already complete in markup. */
+  var typeOnce = function (el, done) {
     var full = el.textContent;
-    var done = false;
+    el.textContent = "";
+    var i = 0;
+    var tick = function () {
+      i += 1;
+      el.textContent = full.slice(0, i);
+      if (i < full.length) { setTimeout(tick, 40); }
+      else if (done) { done(); }
+    };
+    setTimeout(tick, 250);
+  };
+
+  var observeOnce = function (el, fn) {
+    var fired = false;
     var io = new IntersectionObserver(function (entries) {
       entries.forEach(function (entry) {
-        if (!entry.isIntersecting || done) { return; }
-        done = true;
+        if (!entry.isIntersecting || fired) { return; }
+        fired = true;
         io.unobserve(el);
+        fn();
+      });
+    }, { threshold: 0.5 });
+    io.observe(el);
+  };
+
+  var heroType = document.getElementById("heroType");
+  if (heroType) { observeOnce(heroType, function () { typeOnce(heroType); }); }
+
+  document.querySelectorAll("[data-type]").forEach(function (el) {
+    observeOnce(el, function () { typeOnce(el); });
+  });
+
+  /* Typewriter, looping (features headline). */
+  document.querySelectorAll("[data-type-loop]").forEach(function (el) {
+    var full = el.textContent;
+    observeOnce(el, function () {
+      var loop = function () {
         el.textContent = "";
         var i = 0;
         var tick = function () {
           i += 1;
           el.textContent = full.slice(0, i);
-          if (i < full.length) { setTimeout(tick, 40); }
+          if (i < full.length) { setTimeout(tick, 38); }
+          else { setTimeout(loop, 2200); }
         };
-        setTimeout(tick, 250);
-      });
-    }, { threshold: 0.5 });
-    io.observe(el);
+        tick();
+      };
+      loop();
+    });
   });
-
-  /* Hero second beat: screen swaps to MEET ATLITOS after you scroll past. */
-  var heroType = document.getElementById("heroType");
-  var heroLine = "THE WAY INDIA PLAYS IS ABOUT TO CHANGE FOREVER";
-  var meetLine = "MEET ATLITOS.";
 
   if (!window.gsap || !window.ScrollTrigger) { return; }
   gsap.registerPlugin(ScrollTrigger);
 
-  /* Pin the hero like the reference Mac scene: the screen swaps to the
-     second beat while still on screen, then the page continues. */
-  if (heroType) {
-    var onMeet = false;
+  /* Hero pin, three beats: type, meet, ball docks into the slot. */
+  var scoreboard = document.getElementById("scoreboard");
+  var dockBall = document.querySelector(".dock-ball");
+  if (scoreboard) {
+    var beat = 0;
+    if (dockBall) { gsap.set(dockBall, { x: "70vw", rotation: 0 }); }
     ScrollTrigger.create({
       trigger: ".hero",
       start: "top top",
-      end: "+=90%",
+      end: "+=140%",
       pin: true,
       pinSpacing: true,
       onUpdate: function (self) {
-        var wantMeet = self.progress > 0.45;
-        if (wantMeet === onMeet) { return; }
-        onMeet = wantMeet;
-        heroType.textContent = wantMeet ? meetLine : heroLine;
-        gsap.fromTo(".sb-text", { opacity: 0.15 }, { opacity: 1, duration: 0.45 });
+        var p = self.progress;
+        var wantBeat = p < 0.34 ? 0 : 1;
+        if (wantBeat !== beat) {
+          beat = wantBeat;
+          scoreboard.classList.toggle("is-meet", beat === 1);
+          if (beat === 1) {
+            gsap.fromTo(".sb-beat2",
+              { opacity: 0.15, filter: "grayscale(1)" },
+              { opacity: 1, filter: "grayscale(0)", duration: 0.7 });
+          }
+        }
+        /* Beat 3: ball rolls in from the right and docks into the slot. */
+        if (dockBall) {
+          var t = Math.max(0, Math.min(1, (p - 0.55) / 0.4));
+          gsap.set(dockBall, { x: (1 - t) * window.innerWidth * 0.7, rotation: -360 * t });
+        }
       }
     });
+  }
+
+  /* Peek ball: slides in from the page edge, pauses, slides back. */
+  var peek = document.querySelector(".peek-ball");
+  if (peek) {
+    gsap.timeline({ delay: 1.4 })
+      .to(peek, { x: "-46%", rotate: 10, duration: 0.7, ease: "back.out(1.8)" })
+      .to(peek, { x: "0%", rotate: -14, duration: 0.6, ease: "power2.in" }, "+=1.6");
   }
 
   /* Sticker and demo frame pops */
@@ -81,6 +124,22 @@
       ease: "back.out(1.6)",
       scrollTrigger: { trigger: el, start: "top 88%" }
     });
+  });
+
+  /* Demo card rows stagger in, dark CTA row pulses. */
+  gsap.utils.toArray(".demo-card").forEach(function (card) {
+    gsap.from(card.querySelectorAll(".d-row, .d-xp"), {
+      opacity: 0,
+      x: 30,
+      duration: 0.45,
+      stagger: 0.1,
+      ease: "power2.out",
+      scrollTrigger: { trigger: card, start: "top 78%" }
+    });
+    var cta = card.querySelector(".d-cta");
+    if (cta) {
+      gsap.to(cta, { opacity: 0.82, duration: 0.9, yoyo: true, repeat: -1, ease: "sine.inOut" });
+    }
   });
 
   /* Hand drawn arrows: stroke reveal */
@@ -99,6 +158,26 @@
       scrollTrigger: { trigger: svg, start: "top 82%" }
     });
   });
+
+  /* Features: screen rises, notification cards stagger in. */
+  var featScreen = document.querySelector(".feat-screen");
+  if (featScreen) {
+    gsap.from(featScreen, {
+      y: 140,
+      opacity: 0,
+      duration: 0.8,
+      ease: "power2.out",
+      scrollTrigger: { trigger: ".features", start: "top 60%" }
+    });
+    gsap.from(".notif", {
+      opacity: 0,
+      y: 40,
+      duration: 0.5,
+      stagger: 0.16,
+      ease: "back.out(1.5)",
+      scrollTrigger: { trigger: featScreen, start: "top 70%" }
+    });
+  }
 
   /* Pinned different scene: phases recolor and retag */
   var stage = document.getElementById("pinStage");
@@ -133,7 +212,6 @@
         setPhase(Math.min(2, Math.floor(self.progress * 3)));
       }
     });
-    /* gentle ball float */
     gsap.to(".ball-wrap", {
       y: -14,
       duration: 2.4,
@@ -143,14 +221,24 @@
     });
   }
 
-  /* Empower bursts pop with rotation */
+  /* Empower stage: center ball pops then bobs, bursts pop with rotation. */
+  var stageBall = document.querySelector(".stage-ball");
+  if (stageBall) {
+    gsap.from(stageBall, {
+      scale: 0,
+      duration: 0.6,
+      ease: "back.out(2)",
+      scrollTrigger: { trigger: ".stage", start: "top 80%" }
+    });
+    gsap.to(stageBall, { y: 10, duration: 2, yoyo: true, repeat: -1, ease: "sine.inOut" });
+  }
   gsap.utils.toArray(".burst").forEach(function (el, i) {
     gsap.from(el, {
       scale: 0,
       rotate: -14,
       duration: 0.5,
       ease: "back.out(2.2)",
-      delay: i * 0.18,
+      delay: 0.2 + i * 0.18,
       scrollTrigger: { trigger: ".stage", start: "top 78%" }
     });
   });
