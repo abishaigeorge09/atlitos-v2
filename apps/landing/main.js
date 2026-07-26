@@ -78,15 +78,25 @@
     io.observe(el);
   };
 
-  /* Hero beats: type the line, hold, then Meet Atlitos and the ball docks. */
+  /* Hero: rotate the sport photography, type the line, then Meet Atlitos. */
+  var hero = document.querySelector(".hero");
+  var heroImgs = document.querySelectorAll(".hero-bg img");
+  if (heroImgs.length > 1) {
+    var heroIdx = 0;
+    setInterval(function () {
+      if (document.visibilityState === "hidden") { return; }
+      heroImgs[heroIdx].classList.remove("is-on");
+      heroIdx = (heroIdx + 1) % heroImgs.length;
+      heroImgs[heroIdx].classList.add("is-on");
+    }, 4800);
+  }
   var heroType = document.getElementById("heroType");
-  var scoreboard = document.getElementById("scoreboard");
-  if (heroType && scoreboard) {
+  if (heroType && hero) {
     observeOnce(heroType, function () {
       typeOnce(heroType, function () {
         setTimeout(function () {
-          scoreboard.classList.add("is-meet");
-        }, 1500);
+          hero.classList.add("is-meet");
+        }, 900);
       });
     });
   }

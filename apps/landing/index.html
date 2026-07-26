@@ -31,30 +31,22 @@
 
 <main id="main">
 
-  <!-- HERO. Renders complete with zero JS: full text in markup, nothing hidden. -->
+  <!-- HERO. Full bleed rotating sport photography. Renders complete with zero JS. -->
   <section class="hero" id="top">
+    <div class="hero-bg" aria-hidden="true">
+      <img src="img/hero-stadium.jpg" alt="" class="is-on" />
+      <img src="img/hero-basketball.jpg" alt="" />
+      <img src="img/hero-badminton.jpg" alt="" />
+    </div>
+    <div class="hero-scrim" aria-hidden="true"></div>
     <div class="shell hero-inner">
-      <div class="scoreboard" id="scoreboard" role="img" aria-label="Screen reading: the way India plays is about to change forever. Meet Atlitos.">
-        <div class="sb-topline mono"><span>ATLITOS ARENA</span><span class="sb-live"><i class="live-dot"></i>LIVE</span><span>EVE 19:30</span></div>
-        <div class="sb-screen">
-          <p class="sb-text sb-beat1"><span class="type" id="heroType">The way India plays is about to change forever</span><span class="caret" aria-hidden="true">_</span></p>
-          <div class="sb-beat2">
-            <svg class="beat-ball" viewBox="0 0 100 100" fill="none" aria-hidden="true"><circle cx="50" cy="50" r="42" class="bb-face"/><path d="M8 50 H 92" class="bb-seam"/><path d="M50 8 C 30 30, 30 70, 50 92" class="bb-seam"/><path d="M50 8 C 70 30, 70 70, 50 92" class="bb-seam"/><circle cx="50" cy="50" r="42" class="bb-rim"/></svg>
-            <p class="sb-meet">Meet Atlitos.</p>
-          </div>
-        </div>
-        <div class="sb-foot" aria-hidden="true">
-          <div class="sb-dots"><i></i><i></i><i></i><i></i><i></i><i></i></div>
-          <div class="sb-slot">
-            <svg class="dock-ball" viewBox="0 0 100 100" fill="none"><circle cx="50" cy="50" r="42" class="bb-face"/><path d="M8 50 H 92" class="bb-seam"/><path d="M50 8 C 30 30, 30 70, 50 92" class="bb-seam"/><path d="M50 8 C 70 30, 70 70, 50 92" class="bb-seam"/><circle cx="50" cy="50" r="42" class="bb-rim"/></svg>
-          </div>
-        </div>
-      </div>
-      <svg class="peek-ball" aria-hidden="true" viewBox="0 0 100 100" fill="none"><circle cx="50" cy="50" r="42" class="bb-face"/><path d="M8 50 H 92" class="bb-seam"/><path d="M50 8 C 30 30, 30 70, 50 92" class="bb-seam"/><path d="M50 8 C 70 30, 70 70, 50 92" class="bb-seam"/><circle cx="50" cy="50" r="42" class="bb-rim"/></svg>
+      <p class="hero-eyebrow mono"><span>ATLITOS ARENA</span><span class="sb-live"><i class="live-dot"></i>LIVE</span><span>EVE 19:30</span></p>
+      <h1 class="hero-title"><span class="type" id="heroType">The way India plays is about to change forever</span><span class="caret" aria-hidden="true">_</span></h1>
+      <p class="hero-meet" id="heroMeet">Meet <em class="accent">Atlitos</em>.</p>
       <p class="hero-sub" data-reveal="up">Courts. Coaches. Clips. Gear. Drills. One app for your whole game.</p>
       <div class="cta-row">
-        <a class="btn-pill btn-lg" data-reveal="up" data-reveal-delay="1" href="https://atlitos-app.vercel.app">Try the web app</a>
-        <a class="btn-ghost" data-reveal="up" data-reveal-delay="2" href="mailto:founder@synthsports.co?subject=Atlitos%20TestFlight%20access">Get early iOS access</a>
+        <a class="btn-pill btn-lg btn-onDark" data-reveal="up" data-reveal-delay="1" href="https://atlitos-app.vercel.app">Try the web app</a>
+        <a class="btn-ghost ghost-onDark" data-reveal="up" data-reveal-delay="2" href="mailto:founder@synthsports.co?subject=Atlitos%20TestFlight%20access">Get early iOS access</a>
       </div>
       <p class="scroll-hint mono" aria-hidden="true">SCROLL DOWN<span class="hint-arrow">&darr;</span></p>
     </div>
@@ -64,7 +56,6 @@
   <section class="problem" aria-labelledby="problem-title">
     <div class="seam seam-top-ember" aria-hidden="true">
       <svg viewBox="0 0 1440 120" preserveAspectRatio="none"><path d="M0 120 L0 78 C 240 18, 480 2, 720 14 C 960 26, 1200 66, 1440 44 L1440 120 Z" /></svg>
-      <svg class="seam-ball" viewBox="0 0 100 100" fill="none" data-reveal="tilt"><circle cx="50" cy="50" r="42" class="bb-face"/><path d="M8 50 H 92" class="bb-seam"/><path d="M50 8 C 30 30, 30 70, 50 92" class="bb-seam"/><path d="M50 8 C 70 30, 70 70, 50 92" class="bb-seam"/><circle cx="50" cy="50" r="42" class="bb-rim"/></svg>
     </div>
     <div class="problem-grid">
       <h2 id="problem-title" class="sticker-stack">
@@ -135,75 +126,71 @@
     </div>
   </section>
 
-  <!-- STEPS. Folder tabs accumulate via CSS sticky. -->
-  <section class="steps-wrap" id="how" aria-label="How Atlitos works, three steps">
-    <div class="step-tab tab-1"><span class="mono tab-num">01</span><span class="tab-label">Find and book</span></div>
-    <div class="step-panel panel-1">
-      <div class="shell step-grid">
-        <div class="step-copy">
-          <p class="step-lede" data-reveal="up">First, you find your game.</p>
-          <p class="stack-list" data-reveal="up" data-reveal-delay="1">Badminton.<br />Basketball.<br />Tennis.<br />Turf.<br />Near you.</p>
-          <p class="stack-list" data-reveal="up" data-reveal-delay="2">All verified.<br />All live.<br />All bookable.</p>
-        </div>
-        <div class="demo-frame frame-marigold" data-reveal="up">
+  <!-- STEPS. Cards rise from below and stack, each sticking under the last. -->
+  <section class="steps-stack" id="how" aria-label="How Atlitos works, three steps">
+    <article class="scard scard-1">
+      <div class="scard-inner">
+        <div class="scard-copy">
+          <p class="scard-step mono">STEP 01</p>
+          <h3 class="scard-title">Find and book</h3>
+          <p class="scard-lede">First, you find your game.</p>
+          <p class="stack-list">Badminton. Basketball. Tennis. Turf.<br />Near you. All verified. All live. All bookable.</p>
           <div class="demo-card">
             <div class="d-row d-search"><span>Courts near HSR Layout</span></div>
-            <div class="d-row" data-reveal="side"><span>Smash Arena, Badminton</span><span class="mono">&#8377;400</span></div>
-            <div class="d-row" data-reveal="side" data-reveal-delay="1"><span>Hoop House, Basketball</span><span class="mono">&#8377;350</span></div>
-            <div class="d-row" data-reveal="side" data-reveal-delay="2"><span>Baseline Club, Tennis</span><span class="mono">&#8377;500</span></div>
-            <div class="d-row d-cta" data-reveal="side" data-reveal-delay="3"><span>Book 7 to 8 pm</span><span class="mono">&#8377;400</span></div>
+            <div class="d-row"><span>Smash Arena, Badminton</span><span class="mono">&#8377;400</span></div>
+            <div class="d-row"><span>Hoop House, Basketball</span><span class="mono">&#8377;350</span></div>
+            <div class="d-row d-cta"><span>Book 7 to 8 pm</span><span class="mono">&#8377;400</span></div>
           </div>
-          <div class="demo-cursor" aria-hidden="true">
-            <span class="cursor-pill">Book</span>
-            <svg viewBox="0 0 24 24" class="cursor-arrow"><path d="M5 3 L19 12 L12 13 L9 20 Z" /></svg>
-          </div>
+        </div>
+        <div class="scard-photo photo-marigold">
+          <img src="img/hero-pitch.jpg" alt="A fresh turf pitch ready for a game" loading="lazy" />
         </div>
       </div>
-    </div>
+    </article>
 
-    <div class="step-tab tab-2"><span class="mono tab-num">02</span><span class="tab-label">Train and level up</span></div>
-    <div class="step-panel panel-2">
-      <div class="shell step-grid">
-        <div class="step-copy">
-          <p class="step-lede" data-reveal="up">Then, you level up.</p>
-          <p class="stack-list" data-reveal="up" data-reveal-delay="1">Real coaches.<br />One on one sessions.<br />Group training.</p>
-          <p class="stack-list" data-reveal="up" data-reveal-delay="2">Drills.<br />XP.<br />Milestones.</p>
-        </div>
-        <div class="demo-frame frame-ember" data-reveal="up">
+    <article class="scard scard-2">
+      <div class="scard-inner">
+        <div class="scard-copy">
+          <p class="scard-step mono">STEP 02</p>
+          <h3 class="scard-title">Train and level up</h3>
+          <p class="scard-lede">Then, you level up.</p>
+          <p class="stack-list">Real coaches. One on one sessions. Group training.<br />Drills. XP. Milestones.</p>
           <div class="demo-card">
             <div class="d-row d-search"><span>Coach Priya, Badminton</span></div>
-            <div class="d-row" data-reveal="side"><span>Footwork drill</span><span class="mono">DONE</span></div>
-            <div class="d-row" data-reveal="side" data-reveal-delay="1"><span>Net play drill</span><span class="mono">DONE</span></div>
-            <div class="d-xp" data-reveal="side" data-reveal-delay="2"><span class="mono">240 XP</span><span class="xp-bar"><i></i></span></div>
-            <div class="d-row d-cta" data-reveal="side" data-reveal-delay="3"><span>Next session Tuesday</span><span class="mono">&#8377;600</span></div>
+            <div class="d-row"><span>Footwork drill</span><span class="mono">DONE</span></div>
+            <div class="d-xp"><span class="mono">240 XP</span><span class="xp-bar"><i></i></span></div>
+            <div class="d-row d-cta"><span>Next session Tuesday</span><span class="mono">&#8377;600</span></div>
           </div>
         </div>
-      </div>
-    </div>
-
-    <div class="step-tab tab-3"><span class="mono tab-num">03</span><span class="tab-label">Share and give back</span></div>
-    <div class="step-panel panel-3">
-      <div class="shell step-grid">
-        <div class="step-copy">
-          <p class="step-lede" data-reveal="up">Then, you give back.</p>
-          <p class="stack-list" data-reveal="up" data-reveal-delay="1">Post your best plays.<br />Shop the gear you need.</p>
-          <p class="stack-list" data-reveal="up" data-reveal-delay="2">Round up the change.<br />Fund another athlete.</p>
+        <div class="scard-photo photo-ember">
+          <img src="img/step-train.jpg" alt="An athlete doing pushups in a training session" loading="lazy" />
         </div>
-        <div class="demo-frame frame-green" data-reveal="up">
+      </div>
+    </article>
+
+    <article class="scard scard-3">
+      <div class="scard-inner">
+        <div class="scard-copy">
+          <p class="scard-step mono">STEP 03</p>
+          <h3 class="scard-title">Share and give back</h3>
+          <p class="scard-lede">Then, you give back.</p>
+          <p class="stack-list">Post your best plays. Shop the gear you need.<br />Round up the change. Fund another athlete.</p>
           <div class="demo-card">
             <div class="d-row d-search"><span>Order, grip tape and shuttles</span></div>
-            <div class="d-row" data-reveal="side"><span>Order total</span><span class="mono">&#8377;293</span></div>
-            <div class="d-row" data-reveal="side" data-reveal-delay="1"><span>Round up</span><span class="mono">+ &#8377;7</span></div>
-            <div class="d-row d-cta" data-reveal="side" data-reveal-delay="2"><span>Goes to an athlete</span><span class="mono">&#8377;7</span></div>
+            <div class="d-row"><span>Order total</span><span class="mono">&#8377;293</span></div>
+            <div class="d-row"><span>Round up</span><span class="mono">+ &#8377;7</span></div>
+            <div class="d-row d-cta"><span>Goes to an athlete</span><span class="mono">&#8377;7</span></div>
           </div>
         </div>
+        <div class="scard-photo photo-green">
+          <img src="img/step-give.jpg" alt="Young athletes running drills on a neighborhood court" loading="lazy" />
+        </div>
       </div>
-    </div>
+    </article>
   </section>
 
   <!-- FEATURES. Marigold band arches in over the steps; the ball rides its seam. -->
   <section class="features" aria-labelledby="features-title">
-    <svg class="features-ball" aria-hidden="true" viewBox="0 0 100 100" fill="none" data-reveal="tilt"><circle cx="50" cy="50" r="42" class="bb-face"/><path d="M8 50 H 92" class="bb-seam"/><path d="M50 8 C 30 30, 30 70, 50 92" class="bb-seam"/><path d="M50 8 C 70 30, 70 70, 50 92" class="bb-seam"/><circle cx="50" cy="50" r="42" class="bb-rim"/></svg>
     <div class="shell features-inner">
       <h2 id="features-title" class="serif-line"><span class="type" data-type-loop>Atlitos works while you play and comes to you with your game</span><span class="caret" aria-hidden="true">_</span></h2>
       <div class="feat-grid">
@@ -297,13 +284,7 @@
         </div>
       </div>
       <div class="ball-wrap" aria-hidden="true">
-        <svg class="ball" viewBox="0 0 200 200" fill="none">
-          <circle cx="100" cy="100" r="86" class="ball-face" />
-          <path d="M14 100 H 186" class="ball-seam" />
-          <path d="M100 14 C 60 60, 60 140, 100 186" class="ball-seam" />
-          <path d="M100 14 C 140 60, 140 140, 100 186" class="ball-seam" />
-          <circle cx="100" cy="100" r="86" class="ball-rim" />
-        </svg>
+        <div class="ball ball-photo"><img src="img/hero-badminton.jpg" alt="" loading="lazy" /></div>
         <span class="tag tag-a">Site visits</span>
         <span class="tag tag-b">Real photos</span>
         <span class="tag tag-c">Live slots</span>
@@ -445,7 +426,7 @@
         </svg>
         <span class="burst burst-marigold mono" data-reveal="pop">+ &#8377;7</span>
         <span class="burst burst-paper" data-reveal="pop" data-reveal-delay="2">GAME ON</span>
-        <svg class="stage-ball" viewBox="0 0 100 100" fill="none" data-reveal="pop" data-reveal-delay="1"><circle cx="50" cy="50" r="42" class="bb-face"/><path d="M8 50 H 92" class="bb-seam"/><path d="M50 8 C 30 30, 30 70, 50 92" class="bb-seam"/><path d="M50 8 C 70 30, 70 70, 50 92" class="bb-seam"/><circle cx="50" cy="50" r="42" class="bb-rim"/></svg>
+        <div class="stage-ball stage-photo" data-reveal="pop" data-reveal-delay="1"><img src="img/night-match.jpg" alt="" loading="lazy" /></div>
         <span class="orbit"></span>
         <span class="spark spark-a">&#10022;</span>
         <span class="spark spark-b">&#10022;</span>
