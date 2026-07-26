@@ -397,66 +397,83 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--ember); outline
 .a-ember { stroke: var(--ember); }
 .a-green { stroke: var(--green); }
 
-/* ---------- Steps: cards rise from below and stack ---------- */
-.steps-stack {
-  max-width: 1160px;
-  margin: 0 auto;
-  padding: 30px 24px 140px;
-}
+/* ---------- Steps: one Step component instanced three times.
+   Parker mechanic: every card sticky at the SAME offset with the same
+   z index, one viewport each, DOM order paints later cards over earlier. ---------- */
+.steps-wrapper { position: relative; max-width: 1160px; margin: 0 auto; padding: 20px 24px 60px; }
 .scard {
   position: sticky;
-  min-height: 74vh;
-  border: 3px solid var(--ink);
-  border-radius: 26px;
-  box-shadow: var(--shadow-hard);
-  overflow: hidden;
-  display: flex;
+  top: calc(var(--nav-h) + 44px);
+  z-index: 1;
+  height: calc(100svh - var(--nav-h) - 64px);
+  min-height: 540px;
+  display: flex; flex-direction: column;
 }
-.scard + .scard { margin-top: 14vh; }
-.scard-1 { top: calc(var(--nav-h) + 14px); background: var(--marigold); }
-.scard-2 { top: calc(var(--nav-h) + 42px); background: var(--ember); color: var(--ink-on-accent); }
-.scard-3 { top: calc(var(--nav-h) + 70px); background: var(--green); }
-.scard-inner { display: grid; grid-template-columns: 1.05fr 1fr; width: 100%; }
-.scard-copy {
-  padding: clamp(28px, 4vw, 54px);
-  display: flex; flex-direction: column; gap: 14px;
-  align-items: flex-start;
-}
-.scard-step {
-  font-size: 0.75rem; font-weight: 700; letter-spacing: 0.16em;
-  background: var(--ink);
-  color: var(--ink-inverse);
-  border-radius: 999px;
-  padding: 6px 14px;
-}
-.scard-title {
-  font-family: var(--font-display);
-  font-weight: 900;
-  font-size: clamp(1.875rem, 3.6vw, 3rem);
-  line-height: 1.05;
-}
-.scard-lede {
+.scard-tab {
+  display: inline-flex; align-items: center; gap: 14px;
+  align-self: flex-start;
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: clamp(1.125rem, 2vw, 1.5rem);
+  font-size: clamp(1.125rem, 2.2vw, 1.75rem);
+  line-height: 1.1;
+  border: 3px solid var(--ink);
+  border-bottom: none;
+  border-radius: 16px 16px 0 0;
+  padding: 16px 26px 14px;
+  position: relative; z-index: 2;
+  margin-bottom: -3px;
 }
-.stack-list { font-size: 1.0625rem; font-weight: 500; line-height: 1.7; color: inherit; }
-.scard .demo-card { margin-top: auto; width: min(430px, 100%); }
-.scard-photo { position: relative; min-height: 320px; border-left: 3px solid var(--ink); }
-.scard-photo img, .scard-photo video {
-  position: absolute; inset: 0;
-  width: 100%; height: 100%;
+.scard-tab .tab-num { font-size: 0.875rem; opacity: 0.7; }
+.scard-1 .scard-tab { background: var(--marigold); }
+.scard-2 .scard-tab { background: var(--ember); color: var(--ink-on-accent); }
+.scard-3 .scard-tab { background: var(--green); }
+.scard-folder {
+  flex: 1;
+  display: grid; grid-template-columns: 1fr 1.25fr;
+  gap: clamp(24px, 4vw, 60px);
+  align-items: center;
+  border: 3px solid var(--ink);
+  border-radius: 0 22px 22px 22px;
+  box-shadow: var(--shadow-hard);
+  padding: clamp(24px, 3.6vw, 52px);
+}
+.scard-1 .scard-folder { background: var(--marigold-tint); }
+.scard-2 .scard-folder { background: var(--ember-tint); }
+.scard-3 .scard-folder { background: var(--green-tint); }
+.scard-lede {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: clamp(1.5rem, 2.8vw, 2.25rem);
+  line-height: 1.1;
+  margin-bottom: 22px;
+}
+.stack-list { font-size: 1.0625rem; font-weight: 500; line-height: 1.7; color: var(--ink-secondary); }
+.stack-list + .stack-list { margin-top: 18px; }
+.scard-video {
+  position: relative;
+  height: 100%;
+  max-height: 62vh;
+  display: flex;
+}
+.scard-video video {
+  width: 100%;
   object-fit: cover;
-  filter: saturate(0.85);
+  border: 2.5px solid var(--ink);
+  border-radius: 12px;
+  background: var(--surface);
 }
-.scard-photo::after {
-  content: "";
-  position: absolute; inset: 0;
-  mix-blend-mode: multiply;
+.slot-chip {
+  position: absolute;
+  right: clamp(24px, 3vw, 40px); bottom: clamp(22px, 2.6vw, 36px);
+  background: var(--paper);
+  border: 1.5px dashed var(--ink);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 0.625rem; font-weight: 700; letter-spacing: 0.08em;
+  color: var(--ink-secondary);
 }
-.photo-marigold::after { background: linear-gradient(135deg, rgba(232, 179, 36, 0.38), rgba(28, 23, 18, 0.12)); }
-.photo-ember::after { background: linear-gradient(135deg, rgba(228, 97, 54, 0.34), rgba(28, 23, 18, 0.14)); }
-.photo-green::after { background: linear-gradient(135deg, rgba(76, 175, 125, 0.36), rgba(28, 23, 18, 0.14)); }
+
+.demo-card { margin-top: auto; width: min(430px, 100%); }
 
 .demo-card {
   background: var(--surface);
@@ -1139,9 +1156,9 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--ember); outline
 @media (max-width: 900px) {
   .problem-grid, .empower-head, .pricing-grid, .feat-grid { grid-template-columns: 1fr; gap: 36px; }
   .problem-grid h2 { justify-self: start; }
-  .scard-inner { grid-template-columns: 1fr; }
-  .scard { min-height: 0; }
-  .scard-photo { min-height: 34vh; border-left: none; border-top: 3px solid var(--ink); order: -1; }
+  .scard { height: auto; min-height: 0; }
+  .scard-folder { grid-template-columns: 1fr; }
+  .scard-video { max-height: 34vh; min-height: 220px; }
   .scoreboard { min-height: 44vh; }
   .sb-screen { min-height: 30vh; }
   .persona-grid { grid-template-columns: 1fr 1fr; }

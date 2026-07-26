@@ -141,70 +141,51 @@
     </div>
   </section>
 
-  <!-- STEPS. Cards rise from below and stack, each sticking under the last. -->
-  <section class="steps-stack" id="how" aria-label="How Atlitos works, three steps">
+  <!-- STEPS. One Step component instanced three times, Parker anatomy:
+       sticky title tab + folder of copy and demo video. Same top offset and
+       z index on all three, DOM order does the stacking. -->
+  <section class="steps-wrapper" id="how" aria-label="How Atlitos works, three steps">
     <article class="scard scard-1">
-      <div class="scard-inner">
-        <div class="scard-copy">
-          <p class="scard-step mono">STEP 01</p>
-          <h3 class="scard-title">Find and book</h3>
+      <h2 class="scard-tab"><span class="mono tab-num">01</span>Step 1, Find and book</h2>
+      <div class="scard-folder">
+        <div class="scard-body">
           <p class="scard-lede">First, you find your game.</p>
-          <p class="stack-list">Badminton. Basketball. Tennis. Turf.<br />Near you. All verified. All live. All bookable.</p>
-          <div class="demo-frame frame-marigold">
-            <div class="demo-card">
-              <div class="d-row d-search"><span>Courts near HSR Layout</span></div>
-              <div class="d-row"><span>Smash Arena, Badminton</span><span class="mono">&#8377;400</span></div>
-              <div class="d-row"><span>Hoop House, Basketball</span><span class="mono">&#8377;350</span></div>
-              <div class="d-row d-cta"><span>Book 7 to 8 pm</span><span class="mono">&#8377;400</span></div>
-            </div>
-          </div>
+          <p class="stack-list">Badminton.<br />Basketball.<br />Tennis.<br />Turf.<br />Near you.</p>
+          <p class="stack-list">All verified.<br />All live.<br />All bookable.</p>
         </div>
-        <div class="scard-photo photo-marigold">
+        <div class="demo-frame frame-marigold scard-video">
           <video src="img/step1-courts.mp4" poster="img/hero-pitch.jpg" autoplay muted loop playsinline></video>
+          <span class="slot-chip mono">VIDEO SLOT, img/step1-courts.mp4</span>
         </div>
       </div>
     </article>
 
     <article class="scard scard-2">
-      <div class="scard-inner">
-        <div class="scard-copy">
-          <p class="scard-step mono">STEP 02</p>
-          <h3 class="scard-title">Train and level up</h3>
+      <h2 class="scard-tab"><span class="mono tab-num">02</span>Step 2, Train and level up</h2>
+      <div class="scard-folder">
+        <div class="scard-body">
           <p class="scard-lede">Then, you level up.</p>
-          <p class="stack-list">Real coaches. One on one sessions. Group training.<br />Drills. XP. Milestones.</p>
-          <div class="demo-frame frame-ember">
-            <div class="demo-card">
-              <div class="d-row d-search"><span>Coach Priya, Badminton</span></div>
-              <div class="d-row"><span>Footwork drill</span><span class="mono">DONE</span></div>
-              <div class="d-xp"><span class="mono">240 XP</span><span class="xp-bar"><i></i></span></div>
-              <div class="d-row d-cta"><span>Next session Tuesday</span><span class="mono">&#8377;600</span></div>
-            </div>
-          </div>
+          <p class="stack-list">Real coaches.<br />One on one sessions.<br />Group training.</p>
+          <p class="stack-list">Drills.<br />XP.<br />Milestones.</p>
         </div>
-        <div class="scard-photo photo-ember">
+        <div class="demo-frame frame-ember scard-video">
           <video src="img/step2-coach.mp4" poster="img/step-train.jpg" autoplay muted loop playsinline></video>
+          <span class="slot-chip mono">VIDEO SLOT, img/step2-coach.mp4</span>
         </div>
       </div>
     </article>
 
     <article class="scard scard-3">
-      <div class="scard-inner">
-        <div class="scard-copy">
-          <p class="scard-step mono">STEP 03</p>
-          <h3 class="scard-title">Share and give back</h3>
+      <h2 class="scard-tab"><span class="mono tab-num">03</span>Step 3, Share and give back</h2>
+      <div class="scard-folder">
+        <div class="scard-body">
           <p class="scard-lede">Then, you give back.</p>
-          <p class="stack-list">Post your best plays. Shop the gear you need.<br />Round up the change. Fund another athlete.</p>
-          <div class="demo-frame frame-green">
-            <div class="demo-card">
-              <div class="d-row d-search"><span>Order, grip tape and shuttles</span></div>
-              <div class="d-row"><span>Order total</span><span class="mono">&#8377;293</span></div>
-              <div class="d-row"><span>Round up</span><span class="mono">+ &#8377;7</span></div>
-              <div class="d-row d-cta"><span>Goes to an athlete</span><span class="mono">&#8377;7</span></div>
-            </div>
-          </div>
+          <p class="stack-list">Post your best plays.<br />Shop the gear you need.</p>
+          <p class="stack-list">Round up the change.<br />Fund another athlete.</p>
         </div>
-        <div class="scard-photo photo-green">
+        <div class="demo-frame frame-green scard-video">
           <video src="img/step3-roundup.mp4" poster="img/step-give.jpg" autoplay muted loop playsinline></video>
+          <span class="slot-chip mono">VIDEO SLOT, img/step3-roundup.mp4</span>
         </div>
       </div>
     </article>

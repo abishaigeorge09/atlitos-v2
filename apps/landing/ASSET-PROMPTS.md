@@ -39,14 +39,16 @@ For true frame by frame scroll scrubbing like the reference site. Generate ONE c
 
 Each `<video>` is already in the page with the current photo as poster. Drop the file in and it plays automatically. Specs for all three: MP4 (H.264), 1200x900 or similar 4:3, 6 to 10 seconds, MUTED (no audio track needed), seamless loop, under 4 MB each if possible.
 
-**`step1-courts.mp4`**
-> Screen recording style animation of a clean mobile booking app on a cream #FBF7F1 background: a search bar reads results populating as three court cards slide in one by one (badminton, basketball, tennis) each with a price in rupees, then a booking button gets tapped and confirms. Flat UI, ink #1C1712 borders, marigold #E8B324 accents. Loops seamlessly. No sound.
+These mirror the reference site's three step videos (a dashboard populating a grid, a minimal chat UI, a document UI writing itself), adapted to Atlitos. Each video slot shows a dashed VIDEO SLOT chip on the page until the file exists.
 
-**`step2-coach.mp4`**
-> Screen recording style animation of a coaching app screen: a coach avatar assigns a footwork drill, a checklist item ticks to done, an XP progress bar fills from 40 percent to 65 percent with a small celebration. Flat UI, cream background, ember #E46136 accents. Loops seamlessly. No sound.
+**`step1-courts.mp4`** , the "dashboard populating" video
+> Screen recording style animation of a clean court booking app on a cream #FBF7F1 background: a search pill reads "Courts near you", then a grid of court thumbnail cards populates one by one (badminton hall, basketball court, tennis court, turf), each card stamping a rupee price chip as it lands, ending with one card highlighted and a "Booked, 7 to 8 pm" confirmation pill. Flat UI, ink #1C1712 borders, marigold #E8B324 accents, subtle spring motion. Loops seamlessly. 6 to 10 seconds. No sound, no real brand logos.
 
-**`step3-roundup.mp4`**
-> Screen recording style animation of a checkout screen: an order total of 293 rupees appears, a roundup toggle flips on, plus 7 rupees animates onto the bill, and a final line shows the 7 rupees routed to a young athlete with a small heart pulse. Flat UI, cream background, green #4CAF7D accent for the roundup. Loops seamlessly. No sound.
+**`step2-coach.mp4`** , the "minimal chat" video
+> Screen recording style animation of a minimal coaching chat interface on a cream #FBF7F1 background: a typed question "How do I fix my smash?" is sent with a black circular send button with an up arrow, a coach reply appears assigning a footwork drill card, the drill ticks to done, and an XP progress bar fills from 40 to 65 percent with a small tick celebration. Flat UI, ember #E46136 accents, ink #1C1712 text. Loops seamlessly. 6 to 10 seconds. No sound.
+
+**`step3-roundup.mp4`** , the "document writing itself" video
+> Screen recording style animation of a checkout receipt writing itself line by line on a cream #FBF7F1 background: "Grip tape and shuttles, 293 rupees" appears, a roundup toggle flips on, "plus 7 rupees" writes itself in green #4CAF7D, then a side panel slides in showing "7 rupees routed to a young athlete" with a small pulse. Flat UI, ink #1C1712 borders. Loops seamlessly. 6 to 10 seconds. No sound.
 
 ## 4. Empower story portrait (wired NOW as a dashed placeholder slot)
 
