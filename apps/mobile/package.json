@@ -58,9 +58,10 @@
   },
   "devDependencies": {
     "@atlitos/config": "workspace:*",
+    "@babel/plugin-transform-react-jsx": "^7.29.7",
     "@types/node": "^20",
-    "babel-preset-expo": "~57.0.3",
     "@types/react": "~19.2.2",
+    "babel-preset-expo": "~57.0.3",
     "eslint": "^9.15.0",
     "prettier-plugin-tailwindcss": "^0.5.11",
     "tailwindcss": "^3.4.17",
