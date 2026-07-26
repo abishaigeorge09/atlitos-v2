@@ -397,46 +397,51 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--ember); outline
 .a-ember { stroke: var(--ember); }
 .a-green { stroke: var(--green); }
 
-/* ---------- Steps: the original folder tabs. Sticky tabs accumulate
-   across the top while full width panels scroll beneath. ---------- */
-.steps-wrap { position: relative; padding-bottom: 0; }
-.step-tab {
+/* ---------- Steps: each step is its own FILE, tab attached to its own
+   full width panel. All files sticky at the same offset; DOM order slides
+   the next file over the previous panel. The tab row is transparent, so
+   earlier tabs stay visible as the drawer fills. ---------- */
+.steps-wrap { position: relative; }
+.step-file {
   position: sticky;
   top: var(--nav-h);
-  z-index: 30;
+  height: calc(100svh - var(--nav-h));
+  display: flex; flex-direction: column;
+}
+.step-tab {
+  align-self: flex-start;
   display: flex; align-items: center; gap: 16px;
-  width: 33.333vw;
   border: 3px solid var(--ink);
   border-bottom: none;
   border-radius: 16px 16px 0 0;
-  box-shadow: var(--shadow-hard);
-  padding: 22px 24px;
+  padding: 18px 26px 16px;
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: clamp(1rem, 2vw, 1.625rem);
+  font-size: clamp(1rem, 2vw, 1.5rem);
   line-height: 1.15;
+  position: relative; z-index: 2;
+  margin-bottom: -3px;
 }
 .tab-label { white-space: nowrap; }
 .tab-num { font-size: clamp(0.8125rem, 1.4vw, 1rem); font-weight: 700; opacity: 0.75; }
-.tab-1 { background: var(--marigold); margin-left: 0; z-index: 31; border-bottom-left-radius: 0; }
-.tab-2 { background: var(--ember); color: var(--ink-on-accent); margin-left: 33.333vw; z-index: 32; }
-.tab-3 { background: var(--green); margin-left: 66.667vw; z-index: 33; border-top-right-radius: 0; }
+.tab-1 { background: var(--marigold); margin-left: 4vw; }
+.tab-2 { background: var(--ember); color: var(--ink-on-accent); margin-left: 36vw; }
+.tab-3 { background: var(--green); margin-left: 68vw; }
 .step-panel {
-  position: relative;
-  z-index: 20;
+  flex: 1;
   background: var(--surface);
-  padding: 100px 0 130px;
-  border-top: none;
+  border-top: 3px solid var(--ink);
+  display: flex; align-items: center;
+  padding: 40px 0;
   background-image:
-    repeating-linear-gradient(90deg, var(--ink) 0 12px, transparent 12px 22px),
     repeating-linear-gradient(90deg, var(--ink) 0 12px, transparent 12px 22px);
   background-repeat: no-repeat;
-  background-size: 100% 3px, 100% 3px;
-  background-position: 0 0, 11px 8px;
+  background-size: 100% 3px;
+  background-position: 0 8px;
 }
-.panel-3 { padding-bottom: 200px; }
 .step-grid {
   display: grid; grid-template-columns: 1fr 1.15fr; gap: 64px; align-items: center;
+  width: 100%;
 }
 .step-lede {
   font-family: var(--font-display);
@@ -450,6 +455,7 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--ember); outline
 .step-video video {
   width: 100%;
   aspect-ratio: 4 / 3;
+  max-height: calc(100svh - var(--nav-h) - 220px);
   object-fit: cover;
   border: 2.5px solid var(--ink);
   border-radius: 12px;
@@ -1148,11 +1154,13 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--ember); outline
 @media (max-width: 900px) {
   .problem-grid, .empower-head, .pricing-grid, .feat-grid { grid-template-columns: 1fr; gap: 36px; }
   .problem-grid h2 { justify-self: start; }
-  .step-grid { grid-template-columns: 1fr; gap: 40px; }
+  .step-grid { grid-template-columns: 1fr; gap: 28px; }
+  .step-file { height: auto; position: relative; top: 0; }
   .step-tab {
-    width: max-content; max-width: 88vw; margin-left: 0 !important;
+    width: max-content; max-width: 88vw; margin-left: 4vw !important;
     padding: 14px 20px; font-size: 1.125rem;
   }
+  .step-panel { padding: 34px 0 44px; }
   .scoreboard { min-height: 44vh; }
   .sb-screen { min-height: 30vh; }
   .persona-grid { grid-template-columns: 1fr 1fr; }
