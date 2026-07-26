@@ -31,36 +31,29 @@
 
 <main id="main">
 
-  <!-- HERO. The arena scoreboard frame, its screen playing rotating sport photography.
-       Renders complete with zero JS: full text in markup, first photo visible. -->
-  <section class="hero" id="top">
-    <div class="hero-sticky">
-    <div class="shell hero-inner">
-      <div class="scoreboard" role="img" aria-label="Arena screen reading: the way India plays is about to change forever. Meet Atlitos.">
-        <div class="sb-topline mono"><span>ATLITOS ARENA</span><span class="sb-live"><i class="live-dot"></i>LIVE</span><span>EVE 19:30</span></div>
-        <div class="sb-screen">
-          <div class="hero-bg" aria-hidden="true">
-            <img src="img/hero-stadium.jpg" alt="" class="is-on" />
-            <img src="img/hero-basketball.jpg" alt="" />
-            <img src="img/hero-badminton.jpg" alt="" />
-          </div>
-          <div class="hero-scrim" aria-hidden="true"></div>
-          <div class="sb-content">
-            <p class="sb-text"><span class="type" id="heroType">The way India plays is about to change forever</span><span class="caret" aria-hidden="true">_</span></p>
-            <p class="hero-meet" id="heroMeet">Meet <em class="meet-accent">Atlitos</em>.</p>
-          </div>
-        </div>
-        <div class="sb-foot" aria-hidden="true">
-          <div class="sb-dots"><i></i><i></i><i></i><i></i><i></i><i></i></div>
-        </div>
-      </div>
-      <p class="hero-sub" data-reveal="up">Courts. Coaches. Clips. Gear. Drills. One app for your whole game.</p>
-      <div class="cta-row">
-        <a class="btn-pill btn-lg" data-reveal="up" data-reveal-delay="1" href="https://atlitos-app.vercel.app">Try the web app</a>
-        <a class="btn-ghost" data-reveal="up" data-reveal-delay="2" href="mailto:founder@synthsports.co?subject=Atlitos%20TestFlight%20access">Get early iOS access</a>
-      </div>
-      <p class="scroll-hint mono" aria-hidden="true">SCROLL DOWN<span class="hint-arrow">&darr;</span></p>
+  <!-- HERO. The cinematic scoreboard video IS the hero. Phase 1 autoplays the
+       intro to the resting frame; phase 2 maps scroll to the final camera push
+       so the visitor scrolls INTO the LED board. Zero JS: the video autoplays
+       once and the page reads normally below. -->
+  <section class="vhero" id="top" aria-label="Atlitos opening film">
+    <div class="vhero-sticky">
+      <video id="heroVideo" class="vhero-video" src="img/hero-scoreboard.mp4" poster="img/hero-poster.jpg" autoplay muted playsinline preload="auto"></video>
+      <div class="vhero-veil" id="heroVeil" aria-hidden="true"></div>
+      <h1 class="sr-only">The way you play sports is about to change forever. Meet Atlitos.</h1>
+      <p class="vhero-hint mono" id="heroHint" aria-hidden="true">SCROLL DOWN<span class="hint-arrow">&darr;</span></p>
     </div>
+  </section>
+
+  <!-- INSIDE THE BOARD. Section 2 emerges from the LED close up darkness. -->
+  <section class="led-entry" aria-labelledby="led-entry-title">
+    <div class="shell led-entry-inner">
+      <p class="sec-eyebrow eyebrow-onDark eyebrow-center mono" data-reveal="up">YOU ARE INSIDE THE BOARD</p>
+      <h2 id="led-entry-title" class="serif-line led-entry-title" data-reveal="up" data-reveal-delay="1">Meet <em class="meet-accent">Atlitos</em>.</h2>
+      <p class="led-entry-sub" data-reveal="up" data-reveal-delay="2">Courts. Coaches. Clips. Gear. Drills. One app for your whole game.</p>
+      <div class="cta-row cta-center">
+        <a class="btn-pill btn-lg btn-onDark" data-reveal="up" data-reveal-delay="2" href="https://atlitos-app.vercel.app">Try the web app</a>
+        <a class="btn-ghost ghost-onDark" data-reveal="up" data-reveal-delay="3" href="mailto:founder@synthsports.co?subject=Atlitos%20TestFlight%20access">Get early iOS access</a>
+      </div>
     </div>
   </section>
 

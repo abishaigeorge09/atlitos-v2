@@ -155,7 +155,18 @@
     });
   }
 
-  if (reduced) { return; }
+  if (reduced) {
+    /* Reduced motion: no autoplaying film, hold the resting frame. */
+    var rv = document.getElementById("heroVideo");
+    if (rv) {
+      rv.removeAttribute("autoplay");
+      rv.pause();
+      var seekRest = function () { try { rv.currentTime = 7.9; } catch (e) {} };
+      if (rv.readyState > 0) { seekRest(); }
+      else { rv.addEventListener("loadedmetadata", seekRest); }
+    }
+    return;
+  }
 
   /* ---------- Typewriter, one shot. Text already complete in markup. ---------- */
   var typeOnce = function (el, done) {
@@ -171,34 +182,64 @@
     setTimeout(tick, 250);
   };
 
-  /* ---------- Hero: scroll scrubbed narrative in the scoreboard screen ---------- */
-  var hero = document.querySelector(".hero");
-  var heroImgs = document.querySelectorAll(".hero-bg img");
-  if (hero && heroImgs.length) {
-    var heroCurrent = 0;
-    var onScrollHero = function () {
-      var rect = hero.getBoundingClientRect();
-      var track = hero.offsetHeight - window.innerHeight;
-      if (track <= 0) { return; }
-      var p = Math.min(1, Math.max(0, -rect.top / track));
-      var idx = Math.min(heroImgs.length - 1, Math.floor(p * heroImgs.length));
-      if (idx !== heroCurrent) {
-        heroImgs[heroCurrent].classList.remove("is-on");
-        heroImgs[idx].classList.add("is-on");
-        heroCurrent = idx;
-      }
-      if (p > 0.5) { hero.classList.add("is-meet"); }
+  /* ---------- Hero film: phase 1 autoplays the intro to the resting frame,
+     phase 2 maps scroll to the final camera push. Reversible, never replays
+     the intro. ---------- */
+  var vid = document.getElementById("heroVideo");
+  var vhero = document.querySelector(".vhero");
+  var heroVeil = document.getElementById("heroVeil");
+  var heroHint = document.getElementById("heroHint");
+  if (vid && vhero) {
+    var REST = 7.9, END = 9.88;
+    var phase = "intro";
+    var cur = REST;
+    var enterRest = function () {
+      if (phase !== "intro") { return; }
+      phase = "scrub";
+      vid.pause();
+      try { vid.currentTime = REST; } catch (e) {}
+      cur = REST;
+      docEl.classList.add("v-rested");
+      if (heroHint) { heroHint.style.opacity = "1"; }
     };
-    window.addEventListener("scroll", onScrollHero, { passive: true });
-    onScrollHero();
-  }
-  var heroType = document.getElementById("heroType");
-  if (heroType && hero) {
-    observeOnce(heroType, function () {
-      typeOnce(heroType, function () {
-        setTimeout(function () { hero.classList.add("is-meet"); }, 1400);
-      });
+    vid.addEventListener("timeupdate", function () {
+      if (phase === "intro" && vid.currentTime >= REST) { enterRest(); }
     });
+    vid.addEventListener("ended", enterRest);
+    /* Hard fallback: the page must never stay navless. */
+    window.setTimeout(enterRest, 12000);
+    /* Scrolling during the intro skips straight to the resting frame. */
+    window.addEventListener("scroll", function () {
+      if (phase === "intro" && window.scrollY > 60) { enterRest(); }
+    }, { passive: true });
+
+    var heroLoop = function () {
+      requestAnimationFrame(heroLoop);
+      if (phase !== "scrub") { return; }
+      var track = vhero.offsetHeight - window.innerHeight;
+      if (track <= 0) { return; }
+      var p = Math.min(1, Math.max(0, window.scrollY / track));
+      /* chase the target with a little inertia, clamped to the push in */
+      var target = REST + p * (END - REST);
+      cur += (target - cur) * 0.16;
+      cur = Math.min(END, Math.max(REST, cur));
+      if (Math.abs(cur - (vid.currentTime || 0)) > 0.008 && vid.readyState > 1) {
+        try { vid.currentTime = cur; } catch (e) {}
+      }
+      /* scroll hint: gone within the first tenth of the push */
+      if (heroHint) { heroHint.style.opacity = String(Math.max(0, 1 - p * 10)); }
+      /* navbar: visible to 40 percent, gone by 70 */
+      if (header) {
+        var nOp = p < 0.4 ? 1 : p > 0.7 ? 0 : 1 - (p - 0.4) / 0.3;
+        header.style.opacity = String(nOp);
+        header.style.pointerEvents = nOp < 0.05 ? "none" : "";
+      }
+      /* the LED veil rises over the close up so section 2 emerges from it */
+      if (heroVeil) {
+        heroVeil.style.opacity = String(p < 0.8 ? 0 : (p - 0.8) / 0.2 * 0.92);
+      }
+    };
+    heroLoop();
   }
 
   /* ---------- Problem word rotator: fade out to blank, then the next phrase ---------- */
@@ -279,7 +320,7 @@
 
   /* Hard guarantee for above the fold: whatever happens, hero content shows. */
   window.setTimeout(function () {
-    document.querySelectorAll(".hero [data-reveal]").forEach(function (el) {
+    document.querySelectorAll(".led-entry [data-reveal]").forEach(function (el) {
       el.classList.add("is-in");
     });
   }, 2200);
