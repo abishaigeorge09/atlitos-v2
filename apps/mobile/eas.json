@@ -12,7 +12,12 @@
       "distribution": "internal"
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://syzzfgaudpifwvbpycyi.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_w81GxOVCX2UVNoQ9NAGTaA_u2kuT29O",
+        "EXPO_PUBLIC_RAZORPAY_KEY_ID": "rzp_test_TCwxkMaUz54BPH"
+      }
     }
   },
   "submit": {
