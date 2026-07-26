@@ -618,12 +618,15 @@ h3 {
 .footer-nav a:hover { color: var(--text); }
 
 /* Reveal */
-.reveal {
+/* Reveal animation is progressive enhancement only: content hides ONLY
+   when JS has confirmed it is running (html.js), so a blocked or failed
+   script can never blank the page. */
+html.js .reveal {
   opacity: 0;
   transform: translateY(16px);
   transition: opacity 480ms var(--ease-srm), transform 480ms var(--ease-srm);
 }
-.reveal.is-visible {
+html.js .reveal.is-visible {
   opacity: 1;
   transform: none;
 }
