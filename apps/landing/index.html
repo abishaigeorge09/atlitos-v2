@@ -16,7 +16,7 @@
 
 <a class="skip-link" href="#main">Skip to content</a>
 
-<header class="site-header" id="siteHeader">
+<header class="site-header compact" id="siteHeader">
   <div class="nav-card">
     <a class="wordmark" href="#top" aria-label="Atlitos home">Atlitos</a>
     <nav aria-label="Sections" class="site-nav">
@@ -34,6 +34,7 @@
   <!-- HERO. The arena scoreboard frame, its screen playing rotating sport photography.
        Renders complete with zero JS: full text in markup, first photo visible. -->
   <section class="hero" id="top">
+    <div class="hero-sticky">
     <div class="shell hero-inner">
       <div class="scoreboard" role="img" aria-label="Arena screen reading: the way India plays is about to change forever. Meet Atlitos.">
         <div class="sb-topline mono"><span>ATLITOS ARENA</span><span class="sb-live"><i class="live-dot"></i>LIVE</span><span>EVE 19:30</span></div>
@@ -60,6 +61,7 @@
       </div>
       <p class="scroll-hint mono" aria-hidden="true">SCROLL DOWN<span class="hint-arrow">&darr;</span></p>
     </div>
+    </div>
   </section>
 
   <!-- PROBLEM. Ember band flows in over a curved seam; the ball rides the seam edge. -->
@@ -68,14 +70,17 @@
       <svg viewBox="0 0 1440 120" preserveAspectRatio="none"><path d="M0 120 L0 78 C 240 18, 480 2, 720 14 C 960 26, 1200 66, 1440 44 L1440 120 Z" /></svg>
     </div>
     <div class="problem-grid">
-      <h2 id="problem-title" class="sticker-stack">
-        <span class="sticker" data-reveal="tilt">Playing is easy.</span>
-        <span class="sticker" data-reveal="tilt" data-reveal-delay="1"><em class="accent">Finding</em> courts, coaches</span>
-        <span class="sticker" data-reveal="tilt" data-reveal-delay="2">and your people is hard.</span>
-      </h2>
+      <div class="problem-left">
+        <p class="sec-eyebrow eyebrow-onAccent mono" data-reveal="up">THE PROBLEM</p>
+        <h2 id="problem-title" class="sticker-stack">
+          <span class="sticker" data-reveal="tilt">Playing is easy.</span>
+          <span class="sticker" data-reveal="tilt" data-reveal-delay="1"><em class="accent">Finding</em> courts, coaches</span>
+          <span class="sticker" data-reveal="tilt" data-reveal-delay="2">and your people is hard.</span>
+        </h2>
+      </div>
       <div class="note" data-reveal="up" data-reveal-delay="2">
         <p>Good games do not organize themselves.</p>
-        <p>They come from <mark class="chip">twenty pings in a WhatsApp group</mark> and a phone call to check one slot.</p>
+        <p>They come from <mark class="chip"><span id="rotChip">twenty pings in a WhatsApp group</span></mark> and a phone call to check one slot.</p>
         <p>That is the old way. And it takes forever.</p>
       </div>
     </div>
@@ -145,15 +150,17 @@
           <h3 class="scard-title">Find and book</h3>
           <p class="scard-lede">First, you find your game.</p>
           <p class="stack-list">Badminton. Basketball. Tennis. Turf.<br />Near you. All verified. All live. All bookable.</p>
-          <div class="demo-card">
-            <div class="d-row d-search"><span>Courts near HSR Layout</span></div>
-            <div class="d-row"><span>Smash Arena, Badminton</span><span class="mono">&#8377;400</span></div>
-            <div class="d-row"><span>Hoop House, Basketball</span><span class="mono">&#8377;350</span></div>
-            <div class="d-row d-cta"><span>Book 7 to 8 pm</span><span class="mono">&#8377;400</span></div>
+          <div class="demo-frame frame-marigold">
+            <div class="demo-card">
+              <div class="d-row d-search"><span>Courts near HSR Layout</span></div>
+              <div class="d-row"><span>Smash Arena, Badminton</span><span class="mono">&#8377;400</span></div>
+              <div class="d-row"><span>Hoop House, Basketball</span><span class="mono">&#8377;350</span></div>
+              <div class="d-row d-cta"><span>Book 7 to 8 pm</span><span class="mono">&#8377;400</span></div>
+            </div>
           </div>
         </div>
         <div class="scard-photo photo-marigold">
-          <img src="img/hero-pitch.jpg" alt="A fresh turf pitch ready for a game" loading="lazy" />
+          <video src="img/step1-courts.mp4" poster="img/hero-pitch.jpg" autoplay muted loop playsinline></video>
         </div>
       </div>
     </article>
@@ -165,15 +172,17 @@
           <h3 class="scard-title">Train and level up</h3>
           <p class="scard-lede">Then, you level up.</p>
           <p class="stack-list">Real coaches. One on one sessions. Group training.<br />Drills. XP. Milestones.</p>
-          <div class="demo-card">
-            <div class="d-row d-search"><span>Coach Priya, Badminton</span></div>
-            <div class="d-row"><span>Footwork drill</span><span class="mono">DONE</span></div>
-            <div class="d-xp"><span class="mono">240 XP</span><span class="xp-bar"><i></i></span></div>
-            <div class="d-row d-cta"><span>Next session Tuesday</span><span class="mono">&#8377;600</span></div>
+          <div class="demo-frame frame-ember">
+            <div class="demo-card">
+              <div class="d-row d-search"><span>Coach Priya, Badminton</span></div>
+              <div class="d-row"><span>Footwork drill</span><span class="mono">DONE</span></div>
+              <div class="d-xp"><span class="mono">240 XP</span><span class="xp-bar"><i></i></span></div>
+              <div class="d-row d-cta"><span>Next session Tuesday</span><span class="mono">&#8377;600</span></div>
+            </div>
           </div>
         </div>
         <div class="scard-photo photo-ember">
-          <img src="img/step-train.jpg" alt="An athlete doing pushups in a training session" loading="lazy" />
+          <video src="img/step2-coach.mp4" poster="img/step-train.jpg" autoplay muted loop playsinline></video>
         </div>
       </div>
     </article>
@@ -185,15 +194,17 @@
           <h3 class="scard-title">Share and give back</h3>
           <p class="scard-lede">Then, you give back.</p>
           <p class="stack-list">Post your best plays. Shop the gear you need.<br />Round up the change. Fund another athlete.</p>
-          <div class="demo-card">
-            <div class="d-row d-search"><span>Order, grip tape and shuttles</span></div>
-            <div class="d-row"><span>Order total</span><span class="mono">&#8377;293</span></div>
-            <div class="d-row"><span>Round up</span><span class="mono">+ &#8377;7</span></div>
-            <div class="d-row d-cta"><span>Goes to an athlete</span><span class="mono">&#8377;7</span></div>
+          <div class="demo-frame frame-green">
+            <div class="demo-card">
+              <div class="d-row d-search"><span>Order, grip tape and shuttles</span></div>
+              <div class="d-row"><span>Order total</span><span class="mono">&#8377;293</span></div>
+              <div class="d-row"><span>Round up</span><span class="mono">+ &#8377;7</span></div>
+              <div class="d-row d-cta"><span>Goes to an athlete</span><span class="mono">&#8377;7</span></div>
+            </div>
           </div>
         </div>
         <div class="scard-photo photo-green">
-          <img src="img/step-give.jpg" alt="Young athletes running drills on a neighborhood court" loading="lazy" />
+          <video src="img/step3-roundup.mp4" poster="img/step-give.jpg" autoplay muted loop playsinline></video>
         </div>
       </div>
     </article>
@@ -202,6 +213,7 @@
   <!-- FEATURES. Marigold band arches in over the steps; the ball rides its seam. -->
   <section class="features" aria-labelledby="features-title">
     <div class="shell features-inner">
+      <p class="sec-eyebrow mono" data-reveal="up">ALWAYS ON</p>
       <h2 id="features-title" class="serif-line"><span class="type" data-type-loop>Atlitos works while you play and comes to you with your game</span><span class="caret" aria-hidden="true">_</span></h2>
       <div class="feat-grid">
         <div class="feat-copy">
@@ -213,7 +225,7 @@
             <span class="mini-sticker" data-reveal="tilt" data-reveal-delay="2">No missed slots</span>
           </div>
         </div>
-        <div class="feat-screen" data-reveal="up">
+        <div class="demo-frame frame-paper feat-screen" data-reveal="up">
           <div class="fs-topline mono" aria-hidden="true"><span>NOTIFICATIONS</span><span>4 NEW</span></div>
           <div class="notif-col">
             <div class="notif" data-reveal="side">
@@ -245,10 +257,11 @@
   <!-- OLD WAY vs ATLITOS WAY. Espresso band, court diagram, toggle. -->
   <section class="oldway" aria-labelledby="oldway-title">
     <div class="shell oldway-inner">
+      <p class="sec-eyebrow eyebrow-onDark mono" data-reveal="up">BOOKING A GAME</p>
       <h2 id="oldway-title" class="serif-line"><span class="type" data-type>Getting a game used to be a maze</span><span class="caret" aria-hidden="true">_</span></h2>
       <div class="way-toggle" role="tablist" aria-label="Old way or Atlitos way">
-        <button class="way-btn" id="wayOld" role="tab" aria-selected="false" type="button">The old way</button>
-        <button class="way-btn is-active" id="wayNew" role="tab" aria-selected="true" type="button">The Atlitos way</button>
+        <button class="way-btn is-active" id="wayOld" role="tab" aria-selected="true" type="button">The old way</button>
+        <button class="way-btn" id="wayNew" role="tab" aria-selected="false" type="button">The Atlitos way</button>
       </div>
       <div class="court-wrap" data-reveal="up">
         <svg class="court" viewBox="0 0 900 420" fill="none" aria-hidden="true">
@@ -257,17 +270,17 @@
           <circle cx="450" cy="210" r="60" class="court-line" />
           <rect x="30" y="120" width="110" height="180" class="court-line" />
           <rect x="760" y="120" width="110" height="180" class="court-line" />
-          <path id="pathOld" class="way-path way-old" d="M70 360 C 150 260, 90 190, 190 210 C 300 232, 240 330, 340 320 C 430 312, 380 200, 470 220 C 560 240, 520 340, 610 320 C 700 300, 660 180, 750 200 C 800 210, 810 130, 840 80" />
-          <path id="pathNew" class="way-path way-new is-shown" d="M70 360 C 300 300, 600 180, 840 80" />
+          <path id="pathOld" class="way-path way-old is-shown" d="M70 360 C 150 260, 90 190, 190 210 C 300 232, 240 330, 340 320 C 430 312, 380 200, 470 220 C 560 240, 520 340, 610 320 C 700 300, 660 180, 750 200 C 800 210, 810 130, 840 80" />
+          <path id="pathNew" class="way-path way-new" d="M70 360 C 300 300, 600 180, 840 80" />
           <circle cx="840" cy="80" r="14" class="way-goal" />
         </svg>
-        <div class="way-labels way-labels-old" aria-hidden="true">
+        <div class="way-labels way-labels-old is-shown" aria-hidden="true">
           <span class="way-tag mono">20 PINGS</span>
           <span class="way-tag mono">3 CALLS</span>
           <span class="way-tag mono">SLOT GONE</span>
           <span class="way-tag mono">TRY SUNDAY?</span>
         </div>
-        <div class="way-labels way-labels-new is-shown" aria-hidden="true">
+        <div class="way-labels way-labels-new" aria-hidden="true">
           <span class="way-tag way-tag-new mono">OPEN APP</span>
           <span class="way-tag way-tag-new mono">BOOK</span>
           <span class="way-tag way-tag-new mono">PLAY</span>
@@ -278,45 +291,85 @@
     <div class="dome dome-paper" aria-hidden="true"></div>
   </section>
 
-  <!-- DIFFERENT. Sticky stage, phases recolor semicircle, ball and tags. -->
-  <section class="pin-scene" id="different" aria-labelledby="different-title">
-    <div class="pin-stage phase-0" id="pinStage">
-      <div class="semicircle" aria-hidden="true"></div>
-      <div class="shell pin-grid">
-        <h2 id="different-title" class="sticker-stack pin-title">
-          <span class="sticker" data-reveal="tilt">What makes</span>
-          <span class="sticker" data-reveal="tilt" data-reveal-delay="1"><em class="accent">Atlitos</em> different?</span>
-        </h2>
-        <div class="pin-captions">
-          <p class="note pin-caption cap-0 is-on">First, every court is checked by our team before it goes live.</p>
-          <p class="note pin-caption cap-1">Second, payments settle through a ledger. Refunds and receipts included.</p>
-          <p class="note pin-caption cap-2">And finally, Empower routes spare change to athletes who need it.</p>
+  <!-- DIFFERENT. Three clear intent rows, the third one points into Empower. -->
+  <section class="different" id="different" aria-labelledby="different-title">
+    <div class="shell">
+      <p class="sec-eyebrow mono" data-reveal="up">WHY ATLITOS</p>
+      <h2 id="different-title" class="sticker-stack">
+        <span class="sticker" data-reveal="tilt">What makes</span>
+        <span class="sticker" data-reveal="tilt" data-reveal-delay="1"><em class="accent">Atlitos</em> different?</span>
+      </h2>
+      <div class="diff-rows">
+        <div class="diff-row diff-marigold" data-reveal="up">
+          <p class="diff-num mono">01</p>
+          <div class="diff-copy">
+            <h3>Every court is checked before it goes live.</h3>
+            <p>Our team visits, photographs, and prices each venue. What you see is what you play on.</p>
+            <div class="diff-tags" aria-hidden="true">
+              <span class="tag">Site visits</span><span class="tag">Real photos</span><span class="tag">Live slots</span><span class="tag">Fair prices</span>
+            </div>
+          </div>
+          <div class="diff-media">
+            <img src="img/hero-pitch.jpg" alt="A verified turf pitch" loading="lazy" />
+          </div>
+        </div>
+        <div class="diff-row diff-ember diff-flip" data-reveal="up">
+          <p class="diff-num mono">02</p>
+          <div class="diff-copy">
+            <h3>Money settles right, every time.</h3>
+            <p>Payments run through a ledger. Refunds are clean, receipts are instant, and partners get paid on time.</p>
+            <div class="diff-tags" aria-hidden="true">
+              <span class="tag">Instant receipts</span><span class="tag">Clean refunds</span><span class="tag">Payouts on time</span>
+            </div>
+          </div>
+          <div class="diff-media">
+            <div class="demo-card diff-receipt">
+              <div class="d-row d-search"><span>Receipt, Smash Arena</span></div>
+              <div class="d-row"><span>Court, 7 to 8 pm</span><span class="mono">&#8377;400</span></div>
+              <div class="d-row"><span>Rain cancellation</span><span class="mono">REFUNDED</span></div>
+              <div class="d-row d-cta"><span>Settled to your bank</span><span class="mono">&#8377;400</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="diff-row diff-green" data-reveal="up">
+          <p class="diff-num mono">03</p>
+          <div class="diff-copy">
+            <h3>Your spare change funds another athlete.</h3>
+            <p>Empower turns roundups and donations into court time, coaching, and gear for athletes who cannot afford them.</p>
+            <div class="diff-tags" aria-hidden="true">
+              <span class="tag">Roundups</span><span class="tag">Donations</span><span class="tag">Verified athletes</span><span class="tag">Tracked impact</span>
+            </div>
+          </div>
+          <div class="diff-media">
+            <a class="diff-empower-link" href="#empower">
+              <span class="del-head">Empower</span>
+              <span class="del-line">The heart of Atlitos. See how it works.</span>
+              <span class="del-arrow" aria-hidden="true">&darr;</span>
+            </a>
+          </div>
         </div>
       </div>
-      <div class="ball-wrap" aria-hidden="true">
-        <div class="ball ball-photo"><img src="img/hero-badminton.jpg" alt="" loading="lazy" /></div>
-        <span class="tag tag-a">Site visits</span>
-        <span class="tag tag-b">Real photos</span>
-        <span class="tag tag-c">Live slots</span>
-        <span class="tag tag-d">Fair prices</span>
-      </div>
-      <div class="phase-dots mono" aria-hidden="true"><i class="pd pd-0 is-on"></i><i class="pd pd-1"></i><i class="pd pd-2"></i></div>
     </div>
   </section>
 
-  <!-- STRIP. Marigold marquee band; the differentiator scene hands off into pricing through it. -->
+  <!-- STRIP. The subscription itself scrolls past on the way into pricing. -->
   <div class="strip" aria-hidden="true">
     <div class="strip-track">
-      <span class="strip-word">Built by athletes who actually play</span><span class="strip-star">&#10033;</span>
-      <span class="strip-word">Built by athletes who actually play</span><span class="strip-star">&#10033;</span>
-      <span class="strip-word">Built by athletes who actually play</span><span class="strip-star">&#10033;</span>
-      <span class="strip-word">Built by athletes who actually play</span><span class="strip-star">&#10033;</span>
+      <span class="strip-word">Starter <span class="mono">&#8377;0</span></span><span class="strip-star">&#10033;</span>
+      <span class="strip-word">Pro <span class="mono">&#8377;199</span> per month</span><span class="strip-star">&#10033;</span>
+      <span class="strip-word">Elite <span class="mono">&#8377;499</span> per month</span><span class="strip-star">&#10033;</span>
+      <span class="strip-word">Every plan is the full Atlitos</span><span class="strip-star">&#10033;</span>
+      <span class="strip-word">Starter <span class="mono">&#8377;0</span></span><span class="strip-star">&#10033;</span>
+      <span class="strip-word">Pro <span class="mono">&#8377;199</span> per month</span><span class="strip-star">&#10033;</span>
+      <span class="strip-word">Elite <span class="mono">&#8377;499</span> per month</span><span class="strip-star">&#10033;</span>
+      <span class="strip-word">Every plan is the full Atlitos</span><span class="strip-star">&#10033;</span>
     </div>
   </div>
 
   <!-- PRICING. Deep green band, included card left, tier cards right. -->
   <section class="pricing" id="pricing" aria-labelledby="pricing-title">
     <div class="shell">
+      <p class="sec-eyebrow eyebrow-onDark mono" data-reveal="up">MEMBERSHIP</p>
       <div class="pricing-head">
         <h2 id="pricing-title" class="sticker-stack">
           <span class="sticker" data-reveal="tilt">Plans built for</span>
@@ -381,9 +434,41 @@
     <div class="pricing-round" aria-hidden="true"></div>
   </section>
 
+  <!-- VOICES. Two opposite marquees of quote cards. Placeholder copy until real quotes land. -->
+  <section class="voices" aria-labelledby="voices-title">
+    <div class="shell voices-head">
+      <p class="sec-eyebrow mono" data-reveal="up">VOICES</p>
+      <h2 id="voices-title" class="serif-line">The game will do the talking</h2>
+      <p class="voices-note" data-reveal="up">Sample cards below. Real words from athletes, coaches, and court partners land here at launch.</p>
+    </div>
+    <div class="vwall" aria-hidden="true">
+      <div class="marquee-track vrow">
+        <div class="vcard"><p class="v-quote">Quote from a Bengaluru badminton regular goes here.</p><p class="v-name mono">ATHLETE NAME, BENGALURU</p><span class="v-tag mono">SAMPLE</span></div>
+        <div class="vcard"><p class="v-quote">A coach on filling weekday sessions goes here.</p><p class="v-name mono">COACH NAME, PUNE</p><span class="v-tag mono">SAMPLE</span></div>
+        <div class="vcard"><p class="v-quote">A court partner on payouts landing on time goes here.</p><p class="v-name mono">PARTNER NAME, HYDERABAD</p><span class="v-tag mono">SAMPLE</span></div>
+        <div class="vcard"><p class="v-quote">A player on booking a turf in under a minute goes here.</p><p class="v-name mono">ATHLETE NAME, MUMBAI</p><span class="v-tag mono">SAMPLE</span></div>
+        <div class="vcard"><p class="v-quote">Quote from a Bengaluru badminton regular goes here.</p><p class="v-name mono">ATHLETE NAME, BENGALURU</p><span class="v-tag mono">SAMPLE</span></div>
+        <div class="vcard"><p class="v-quote">A coach on filling weekday sessions goes here.</p><p class="v-name mono">COACH NAME, PUNE</p><span class="v-tag mono">SAMPLE</span></div>
+        <div class="vcard"><p class="v-quote">A court partner on payouts landing on time goes here.</p><p class="v-name mono">PARTNER NAME, HYDERABAD</p><span class="v-tag mono">SAMPLE</span></div>
+        <div class="vcard"><p class="v-quote">A player on booking a turf in under a minute goes here.</p><p class="v-name mono">ATHLETE NAME, MUMBAI</p><span class="v-tag mono">SAMPLE</span></div>
+      </div>
+      <div class="marquee-track marquee-reverse vrow">
+        <div class="vcard"><p class="v-quote">A parent on their kid earning XP for real drills goes here.</p><p class="v-name mono">PARENT NAME, CHENNAI</p><span class="v-tag mono">SAMPLE</span></div>
+        <div class="vcard"><p class="v-quote">A supporter on funding an athlete through Empower goes here.</p><p class="v-name mono">SUPPORTER NAME, DELHI</p><span class="v-tag mono">SAMPLE</span></div>
+        <div class="vcard"><p class="v-quote">A weekend team on finding their fifth player goes here.</p><p class="v-name mono">TEAM NAME, KOCHI</p><span class="v-tag mono">SAMPLE</span></div>
+        <div class="vcard"><p class="v-quote">A young athlete on their first funded coaching block goes here.</p><p class="v-name mono">ATHLETE NAME, JAIPUR</p><span class="v-tag mono">SAMPLE</span></div>
+        <div class="vcard"><p class="v-quote">A parent on their kid earning XP for real drills goes here.</p><p class="v-name mono">PARENT NAME, CHENNAI</p><span class="v-tag mono">SAMPLE</span></div>
+        <div class="vcard"><p class="v-quote">A supporter on funding an athlete through Empower goes here.</p><p class="v-name mono">SUPPORTER NAME, DELHI</p><span class="v-tag mono">SAMPLE</span></div>
+        <div class="vcard"><p class="v-quote">A weekend team on finding their fifth player goes here.</p><p class="v-name mono">TEAM NAME, KOCHI</p><span class="v-tag mono">SAMPLE</span></div>
+        <div class="vcard"><p class="v-quote">A young athlete on their first funded coaching block goes here.</p><p class="v-name mono">ATHLETE NAME, JAIPUR</p><span class="v-tag mono">SAMPLE</span></div>
+      </div>
+    </div>
+  </section>
+
   <!-- PERSONAS. Paper band, four doors into the app; espresso dome rises into Empower. -->
   <section class="personas" aria-labelledby="personas-title">
     <div class="shell">
+      <p class="sec-eyebrow mono eyebrow-center" data-reveal="up">WHO IT IS FOR</p>
       <h2 id="personas-title" class="serif-line personas-title"><span class="type" data-type>One app, four ways in</span><span class="caret" aria-hidden="true">_</span></h2>
       <div class="persona-grid">
         <div class="persona" data-reveal="up">
@@ -415,13 +500,14 @@
     <div class="dome dome-espresso" aria-hidden="true"></div>
   </section>
 
-  <!-- EMPOWER CLOSING. Dark stage, drawn arrow, bursts, CTAs. -->
+  <!-- EMPOWER. The heart of Atlitos: the flow, the impact, the 3D ball, the CTA. -->
   <section class="empower" id="empower" aria-labelledby="empower-title">
     <div class="shell empower-inner">
+      <p class="sec-eyebrow eyebrow-onDark eyebrow-center mono" data-reveal="up">THE HEART OF ATLITOS</p>
       <div class="empower-head">
         <h2 id="empower-title" class="sticker-stack">
-          <span class="sticker" data-reveal="tilt">Ready to</span>
-          <span class="sticker" data-reveal="tilt" data-reveal-delay="1"><em class="accent">play more?</em></span>
+          <span class="sticker" data-reveal="tilt">Empower.</span>
+          <span class="sticker" data-reveal="tilt" data-reveal-delay="1"><em class="accent">Play for someone else too.</em></span>
         </h2>
         <div class="note empower-note" data-reveal="up" data-reveal-delay="2">
           <p>Talent is everywhere. Opportunity is not.</p>
@@ -429,19 +515,52 @@
           <p>Play your game. Fund someone else's.</p>
         </div>
       </div>
-      <div class="stage" aria-hidden="true">
-        <svg class="stage-arrow" viewBox="0 0 520 200" fill="none" data-reveal="draw">
-          <path class="a-path a-green" d="M20 170 C 120 190, 200 120, 260 120 C 330 120, 360 60, 470 30" />
-          <path class="a-path a-green" d="M430 26 L 472 28 L 452 64" />
-        </svg>
-        <span class="burst burst-marigold mono" data-reveal="pop">+ &#8377;7</span>
-        <span class="burst burst-paper" data-reveal="pop" data-reveal-delay="2">GAME ON</span>
-        <div class="stage-ball stage-photo" data-reveal="pop" data-reveal-delay="1"><img src="img/night-match.jpg" alt="" loading="lazy" /></div>
-        <span class="orbit"></span>
-        <span class="spark spark-a">&#10022;</span>
-        <span class="spark spark-b">&#10022;</span>
+      <div class="emp-flow">
+        <div class="emp-card" data-reveal="up">
+          <p class="emp-num mono">01</p>
+          <p class="emp-title">You order gear</p>
+          <p class="emp-line">Grip tape and shuttles for Saturday.</p>
+          <p class="emp-val mono">&#8377;293</p>
+        </div>
+        <svg class="emp-arrow" viewBox="0 0 120 60" fill="none" aria-hidden="true" data-reveal="draw"><path class="a-path a-green" d="M10 30 C 40 12, 80 48, 110 30" /><path class="a-path a-green" d="M92 18 L 112 30 L 90 42" /></svg>
+        <div class="emp-card" data-reveal="up" data-reveal-delay="1">
+          <p class="emp-num mono">02</p>
+          <p class="emp-title">It rounds up</p>
+          <p class="emp-line">Spare change, no second thought.</p>
+          <p class="emp-val mono emp-val-green">+ &#8377;7</p>
+        </div>
+        <svg class="emp-arrow" viewBox="0 0 120 60" fill="none" aria-hidden="true" data-reveal="draw" data-reveal-delay="1"><path class="a-path a-green" d="M10 30 C 40 48, 80 12, 110 30" /><path class="a-path a-green" d="M92 18 L 112 30 L 90 42" /></svg>
+        <div class="emp-card emp-card-photo" data-reveal="up" data-reveal-delay="2">
+          <p class="emp-num mono">03</p>
+          <p class="emp-title">An athlete plays</p>
+          <p class="emp-line">Court time, coaching, and gear, funded.</p>
+          <div class="photo-slot">
+            <span class="mono">PHOTO SLOT</span>
+            <span class="mono slot-file">img/empower-story.jpg</span>
+          </div>
+        </div>
       </div>
-      <p class="roundup-line mono" data-reveal="up"><span class="ru" data-count="293">&#8377;293</span> order. <span class="ru" data-count="7">&#8377;7</span> rounded up. <span class="ru" data-count="7">&#8377;7</span> to an athlete.</p>
+      <div class="emp-stats">
+        <div class="emp-stat" data-reveal="up">
+          <p class="emp-stat-val mono"><span class="ru" data-count="48000" data-prefix="&#8377;">&#8377;48,000</span></p>
+          <p class="emp-stat-label">spare change routed</p>
+          <span class="v-tag mono">SAMPLE</span>
+        </div>
+        <div class="emp-stat" data-reveal="up" data-reveal-delay="1">
+          <p class="emp-stat-val mono"><span class="ru" data-count="132">132</span></p>
+          <p class="emp-stat-label">athletes funded</p>
+          <span class="v-tag mono">SAMPLE</span>
+        </div>
+        <div class="emp-stat" data-reveal="up" data-reveal-delay="2">
+          <p class="emp-stat-val mono"><span class="ru" data-count="9">9</span></p>
+          <p class="emp-stat-label">cities and counting</p>
+          <span class="v-tag mono">SAMPLE</span>
+        </div>
+      </div>
+      <div class="emp-3d" id="emp3d" aria-hidden="true">
+        <div class="emp-3d-fallback"></div>
+      </div>
+      <p class="roundup-line mono" data-reveal="up"><span class="ru" data-count="293" data-prefix="&#8377;">&#8377;293</span> order. <span class="ru" data-count="7" data-prefix="&#8377;">&#8377;7</span> rounded up. <span class="ru" data-count="7" data-prefix="&#8377;">&#8377;7</span> to an athlete.</p>
       <div class="cta-row cta-center">
         <a class="btn-pill btn-lg btn-onDark" data-reveal="up" href="https://atlitos-app.vercel.app">Try the web app</a>
         <a class="btn-ghost ghost-onDark" data-reveal="up" data-reveal-delay="1" href="mailto:founder@synthsports.co?subject=Atlitos%20TestFlight%20access">Get early iOS access</a>
