@@ -10,6 +10,14 @@
 appId: com.atlitos.app
 ---
 - launchApp
+# A cold launch right after another flow's `clearState: true` (see the
+# groups-*.yaml flows) can take a beat longer to hydrate than a warm
+# relaunch, so wait for either landing state before deciding whether the
+# guest splash needs tapping, rather than checking "Continue as guest"
+# the instant launchApp returns.
+- extendedWaitUntil:
+    visible: "Continue as guest|Football"
+    timeout: 10000
 - runFlow:
     when:
       visible: "Continue as guest"

@@ -26,6 +26,46 @@ appId: com.atlitos.app
       visible: "Save Password.*"
     commands:
       - tapOn: "Not Now"
+# State normalization: `atlitos://login` has no guard of its own
+# (apps/mobile/src/app/(auth)/login.tsx renders unconditionally), but a
+# leftover session (guest OR a previous run's player/coach, since the iOS
+# Keychain backing expo-secure-store outlives `launchApp` and even
+# `clearState`) makes splash.tsx auto route away from Login before Maestro
+# ever sees it, so the deep link silently no-ops onto Home instead (the
+# "Email or phone.*" failure this flow was hitting). Force a real
+# signed_out state first via the app's own "Log out" control (Home tab,
+# bottom of the scroll, FR-65: returns to guest mode at Home, not to
+# Login) so the deep link below is guaranteed to land on the login form
+# regardless of whatever account the simulator was left in. Same pattern
+# as groups-join-guard.yaml.
+- runFlow:
+    when:
+      visible: "Continue as guest"
+    commands:
+      - tapOn: "Continue as guest"
+- scrollUntilVisible:
+    element:
+      text: "Log out"
+    direction: DOWN
+    timeout: 25000
+    speed: 60
+    optional: true
+- runFlow:
+    when:
+      visible: "Log out"
+    commands:
+      - tapOn: "Log out"
+      - waitForAnimationToEnd:
+          timeout: 3000
+- scrollUntilVisible:
+    element:
+      text: "What are you looking for..."
+    direction: UP
+    timeout: 10000
+    optional: true
+- extendedWaitUntil:
+    visible: "ATLITOS"
+    timeout: 15000
 - openLink: atlitos://login
 - extendedWaitUntil:
     visible: "Email or phone.*"
@@ -64,11 +104,13 @@ appId: com.atlitos.app
             - tapOn: "Trainings"
             - waitForAnimationToEnd:
                 timeout: 3000
-- scrollUntilVisible:
-    element: "Your trainings at a glance"
-    direction: UP
-    timeout: 15000
-    optional: false
+- swipe:
+    direction: DOWN
+- swipe:
+    direction: DOWN
+- extendedWaitUntil:
+    visible: "Your trainings at a glance"
+    timeout: 10000
 - assertVisible: "Trainings"
 - assertVisible: "Stats"
 - assertVisible: "Coaches"
@@ -138,6 +180,10 @@ appId: com.atlitos.app
 # groups" card above this session card, so it is no longer guaranteed to
 # be on screen without a scroll.
 - tapOn: "Stats"
+- swipe:
+    direction: DOWN
+- swipe:
+    direction: DOWN
 - extendedWaitUntil:
     visible: "Your trainings at a glance"
     timeout: 10000
@@ -154,6 +200,10 @@ appId: com.atlitos.app
 - assertNotVisible: "Payments"
 - takeScreenshot: /tmp/trainings-shell/player-session-drillin
 - tapOn: "Back"
+- swipe:
+    direction: DOWN
+- swipe:
+    direction: DOWN
 - extendedWaitUntil:
     visible: "Your trainings at a glance"
     timeout: 10000
@@ -175,6 +225,37 @@ appId: com.atlitos.app
 - assertVisible: "Hyderabad"
 
 # ---------- Coach: coach1@atlitos.dev ----------
+# Same normalization as the athlete entry above: the player session from
+# the block just above would otherwise make this second `atlitos://login`
+# no-op onto Home exactly like the first one did.
+- runFlow:
+    when:
+      visible: "Continue as guest"
+    commands:
+      - tapOn: "Continue as guest"
+- scrollUntilVisible:
+    element:
+      text: "Log out"
+    direction: DOWN
+    timeout: 25000
+    speed: 60
+    optional: true
+- runFlow:
+    when:
+      visible: "Log out"
+    commands:
+      - tapOn: "Log out"
+      - waitForAnimationToEnd:
+          timeout: 3000
+- scrollUntilVisible:
+    element:
+      text: "What are you looking for..."
+    direction: UP
+    timeout: 10000
+    optional: true
+- extendedWaitUntil:
+    visible: "ATLITOS"
+    timeout: 15000
 - openLink: atlitos://login
 - extendedWaitUntil:
     visible: "Email or phone.*"
