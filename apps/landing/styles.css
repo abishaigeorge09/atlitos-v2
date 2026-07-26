@@ -522,6 +522,110 @@ a:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
 .tag-c { top: 44%; left: -14%; transform: rotate(2deg); }
 .tag-d { top: 40%; right: -12%; transform: rotate(-3deg); }
 
+/* ---------- Pricing: deep green band, included card, tier cards ---------- */
+.pricing {
+  background: var(--green-deep);
+  color: var(--ink-inverse);
+  padding: 110px 0 130px;
+}
+.pricing-head {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 40px; flex-wrap: wrap;
+}
+.pricing-note { max-width: 34ch; color: rgba(251, 247, 241, 0.8); }
+.pricing .sticker { box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.5); }
+.pricing-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 40px;
+  margin-top: 64px;
+  align-items: start;
+}
+.incl-card {
+  background: var(--surface);
+  color: var(--ink);
+  border: 2.5px solid var(--ink);
+  border-radius: 16px;
+  box-shadow: var(--shadow-hard);
+  padding: 34px 36px;
+}
+.incl-card h3, .plan h3 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.5rem;
+  letter-spacing: -0.01em;
+}
+.incl-card ul { list-style: none; margin-top: 22px; }
+.incl-card li {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 9px 0;
+  font-size: 0.9375rem; font-weight: 500;
+}
+.check {
+  flex: none;
+  width: 18px; height: 18px; margin-top: 3px;
+  stroke: var(--green); stroke-width: 3; fill: none;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+.plan-col { display: flex; flex-direction: column; gap: 22px; }
+.plan {
+  background: var(--surface);
+  color: var(--ink);
+  border: 2.5px solid var(--ink);
+  border-radius: 16px;
+  box-shadow: var(--shadow-hard);
+  padding: 28px 30px;
+}
+.plan-pro { border-color: var(--marigold); box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.5); }
+.plan-elite { border-color: var(--ember); box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.5); }
+.price {
+  display: flex; align-items: baseline; gap: 10px;
+  margin-top: 8px;
+}
+.price .mono { font-size: 2rem; font-weight: 700; }
+.price .per { font-size: 0.9375rem; color: var(--ink-tertiary); }
+.plan-line {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 2px dashed var(--border-strong);
+  font-weight: 600;
+  font-size: 0.9375rem;
+}
+.plan-feats { list-style: none; margin-top: 12px; }
+.plan-feats li {
+  padding: 7px 0;
+  font-size: 0.9375rem;
+  color: var(--ink-secondary);
+  border-bottom: 1px dashed var(--border);
+}
+.plan-feats li:last-child { border-bottom: none; }
+.plan-cta {
+  display: block;
+  text-align: center;
+  margin-top: 18px;
+  padding: 15px 22px;
+  border-radius: 10px;
+  border: 2px solid var(--ink);
+  font-weight: 700; font-size: 1rem;
+  text-decoration: none;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+.plan-cta:hover { transform: translate(-2px, -2px); box-shadow: 3px 3px 0 var(--ink); }
+.cta-ink { background: var(--ink); color: var(--ink-inverse); }
+.cta-marigold { background: var(--marigold); color: var(--ink); }
+.cta-ember { background: var(--ember); color: var(--ink-on-accent); }
+.plan-enterprise {
+  border: 2px solid rgba(251, 247, 241, 0.5);
+  border-radius: 16px;
+  padding: 26px 30px;
+  text-align: center;
+}
+.ent-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.375rem;
+}
+.ent-line { margin-top: 8px; font-size: 0.9375rem; color: rgba(251, 247, 241, 0.8); }
+.plan-enterprise .plan-cta { display: inline-block; margin-top: 16px; background: var(--paper); color: var(--ink); }
+
 /* ---------- Empower closing ---------- */
 .empower {
   position: relative;
@@ -637,7 +741,7 @@ a:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
 
 /* ---------- Responsive ---------- */
 @media (max-width: 900px) {
-  .problem-grid, .empower-head { grid-template-columns: 1fr; gap: 36px; }
+  .problem-grid, .empower-head, .pricing-grid { grid-template-columns: 1fr; gap: 36px; }
   .step-grid { grid-template-columns: 1fr; gap: 40px; }
   .step-tab {
     width: max-content; max-width: 88vw; margin-left: 0 !important;
