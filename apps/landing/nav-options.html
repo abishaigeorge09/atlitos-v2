@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Atlitos navbar directions</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;0,9..144,900;1,9..144,700;1,9..144,900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet" />
+<style>
+:root{--paper:#FBF7F1;--surface:#fff;--ink:#1C1712;--ink2:#5B5248;--ember:#E46136;--espresso:#14100B;--marigold:#E8B324;--green:#4CAF7D;--mono:"JetBrains Mono",monospace;--disp:"Fraunces",serif;--body:"Inter",sans-serif;}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#2a241d;font-family:var(--body);color:var(--ink)}
+.opt{position:relative;height:88vh;min-height:640px;overflow:hidden;margin:26px auto;max-width:1500px;border-radius:18px;background:url("img/hero-stadium.jpg") center/cover;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.opt::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(20,16,11,.5),rgba(20,16,11,.28) 40%,rgba(20,16,11,.65))}
+.label{position:absolute;left:50%;bottom:26px;transform:translateX(-50%);z-index:9;background:var(--ink);color:var(--paper);font-family:var(--mono);font-size:13px;letter-spacing:.14em;padding:10px 22px;border-radius:999px}
+.demo-copy{position:absolute;left:50%;top:52%;transform:translate(-50%,-50%);text-align:center;color:var(--paper);z-index:1}
+.demo-copy h2{font-family:var(--disp);font-weight:900;font-size:clamp(28px,3.6vw,54px);text-shadow:0 3px 24px rgba(0,0,0,.5)}
+.demo-copy p{margin-top:10px;font-family:var(--disp);font-weight:700;opacity:.9}
+.wordmark{font-family:var(--disp);font-style:italic;font-weight:900;color:var(--ember);text-decoration:none;line-height:1}
+a{text-decoration:none}
+
+/* OPTION 1: scoreboard broadcast rail */
+.nav1{position:absolute;top:0;left:0;right:0;z-index:5;display:flex;align-items:stretch;background:var(--espresso);border-bottom:3px solid var(--ink);font-family:var(--mono)}
+.nav1 .wm{display:flex;align-items:center;gap:12px;padding:16px 26px;background:var(--ember);color:#2A0E02;font-family:var(--disp);font-style:italic;font-weight:900;font-size:22px}
+.nav1 .live{display:flex;align-items:center;gap:8px;color:var(--marigold);font-size:11px;letter-spacing:.16em;padding:0 22px;border-right:1px solid rgba(251,247,241,.15)}
+.nav1 .dot{width:8px;height:8px;border-radius:50%;background:var(--marigold)}
+.nav1 nav{display:flex;align-items:center;margin-left:auto}
+.nav1 nav a{color:var(--paper);font-size:12px;letter-spacing:.12em;padding:0 20px;display:flex;align-items:center;border-left:1px solid rgba(251,247,241,.15);height:100%}
+.nav1 .cta{background:var(--marigold);color:var(--ink);font-weight:700;display:flex;align-items:center;padding:0 26px;font-size:12px;letter-spacing:.12em;border-left:3px solid var(--ink)}
+
+/* OPTION 2: vertical jersey rail */
+.nav2{position:absolute;left:22px;top:50%;transform:translateY(-50%);z-index:5;display:flex;flex-direction:column;align-items:center;gap:18px;background:rgba(251,247,241,.92);border:2.5px solid var(--ink);border-radius:999px;padding:22px 12px;box-shadow:4px 4px 0 var(--ink)}
+.nav2 .wm{writing-mode:vertical-rl;rotate:180deg;font-size:22px}
+.nav2 nav{display:flex;flex-direction:column;gap:14px;border-top:2px dashed var(--ink);border-bottom:2px dashed var(--ink);padding:16px 0}
+.nav2 nav a{color:var(--ink);writing-mode:vertical-rl;rotate:180deg;font-size:12px;font-weight:600;letter-spacing:.08em}
+.nav2 .cta{background:var(--ember);border:2px solid var(--ink);color:#2A0E02;border-radius:999px;width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-weight:900;font-family:var(--disp)}
+
+/* OPTION 3: bottom dock */
+.nav3{position:absolute;left:50%;bottom:74px;transform:translateX(-50%);z-index:5;display:flex;align-items:center;gap:6px;background:var(--espresso);border:2.5px solid var(--ink);border-radius:999px;padding:8px;box-shadow:0 14px 40px rgba(0,0,0,.45)}
+.nav3 .wm{font-size:20px;padding:8px 18px}
+.nav3 nav{display:flex;gap:4px}
+.nav3 nav a{color:var(--paper);font-size:13.5px;font-weight:600;padding:10px 16px;border-radius:999px}
+.nav3 nav a:hover{background:rgba(251,247,241,.12)}
+.nav3 .cta{background:var(--ember);color:#2A0E02;font-weight:700;font-size:13.5px;padding:12px 22px;border-radius:999px;border:2px solid var(--ink)}
+
+/* OPTION 4: poster corners + burger */
+.nav4-wm{position:absolute;top:26px;left:30px;z-index:5;background:var(--surface);border:2.5px solid var(--ink);box-shadow:4px 4px 0 var(--ink);padding:10px 20px;font-size:24px;rotate:-2deg}
+.nav4-right{position:absolute;top:26px;right:30px;z-index:5;display:flex;gap:12px;align-items:center}
+.nav4-cta{background:var(--ember);border:2.5px solid var(--ink);color:#2A0E02;font-weight:700;font-size:14px;padding:13px 22px;border-radius:999px;box-shadow:4px 4px 0 var(--ink)}
+.nav4-burger{width:52px;height:52px;border-radius:50%;background:var(--paper);border:2.5px solid var(--ink);box-shadow:4px 4px 0 var(--ink);display:flex;flex-direction:column;gap:5px;align-items:center;justify-content:center}
+.nav4-burger i{display:block;width:20px;height:2.5px;background:var(--ink);border-radius:2px}
+.nav4-hint{position:absolute;top:96px;right:34px;z-index:5;font-family:var(--mono);color:var(--paper);font-size:10px;letter-spacing:.12em;opacity:.75}
+
+/* OPTION 5: folder tab hanging from top */
+.nav5{position:absolute;top:0;left:50%;transform:translateX(-50%);z-index:5;display:flex;flex-direction:column;align-items:center}
+.nav5 .tab{display:flex;align-items:center;gap:26px;background:var(--marigold);border:3px solid var(--ink);border-top:none;border-radius:0 0 20px 20px;box-shadow:4px 4px 0 rgba(0,0,0,.35);padding:16px 34px}
+.nav5 .wm{font-size:22px}
+.nav5 nav{display:flex;gap:20px}
+.nav5 nav a{color:var(--ink);font-weight:600;font-size:14.5px}
+.nav5 .cta{background:var(--ink);color:var(--paper);font-weight:600;font-size:13.5px;padding:11px 20px;border-radius:999px}
+
+/* OPTION 6: editorial dashed underline, transparent */
+.nav6{position:absolute;top:0;left:0;right:0;z-index:5;display:flex;align-items:center;gap:26px;padding:24px 44px 20px;background:linear-gradient(180deg,rgba(20,16,11,.45),transparent);}
+.nav6::after{content:"";position:absolute;left:24px;right:24px;bottom:0;height:3px;background:repeating-linear-gradient(90deg,var(--paper) 0 12px,transparent 12px 24px);opacity:.9}
+.nav6 .wm{font-size:26px}
+.nav6 nav{display:flex;gap:24px;margin-left:auto}
+.nav6 nav a{color:var(--paper);font-weight:600;font-size:14.5px;text-shadow:0 1px 8px rgba(0,0,0,.5)}
+.nav6 .cta{background:var(--paper);color:var(--ink);border:2px solid var(--ink);font-weight:700;font-size:13.5px;padding:12px 22px;border-radius:999px}
+</style>
+</head>
+<body>
+
+<section class="opt">
+  <div class="nav1">
+    <span class="wm">Atlitos</span>
+    <span class="live"><span class="dot"></span>LIVE</span>
+    <nav><a href="#">HOW IT WORKS</a><a href="#">WHY ATLITOS</a><a href="#">PRICING</a><a href="#">EMPOWER</a></nav>
+    <a class="cta" href="#">TRY THE WEB APP</a>
+  </div>
+  <div class="demo-copy"><h2>The way India plays is about to change forever</h2><p>Meet Atlitos.</p></div>
+  <span class="label">OPTION 1, SCOREBOARD RAIL, FLUSH TOP, STADIUM TICKER ENERGY</span>
+</section>
+
+<section class="opt">
+  <div class="nav2">
+    <a class="wordmark wm" href="#">Atlitos</a>
+    <nav><a href="#">How it works</a><a href="#">Why Atlitos</a><a href="#">Pricing</a><a href="#">Empower</a></nav>
+    <a class="cta" href="#">&rarr;</a>
+  </div>
+  <div class="demo-copy"><h2>The way India plays is about to change forever</h2><p>Meet Atlitos.</p></div>
+  <span class="label">OPTION 2, VERTICAL JERSEY RAIL, LEFT EDGE, CONTENT FULL BLEED</span>
+</section>
+
+<section class="opt">
+  <div class="nav3">
+    <a class="wordmark wm" href="#">Atlitos</a>
+    <nav><a href="#">How it works</a><a href="#">Why Atlitos</a><a href="#">Pricing</a><a href="#">Empower</a></nav>
+    <a class="cta" href="#">Try the web app</a>
+  </div>
+  <div class="demo-copy" style="top:44%"><h2>The way India plays is about to change forever</h2><p>Meet Atlitos.</p></div>
+  <span class="label" style="bottom:auto;top:26px">OPTION 3, BOTTOM DOCK, APP TAB BAR ENERGY, HERO STAYS CLEAN</span>
+</section>
+
+<section class="opt">
+  <a class="wordmark nav4-wm" href="#">Atlitos</a>
+  <div class="nav4-right">
+    <a class="nav4-cta" href="#">Try the web app</a>
+    <span class="nav4-burger"><i></i><i></i><i></i></span>
+  </div>
+  <span class="nav4-hint">MENU OPENS A FULLSCREEN INK OVERLAY</span>
+  <div class="demo-copy"><h2>The way India plays is about to change forever</h2><p>Meet Atlitos.</p></div>
+  <span class="label">OPTION 4, POSTER CORNERS, TILTED STICKER PLUS BURGER OVERLAY</span>
+</section>
+
+<section class="opt">
+  <div class="nav5">
+    <div class="tab">
+      <a class="wordmark wm" href="#">Atlitos</a>
+      <nav><a href="#">How it works</a><a href="#">Why Atlitos</a><a href="#">Pricing</a><a href="#">Empower</a></nav>
+      <a class="cta" href="#">Try the web app</a>
+    </div>
+  </div>
+  <div class="demo-copy"><h2>The way India plays is about to change forever</h2><p>Meet Atlitos.</p></div>
+  <span class="label">OPTION 5, FOLDER TAB, HANGS FROM THE TOP, MATCHES THE STEP FILES</span>
+</section>
+
+<section class="opt">
+  <div class="nav6">
+    <a class="wordmark wm" href="#">Atlitos</a>
+    <nav><a href="#">How it works</a><a href="#">Why Atlitos</a><a href="#">Pricing</a><a href="#">Empower</a></nav>
+    <a class="cta" href="#">Try the web app</a>
+  </div>
+  <div class="demo-copy"><h2>The way India plays is about to change forever</h2><p>Meet Atlitos.</p></div>
+  <span class="label">OPTION 6, EDITORIAL DASHED RULE, TRANSPARENT OVER THE HERO</span>
+</section>
+
+</body>
+</html>
