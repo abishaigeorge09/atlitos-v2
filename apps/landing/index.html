@@ -9,139 +9,221 @@
   <meta name="theme-color" content="#FBF7F1" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;0,9..144,900;1,9..144,700;1,9..144,900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
 
 <a class="skip-link" href="#main">Skip to content</a>
 
-<header class="site-header">
-  <div class="shell header-row">
-    <a class="wordmark" href="#top" aria-label="Atlitos home">ATLITOS</a>
+<header class="site-header" id="siteHeader">
+  <div class="nav-card">
+    <a class="wordmark" href="#top" aria-label="Atlitos home">Atlitos</a>
     <nav aria-label="Sections" class="site-nav">
-      <a href="#journey">How it works</a>
+      <a href="#how">How it works</a>
       <a href="#different">Why Atlitos</a>
       <a href="#empower">Empower</a>
     </nav>
-    <a class="btn btn-primary btn-sm" href="https://atlitos-app.vercel.app">Try the web app</a>
+    <a class="btn-pill btn-nav" href="https://atlitos-app.vercel.app">Try the web app</a>
   </div>
 </header>
 
 <main id="main">
 
-  <!-- Hero -->
+  <!-- HERO. Renders complete with zero JS: full text in markup, nothing hidden. -->
   <section class="hero" id="top">
-    <div class="shell">
-      <p class="eyebrow">The sports superapp for India</p>
-      <h1 class="hero-title">
-        <span class="hero-line">Playing is easy.</span>
-        <span class="hero-line">Finding courts, coaches</span>
-        <span class="hero-line">and your people is hard.</span>
-      </h1>
-      <p class="lede">Atlitos puts the whole athlete life in one app. Book a verified court, train with a real coach, share your best plays, and fund another athlete while you are at it.</p>
-      <p class="noun-line" aria-label="What Atlitos covers">Courts. Coaches. Clips. Gear. Drills.</p>
+    <div class="shell hero-inner">
+      <div class="scoreboard" role="img" aria-label="Scoreboard reading: the way India plays is about to change forever">
+        <div class="sb-topline mono"><span>ATLITOS ARENA</span><span>EVE 19:30</span></div>
+        <div class="sb-screen">
+          <p class="sb-text mono"><span class="type" id="heroType">THE WAY INDIA PLAYS IS ABOUT TO CHANGE FOREVER</span><span class="caret" aria-hidden="true">_</span></p>
+        </div>
+        <div class="sb-dots" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      </div>
+      <p class="hero-sub">Courts. Coaches. Clips. Gear. Drills. One app for your whole game.</p>
       <div class="cta-row">
-        <a class="btn btn-primary" href="https://atlitos-app.vercel.app">Try the web app</a>
-        <a class="btn btn-secondary" href="mailto:founder@synthsports.co?subject=Atlitos%20TestFlight%20access">Get early iOS access</a>
+        <a class="btn-pill btn-lg" href="https://atlitos-app.vercel.app">Try the web app</a>
+        <a class="btn-ghost" href="mailto:founder@synthsports.co?subject=Atlitos%20TestFlight%20access">Get early iOS access</a>
+      </div>
+      <p class="scroll-hint mono" aria-hidden="true">SCROLL DOWN<span class="hint-arrow">&darr;</span></p>
+    </div>
+  </section>
+
+  <!-- PROBLEM. Sticker headline, dashed note, old way marquee. -->
+  <section class="problem" aria-labelledby="problem-title">
+    <div class="shell problem-grid">
+      <h2 id="problem-title" class="sticker-stack">
+        <span class="sticker pop">Playing is easy.</span>
+        <span class="sticker pop"><em class="accent">Finding</em> courts, coaches</span>
+        <span class="sticker pop">and your people is hard.</span>
+      </h2>
+      <div class="note pop">
+        <p>Good games do not organize themselves.</p>
+        <p>They come from <mark class="chip">twenty pings in a WhatsApp group</mark> and a phone call to check one slot.</p>
+        <p>That is the old way. And it takes forever.</p>
+      </div>
+    </div>
+    <div class="marquee" aria-hidden="true">
+      <div class="marquee-track">
+        <span class="m-tile"><svg viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg></span>
+        <span class="m-word mono">WHERE?</span>
+        <span class="m-tile"><svg viewBox="0 0 24 24"><path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384"/></svg></span>
+        <span class="m-word mono">WHO IS IN?</span>
+        <span class="m-tile"><svg viewBox="0 0 24 24"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg></span>
+        <span class="m-word mono">CASH ONLY</span>
+        <span class="m-tile"><svg viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg></span>
+        <span class="m-word mono">SLOT GONE</span>
+        <span class="m-tile"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></span>
+        <span class="m-tile"><svg viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg></span>
+        <span class="m-word mono">WHERE?</span>
+        <span class="m-tile"><svg viewBox="0 0 24 24"><path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384"/></svg></span>
+        <span class="m-word mono">WHO IS IN?</span>
+        <span class="m-tile"><svg viewBox="0 0 24 24"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg></span>
+        <span class="m-word mono">CASH ONLY</span>
+        <span class="m-tile"><svg viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg></span>
+        <span class="m-word mono">SLOT GONE</span>
+        <span class="m-tile"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- INTERLUDE. Typed line, three drawn arrows. -->
+  <section class="interlude">
+    <div class="shell interlude-inner">
+      <h2 class="serif-line"><span class="type" data-type>Here is how it works</span><span class="caret" aria-hidden="true">_</span></h2>
+      <div class="arrows" aria-hidden="true">
+        <svg class="arrow draw" viewBox="0 0 120 120" fill="none"><path class="a-path a-marigold" d="M14 106 C 40 80, 70 50, 96 22" /><path class="a-path a-marigold" d="M70 24 L 96 22 L 92 48" /></svg>
+        <svg class="arrow draw" viewBox="0 0 120 120" fill="none"><path class="a-path a-ember" d="M60 108 L 60 20" /><path class="a-path a-ember" d="M40 42 L 60 18 L 80 42" /></svg>
+        <svg class="arrow draw" viewBox="0 0 120 120" fill="none"><path class="a-path a-green" d="M106 106 C 80 80, 50 50, 24 22" /><path class="a-path a-green" d="M50 24 L 24 22 L 28 48" /></svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEPS. Folder tabs accumulate via CSS sticky. -->
+  <section class="steps-wrap" id="how" aria-label="How Atlitos works, three steps">
+    <div class="step-tab tab-1"><span class="mono tab-num">01</span><span class="tab-label">Find and book</span></div>
+    <div class="step-panel panel-1">
+      <div class="shell step-grid">
+        <div class="step-copy">
+          <p class="step-lede">First, you find your game.</p>
+          <p class="stack-list">Badminton.<br />Basketball.<br />Tennis.<br />Turf.<br />Near you.</p>
+          <p class="stack-list">All verified.<br />All live.<br />All bookable.</p>
+        </div>
+        <div class="demo-frame frame-marigold pop">
+          <div class="demo-card">
+            <div class="d-row d-search"><span>Courts near HSR Layout</span></div>
+            <div class="d-row"><span>Smash Arena, Badminton</span><span class="mono">&#8377;400</span></div>
+            <div class="d-row"><span>Hoop House, Basketball</span><span class="mono">&#8377;350</span></div>
+            <div class="d-row"><span>Baseline Club, Tennis</span><span class="mono">&#8377;500</span></div>
+            <div class="d-row d-cta"><span>Book 7 to 8 pm</span><span class="mono">&#8377;400</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step-tab tab-2"><span class="mono tab-num">02</span><span class="tab-label">Train and level up</span></div>
+    <div class="step-panel panel-2">
+      <div class="shell step-grid">
+        <div class="step-copy">
+          <p class="step-lede">Then, you level up.</p>
+          <p class="stack-list">Real coaches.<br />One on one sessions.<br />Group training.</p>
+          <p class="stack-list">Drills.<br />XP.<br />Milestones.</p>
+        </div>
+        <div class="demo-frame frame-ember pop">
+          <div class="demo-card">
+            <div class="d-row d-search"><span>Coach Priya, Badminton</span></div>
+            <div class="d-row"><span>Footwork drill</span><span class="mono">DONE</span></div>
+            <div class="d-row"><span>Net play drill</span><span class="mono">DONE</span></div>
+            <div class="d-xp"><span class="mono">240 XP</span><span class="xp-bar"><i></i></span></div>
+            <div class="d-row d-cta"><span>Next session Tuesday</span><span class="mono">&#8377;600</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step-tab tab-3"><span class="mono tab-num">03</span><span class="tab-label">Share and give back</span></div>
+    <div class="step-panel panel-3">
+      <div class="shell step-grid">
+        <div class="step-copy">
+          <p class="step-lede">Then, you give back.</p>
+          <p class="stack-list">Post your best plays.<br />Shop the gear you need.</p>
+          <p class="stack-list">Round up the change.<br />Fund another athlete.</p>
+        </div>
+        <div class="demo-frame frame-green pop">
+          <div class="demo-card">
+            <div class="d-row d-search"><span>Order, grip tape and shuttles</span></div>
+            <div class="d-row"><span>Order total</span><span class="mono">&#8377;293</span></div>
+            <div class="d-row"><span>Round up</span><span class="mono">+ &#8377;7</span></div>
+            <div class="d-row d-cta"><span>Goes to an athlete</span><span class="mono">&#8377;7</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DIFFERENT. Sticky stage, phases recolor semicircle, ball and tags. -->
+  <section class="pin-scene" id="different" aria-labelledby="different-title">
+    <div class="pin-stage phase-0" id="pinStage">
+      <div class="semicircle" aria-hidden="true"></div>
+      <div class="shell pin-grid">
+        <h2 id="different-title" class="sticker-stack pin-title">
+          <span class="sticker">What makes</span>
+          <span class="sticker"><em class="accent">Atlitos</em> different?</span>
+        </h2>
+        <div class="pin-captions">
+          <p class="note pin-caption cap-0 is-on">First, every court is checked by our team before it goes live.</p>
+          <p class="note pin-caption cap-1">Second, payments settle through a ledger. Refunds and receipts included.</p>
+          <p class="note pin-caption cap-2">And finally, Empower routes spare change to athletes who need it.</p>
+        </div>
+      </div>
+      <div class="ball-wrap" aria-hidden="true">
+        <svg class="ball" viewBox="0 0 200 200" fill="none">
+          <circle cx="100" cy="100" r="86" class="ball-face" />
+          <path d="M14 100 H 186" class="ball-seam" />
+          <path d="M100 14 C 60 60, 60 140, 100 186" class="ball-seam" />
+          <path d="M100 14 C 140 60, 140 140, 100 186" class="ball-seam" />
+          <circle cx="100" cy="100" r="86" class="ball-rim" />
+        </svg>
+        <span class="tag tag-a">Site visits</span>
+        <span class="tag tag-b">Real photos</span>
+        <span class="tag tag-c">Live slots</span>
+        <span class="tag tag-d">Fair prices</span>
+      </div>
+    </div>
+    <div class="pin-spacer" aria-hidden="true"></div>
+    <div class="pin-spacer" aria-hidden="true"></div>
+  </section>
+
+  <!-- EMPOWER CLOSING. Arch top, dark stage, drawn arrow, bursts, CTAs. -->
+  <section class="empower" id="empower" aria-labelledby="empower-title">
+    <div class="arch" aria-hidden="true"></div>
+    <div class="shell empower-inner">
+      <div class="empower-head">
+        <h2 id="empower-title" class="sticker-stack">
+          <span class="sticker pop">Ready to</span>
+          <span class="sticker pop"><em class="accent">play more?</em></span>
+        </h2>
+        <div class="note empower-note pop">
+          <p>Talent is everywhere. Opportunity is not.</p>
+          <p>Empower turns your spare change into court time, coaching, and gear for athletes who cannot afford them.</p>
+          <p>Play your game. Fund someone else's.</p>
+        </div>
+      </div>
+      <div class="stage" aria-hidden="true">
+        <svg class="stage-arrow draw" viewBox="0 0 520 200" fill="none">
+          <path class="a-path a-green" d="M20 170 C 120 190, 200 120, 260 120 C 330 120, 360 60, 470 30" />
+          <path class="a-path a-green" d="M430 26 L 472 28 L 452 64" />
+        </svg>
+        <span class="burst burst-marigold mono">+ &#8377;7</span>
+        <span class="burst burst-paper">GAME ON</span>
+        <span class="orbit"></span>
+      </div>
+      <p class="roundup-line mono"><span class="ru">&#8377;293</span> order. <span class="ru">&#8377;7</span> rounded up. <span class="ru">&#8377;7</span> to an athlete.</p>
+      <div class="cta-row cta-center">
+        <a class="btn-pill btn-lg btn-onDark" href="https://atlitos-app.vercel.app">Try the web app</a>
+        <a class="btn-ghost ghost-onDark" href="mailto:founder@synthsports.co?subject=Atlitos%20TestFlight%20access">Get early iOS access</a>
       </div>
       <p class="cta-note">Free on the web. iOS is in TestFlight, email us and we will add you.</p>
-    </div>
-  </section>
-
-  <!-- Journey -->
-  <section class="section" id="journey" aria-labelledby="journey-title">
-    <div class="shell">
-      <p class="eyebrow reveal">How it works</p>
-      <h2 id="journey-title" class="reveal">Your game, in three moves</h2>
-      <ol class="journey" role="list">
-        <li class="step reveal">
-          <span class="step-num mono" aria-hidden="true">01</span>
-          <h3>Find and book</h3>
-          <p>Search verified courts near you, pick a live slot, and pay in the app. No calls, no waiting on a reply, no cash at the counter.</p>
-        </li>
-        <li class="step reveal">
-          <span class="step-num mono" aria-hidden="true">02</span>
-          <h3>Train and level up</h3>
-          <p>Book coaches for one on one sessions or join group training. Learn drills, earn XP, and watch your game climb.</p>
-        </li>
-        <li class="step reveal">
-          <span class="step-num mono" aria-hidden="true">03</span>
-          <h3>Share and give back</h3>
-          <p>Post your best plays on Clutch, shop the gear you need, and round up your orders to fund athletes who cannot afford court time.</p>
-        </li>
-      </ol>
-    </div>
-  </section>
-
-  <!-- Old way / new way -->
-  <section class="compare-band" aria-labelledby="compare-title">
-    <div class="shell">
-      <h2 id="compare-title" class="reveal">Booking a court should not feel like a group project</h2>
-      <div class="compare reveal">
-        <div class="compare-col compare-old">
-          <p class="compare-label">The old way</p>
-          <ul role="list">
-            <li>WhatsApp groups that go quiet when you need an answer</li>
-            <li>Phone calls to check if a slot is even free</li>
-            <li>Guessing whether the court is real or maintained</li>
-            <li>Cash at the counter and no receipt</li>
-          </ul>
-        </div>
-        <div class="compare-col compare-new">
-          <p class="compare-label">With Atlitos</p>
-          <ul role="list">
-            <li>Live slots you can book right now</li>
-            <li>Courts verified by our team before they go live</li>
-            <li>Payment settled in the app with a receipt</li>
-            <li>One tap to rebook the same slot next week</li>
-          </ul>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Different -->
-  <section class="section" id="different" aria-labelledby="different-title">
-    <div class="shell">
-      <p class="eyebrow reveal">Why Atlitos</p>
-      <h2 id="different-title" class="reveal">What makes Atlitos different</h2>
-      <dl class="diff-list">
-        <div class="diff reveal">
-          <dt>Real courts, verified</dt>
-          <dd>Every venue is checked by our team before it appears in the app. What you see is what you play on.</dd>
-        </div>
-        <div class="diff reveal">
-          <dt>Payments that settle right</dt>
-          <dd>Money moves through a ledger, not a promise. Bookings, refunds, and payouts are all tracked and receipted in the app.</dd>
-        </div>
-        <div class="diff reveal">
-          <dt>Built to give back</dt>
-          <dd>Empower routes roundups and donations to verified athletes who need court time, coaching, and gear. Purpose is in the product, not the pitch.</dd>
-        </div>
-      </dl>
-    </div>
-  </section>
-
-  <!-- Empower band -->
-  <section class="empower" id="empower" aria-labelledby="empower-title">
-    <div class="shell">
-      <p class="eyebrow eyebrow-on-dark reveal">Powered by purpose</p>
-      <h2 id="empower-title" class="reveal">Talent is everywhere.<br />Opportunity is not.</h2>
-      <p class="empower-lede reveal">Empower turns spare change from bookings, sessions, and gear into court time, coaching, and equipment for athletes who cannot afford them. Play your game, fund someone else's.</p>
-      <p class="roundup-line mono reveal" aria-label="Example roundup"><span class="ru">₹293</span> order. <span class="ru">₹7</span> rounded up. <span class="ru">₹7</span> to an athlete.</p>
-    </div>
-  </section>
-
-  <!-- Closing CTA -->
-  <section class="closing" aria-labelledby="closing-title">
-    <div class="shell">
-      <h2 id="closing-title" class="reveal">Ready to play more?</h2>
-      <p class="closing-lede reveal">The web app is live today. iOS access is one email away.</p>
-      <div class="cta-row cta-row-center reveal">
-        <a class="btn btn-primary" href="https://atlitos-app.vercel.app">Try the web app</a>
-        <a class="btn btn-secondary" href="mailto:founder@synthsports.co?subject=Atlitos%20TestFlight%20access">Get early iOS access</a>
-      </div>
     </div>
   </section>
 
@@ -150,37 +232,32 @@
 <footer class="site-footer">
   <div class="shell footer-inner">
     <p class="tagline">Built for <span class="accent">Athletes</span>. Backed by <span class="accent">Tech</span>. Powered by <span class="accent">Purpose</span>.</p>
-    <div class="footer-meta">
-      <a class="wordmark wordmark-sm" href="#top">ATLITOS</a>
-      <nav aria-label="Footer" class="footer-nav">
+    <div class="footer-cols">
+      <nav aria-label="Site">
+        <p class="f-head mono">EXPLORE</p>
+        <a href="#how">How it works</a>
+        <a href="#different">Why Atlitos</a>
+        <a href="#empower">Empower</a>
+      </nav>
+      <nav aria-label="Access">
+        <p class="f-head mono">PLAY</p>
         <a href="https://atlitos-app.vercel.app">Web app</a>
         <a href="mailto:founder@synthsports.co?subject=Atlitos%20TestFlight%20access">iOS access</a>
+      </nav>
+      <nav aria-label="Partners">
+        <p class="f-head mono">PARTNERS</p>
         <a href="https://atlitos-portal-court.vercel.app">Court portal</a>
         <a href="https://atlitos-portal-life.vercel.app">Empower portal</a>
       </nav>
     </div>
+    <p class="copyright"><span class="mono">&copy; 2026</span> Atlitos. All rights reserved.</p>
   </div>
+  <div class="giant-mark" id="giantMark" aria-hidden="true">Atlitos</div>
 </footer>
 
-<script>
-  (function () {
-    var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    var els = document.querySelectorAll(".reveal");
-    if (reduced || !("IntersectionObserver" in window)) {
-      els.forEach(function (el) { el.classList.add("is-visible"); });
-      return;
-    }
-    var io = new IntersectionObserver(function (entries) {
-      entries.forEach(function (entry) {
-        if (entry.isIntersecting) {
-          entry.target.classList.add("is-visible");
-          io.unobserve(entry.target);
-        }
-      });
-    }, { threshold: 0.12 });
-    els.forEach(function (el) { io.observe(el); });
-  })();
-</script>
+<script src="vendor/gsap.min.js" defer></script>
+<script src="vendor/ScrollTrigger.min.js" defer></script>
+<script src="main.js" defer></script>
 
 </body>
 </html>
