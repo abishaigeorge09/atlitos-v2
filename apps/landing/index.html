@@ -31,22 +31,32 @@
 
 <main id="main">
 
-  <!-- HERO. Full bleed rotating sport photography. Renders complete with zero JS. -->
+  <!-- HERO. The arena scoreboard frame, its screen playing rotating sport photography.
+       Renders complete with zero JS: full text in markup, first photo visible. -->
   <section class="hero" id="top">
-    <div class="hero-bg" aria-hidden="true">
-      <img src="img/hero-stadium.jpg" alt="" class="is-on" />
-      <img src="img/hero-basketball.jpg" alt="" />
-      <img src="img/hero-badminton.jpg" alt="" />
-    </div>
-    <div class="hero-scrim" aria-hidden="true"></div>
     <div class="shell hero-inner">
-      <p class="hero-eyebrow mono"><span>ATLITOS ARENA</span><span class="sb-live"><i class="live-dot"></i>LIVE</span><span>EVE 19:30</span></p>
-      <h1 class="hero-title"><span class="type" id="heroType">The way India plays is about to change forever</span><span class="caret" aria-hidden="true">_</span></h1>
-      <p class="hero-meet" id="heroMeet">Meet <em class="accent">Atlitos</em>.</p>
+      <div class="scoreboard" role="img" aria-label="Arena screen reading: the way India plays is about to change forever. Meet Atlitos.">
+        <div class="sb-topline mono"><span>ATLITOS ARENA</span><span class="sb-live"><i class="live-dot"></i>LIVE</span><span>EVE 19:30</span></div>
+        <div class="sb-screen">
+          <div class="hero-bg" aria-hidden="true">
+            <img src="img/hero-stadium.jpg" alt="" class="is-on" />
+            <img src="img/hero-basketball.jpg" alt="" />
+            <img src="img/hero-badminton.jpg" alt="" />
+          </div>
+          <div class="hero-scrim" aria-hidden="true"></div>
+          <div class="sb-content">
+            <p class="sb-text"><span class="type" id="heroType">The way India plays is about to change forever</span><span class="caret" aria-hidden="true">_</span></p>
+            <p class="hero-meet" id="heroMeet">Meet <em class="meet-accent">Atlitos</em>.</p>
+          </div>
+        </div>
+        <div class="sb-foot" aria-hidden="true">
+          <div class="sb-dots"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        </div>
+      </div>
       <p class="hero-sub" data-reveal="up">Courts. Coaches. Clips. Gear. Drills. One app for your whole game.</p>
       <div class="cta-row">
-        <a class="btn-pill btn-lg btn-onDark" data-reveal="up" data-reveal-delay="1" href="https://atlitos-app.vercel.app">Try the web app</a>
-        <a class="btn-ghost ghost-onDark" data-reveal="up" data-reveal-delay="2" href="mailto:founder@synthsports.co?subject=Atlitos%20TestFlight%20access">Get early iOS access</a>
+        <a class="btn-pill btn-lg" data-reveal="up" data-reveal-delay="1" href="https://atlitos-app.vercel.app">Try the web app</a>
+        <a class="btn-ghost" data-reveal="up" data-reveal-delay="2" href="mailto:founder@synthsports.co?subject=Atlitos%20TestFlight%20access">Get early iOS access</a>
       </div>
       <p class="scroll-hint mono" aria-hidden="true">SCROLL DOWN<span class="hint-arrow">&darr;</span></p>
     </div>

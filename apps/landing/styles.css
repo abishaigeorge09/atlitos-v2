@@ -163,14 +163,38 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--ember); outline
 .ghost-onDark { color: var(--ink-inverse); border-color: rgba(251, 247, 241, 0.35); }
 .ghost-onDark:hover { border-color: var(--ink-inverse); }
 
-/* ---------- Hero: full bleed rotating sport photography ---------- */
-.hero {
+/* ---------- Hero: the arena scoreboard machine, screen playing sport photography ---------- */
+.hero { padding: calc(var(--nav-h) + 48px) 0 150px; position: relative; }
+.hero-inner { display: flex; flex-direction: column; align-items: center; text-align: center; }
+.scoreboard {
+  width: min(920px, 94vw);
+  min-height: 58vh;
+  display: flex; flex-direction: column;
+  background: var(--surface-muted);
+  border: 3px solid var(--ink);
+  border-radius: 26px;
+  box-shadow: var(--shadow-hard);
+  padding: 18px 24px 16px;
+  position: relative; z-index: 2;
+}
+.sb-topline {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 0.75rem; font-weight: 600; letter-spacing: 0.14em;
+  color: var(--ink-secondary);
+  padding: 0 4px 12px;
+}
+.sb-live { display: flex; align-items: center; gap: 7px; color: var(--ember); }
+.live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ember); animation: blink 1.4s steps(1) infinite; }
+.sb-screen {
   position: relative;
-  height: 100svh;
-  min-height: 640px;
-  display: flex; align-items: center; justify-content: center;
   overflow: hidden;
-  padding: var(--nav-h) 0 90px;
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  flex: 1;
+  min-height: 42vh;
+  display: flex; align-items: center; justify-content: center;
+  padding: 34px 30px;
+  background: var(--espresso);
 }
 .hero-bg img {
   position: absolute; inset: 0;
@@ -185,51 +209,57 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--ember); outline
   position: absolute; inset: 0;
   background:
     var(--grain-light),
-    linear-gradient(180deg, rgba(20, 16, 11, 0.62), rgba(20, 16, 11, 0.42) 44%, rgba(20, 16, 11, 0.86));
+    linear-gradient(180deg, rgba(20, 16, 11, 0.52), rgba(20, 16, 11, 0.34) 46%, rgba(20, 16, 11, 0.72));
   background-size: 7px 7px, auto;
 }
-.hero-inner {
-  position: relative; z-index: 2;
-  display: flex; flex-direction: column; align-items: center; text-align: center;
-  color: var(--ink-inverse);
-}
-.hero-eyebrow {
-  display: flex; align-items: center; gap: 22px;
-  font-size: 0.75rem; font-weight: 600; letter-spacing: 0.16em;
-  color: rgba(251, 247, 241, 0.85);
-  border: 1.5px solid rgba(251, 247, 241, 0.35);
-  border-radius: 999px;
-  padding: 8px 18px;
-}
-.sb-live { display: flex; align-items: center; gap: 7px; color: var(--marigold); }
-.live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--marigold); animation: blink 1.4s steps(1) infinite; }
-.hero-title {
-  margin-top: 30px;
+.sb-content { position: relative; z-index: 2; }
+.sb-text {
   font-family: var(--font-display);
-  font-weight: 900;
-  font-size: clamp(2.25rem, 5.6vw, 4.5rem);
-  line-height: 1.08;
-  max-width: 17ch;
+  font-weight: 700;
+  font-size: clamp(1.625rem, 3.8vw, 2.75rem);
+  line-height: 1.25;
+  color: var(--ink-inverse);
+  max-width: 22ch;
   text-wrap: balance;
-  text-shadow: 0 3px 26px rgba(20, 16, 11, 0.55);
+  text-shadow: 0 2px 18px rgba(20, 16, 11, 0.6);
 }
 .caret { animation: blink 1s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
 .hero-meet {
-  margin-top: 18px;
+  margin-top: 14px;
   font-family: var(--font-display);
   font-style: italic;
   font-weight: 700;
-  font-size: clamp(1.375rem, 2.8vw, 2rem);
+  font-size: clamp(1.25rem, 2.6vw, 1.875rem);
+  color: var(--ink-inverse);
+  text-shadow: 0 2px 18px rgba(20, 16, 11, 0.6);
   transition: opacity 0.7s ease, transform 0.7s ease;
 }
+.meet-accent { color: var(--marigold); font-style: italic; }
 .js .hero:not(.is-meet) .hero-meet { opacity: 0; transform: translateY(10px); }
+.sb-foot {
+  display: flex; align-items: center; justify-content: center;
+  padding-top: 14px;
+  min-height: 30px;
+}
+.sb-dots { display: flex; gap: 8px; justify-content: center; }
+.sb-dots i {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--border-strong);
+  animation: dotpulse 1.8s ease-in-out infinite;
+}
+.sb-dots i:nth-child(2) { animation-delay: 0.15s; }
+.sb-dots i:nth-child(3) { animation-delay: 0.3s; }
+.sb-dots i:nth-child(4) { animation-delay: 0.45s; }
+.sb-dots i:nth-child(5) { animation-delay: 0.6s; }
+.sb-dots i:nth-child(6) { animation-delay: 0.75s; }
+@keyframes dotpulse { 50% { background: var(--ember); transform: scale(1.25); } }
 .hero-sub {
-  margin-top: 22px;
+  margin-top: 34px;
   font-family: var(--font-display);
   font-weight: 700;
   font-size: clamp(1.125rem, 2.6vw, 1.5rem);
-  color: rgba(251, 247, 241, 0.92);
+  color: var(--ink);
   max-width: 34ch;
   text-wrap: balance;
 }
@@ -991,7 +1021,7 @@ html:not(.js) .phase-dots { display: none; }
 /* ---------- Reduced motion: final states, no pins, pre typed text ---------- */
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
-  .caret, .hint-arrow, .live-dot, .spark { animation: none; }
+  .caret, .hint-arrow, .live-dot, .spark, .sb-dots i { animation: none; }
   .marquee-track, .strip-track { animation: none; }
   .tag, .stage-ball, .d-cta { animation: none; }
   .hero-bg img { transition: none; }
@@ -1012,6 +1042,8 @@ html:not(.js) .phase-dots { display: none; }
   .scard-inner { grid-template-columns: 1fr; }
   .scard { min-height: 0; }
   .scard-photo { min-height: 34vh; border-left: none; border-top: 3px solid var(--ink); order: -1; }
+  .scoreboard { min-height: 44vh; }
+  .sb-screen { min-height: 30vh; }
   .persona-grid { grid-template-columns: 1fr 1fr; }
   .pin-grid { flex-direction: column; }
   .pin-captions { max-width: 46ch; }
@@ -1023,8 +1055,8 @@ html:not(.js) .phase-dots { display: none; }
 @media (max-width: 620px) {
   .site-nav { display: none; }
   .nav-card { max-width: 380px; }
-  .hero { min-height: 560px; }
-  .hero-eyebrow { gap: 12px; font-size: 0.6875rem; }
+  .hero { padding-top: calc(var(--nav-h) + 40px); padding-bottom: 110px; }
+  .sb-screen { min-height: 220px; padding: 22px 16px; }
   .footer-cols { gap: 36px; }
   .stage { height: 300px; }
   .persona-grid { grid-template-columns: 1fr; }
