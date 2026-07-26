@@ -141,54 +141,53 @@
     </div>
   </section>
 
-  <!-- STEPS. One Step component instanced three times, Parker anatomy:
-       sticky title tab + folder of copy and demo video. Same top offset and
-       z index on all three, DOM order does the stacking. -->
-  <section class="steps-wrapper" id="how" aria-label="How Atlitos works, three steps">
-    <article class="scard scard-1">
-      <h2 class="scard-tab"><span class="mono tab-num">01</span>Step 1, Find and book</h2>
-      <div class="scard-folder">
-        <div class="scard-body">
-          <p class="scard-lede">First, you find your game.</p>
-          <p class="stack-list">Badminton.<br />Basketball.<br />Tennis.<br />Turf.<br />Near you.</p>
-          <p class="stack-list">All verified.<br />All live.<br />All bookable.</p>
+  <!-- STEPS. The original folder tab design: sticky tabs accumulate across
+       the top while full width panels scroll beneath them. -->
+  <section class="steps-wrap" id="how" aria-label="How Atlitos works, three steps">
+    <div class="step-tab tab-1"><span class="mono tab-num">01</span><span class="tab-label">Find and book</span></div>
+    <div class="step-panel panel-1">
+      <div class="shell step-grid">
+        <div class="step-copy">
+          <p class="step-lede" data-reveal="up">First, you find your game.</p>
+          <p class="stack-list" data-reveal="up" data-reveal-delay="1">Badminton.<br />Basketball.<br />Tennis.<br />Turf.<br />Near you.</p>
+          <p class="stack-list" data-reveal="up" data-reveal-delay="2">All verified.<br />All live.<br />All bookable.</p>
         </div>
-        <div class="demo-frame frame-marigold scard-video">
+        <div class="demo-frame frame-marigold step-video" data-reveal="up">
           <video src="img/step1-courts.mp4" poster="img/hero-pitch.jpg" autoplay muted loop playsinline></video>
           <span class="slot-chip mono">VIDEO SLOT, img/step1-courts.mp4</span>
         </div>
       </div>
-    </article>
+    </div>
 
-    <article class="scard scard-2">
-      <h2 class="scard-tab"><span class="mono tab-num">02</span>Step 2, Train and level up</h2>
-      <div class="scard-folder">
-        <div class="scard-body">
-          <p class="scard-lede">Then, you level up.</p>
-          <p class="stack-list">Real coaches.<br />One on one sessions.<br />Group training.</p>
-          <p class="stack-list">Drills.<br />XP.<br />Milestones.</p>
+    <div class="step-tab tab-2"><span class="mono tab-num">02</span><span class="tab-label">Train and level up</span></div>
+    <div class="step-panel panel-2">
+      <div class="shell step-grid">
+        <div class="step-copy">
+          <p class="step-lede" data-reveal="up">Then, you level up.</p>
+          <p class="stack-list" data-reveal="up" data-reveal-delay="1">Real coaches.<br />One on one sessions.<br />Group training.</p>
+          <p class="stack-list" data-reveal="up" data-reveal-delay="2">Drills.<br />XP.<br />Milestones.</p>
         </div>
-        <div class="demo-frame frame-ember scard-video">
+        <div class="demo-frame frame-ember step-video" data-reveal="up">
           <video src="img/step2-coach.mp4" poster="img/step-train.jpg" autoplay muted loop playsinline></video>
           <span class="slot-chip mono">VIDEO SLOT, img/step2-coach.mp4</span>
         </div>
       </div>
-    </article>
+    </div>
 
-    <article class="scard scard-3">
-      <h2 class="scard-tab"><span class="mono tab-num">03</span>Step 3, Share and give back</h2>
-      <div class="scard-folder">
-        <div class="scard-body">
-          <p class="scard-lede">Then, you give back.</p>
-          <p class="stack-list">Post your best plays.<br />Shop the gear you need.</p>
-          <p class="stack-list">Round up the change.<br />Fund another athlete.</p>
+    <div class="step-tab tab-3"><span class="mono tab-num">03</span><span class="tab-label">Share and give back</span></div>
+    <div class="step-panel panel-3">
+      <div class="shell step-grid">
+        <div class="step-copy">
+          <p class="step-lede" data-reveal="up">Then, you give back.</p>
+          <p class="stack-list" data-reveal="up" data-reveal-delay="1">Post your best plays.<br />Shop the gear you need.</p>
+          <p class="stack-list" data-reveal="up" data-reveal-delay="2">Round up the change.<br />Fund another athlete.</p>
         </div>
-        <div class="demo-frame frame-green scard-video">
+        <div class="demo-frame frame-green step-video" data-reveal="up">
           <video src="img/step3-roundup.mp4" poster="img/step-give.jpg" autoplay muted loop playsinline></video>
           <span class="slot-chip mono">VIDEO SLOT, img/step3-roundup.mp4</span>
         </div>
       </div>
-    </article>
+    </div>
   </section>
 
   <!-- FEATURES. Marigold band arches in over the steps; the ball rides its seam. -->
