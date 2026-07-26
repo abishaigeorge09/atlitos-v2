@@ -397,68 +397,64 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--ember); outline
 .a-ember { stroke: var(--ember); }
 .a-green { stroke: var(--green); }
 
-/* ---------- Steps: each step is its own FILE, tab attached to its own
-   full width panel. All files sticky at the same offset; DOM order slides
-   the next file over the previous panel. The tab row is transparent, so
-   earlier tabs stay visible as the drawer fills. ---------- */
+/* ---------- Steps: each step is its own FILE, sized to the reference.
+   Tab 1 flush left, tab 2 at a third, tab 3 flush right. Panels carry no
+   box of their own, just the full width dashed rule under the tab row,
+   so files blend with the paper page exactly like the reference. ---------- */
 .steps-wrap { position: relative; }
 .step-file {
   position: sticky;
   top: var(--nav-h);
   height: calc(100svh - var(--nav-h));
   display: flex; flex-direction: column;
+  background: transparent;
 }
 .step-tab {
   align-self: flex-start;
-  display: flex; align-items: center; gap: 16px;
+  display: flex; align-items: center; gap: 18px;
   border: 3px solid var(--ink);
   border-bottom: none;
-  border-radius: 16px 16px 0 0;
-  padding: 18px 26px 16px;
+  border-radius: 18px 18px 0 0;
+  box-shadow: 4px 0 0 rgba(28, 23, 18, 0.9);
+  padding: 26px 38px 24px;
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: clamp(1rem, 2vw, 1.5rem);
-  line-height: 1.15;
+  font-size: clamp(1.25rem, 2.3vw, 1.875rem);
+  line-height: 1.1;
   position: relative; z-index: 2;
   margin-bottom: -3px;
 }
 .tab-label { white-space: nowrap; }
-.tab-num { font-size: clamp(0.8125rem, 1.4vw, 1rem); font-weight: 700; opacity: 0.75; }
-.tab-1 { background: var(--marigold); margin-left: 4vw; }
-.tab-2 { background: var(--ember); color: var(--ink-on-accent); margin-left: 36vw; }
-.tab-3 { background: var(--green); margin-left: 68vw; }
+.tab-num { font-size: clamp(0.875rem, 1.5vw, 1.0625rem); font-weight: 700; opacity: 0.75; }
+.tab-1 { background: var(--marigold); margin-left: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.tab-2 { background: var(--ember); color: var(--ink-on-accent); margin-left: 33.333vw; }
+.tab-3 { background: var(--green); margin-left: auto; margin-right: 0; border-top-right-radius: 0; box-shadow: -4px 0 0 rgba(28, 23, 18, 0.9); }
 .step-panel {
   flex: 1;
-  background: var(--surface);
-  border-top: 3px solid var(--ink);
+  background: var(--paper);
   display: flex; align-items: center;
-  padding: 40px 0;
-  background-image:
-    repeating-linear-gradient(90deg, var(--ink) 0 12px, transparent 12px 22px);
+  padding: 70px 0 50px;
+  /* the reference rule: one long dashed line, full width, under the tab row */
+  background-image: repeating-linear-gradient(90deg, var(--ink) 0 14px, transparent 14px 26px);
   background-repeat: no-repeat;
   background-size: 100% 3px;
-  background-position: 0 8px;
+  background-position: 0 0;
 }
 .step-grid {
-  display: grid; grid-template-columns: 1fr 1.15fr; gap: 64px; align-items: center;
+  display: grid; grid-template-columns: 0.85fr 1.25fr; gap: clamp(48px, 7vw, 110px);
+  align-items: center;
   width: 100%;
 }
-.step-lede {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: clamp(1.5rem, 3vw, 2.125rem);
-  margin-bottom: 26px;
-}
-.stack-list { font-size: 1.125rem; font-weight: 500; line-height: 1.75; color: var(--ink-secondary); }
-.stack-list + .stack-list { margin-top: 22px; }
+.step-lede { font-weight: 600; font-size: 1.0625rem; margin-bottom: 24px; color: var(--ink); }
+.stack-list { font-size: 1.0625rem; font-weight: 500; line-height: 1.85; color: var(--ink); }
+.stack-list + .stack-list { margin-top: 26px; }
 .step-video { position: relative; }
 .step-video video {
   width: 100%;
-  aspect-ratio: 4 / 3;
-  max-height: calc(100svh - var(--nav-h) - 220px);
+  height: clamp(300px, 48vh, 480px);
   object-fit: cover;
   border: 2.5px solid var(--ink);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--surface);
   display: block;
 }
