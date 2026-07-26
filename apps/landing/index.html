@@ -5,12 +5,11 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>ATLITOS, the sports superapp for Indian athletes</title>
-  <meta name="description" content="Book verified courts, train with coaches, watch short sports videos, shop gear, learn drills, and support athletes across India. One app." />
-  <meta name="theme-color" content="#FBF7F1" media="(prefers-color-scheme: light)" />
-  <meta name="theme-color" content="#14100B" media="(prefers-color-scheme: dark)" />
+  <meta name="description" content="Book verified courts, train with coaches, share your best plays, and give back to athletes across India. One app for your whole game." />
+  <meta name="theme-color" content="#FBF7F1" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -21,9 +20,9 @@
   <div class="shell header-row">
     <a class="wordmark" href="#top" aria-label="Atlitos home">ATLITOS</a>
     <nav aria-label="Sections" class="site-nav">
-      <a href="#verticals">Verticals</a>
+      <a href="#journey">How it works</a>
+      <a href="#different">Why Atlitos</a>
       <a href="#empower">Empower</a>
-      <a href="#partners">Partners</a>
     </nav>
     <a class="btn btn-primary btn-sm" href="https://atlitos-app.vercel.app">Try the web app</a>
   </div>
@@ -33,153 +32,116 @@
 
   <!-- Hero -->
   <section class="hero" id="top">
-    <div class="shell hero-grid">
-      <div class="hero-copy">
-        <p class="eyebrow">The sports superapp for India</p>
-        <h1>Play more.<br />Train better.<br /><span class="accent">Give back.</span></h1>
-        <p class="lede">Book verified courts near you, train with real coaches, share your best plays, shop gear, learn drills, and lift up athletes who need it. One app for your whole game.</p>
-        <div class="cta-row">
-          <a class="btn btn-primary" href="https://atlitos-app.vercel.app">Try the web app</a>
-          <a class="btn btn-secondary" href="mailto:founder@synthsports.co?subject=Atlitos%20TestFlight%20access">Get early iOS access</a>
-        </div>
-        <p class="cta-note">iOS is in TestFlight. Email us and we will add you.</p>
+    <div class="shell">
+      <p class="eyebrow">The sports superapp for India</p>
+      <h1 class="hero-title">
+        <span class="hero-line">Playing is easy.</span>
+        <span class="hero-line">Finding courts, coaches</span>
+        <span class="hero-line">and your people is hard.</span>
+      </h1>
+      <p class="lede">Atlitos puts the whole athlete life in one app. Book a verified court, train with a real coach, share your best plays, and fund another athlete while you are at it.</p>
+      <p class="noun-line" aria-label="What Atlitos covers">Courts. Coaches. Clips. Gear. Drills.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="https://atlitos-app.vercel.app">Try the web app</a>
+        <a class="btn btn-secondary" href="mailto:founder@synthsports.co?subject=Atlitos%20TestFlight%20access">Get early iOS access</a>
       </div>
+      <p class="cta-note">Free on the web. iOS is in TestFlight, email us and we will add you.</p>
+    </div>
+  </section>
 
-      <div class="hero-visual" aria-hidden="true">
-        <div class="phone">
-          <div class="phone-notch"></div>
-          <div class="phone-screen">
-            <div class="ph-greeting">
-              <span class="ph-line ph-line-wide"></span>
-              <span class="ph-line ph-line-narrow"></span>
-            </div>
-            <div class="ph-grid">
-              <div class="ph-tile"><span class="ph-disc"></span><span class="ph-line"></span></div>
-              <div class="ph-tile"><span class="ph-disc ph-disc-alt"></span><span class="ph-line"></span></div>
-              <div class="ph-tile"><span class="ph-disc ph-disc-alt"></span><span class="ph-line"></span></div>
-              <div class="ph-tile"><span class="ph-disc"></span><span class="ph-line"></span></div>
-              <div class="ph-tile"><span class="ph-disc ph-disc-alt"></span><span class="ph-line"></span></div>
-              <div class="ph-tile"><span class="ph-disc"></span><span class="ph-line"></span></div>
-            </div>
-            <div class="ph-stat">
-              <span class="ph-stat-num mono">240 XP</span>
-              <span class="ph-stat-bar"><span class="ph-stat-fill"></span></span>
-            </div>
-            <div class="ph-card">
-              <span class="ph-line ph-line-wide"></span>
-              <span class="ph-price mono">₹400</span>
-            </div>
-          </div>
+  <!-- Journey -->
+  <section class="section" id="journey" aria-labelledby="journey-title">
+    <div class="shell">
+      <p class="eyebrow reveal">How it works</p>
+      <h2 id="journey-title" class="reveal">Your game, in three moves</h2>
+      <ol class="journey" role="list">
+        <li class="step reveal">
+          <span class="step-num mono" aria-hidden="true">01</span>
+          <h3>Find and book</h3>
+          <p>Search verified courts near you, pick a live slot, and pay in the app. No calls, no waiting on a reply, no cash at the counter.</p>
+        </li>
+        <li class="step reveal">
+          <span class="step-num mono" aria-hidden="true">02</span>
+          <h3>Train and level up</h3>
+          <p>Book coaches for one on one sessions or join group training. Learn drills, earn XP, and watch your game climb.</p>
+        </li>
+        <li class="step reveal">
+          <span class="step-num mono" aria-hidden="true">03</span>
+          <h3>Share and give back</h3>
+          <p>Post your best plays on Clutch, shop the gear you need, and round up your orders to fund athletes who cannot afford court time.</p>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- Old way / new way -->
+  <section class="compare-band" aria-labelledby="compare-title">
+    <div class="shell">
+      <h2 id="compare-title" class="reveal">Booking a court should not feel like a group project</h2>
+      <div class="compare reveal">
+        <div class="compare-col compare-old">
+          <p class="compare-label">The old way</p>
+          <ul role="list">
+            <li>WhatsApp groups that go quiet when you need an answer</li>
+            <li>Phone calls to check if a slot is even free</li>
+            <li>Guessing whether the court is real or maintained</li>
+            <li>Cash at the counter and no receipt</li>
+          </ul>
         </div>
-        <div class="hero-disc hero-disc-a"></div>
-        <div class="hero-disc hero-disc-b"></div>
+        <div class="compare-col compare-new">
+          <p class="compare-label">With Atlitos</p>
+          <ul role="list">
+            <li>Live slots you can book right now</li>
+            <li>Courts verified by our team before they go live</li>
+            <li>Payment settled in the app with a receipt</li>
+            <li>One tap to rebook the same slot next week</li>
+          </ul>
+        </div>
       </div>
     </div>
   </section>
 
-  <!-- Verticals -->
-  <section class="section" id="verticals" aria-labelledby="verticals-title">
+  <!-- Different -->
+  <section class="section" id="different" aria-labelledby="different-title">
     <div class="shell">
-      <p class="eyebrow reveal">Six verticals</p>
-      <h2 id="verticals-title" class="reveal">Everything an athlete needs, in one place</h2>
-      <ul class="cards reveal" role="list">
-        <li class="card">
-          <span class="icon-disc" aria-hidden="true">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>
-          </span>
-          <h3>Courts</h3>
-          <p>Book verified courts near you and get playing in minutes.</p>
-        </li>
-        <li class="card">
-          <span class="icon-disc" aria-hidden="true">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          </span>
-          <h3>Coaching</h3>
-          <p>Find coaches for 1 on 1 sessions or join group training with monthly memberships.</p>
-        </li>
-        <li class="card">
-          <span class="icon-disc" aria-hidden="true">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z"/><path d="m6.2 5.3 3.1 3.9"/><path d="m12.4 3.4 3.1 4"/><path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>
-          </span>
-          <h3>Clutch</h3>
-          <p>Watch and share short sports videos from athletes like you.</p>
-        </li>
-        <li class="card">
-          <span class="icon-disc" aria-hidden="true">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
-          </span>
-          <h3>Shop</h3>
-          <p>Get the right gear for your sport, delivered.</p>
-        </li>
-        <li class="card">
-          <span class="icon-disc" aria-hidden="true">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M12 5 9.04 7.96a2.17 2.17 0 0 0 0 3.08c.82.82 2.13.85 3 .07l2.07-1.9a2.82 2.82 0 0 1 3.79 0l2.96 2.66"/><path d="m18 15-2-2"/><path d="m15 18-2-2"/></svg>
-          </span>
-          <h3>Empower</h3>
-          <p>Support underprivileged athletes with donations and roundups.</p>
-        </li>
-        <li class="card">
-          <span class="icon-disc" aria-hidden="true">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></svg>
-          </span>
-          <h3>Learn</h3>
-          <p>Master drills, earn XP, and hit milestones as you improve.</p>
-        </li>
-      </ul>
+      <p class="eyebrow reveal">Why Atlitos</p>
+      <h2 id="different-title" class="reveal">What makes Atlitos different</h2>
+      <dl class="diff-list">
+        <div class="diff reveal">
+          <dt>Real courts, verified</dt>
+          <dd>Every venue is checked by our team before it appears in the app. What you see is what you play on.</dd>
+        </div>
+        <div class="diff reveal">
+          <dt>Payments that settle right</dt>
+          <dd>Money moves through a ledger, not a promise. Bookings, refunds, and payouts are all tracked and receipted in the app.</dd>
+        </div>
+        <div class="diff reveal">
+          <dt>Built to give back</dt>
+          <dd>Empower routes roundups and donations to verified athletes who need court time, coaching, and gear. Purpose is in the product, not the pitch.</dd>
+        </div>
+      </dl>
     </div>
   </section>
 
   <!-- Empower band -->
   <section class="empower" id="empower" aria-labelledby="empower-title">
-    <div class="shell empower-grid">
-      <div class="empower-copy reveal">
-        <p class="eyebrow eyebrow-on-dark">Powered by purpose</p>
-        <h2 id="empower-title">Every order can round up for an athlete</h2>
-        <p>Talent in India is everywhere. Opportunity is not. Empower turns spare change from bookings, sessions, and gear into court time, coaching, and equipment for athletes who cannot afford them. Donate directly or round up as you go.</p>
-      </div>
-      <div class="roundup reveal" aria-label="Example of a roundup on an order">
-        <p class="roundup-title">Roundup on one order</p>
-        <dl class="roundup-rows">
-          <div class="roundup-row"><dt>Order total</dt><dd class="mono">₹293</dd></div>
-          <div class="roundup-row"><dt>Round up</dt><dd class="mono accent">+ ₹7</dd></div>
-          <div class="roundup-row roundup-total"><dt>Goes to an athlete</dt><dd class="mono accent">₹7</dd></div>
-        </dl>
-        <p class="roundup-note">Small change, every order, straight to the athletes who need it.</p>
-      </div>
+    <div class="shell">
+      <p class="eyebrow eyebrow-on-dark reveal">Powered by purpose</p>
+      <h2 id="empower-title" class="reveal">Talent is everywhere.<br />Opportunity is not.</h2>
+      <p class="empower-lede reveal">Empower turns spare change from bookings, sessions, and gear into court time, coaching, and equipment for athletes who cannot afford them. Play your game, fund someone else's.</p>
+      <p class="roundup-line mono reveal" aria-label="Example roundup"><span class="ru">₹293</span> order. <span class="ru">₹7</span> rounded up. <span class="ru">₹7</span> to an athlete.</p>
     </div>
   </section>
 
-  <!-- Partners -->
-  <section class="section" id="partners" aria-labelledby="partners-title">
+  <!-- Closing CTA -->
+  <section class="closing" aria-labelledby="closing-title">
     <div class="shell">
-      <p class="eyebrow reveal">For partners</p>
-      <h2 id="partners-title" class="reveal">Build the athlete economy with us</h2>
-      <ul class="cards cards-3 reveal" role="list">
-        <li class="card card-link-wrap">
-          <span class="icon-disc" aria-hidden="true">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2 21a8 8 0 0 1 13.292-6"/><circle cx="10" cy="8" r="5"/><path d="m16 19 2 2 4-4"/></svg>
-          </span>
-          <h3>Coaches</h3>
-          <p>Run 1 on 1 sessions and group memberships, get paid, grow your roster.</p>
-          <a class="card-link" href="https://atlitos-app.vercel.app">Apply in the app<svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg></a>
-        </li>
-        <li class="card card-link-wrap">
-          <span class="icon-disc" aria-hidden="true">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></svg>
-          </span>
-          <h3>Court partners</h3>
-          <p>List your venue, manage slots, and fill your calendar with verified bookings.</p>
-          <a class="card-link" href="https://atlitos-portal-court.vercel.app">Open the court portal<svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg></a>
-        </li>
-        <li class="card card-link-wrap">
-          <span class="icon-disc" aria-hidden="true">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M11 14h2a2 2 0 1 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 16"/><path d="m7 20 1.6-1.4c.3-.4.8-.6 1.4-.6h4c1.1 0 2.1-.4 2.8-1.2l4.6-4.4a2 2 0 0 0-2.75-2.91l-4.2 3.9"/><path d="m2 15 6 6"/><path d="M19.5 8.5c.7-.7 1.5-1.6 1.5-2.7A2.73 2.73 0 0 0 16 4a2.78 2.78 0 0 0-5 1.8c0 1.2.8 2 1.5 2.8L16 12Z"/></svg>
-          </span>
-          <h3>Empower partners</h3>
-          <p>Verify athletes, track support, and route every rupee where it belongs.</p>
-          <a class="card-link" href="https://atlitos-portal-life.vercel.app">Open the Empower portal<svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg></a>
-        </li>
-      </ul>
+      <h2 id="closing-title" class="reveal">Ready to play more?</h2>
+      <p class="closing-lede reveal">The web app is live today. iOS access is one email away.</p>
+      <div class="cta-row cta-row-center reveal">
+        <a class="btn btn-primary" href="https://atlitos-app.vercel.app">Try the web app</a>
+        <a class="btn btn-secondary" href="mailto:founder@synthsports.co?subject=Atlitos%20TestFlight%20access">Get early iOS access</a>
+      </div>
     </div>
   </section>
 
@@ -215,7 +177,7 @@
           io.unobserve(entry.target);
         }
       });
-    }, { threshold: 0.15 });
+    }, { threshold: 0.12 });
     els.forEach(function (el) { io.observe(el); });
   })();
 </script>
