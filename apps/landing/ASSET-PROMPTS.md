@@ -73,3 +73,14 @@ The dashed PHOTO SLOT box in the Empower section is backed by this filename. Dro
 
 1. **6 to 10 real quotes** for the Voices wall: one or two sentences each, plus first name, role (athlete, coach, court partner, parent, supporter), and city. The wall currently shows SAMPLE labeled placeholder cards; real quotes replace them one for one.
 2. **Real or approved Empower numbers** for the three stat tiles (currently SAMPLE labeled): total spare change routed, athletes funded, cities. If real data does not exist yet, approve figures to present as projections, or keep the SAMPLE labels.
+
+---
+
+## 7. Hero clean plate (unlocks crisp HTML text overlay, replaces baked LED text)
+
+**`hero-clean.mp4`** , 1920x1080 minimum, MP4, same 10 second shot
+> Same cinematic shot as the current hero film: an empty dark indoor court, a rugged orange and black portable LED road sign scoreboard rises into the centered hero position, warm key light, subtle camera settle, then a final camera push into the LED panel. The LED panel is POWERED but shows NO message, just the dark unlit dot matrix. No text anywhere in the frame. 24 fps or higher, 10 seconds, no watermark if the plan allows.
+
+Drop the file in and say the word: the message THE WAY YOU PLAY SPORTS IS ABOUT TO CHANGE FOREVER gets rendered as live HTML LED text, typed on after the board lands, tracked through the scroll push, dissolving into the veil. Text stays sharp at every resolution and becomes editable copy.
+
+Quality ladder for the backplate, cheapest first: regenerate at 1080p on the existing plan (0 cost), local Real-ESRGAN upscale to 1440p (0 cost, run on this Mac), Higgsfield upscale_video 2K/4K (needs credits), Topaz Video AI (299 USD one time, overkill).
