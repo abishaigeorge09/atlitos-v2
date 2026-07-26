@@ -410,28 +410,27 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--ember); outline
   background: transparent;
 }
 .step-tab {
-  align-self: flex-start;
-  display: flex; align-items: center; gap: 18px;
+  display: flex; align-items: center; justify-content: center;
+  width: 33.4vw;
   border: 3px solid var(--ink);
   border-bottom: none;
   border-radius: 18px 18px 0 0;
-  box-shadow: 4px 0 0 rgba(28, 23, 18, 0.9);
-  padding: 26px 38px 24px;
+  box-shadow: var(--shadow-hard);
+  padding: 30px 20px 28px;
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: clamp(1.25rem, 2.3vw, 1.875rem);
+  font-size: clamp(1.25rem, 2.3vw, 2rem);
   line-height: 1.1;
+  white-space: nowrap;
   position: relative; z-index: 2;
   margin-bottom: -3px;
 }
-.tab-label { white-space: nowrap; }
-.tab-num { font-size: clamp(0.875rem, 1.5vw, 1.0625rem); font-weight: 700; opacity: 0.75; }
 .tab-1 { background: var(--marigold); margin-left: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; }
-.tab-2 { background: var(--ember); color: var(--ink-on-accent); margin-left: 33.333vw; }
-.tab-3 { background: var(--green); margin-left: auto; margin-right: 0; border-top-right-radius: 0; box-shadow: -4px 0 0 rgba(28, 23, 18, 0.9); }
+.tab-2 { background: var(--ember); color: var(--ink-on-accent); margin-left: 33.3vw; }
+.tab-3 { background: var(--green); margin-left: 66.6vw; border-top-right-radius: 0; }
 .step-panel {
   flex: 1;
-  background: var(--paper);
+  background: var(--surface);
   display: flex; align-items: center;
   padding: 70px 0 50px;
   /* the reference rule: one long dashed line, full width, under the tab row */
@@ -441,7 +440,7 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--ember); outline
   background-position: 0 0;
 }
 .step-grid {
-  display: grid; grid-template-columns: 0.85fr 1.25fr; gap: clamp(48px, 7vw, 110px);
+  display: grid; grid-template-columns: 0.72fr 1.3fr; gap: clamp(48px, 7vw, 110px);
   align-items: center;
   width: 100%;
 }
@@ -1153,8 +1152,8 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--ember); outline
   .step-grid { grid-template-columns: 1fr; gap: 28px; }
   .step-file { height: auto; position: relative; top: 0; }
   .step-tab {
-    width: max-content; max-width: 88vw; margin-left: 4vw !important;
-    padding: 14px 20px; font-size: 1.125rem;
+    width: max-content; max-width: 88vw; margin-left: 0 !important;
+    padding: 14px 22px; font-size: 1.125rem;
   }
   .step-panel { padding: 34px 0 44px; }
   .scoreboard { min-height: 44vh; }
