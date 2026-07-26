@@ -199,7 +199,17 @@ a:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
   min-height: 32px;
 }
 .sb-dots { display: flex; gap: 8px; justify-content: center; }
-.sb-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--border-strong); }
+.sb-dots i {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--border-strong);
+  animation: dotpulse 1.8s ease-in-out infinite;
+}
+.sb-dots i:nth-child(2) { animation-delay: 0.15s; }
+.sb-dots i:nth-child(3) { animation-delay: 0.3s; }
+.sb-dots i:nth-child(4) { animation-delay: 0.45s; }
+.sb-dots i:nth-child(5) { animation-delay: 0.6s; }
+.sb-dots i:nth-child(6) { animation-delay: 0.75s; }
+@keyframes dotpulse { 50% { background: var(--ember); transform: scale(1.25); } }
 .sb-slot {
   position: absolute; right: 26px; top: 10px;
   width: 120px; height: 18px;
@@ -289,6 +299,7 @@ a:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
   animation: drift 26s linear infinite;
   padding: 6px 0;
 }
+.marquee-reverse { animation-direction: reverse; animation-duration: 32s; margin-top: 18px; }
 @keyframes drift { to { transform: translateX(-50%); } }
 .m-tile {
   flex: none;
@@ -492,8 +503,12 @@ a:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
   width: 100%;
 }
 .pin-captions { position: relative; min-width: 300px; max-width: 340px; }
-.js .pin-caption { position: absolute; top: 0; right: 0; opacity: 0; transition: opacity 320ms ease; margin: 0; }
-.js .pin-caption.is-on { opacity: 1; }
+.js .pin-caption {
+  position: absolute; top: 0; right: 0; opacity: 0; margin: 0;
+  transform: translateY(12px) rotate(1deg);
+  transition: opacity 340ms ease, transform 340ms ease;
+}
+.js .pin-caption.is-on { opacity: 1; transform: translateY(0) rotate(0deg); }
 .pin-caption { background: var(--paper); font-size: 1rem; }
 .pin-caption + .pin-caption { margin-top: 12px; }
 
@@ -731,7 +746,7 @@ a:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
 /* ---------- Reduced motion: final states, no pins, pre typed text ---------- */
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
-  .caret, .hint-arrow { animation: none; }
+  .caret, .hint-arrow, .sb-dots i { animation: none; }
   .marquee-track { animation: none; }
   .pin-stage { position: static; min-height: 0; padding-bottom: 60px; }
   .pin-spacer { display: none; }
