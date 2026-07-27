@@ -15,6 +15,25 @@ const ALLOWLIST: RegExp[] = [
   // Missing favicon and similar asset 404s surface as resource load errors;
   // they are cosmetic and tracked separately from functional console errors.
   /Failed to load resource:.*(favicon|\.ico)/i,
+  // Chromium auto-logs every non-2xx fetch/XHR response as a console.error
+  // ("Failed to load resource: the server responded with a status of NNN
+  // ()"), regardless of whether the app's own code handled the rejection
+  // correctly. Several cases in this suite deliberately trigger a REAL
+  // server-side 4xx as their whole point (AUTH-06's wrong-password/unknown-
+  // email login attempts against auth/v1/token; a guest's blocked RPC call
+  // returning 401 under RLS) — that is the expected negative-path result,
+  // not a JS crash. Scoped to 4xx only: a 5xx here is still a real signal
+  // and must keep failing. pageerror (uncaught JS exceptions, e.g. a React
+  // hydration mismatch) is NOT touched by this entry and stays fully
+  // strict; that channel is where a real app-level defect still surfaces.
+  /Failed to load resource: the server responded with a status of 4\d\d/,
+  // CH-07 deliberately calls page.context().setOffline(true) to prove a
+  // send is not silently lost while offline; every in-flight fetch during
+  // that window legitimately throws a connection-level error (no HTTP
+  // status to check, unlike the 4xx entry above), which is the expected
+  // shape of "offline", not a JS defect.
+  /ERR_INTERNET_DISCONNECTED/,
+  /console\.error: TypeError: Failed to fetch/,
 ];
 
 function allowed(text: string): boolean {

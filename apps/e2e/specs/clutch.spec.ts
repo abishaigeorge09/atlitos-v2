@@ -181,7 +181,10 @@ test.describe("CL — Clutch (short-video social feed)", () => {
     async function burst(client, n) {
       const calls = [];
       for (let i = 0; i < n; i++) calls.push(client.rpc("toggle_clip_like", { p_clip_id: clipId }));
-      return Promise.all(calls.map((p) => p.catch((e) => ({ error: e }))));
+      // supabase-js's PostgrestFilterBuilder is thenable but is not a real
+      // Promise (no bound .catch method); wrap with Promise.resolve first
+      // (observed: "TypeError: p.catch is not a function" without this).
+      return Promise.all(calls.map((p) => Promise.resolve(p).catch((e) => ({ error: e }))));
     }
 
     // Fire both users' toggles concurrently, several rounds, so any race in

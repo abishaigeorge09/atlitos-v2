@@ -95,7 +95,10 @@ test.describe("AUTH — auth, onboarding, session, cross-portal role gates", () 
     await page.getByLabel("Email input").fill(`e2e.player.${stamp}@atlitos.dev`);
     await page.getByLabel("Phone input").fill(`9${stamp.replace(/\D/g, "").padEnd(9, "1").slice(0, 9)}`);
     await page.getByLabel("Date of birth input").fill("1999-05-14");
-    await page.getByLabel("Password input").fill("E2ePlayerPass123!");
+    // exact: true, because getByLabel's default substring match makes plain
+    // "Password input" also match "Confirm password input" (strict-mode
+    // violation observed in practice: two elements resolved).
+    await page.getByLabel("Password input", { exact: true }).fill("E2ePlayerPass123!");
     await page.getByLabel("Confirm password input").fill("E2ePlayerPass123!");
     await page.getByRole("button", { name: "Create account" }).click();
 
@@ -131,7 +134,7 @@ test.describe("AUTH — auth, onboarding, session, cross-portal role gates", () 
     await page.getByLabel("Email input").fill(`e2e.coach.${stamp}@atlitos.dev`);
     await page.getByLabel("Phone input").fill(`8${stamp.replace(/\D/g, "").padEnd(9, "2").slice(0, 9)}`);
     await page.getByLabel("Date of birth input").fill("1990-11-02");
-    await page.getByLabel("Password input").fill("E2eCoachPass123!");
+    await page.getByLabel("Password input", { exact: true }).fill("E2eCoachPass123!");
     await page.getByLabel("Confirm password input").fill("E2eCoachPass123!");
     await page.getByRole("button", { name: "Create account" }).click();
 
@@ -244,6 +247,10 @@ test.describe("AUTH — auth, onboarding, session, cross-portal role gates", () 
     // Cross-surface by nature; runs once regardless of which project
     // executes this file, driven with hardcoded full URLs rather than
     // `baseURL` so it is not tied to whichever project happened to run it.
+    // Three sequential full navigations + logins against three separately
+    // deployed apps do not reliably fit the default 30s test timeout
+    // (observed: a 30s timeout mid cold-navigation to portal-court/admin).
+    test.setTimeout(60_000);
 
     // player@ against portal-court (a court-partner surface): auth succeeds
     // (same Supabase Auth project), but the dashboard layout gate requires
@@ -270,7 +277,29 @@ test.describe("AUTH — auth, onboarding, session, cross-portal role gates", () 
     {
       const context = await browser.newContext();
       const page = await context.newPage();
-      await page.goto(`${ADMIN_URL}/login`);
+      // A direct hard navigation to /login (a real scenario: a bookmark, a
+      // shared link, or a browser refresh while on that route), not `/`
+      // followed by a client-side redirect. REAL FINDING, confirmed by
+      // direct reproduction: this Vercel deployment (a Vite/Refine SPA) has
+      // no catch-all rewrite to index.html, so EVERY direct/deep-linked
+      // path (not just /login: /dashboard, /users, and any nonexistent path
+      // alike) 404s at the edge before any client JS runs. Only `/`
+      // (followed by the app's own client-side redirect to /login) serves
+      // real content. Asserted explicitly here, with a short timeout and a
+      // pointed message, rather than left to silently exhaust a long
+      // fill()/expect() timeout waiting on a field that a 404 page will
+      // never render.
+      const response = await page.goto(`${ADMIN_URL}/login`);
+      if (response && response.status() === 404) {
+        throw new Error(
+          "[AUTH-11] REAL FINDING: a direct hard navigation to " +
+            `${ADMIN_URL}/login returned HTTP 404. The admin console has no ` +
+            "SPA catch-all rewrite for direct/deep-linked routes; only `/` " +
+            "(then a client-side redirect) serves real content. This blocks " +
+            "bookmarks, shared links, and a browser refresh on any admin " +
+            "sub-route, not just this test.",
+        );
+      }
       await page.getByLabel("Email").fill(EMAIL.player);
       await page.getByLabel("Password").fill(DEMO_PASSWORD);
       await page.getByRole("button", { name: "Sign in" }).click();
