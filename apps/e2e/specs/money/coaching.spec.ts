@@ -191,6 +191,30 @@ test.describe("CO: coaching sessions @money", () => {
     expect(decline.json.status).toBe("declined");
     expect(["processed", "pending"]).toContain(decline.json.refund_status);
 
+    // Synthetic-payment rail convergence (same as verify-co04-decline-refund and
+    // the CO-05 sibling): a fixture capture uses a fabricated Razorpay payment
+    // id, so the live test-mode refund API cannot settle it and the refund comes
+    // back `pending`, with the reversing ledger group and the intent flip
+    // deferred to the `refund.processed` webhook. On a REAL payment the edge
+    // function reaches `processed` synchronously. To prove the settlement MATH on
+    // the synthetic rail, drive `settle_refund` directly: it is the single
+    // convergence point the webhook and the edge function both call, so a
+    // fixture run converges to the exact same terminal state a real refund does.
+    const pendingRefund = await sql
+      .from("refunds")
+      .select("id,status")
+      .eq("domain", "session")
+      .eq("entity_id", sessionId)
+      .single();
+    expect(pendingRefund.error, pendingRefund.error?.message).toBeNull();
+    if (pendingRefund.data.status !== "processed") {
+      const settled = await sql.rpc("settle_refund", {
+        p_refund_id: pendingRefund.data.id,
+        p_razorpay_refund_id: `rfnd_CO04${Date.now()}`,
+      });
+      expect(settled.error, settled.error?.message).toBeNull();
+    }
+
     // (b) Ledger nets to zero for the session. A session accrues nothing at
     // capture, so the reversing refund group (debit platform / credit payer)
     // keeps the sum at zero rather than leaving money attributed anywhere.

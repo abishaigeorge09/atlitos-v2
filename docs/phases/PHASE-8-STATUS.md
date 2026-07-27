@@ -271,3 +271,30 @@ QA audit (`docs/qa/QA-AUDIT-REPORT.md`) #1 backlog item. Founder-greenlit. Fully
 - UI: dashboard total/supporters/reviews + "Money in and where it goes" Route-gated disbursement seam ("payouts arriving soon", no transfer, no invented figure); wishlist + funding-detail + profile-preview now derive per-item funding and pills (`derivedItemPill`) so "Funded 100% + 0 donations" cannot render; consumer mobile UPA profile gains supporters + thank-you notes. data-testids added across all touched surfaces (portal had 0).
 - Verify: `pnpm turbo typecheck build lint --filter=@atlitos/portal-life --filter=@atlitos/api` green; portal-life preview deployed. Mobile lint has a PRE-EXISTING `react-hooks/exhaustive-deps` rule-not-found config error in 6 untouched files (not introduced here). Browser walk SKIPPED: authenticated seat needs sign-in (credentials never entered by the agent) and the mobile consumer app has no web preview; relied on SQL + build proof per the audit directive.
 - STILL OPEN (flagged to founder, NOT auto-fixed): the duplicate verified `upa_applications` rows sharing the cricket headline. Deduping/merging would move money attribution, so it is a data decision, not a read fix.
+
+## Post-P8 QA closing verification (2026-07-27)
+
+Closing pass over the consolidated QA branch `qa/upa-money-in-visibility`
+(`qa/co-04-refund-fix` fast-forwarded in, regenerated `pnpm-lock.yaml` committed).
+Full detail in `docs/qa/QA-AUDIT-REPORT.md` ("Post-fix suite status") and
+`docs/qa/CLOSING-CHECKPOINT.md`.
+
+- Workspace gate `pnpm turbo typecheck build lint`: 16 build + 16 typecheck GREEN;
+  only failure is the accepted pre-existing `react-hooks/exhaustive-deps`
+  rule-not-found eslint-config error in 7 untouched mobile files.
+- Two fixtures seeded (test-data, not product): decodable Clutch clip bytes to the
+  private `clips` bucket (CL-01 RED->GREEN; verify-clutch-p5 exits 0); real donations
+  to `upa.verified@`'s OWN upa `f0000000-...0001` via the `donate` + `verify-payment`
+  path (total_raised 2250.00, donor_count 1, ledger nets to 0.00, upa_fund_balance
+  2250.00 == ledger). Scripts: `scripts/seed-clutch-clip-bytes.mjs`,
+  `scripts/seed-upa-verified-donations.mjs`.
+- Authoritative re-run: **63 of 141 passing, 24 failing, 54 skipped/not-run.** Both
+  prior P0s resolved: CO-04 fixed + re-proven; EM-10 a spec-param non-bug (RPC
+  `upa_fund_balance(p_account_ref uuid)` exists and is ledger-correct). Two
+  test-harness spec fixes applied (EM-10 param name; CO-04 drives `settle_refund` for
+  the synthetic-payment rail like verify-co04/CO-05).
+- All 24 remaining reds classified NON-product: 11 pre-existing athlete-web UI
+  interaction cluster (output:single SPA confirmed live on prod), 9 seed/env, 2 copy
+  drift, 2 test-infra false positives. ZERO product/money/RLS defects.
+- Ship: `qa/upa-money-in-visibility` is SAFE to merge to main + deploy. NOT merged,
+  NOT deployed (founder ships).

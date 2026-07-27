@@ -302,7 +302,7 @@ test.describe("EM: empower money + isolation @money", () => {
     const debit = (legs ?? []).filter((l) => l.direction === "debit").reduce((s, l) => s + Number(l.amount), 0);
     const manual = credit - debit;
 
-    const { data: rpcBalance, error } = await sql.rpc("upa_fund_balance", { account_ref: UPA_VERIFIED_ID });
+    const { data: rpcBalance, error } = await sql.rpc("upa_fund_balance", { p_account_ref: UPA_VERIFIED_ID });
     expect(error, error?.message).toBeNull();
     expect(Number(rpcBalance)).toBeCloseTo(manual, 2);
 
