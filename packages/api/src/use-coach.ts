@@ -332,15 +332,30 @@ export function useCoachSessions(client: AtlitosClient) {
       return mapSessionRpcRow(data as unknown as SessionRpcRow);
     },
 
-    /** FR-14. `requested` to `declined`, reason optional. */
+    /** FR-14, FR-35 (CO-04). MUST call `decline-session-refund`, never
+     * `session_transition(id, 'decline')` directly: declining an already
+     * captured request carries an automatic full refund, and only the edge
+     * function writes it. As of 0085 the bare RPC refuses `decline` with
+     * `USE_EDGE_FUNCTION` rather than declining without ever refunding the
+     * athlete. Same shape as `completeSession` and `cancelSession`
+     * (`requested`): the money half lives in the edge function. */
     async declineSession(sessionId: string, reason?: string): Promise<Session> {
-      const { data, error } = await client.rpc("session_transition", {
-        p_session_id: sessionId,
-        p_action: "decline",
-        p_reason: reason ?? undefined,
+      const { data, error } = await client.functions.invoke("decline-session-refund", {
+        body: { session_id: sessionId, reason: reason ?? undefined },
       });
-      if (error) throw mapPostgrestError(error);
-      return mapSessionRpcRow(data as unknown as SessionRpcRow);
+      if (error) throw await mapEdgeFunctionError(error);
+
+      const body = data as { session_id: string; status: SessionStatus };
+      const updated = await client
+        .from("sessions")
+        .select(SESSION_SELECT)
+        .eq("id", body.session_id)
+        .maybeSingle<SessionQueryRow>();
+      if (updated.error) throw mapPostgrestError(updated.error);
+      if (!updated.data) {
+        throw mapPostgrestError({ message: "NOT_FOUND: declined session could not be reloaded" });
+      }
+      return mapSessionRow(updated.data);
     },
 
     /** FR-16. `accepted` to `cancelled`; reason is required

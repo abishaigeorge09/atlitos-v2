@@ -145,22 +145,19 @@ test.describe("CO: coaching sessions @money", () => {
     expect(countAfter).toBe(countBefore);
   });
 
-  test("CO-04 a declined, already-captured session: does the platform actually give the money back @money", async () => {
+  test("CO-04 a declined, already-captured session: the platform gives the money back @money", async () => {
     test.skip(NEEDS_SERVICE_KEY, "needs service role key");
-    // This test asserts the catalog's stated expectation literally
-    // ("money nets to zero for the declined session, no charge retained, no
-    // orphaned ledger entry"). Recorded ahead of running it because the code
-    // reading disagrees with that expectation and the disagreement matters:
-    // 0026_session_request_cancel_refund.sql's own header explains that only
-    // the ATHLETE-initiated `requested` -> `cancelled` edge (cancel-session-
-    // refund) carries an automatic refund; a COACH declining an unanswered,
-    // already-paid request (`requested` -> `declined`, FR-14) has no refund
-    // call anywhere in supabase/functions or the 0021/0026 migrations. A
-    // session accrues no ledger group until completion (AT-40/AT-41), so a
-    // declined session correctly has zero ledger rows either way — but if
-    // payment_intents.status is still `captured` with no refunds row, the
-    // athlete's money was taken and never returned, which is a real gap this
-    // test is designed to surface, not paper over.
+    // CO-04, fixed in 0085 + decline-session-refund. A coach declining an
+    // unanswered, already-paid request (`requested` -> `declined`, FR-14) now
+    // carries an automatic full refund, exactly like the athlete-initiated
+    // `requested` -> `cancelled` edge (cancel-session-refund, FR-35): no
+    // service was rendered and no fee was accrued, so the whole captured amount
+    // goes back. The bare `session_transition('decline')` RPC now raises
+    // USE_EDGE_FUNCTION, so the ONLY decline path is the edge function, which
+    // makes the refund unskippable. This test proves: (a) the decline is
+    // handled, (b) ledger_entries for the session net to zero after the refund,
+    // (c) no orphaned `captured` intent is left behind, and (d) the bare RPC is
+    // closed.
     const [player, coach1] = await Promise.all([personaSession("player"), personaSession("coach1")]);
     const booked = await bookYesterdaySession(player.token, "CO04", "12:00");
     expect(booked.status, JSON.stringify(booked.json)).toBe(200);
@@ -168,19 +165,48 @@ test.describe("CO: coaching sessions @money", () => {
     const captured = await capturePayment(player.token, booked.json.razorpay_order_id, "CO04");
     expect(captured.status, JSON.stringify(captured.json)).toBe(200);
 
-    const decline = await coach1.client.rpc("session_transition", {
+    const sql = serviceClient();
+
+    // (d) The bare RPC is now closed: a coach calling session_transition
+    // directly is refused with USE_EDGE_FUNCTION and the session stays
+    // `requested`, so the refund can never be skipped by routing around the
+    // edge function.
+    const bare = await coach1.client.rpc("session_transition", {
       p_session_id: sessionId,
       p_action: "decline",
-      p_reason: "e2e CO-04 coach declines a paid request",
+      p_reason: "e2e CO-04 attempt via bare RPC",
     });
-    expect(decline.error, decline.error?.message).toBeNull();
-    expect(decline.data.status).toBe("declined");
+    expect(bare.error, "session_transition('decline') must be closed to clients").toBeTruthy();
+    expect(String(bare.error.message)).toContain("USE_EDGE_FUNCTION");
+    const { data: stillRequested } = await sql.from("sessions").select("status").eq("id", sessionId).single();
+    expect(stillRequested.status, "a refused bare decline must not move the session").toBe("requested");
 
-    const sql = serviceClient();
+    // (a) The decline is handled through the edge function, which issues the
+    // refund in the same request.
+    const decline = await callFunction("decline-session-refund", coach1.token, {
+      session_id: sessionId,
+      reason: "e2e CO-04 coach declines a paid request",
+    });
+    expect(decline.status, JSON.stringify(decline.json)).toBe(200);
+    expect(decline.json.status).toBe("declined");
+    expect(["processed", "pending"]).toContain(decline.json.refund_status);
+
+    // (b) Ledger nets to zero for the session. A session accrues nothing at
+    // capture, so the reversing refund group (debit platform / credit payer)
+    // keeps the sum at zero rather than leaving money attributed anywhere.
     const { data: legs } = await sql.from("ledger_entries").select("amount,direction").eq("domain", "session").eq("entity_id", sessionId);
-    const net = (legs ?? []).reduce((s, l) => s + (l.direction === "credit" ? -Number(l.amount) : Number(l.amount)), 0) * -1;
-    expect(net, "ledger for a declined session must net to zero (it accrues nothing)").toBeCloseTo(0, 2);
+    const debit = (legs ?? []).filter((l) => l.direction === "debit").reduce((s, l) => s + Number(l.amount), 0);
+    const credit = (legs ?? []).filter((l) => l.direction === "credit").reduce((s, l) => s + Number(l.amount), 0);
+    expect(credit - debit, "ledger for a declined-and-refunded session must net to zero").toBeCloseTo(0, 2);
+    if (decline.json.refund_status === "processed") {
+      // The reversing group actually moved the full amount, not nothing.
+      expect(debit).toBeCloseTo(credit, 2);
+      expect(debit).toBeCloseTo(1000, 2);
+    }
 
+    // (c) No orphaned captured intent: a refunds row exists and the intent is
+    // no longer sitting at `captured` with nothing accounting for giving the
+    // money back.
     const { data: intent } = await sql
       .from("payment_intents")
       .select("status")
@@ -188,15 +214,15 @@ test.describe("CO: coaching sessions @money", () => {
       .eq("entity_id", sessionId)
       .single();
     const { data: refundRow } = await sql.from("refunds").select("status").eq("domain", "session").eq("entity_id", sessionId).maybeSingle();
-
-    // The catalog's "no charge retained": the intent must not be sitting at
-    // `captured` with nothing accounting for giving it back.
+    expect(refundRow, "a declined, captured request must have a refunds row").toBeTruthy();
     expect(
-      intent.status === "refunded" || !!refundRow,
-      `REAL FINDING (CO-04): session ${sessionId} was declined after capture but payment_intents.status is "${intent.status}" ` +
-        "with no refunds row at all. A coach declining an unanswered, already-paid request has no automatic refund path " +
-        "(unlike the athlete-initiated requested->cancelled edge, which does), so the athlete's money is captured and never returned.",
+      intent.status !== "captured",
+      `CO-04: session ${sessionId} was declined after capture and the intent is still "${intent.status}"; ` +
+        "a declined captured request must reach refunded (or a pending refund on a Razorpay failure), never a stranded captured intent.",
     ).toBe(true);
+    if (decline.json.refund_status === "processed") {
+      expect(intent.status).toBe("refunded");
+    }
   });
 
   test("CO-05 the requested-cancel refund applies automatically, no admin step @money", async () => {

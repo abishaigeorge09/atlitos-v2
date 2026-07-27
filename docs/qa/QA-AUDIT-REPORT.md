@@ -31,7 +31,7 @@ SQL/truth lane, standalone: 7 green (verify-f-donation, verify-f-rls, verify-emp
 ### Every currently-RED case, with cause-class
 
 Product / real finding (needs fix):
-- **CO-04 [P0 money]** a coach declining an already-captured coaching request leaves `payment_intents.status='captured'` with no `refunds` row. Money does not net to zero on decline. Strongest finding; spec self-labels REAL FINDING.
+- **CO-04 [P0 money] — FIXED (`0085` + `decline-session-refund`, commit `c730110`).** A coach declining an already-captured coaching request left `payment_intents.status='captured'` with no `refunds` row; money did not net to zero on decline. Fixed by mirroring the athlete-cancel refund (AT-60/AT-61): `session_transition('decline')` now raises `USE_EDGE_FUNCTION` and the new coach-only `decline-session-refund` edge function issues the automatic full refund through the same `refunds` + `settle_refund` machinery. Proven end to end against the deployed backend by `scripts/verify-co04-decline-refund.mjs`: reversing group `debit platform 1000 / credit user 1000` nets `domain='session'` to `0.00`, intent reaches `refunded`, no orphaned `captured` intent, bare RPC closed. The CO-04 spec (`apps/e2e/specs/money/coaching.spec.ts`) was updated to assert the fix.
 - **EM-10 [P0]** RPC `public.upa_fund_balance(account_ref)` missing from the schema cache (PGRST202). UPA fund-total is not resolvable; either not deployed or a signature drift.
 - AUTH-09 product/UI: after a guest like -> login, the app does not return to the `/clutch` clip (lost-intent redirect). The gate itself now opens correctly (CL-04, FO-09 pass); the post-login return does not land.
 - CL-05, CL-07, CL-10, CL-12 product/UI: Clutch like-toggle, comment submit (timeout), upload (timeout), and creator-profile follow-toggle do not update on the deployed athlete-web build. Partly downstream of the placeholder-clip fixtures (see CL-01).
@@ -56,7 +56,7 @@ Test-infra (script/spec/copy, not product):
 
 MAESTRO native lane: 7 cases (AUTH-12, CL-15, CL-16, CH-10, CH-11, CT-01, CT-14). Not run; they need the Expo iOS simulator. EXT judgment-walk lane: 16 cases, not run this pass (the UPA seat walks were done in the prior lead section).
 
-**Headline: 60 of 141 passing, 27 failing, 54 skipped/not-run.** Of the 27 failing: 2 are clear P0 product findings (CO-04 refund-on-decline, EM-10 missing fund-balance RPC), ~11 are a single systemic athlete-web dynamic-route UI cluster, 9 are seed/env (stale slots, depleted stock, stale coaching session) that a reset should clear, and 5 are test-infra/copy drift with the underlying security/behavior proven green.
+**Headline: 60 of 141 passing, 27 failing, 54 skipped/not-run.** Of the 27 failing: 2 were clear P0 product findings (CO-04 refund-on-decline, now FIXED per the CO-04 entry above; EM-10 missing fund-balance RPC), ~11 are a single systemic athlete-web dynamic-route UI cluster, 9 are seed/env (stale slots, depleted stock, stale coaching session) that a reset should clear, and 5 are test-infra/copy drift with the underlying security/behavior proven green.
 
 ## LEAD: UPA gap matrix (founder priority) — need x capability-today x promise x seat-experience
 
