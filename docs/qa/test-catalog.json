@@ -1,0 +1,1130 @@
+[
+  {
+    "id": "AUTH-01",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "guest",
+    "lane": "PW",
+    "priority": "P1",
+    "expected": "Lands on Home in guest mode; no forced login redirect, no modal"
+  },
+  {
+    "id": "AUTH-02",
+    "surface": "Cross-surface",
+    "persona": "all 9 personas",
+    "lane": "PW",
+    "priority": "P0",
+    "expected": "Each persona routes to its correct home surface/screen; storage state written for reuse by all specs"
+  },
+  {
+    "id": "AUTH-03",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "new player",
+    "lane": "PW",
+    "priority": "P1",
+    "expected": "Account created -> routes to role-select -> Player setup wizard"
+  },
+  {
+    "id": "AUTH-04",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "new coach",
+    "lane": "PW",
+    "priority": "P1",
+    "expected": "Routes to role-select -> Coach setup wizard"
+  },
+  {
+    "id": "AUTH-05",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "guest",
+    "lane": "PW",
+    "priority": "P2",
+    "expected": "Inline field error shown, no account created, no generic crash"
+  },
+  {
+    "id": "AUTH-06",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "guest",
+    "lane": "PW",
+    "priority": "P1",
+    "expected": "Generic error shown both times; no user-enumeration signal (same message for both cases)"
+  },
+  {
+    "id": "AUTH-07",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "new player",
+    "lane": "PW",
+    "priority": "P2",
+    "expected": "Wizard resumes at the same step with prior answers intact, not reset to step 1"
+  },
+  {
+    "id": "AUTH-08",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "new player",
+    "lane": "PW",
+    "priority": "P2",
+    "expected": "Required step blocks Continue until filled; optional step's Skip advances without data"
+  },
+  {
+    "id": "AUTH-09",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "guest -> player@",
+    "lane": "PW",
+    "priority": "P1",
+    "expected": "After login, returns to the exact clip/screen and the originally-intended like action can be completed (no lost intent)"
+  },
+  {
+    "id": "AUTH-10",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "player@",
+    "lane": "PW",
+    "priority": "P0",
+    "expected": "Second reset attempt with the already-used OTP is rejected (single-use enforced)"
+  },
+  {
+    "id": "AUTH-11",
+    "surface": "Cross-surface",
+    "persona": "player@ / partner@ / admin@",
+    "lane": "PW",
+    "priority": "P0",
+    "expected": "Each cross-role login attempt is rejected or, if auth succeeds, is immediately gated out by role-check with no data exposure"
+  },
+  {
+    "id": "AUTH-12",
+    "surface": "Athlete native (Expo sim)",
+    "persona": "player@",
+    "lane": "MAESTRO",
+    "priority": "P1",
+    "expected": "Native login smoke completes without crash; lands on correct Home"
+  },
+  {
+    "id": "CL-01",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "guest",
+    "lane": "PW",
+    "priority": "P1",
+    "expected": "First clip's video element reaches readyState>=3 and fires a timeupdate event (not a pixel-diff check); feed renders one clip per viewport"
+  },
+  {
+    "id": "CL-02",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "guest",
+    "lane": "PW",
+    "priority": "P2",
+    "expected": "loadMore fires with cursor param; next page appends with no duplicate clip ids"
+  },
+  {
+    "id": "CL-03",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "guest",
+    "lane": "PW",
+    "priority": "P1",
+    "expected": "Feed and post detail both fully browsable with no login gate on read-only viewing"
+  },
+  {
+    "id": "CL-04",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "guest",
+    "lane": "PW",
+    "priority": "P1",
+    "expected": "LoginGateModal opens; like is NOT applied (count unchanged) until login completes"
+  },
+  {
+    "id": "CL-05",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "player@",
+    "lane": "PW",
+    "priority": "P1",
+    "expected": "Count increments/decrements immediately (optimistic), reconciles after toggle_clip_like RPC confirms; both directions idempotent"
+  },
+  {
+    "id": "CL-06",
+    "surface": "Backend/SQL",
+    "persona": "player@ / coach1@",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "clip_likes/likeCount never goes negative under any interleaving"
+  },
+  {
+    "id": "CL-07",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "player@",
+    "lane": "PW",
+    "priority": "P1",
+    "expected": "Own-row insert succeeds; commentCount on the header increments by 1"
+  },
+  {
+    "id": "CL-08",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "guest",
+    "lane": "PW",
+    "priority": "P2",
+    "expected": "Composer area replaced by a sign-in prompt; no TextInput is rendered for guests"
+  },
+  {
+    "id": "CL-09",
+    "surface": "Backend/SQL",
+    "persona": "player@ vs coach1@",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "Deletion is rejected server-side; comment row unchanged"
+  },
+  {
+    "id": "CL-10",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "player@",
+    "lane": "PW",
+    "priority": "P1",
+    "expected": "Submit without caption is blocked; valid submit enters uploading->processing state and does not appear in the public feed yet"
+  },
+  {
+    "id": "CL-11",
+    "surface": "Backend/SQL",
+    "persona": "n/a",
+    "lane": "SQL",
+    "priority": "P1",
+    "expected": "Zero stuck rows past SLA; zero orphaned storage rows"
+  },
+  {
+    "id": "CL-12",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "player@",
+    "lane": "PW",
+    "priority": "P1",
+    "expected": "Header stats correct, grid shows published clips only, Follow toggle reflects true state and updates on tap"
+  },
+  {
+    "id": "CL-13",
+    "surface": "Cross-surface",
+    "persona": "admin@ + player@",
+    "lane": "EXT",
+    "priority": "P1",
+    "expected": "Clip disappears from other viewers' feed and creator-profile grid immediately, remains visible only to the uploader's own posts grid with a status pill"
+  },
+  {
+    "id": "CL-14",
+    "surface": "Backend/SQL",
+    "persona": "n/a",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "Taken-down clip is excluded at the data layer, not just hidden client-side"
+  },
+  {
+    "id": "CL-15",
+    "surface": "Athlete native (Expo sim)",
+    "persona": "player@",
+    "lane": "MAESTRO",
+    "priority": "P1",
+    "expected": "Video autoplays only when in viewport; swipe paging snaps correctly between clips"
+  },
+  {
+    "id": "CL-16",
+    "surface": "Athlete native (Expo sim)",
+    "persona": "player@",
+    "lane": "MAESTRO",
+    "priority": "P1",
+    "expected": "Upload flow (asset pick -> caption/sport tag -> submit -> processing) works natively without crash"
+  },
+  {
+    "id": "CL-17",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "player@",
+    "lane": "EXT",
+    "priority": "P2",
+    "expected": "Findings JSON: works / confusing / broken per surface area touched, with evidence"
+  },
+  {
+    "id": "CL-18",
+    "surface": "Backend/SQL",
+    "persona": "player@",
+    "lane": "SQL",
+    "priority": "P1",
+    "expected": "Displayed counts match SQL aggregates exactly (no drift, no double-count)"
+  },
+  {
+    "id": "CL-19",
+    "surface": "Backend/SQL",
+    "persona": "player@ vs coach1@",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "Rejected/removed clip is visible ONLY to the uploader (player@'s own query), confirmed by direct query as a second user, not just UI absence"
+  },
+  {
+    "id": "FO-01",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "player@",
+    "lane": "PW",
+    "priority": "P1",
+    "expected": "followerCount increments immediately in the actor's own view; button flips to Following"
+  },
+  {
+    "id": "FO-02",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "player@",
+    "lane": "PW",
+    "priority": "P1",
+    "expected": "followerCount decrements; toggling twice more is idempotent both directions"
+  },
+  {
+    "id": "FO-03",
+    "surface": "Backend/SQL",
+    "persona": "player@",
+    "lane": "SQL",
+    "priority": "P1",
+    "expected": "Lists match SQL exactly, no phantom or missing rows"
+  },
+  {
+    "id": "FO-04",
+    "surface": "Backend/SQL",
+    "persona": "player@ vs coach1@",
+    "lane": "SQL",
+    "priority": "P1",
+    "expected": "Access is scoped correctly per the app's stated privacy model (no unintended full-list leak)"
+  },
+  {
+    "id": "FO-05",
+    "surface": "Backend/SQL",
+    "persona": "player@ vs coach1@",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "Call rejected; actor id must equal auth.uid(), coach1@ cannot follow on player@'s behalf"
+  },
+  {
+    "id": "FO-06",
+    "surface": "Backend/SQL",
+    "persona": "player@",
+    "lane": "SQL",
+    "priority": "P1",
+    "expected": "RPC rejects self-follow"
+  },
+  {
+    "id": "FO-07",
+    "surface": "Backend/SQL",
+    "persona": "player@",
+    "lane": "SQL",
+    "priority": "P1",
+    "expected": "No drift between displayed counts and SQL aggregate"
+  },
+  {
+    "id": "FO-08",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "player@",
+    "lane": "PW",
+    "priority": "P2",
+    "expected": "Follow state (following/not) renders correctly per viewer for each listed creator"
+  },
+  {
+    "id": "FO-09",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "guest",
+    "lane": "PW",
+    "priority": "P1",
+    "expected": "LoginGateModal opens; follow is NOT toggled"
+  },
+  {
+    "id": "FO-10",
+    "surface": "Cross-surface",
+    "persona": "player@ + coach1@",
+    "lane": "SQL",
+    "priority": "P1",
+    "expected": "Follower count updates correctly for the second logged-in user's view, not just the actor's optimistic UI"
+  },
+  {
+    "id": "CH-01",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "player@ + coach1@",
+    "lane": "PW",
+    "priority": "P1",
+    "expected": "Optimistic append on sender side; receiver sees the message arrive in real time; no duplicate on reconcile"
+  },
+  {
+    "id": "CH-02",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "3 personas (group thread)",
+    "lane": "PW",
+    "priority": "P1",
+    "expected": "Message received by all members with correct sender-name attribution above the bubble"
+  },
+  {
+    "id": "CH-03",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "player@ + coach1@",
+    "lane": "PW",
+    "priority": "P1",
+    "expected": "player@'s unread badge increments without a manual reload"
+  },
+  {
+    "id": "CH-04",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "player@",
+    "lane": "PW",
+    "priority": "P2",
+    "expected": "Older pages load correctly, no duplicate or gapped messages"
+  },
+  {
+    "id": "CH-05",
+    "surface": "Backend/SQL",
+    "persona": "player@ vs coach2@",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "Query returns zero rows / access denied, not another member's data"
+  },
+  {
+    "id": "CH-06",
+    "surface": "Backend/SQL",
+    "persona": "player@ vs coach2@",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "Insert rejected server-side"
+  },
+  {
+    "id": "CH-07",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "player@",
+    "lane": "PW",
+    "priority": "P1",
+    "expected": "Pending message is not lost; resends or clearly shows a retry affordance on reconnect"
+  },
+  {
+    "id": "CH-08",
+    "surface": "Backend/SQL",
+    "persona": "n/a",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "Script exits green: publication + isolation checks pass"
+  },
+  {
+    "id": "CH-09",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "player@",
+    "lane": "PW",
+    "priority": "P3",
+    "expected": "Both render a clear empty state, not a blank screen or error"
+  },
+  {
+    "id": "CH-10",
+    "surface": "Athlete native (Expo sim)",
+    "persona": "player@ + coach1@",
+    "lane": "MAESTRO",
+    "priority": "P1",
+    "expected": "Native 1:1 chat send/receive works without crash"
+  },
+  {
+    "id": "CH-11",
+    "surface": "Athlete native (Expo sim)",
+    "persona": "3 personas",
+    "lane": "MAESTRO",
+    "priority": "P2",
+    "expected": "Roster sheet opens with correct members; sender names show above bubbles"
+  },
+  {
+    "id": "CH-12",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "player@",
+    "lane": "EXT",
+    "priority": "P3",
+    "expected": "MISSING if unspecced: no block-user feature found in code as of this catalog freeze; case is a placeholder pending confirmation, catalog as gap not executable pass/fail"
+  },
+  {
+    "id": "CH-13",
+    "surface": "Backend/SQL",
+    "persona": "player@ vs coach2@",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "Server-side gate (not just missing UI link) blocks access; no thread data returned"
+  },
+  {
+    "id": "CT-01",
+    "surface": "Athlete native (Expo sim)",
+    "persona": "player@",
+    "lane": "MAESTRO",
+    "priority": "P2",
+    "expected": "List/detail load from real data; BillSummary price readouts render in the house mono font"
+  },
+  {
+    "id": "CT-02",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "player@",
+    "lane": "PW",
+    "priority": "P0",
+    "expected": "Booking confirmed; SQL-side booking + ledger rows consistent with what the UI showed"
+  },
+  {
+    "id": "CT-03",
+    "surface": "Backend/SQL",
+    "persona": "player@ + coach1@ (as two bookers)",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "Exactly one booking succeeds; the other is rejected (no double-booked slot)"
+  },
+  {
+    "id": "CT-04",
+    "surface": "Backend/SQL",
+    "persona": "player@",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "Rejected; only the RPC/edge-fn state machine may transition booking status"
+  },
+  {
+    "id": "CT-05",
+    "surface": "Backend/SQL",
+    "persona": "player@",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "Rejected with PRICE_MISMATCH; server re-validates against the authoritative price"
+  },
+  {
+    "id": "CT-06",
+    "surface": "Backend/SQL",
+    "persona": "player@",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "Active-booking cancel succeeds with correct refund policy; completed-booking cancel rejected INVALID_TRANSITION"
+  },
+  {
+    "id": "CT-07",
+    "surface": "Cross-surface",
+    "persona": "partner@ vs p2-verify-partner@",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "Each partner's board shows only their own venue's bookings, never the other's (ids diffed)"
+  },
+  {
+    "id": "CT-08",
+    "surface": "Backend/SQL",
+    "persona": "partner@",
+    "lane": "SQL",
+    "priority": "P1",
+    "expected": "Second call is a no-op / idempotent, does not create a duplicate check-in record"
+  },
+  {
+    "id": "CT-09",
+    "surface": "Cross-surface",
+    "persona": "partner@ vs p2-verify-partner@",
+    "lane": "EXT",
+    "priority": "P0",
+    "expected": "Each sees only their own venues; zero cross-tenant leakage (regression guard for the fixed incident)"
+  },
+  {
+    "id": "CT-10",
+    "surface": "Backend/SQL",
+    "persona": "n/a",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "Every query carries an explicit .eq/.in/.or owner filter; live probe returns zero rows outside p2's own venues"
+  },
+  {
+    "id": "CT-11",
+    "surface": "Backend/SQL",
+    "persona": "partner@",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "Displayed earnings equal the ledger aggregate exactly, no client-side drift"
+  },
+  {
+    "id": "CT-12",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "player@",
+    "lane": "EXT",
+    "priority": "P1",
+    "expected": "Findings JSON on friction/broken points across the player court journey"
+  },
+  {
+    "id": "CT-13",
+    "surface": "Court Partner Portal",
+    "persona": "partner@",
+    "lane": "EXT",
+    "priority": "P1",
+    "expected": "Findings JSON on friction/broken points across the partner ops journey"
+  },
+  {
+    "id": "CT-14",
+    "surface": "Athlete native (Expo sim)",
+    "persona": "player@",
+    "lane": "MAESTRO",
+    "priority": "P2",
+    "expected": "Native courts smoke completes without crash"
+  },
+  {
+    "id": "CT-15",
+    "surface": "Court Partner Portal",
+    "persona": "partner@",
+    "lane": "PW",
+    "priority": "P2",
+    "expected": "Postgres 23P01 exclusion-constraint collision surfaces as a friendly error message, not a raw Postgres error"
+  },
+  {
+    "id": "CT-16",
+    "surface": "Court Partner Portal",
+    "persona": "partner@",
+    "lane": "PW",
+    "priority": "P1",
+    "expected": "Confirm is blocked client-side with an empty reason; enabling requires a non-empty reason before the book-court call fires"
+  },
+  {
+    "id": "CT-17",
+    "surface": "Court Partner Portal",
+    "persona": "partner@",
+    "lane": "PW",
+    "priority": "P1",
+    "expected": "Submission is blocked until a non-empty reason is entered"
+  },
+  {
+    "id": "CT-18",
+    "surface": "Court Partner Portal",
+    "persona": "partner@",
+    "lane": "EXT",
+    "priority": "P2",
+    "expected": "WifiOff disconnect banner with manual Refresh link appears; clears automatically on reconnect"
+  },
+  {
+    "id": "CT-19",
+    "surface": "Court Partner Portal",
+    "persona": "unverified/logged-out partner",
+    "lane": "PW",
+    "priority": "P1",
+    "expected": "Both the layout.tsx server-side gate and middleware.ts session refresh redirect away from /dashboard; neither path leaks dashboard data"
+  },
+  {
+    "id": "CT-20",
+    "surface": "Backend/SQL",
+    "persona": "n/a",
+    "lane": "SQL",
+    "priority": "P2",
+    "expected": "Currently relies on RLS only (no explicit .eq('user_id', user.id)); flag as a house-rule deviation, not currently exploitable given venue_staff's non-public RLS shape"
+  },
+  {
+    "id": "CO-01",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "player@ + coach1@",
+    "lane": "PW",
+    "priority": "P0",
+    "expected": "Each transition succeeds in order; rating is recorded exactly once"
+  },
+  {
+    "id": "CO-02",
+    "surface": "Backend/SQL",
+    "persona": "coach1@",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "Earnings equal the ledger aggregate, no client-side sum drift"
+  },
+  {
+    "id": "CO-03",
+    "surface": "Backend/SQL",
+    "persona": "coach1@",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "Rejected with INVALID_TRANSITION; zero rows written"
+  },
+  {
+    "id": "CO-04",
+    "surface": "Backend/SQL",
+    "persona": "player@ + coach1@",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "Money nets to zero for the declined session (no charge retained, no orphaned ledger entry)"
+  },
+  {
+    "id": "CO-05",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "player@",
+    "lane": "PW",
+    "priority": "P0",
+    "expected": "Correct refund policy applies automatically; no admin step is required or surfaced"
+  },
+  {
+    "id": "CO-06",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "player@",
+    "lane": "PW",
+    "priority": "P0",
+    "expected": "Each state transition (join/renew/lapse) behaves correctly; lapse blocks access to group content until renewed"
+  },
+  {
+    "id": "CO-07",
+    "surface": "Backend/SQL",
+    "persona": "n/a",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "Script exits green"
+  },
+  {
+    "id": "CO-08",
+    "surface": "Backend/SQL",
+    "persona": "player@ vs a non-member",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "Access denied; zero rows returned to the non-member"
+  },
+  {
+    "id": "CO-09",
+    "surface": "Backend/SQL",
+    "persona": "player@",
+    "lane": "SQL",
+    "priority": "P1",
+    "expected": "Second rating attempt rejected (exactly-once); out-of-range rating rejected; coach average recalculates correctly after a valid rating"
+  },
+  {
+    "id": "CO-10",
+    "surface": "Backend/SQL",
+    "persona": "coach1@",
+    "lane": "SQL",
+    "priority": "P1",
+    "expected": "No drift between displayed figures and SQL aggregate"
+  },
+  {
+    "id": "CO-11",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "coach1@",
+    "lane": "PW",
+    "priority": "P1",
+    "expected": "Already-accepted session is unaffected; only future (not-yet-booked) slot generation changes"
+  },
+  {
+    "id": "CO-12",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "player@",
+    "lane": "EXT",
+    "priority": "P1",
+    "expected": "Findings JSON on friction/broken points across the player coaching journey"
+  },
+  {
+    "id": "CO-13",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "coach1@",
+    "lane": "EXT",
+    "priority": "P1",
+    "expected": "Findings JSON on friction/broken points across the coach ops journey"
+  },
+  {
+    "id": "SH-01",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "player@",
+    "lane": "PW",
+    "priority": "P1",
+    "expected": "BillSummary reflects subtotal/GST/delivery/total correctly as quantity changes"
+  },
+  {
+    "id": "SH-02",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "player@",
+    "lane": "PW",
+    "priority": "P0",
+    "expected": "Order confirmed; SQL-side order + ledger rows consistent with what checkout showed"
+  },
+  {
+    "id": "SH-03",
+    "surface": "Backend/SQL",
+    "persona": "player@",
+    "lane": "SQL",
+    "priority": "P1",
+    "expected": "BillSummary delta matches the roundup amount exactly; a linked donation record exists tied to the order"
+  },
+  {
+    "id": "SH-04",
+    "surface": "Backend/SQL",
+    "persona": "player@",
+    "lane": "SQL",
+    "priority": "P1",
+    "expected": "Order's address snapshot is unchanged (immutable), does not retroactively reflect the address edit"
+  },
+  {
+    "id": "SH-05",
+    "surface": "Backend/SQL",
+    "persona": "admin@",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "Legal advances succeed; illegal/skip transition rejected INVALID_TRANSITION"
+  },
+  {
+    "id": "SH-06",
+    "surface": "Backend/SQL",
+    "persona": "player@ vs coach1@",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "Access denied; zero rows returned to coach1@"
+  },
+  {
+    "id": "SH-07",
+    "surface": "Backend/SQL",
+    "persona": "player@",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "Rejected with PRICE_MISMATCH; server re-validates against the catalog price"
+  },
+  {
+    "id": "SH-08",
+    "surface": "Backend/SQL",
+    "persona": "n/a",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "Exactly one checkout succeeds; no oversell"
+  },
+  {
+    "id": "SH-09",
+    "surface": "Backend/SQL",
+    "persona": "player@",
+    "lane": "SQL",
+    "priority": "P1",
+    "expected": "List matches SQL exactly, no stale or client-only entries"
+  },
+  {
+    "id": "SH-10",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "player@",
+    "lane": "EXT",
+    "priority": "P1",
+    "expected": "Findings JSON on friction/broken points across the shop journey"
+  },
+  {
+    "id": "SH-11",
+    "surface": "Backend/SQL",
+    "persona": "admin@",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "Ledger nets to zero for the reversed order; no orphaned partial entries remain"
+  },
+  {
+    "id": "EM-01",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "donor@",
+    "lane": "PW",
+    "priority": "P0",
+    "expected": "Full trail (donation_drafts -> donations -> ledger) is SQL-consistent with what the UI showed"
+  },
+  {
+    "id": "EM-02",
+    "surface": "Backend/SQL",
+    "persona": "donor@ / player@",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "No client-summed drift; roundup accrual equals the SQL aggregate"
+  },
+  {
+    "id": "EM-03",
+    "surface": "Backend/SQL",
+    "persona": "n/a",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "All three scripts exit green"
+  },
+  {
+    "id": "EM-04",
+    "surface": "Backend/SQL",
+    "persona": "donor@ vs upa.verified@",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "Each is blocked from the other's private fields; only appropriately public data crosses the boundary"
+  },
+  {
+    "id": "EM-05",
+    "surface": "Life/UPA Portal",
+    "persona": "upa.tennis@",
+    "lane": "PW",
+    "priority": "P1",
+    "expected": "Application status becomes pending/submitted"
+  },
+  {
+    "id": "EM-06",
+    "surface": "Cross-surface",
+    "persona": "admin@ + upa.tennis@",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "Status flips to verified; ORPHAN-GUARD REGRESSION check: exact linked-row topology (wishlist/fund/profile rows) diffed before/after shows no orphaned or duplicated rows"
+  },
+  {
+    "id": "EM-07",
+    "surface": "Life/UPA Portal",
+    "persona": "upa.tennis@",
+    "lane": "PW",
+    "priority": "P1",
+    "expected": "New submission clears the rejected state and re-enters the review pipeline"
+  },
+  {
+    "id": "EM-08",
+    "surface": "Life/UPA Portal",
+    "persona": "upa.tennis@ (pending)",
+    "lane": "PW",
+    "priority": "P0",
+    "expected": "All redirect to /status via requireVerifiedApplication; zero data leak from any verified-only route"
+  },
+  {
+    "id": "EM-09",
+    "surface": "Life/UPA Portal",
+    "persona": "upa.verified@",
+    "lane": "EXT",
+    "priority": "P1",
+    "expected": "Capability sweep findings JSON: each capability marked WORKS / EXISTS-BUT-CONFUSING / MISSING against PRD-05"
+  },
+  {
+    "id": "EM-10",
+    "surface": "Backend/SQL",
+    "persona": "upa.verified@",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "Figure is ledger-derived, not client-summed; no client-writable path exists to alter it"
+  },
+  {
+    "id": "EM-11",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "donor@ / player@",
+    "lane": "PW",
+    "priority": "P0",
+    "expected": "Only verified UPAs are listed; pending/rejected never appear"
+  },
+  {
+    "id": "EM-12",
+    "surface": "Life/UPA Portal",
+    "persona": "upa.verified@",
+    "lane": "EXT",
+    "priority": "P1",
+    "expected": "Each prompt answered WORKS / EXISTS-BUT-CONFUSING / MISSING with evidence, feeding the UPA gap matrix"
+  },
+  {
+    "id": "EM-13",
+    "surface": "Life/UPA Portal",
+    "persona": "upa.tennis@",
+    "lane": "EXT",
+    "priority": "P1",
+    "expected": "Each prompt answered WORKS / EXISTS-BUT-CONFUSING / MISSING with evidence, feeding the UPA gap matrix"
+  },
+  {
+    "id": "EM-14",
+    "surface": "Athlete web (atlitos-app.vercel.app)",
+    "persona": "donor@",
+    "lane": "EXT",
+    "priority": "P1",
+    "expected": "Donor-trust findings JSON: is the verification signal convincing, is anything confusing or missing before the donate step"
+  },
+  {
+    "id": "EM-15",
+    "surface": "Backend/SQL",
+    "persona": "upa.tennis@",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "Rejected without an explicit admin action; no client-side or direct-RPC bypass to verified exists"
+  },
+  {
+    "id": "EM-16",
+    "surface": "Cross-surface",
+    "persona": "upa.verified@ + donor@",
+    "lane": "PW",
+    "priority": "P1",
+    "expected": "Edit persists and is reflected in the donor-facing public profile"
+  },
+  {
+    "id": "EM-17",
+    "surface": "Cross-surface",
+    "persona": "upa.verified@",
+    "lane": "PW",
+    "priority": "P1",
+    "expected": "Flag as PRD-05 FR-27 deviation: PRD text requires contacting support to deactivate once verified, but code allows full self-service deactivate via RPC with only a confirm dialog"
+  },
+  {
+    "id": "EM-18",
+    "surface": "Life/UPA Portal",
+    "persona": "upa.verified@ (deactivated state)",
+    "lane": "PW",
+    "priority": "P2",
+    "expected": "Reapply mode triggers for status='deactivated' same as 'rejected', though PRD-05 FR-10 only names 'rejected' explicitly; confirm this extra trigger is intentional"
+  },
+  {
+    "id": "EM-19",
+    "surface": "Life/UPA Portal",
+    "persona": "donor@",
+    "lane": "PW",
+    "priority": "P2",
+    "expected": "Lands on a graceful empty/no-application state at /status, not a crash or wrong redirect (donor@ has no business being verified here by design)"
+  },
+  {
+    "id": "EM-20",
+    "surface": "Life/UPA Portal",
+    "persona": "upa.verified@",
+    "lane": "PW",
+    "priority": "P1",
+    "expected": "Edit/remove buttons disappear live without a manual refresh the instant the boundary is crossed"
+  },
+  {
+    "id": "EM-21",
+    "surface": "Backend/SQL",
+    "persona": "upa.verified@",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "RPC rejects the out-of-band call; server-side enforcement matches the client-side gate, not just a hidden button"
+  },
+  {
+    "id": "AD-01",
+    "surface": "Admin (Refine.dev)",
+    "persona": "admin@ vs player@",
+    "lane": "PW",
+    "priority": "P0",
+    "expected": "admin@ succeeds and lands on the verification queue; player@ is rejected with a generic error, no role hint leaked"
+  },
+  {
+    "id": "AD-02",
+    "surface": "Admin (Refine.dev)",
+    "persona": "admin@",
+    "lane": "PW",
+    "priority": "P1",
+    "expected": "Approve publishes the clip; reject is blocked on a blank reason, succeeds with a reason and notifies"
+  },
+  {
+    "id": "AD-03",
+    "surface": "Admin (Refine.dev)",
+    "persona": "admin@",
+    "lane": "PW",
+    "priority": "P0",
+    "expected": "Approve flips status to verified with exactly one audit_log row; reject blocked without a reason, writes audit_log with reason"
+  },
+  {
+    "id": "AD-04",
+    "surface": "Admin (Refine.dev)",
+    "persona": "admin@",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "MISSING: no refund action exists anywhere in apps/admin (PRD-04 FR-24/25 unimplemented); catalog as a gap, not an executable pass"
+  },
+  {
+    "id": "AD-05",
+    "surface": "Admin (Refine.dev)",
+    "persona": "admin@",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "UI-driven advance goes only through admin-order-advance edge function; illegal/skip transition rejected server-side even though the UI never offers it"
+  },
+  {
+    "id": "AD-06",
+    "surface": "Admin (Refine.dev)",
+    "persona": "admin@",
+    "lane": "PW",
+    "priority": "P1",
+    "expected": "MISSING: search works as a read-only list, but there is no User Detail route and no suspend/reinstate action anywhere (PRD-04 FR-35..38 unimplemented); catalog as a gap"
+  },
+  {
+    "id": "AD-07",
+    "surface": "Backend/SQL",
+    "persona": "n/a",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "Every admin mutation routes through a SECURITY DEFINER RPC or service-role edge function; zero direct table writes found"
+  },
+  {
+    "id": "AD-08",
+    "surface": "Admin (Refine.dev)",
+    "persona": "admin@",
+    "lane": "EXT",
+    "priority": "P1",
+    "expected": "Findings JSON explicitly naming which PRD-04 queues/screens are absent (Dashboard, Feature Flags, Support Tickets, Audit Log Viewer)"
+  },
+  {
+    "id": "AD-09",
+    "surface": "Admin (Refine.dev)",
+    "persona": "admin@",
+    "lane": "SQL",
+    "priority": "P2",
+    "expected": "MISSING: no Dashboard Overview route exists anywhere in the app's route table or nav shell; catalog as a gap, verify GMV/pending-count ground truth via direct SQL instead"
+  },
+  {
+    "id": "XP-01",
+    "surface": "Cross-surface",
+    "persona": "n/a",
+    "lane": "PW",
+    "priority": "P1",
+    "expected": "Zero uncaught console errors across every spec (known font-404 finding on athlete-web must be fixed, not allowlisted)"
+  },
+  {
+    "id": "XP-02",
+    "surface": "Cross-surface",
+    "persona": "n/a",
+    "lane": "PW",
+    "priority": "P3",
+    "expected": "No layout breakage or unreadable contrast in either theme"
+  },
+  {
+    "id": "XP-03",
+    "surface": "Cross-surface",
+    "persona": "n/a",
+    "lane": "PW",
+    "priority": "P3",
+    "expected": "Responsive layout holds, no horizontal scroll or clipped controls"
+  },
+  {
+    "id": "XP-04",
+    "surface": "Backend/SQL",
+    "persona": "n/a",
+    "lane": "SQL",
+    "priority": "P1",
+    "expected": "Second run produces identical state to the first; no duplicate rows"
+  },
+  {
+    "id": "XP-05",
+    "surface": "Backend/SQL",
+    "persona": "n/a",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "Matrix matches expected_access for every persona x table cell; no unexpected grant"
+  },
+  {
+    "id": "XP-06",
+    "surface": "Cross-surface",
+    "persona": "n/a",
+    "lane": "EXT",
+    "priority": "P3",
+    "expected": "No house-style violations found; all numeric readouts use the Money component / mono font"
+  },
+  {
+    "id": "XP-07",
+    "surface": "Backend/SQL",
+    "persona": "n/a",
+    "lane": "SQL",
+    "priority": "P1",
+    "expected": "All scripts exit green as a full suite run"
+  },
+  {
+    "id": "XP-08",
+    "surface": "Backend/SQL",
+    "persona": "all personas",
+    "lane": "SQL",
+    "priority": "P1",
+    "expected": "All personas can read fee_config (intentional public reference table); no persona can write it directly (only via admin_update_fee_config RPC)"
+  },
+  {
+    "id": "XP-09",
+    "surface": "Backend/SQL",
+    "persona": "n/a",
+    "lane": "SQL",
+    "priority": "P1",
+    "expected": "Public read is confirmed intentional (auth-hook role lookup); no PII columns beyond role are exposed by the policy"
+  },
+  {
+    "id": "XP-10",
+    "surface": "Backend/SQL",
+    "persona": "coach1@, partner@, player@, upa.verified@, donor@, admin@",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "coach1@ sees only own coach rows; partner@ sees only own venue's rows (via venues join); player@/upa.verified@/donor@ see none; admin@ sees all"
+  },
+  {
+    "id": "XP-11",
+    "surface": "Backend/SQL",
+    "persona": "n/a",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "Non-member blocked from both SELECT and INSERT on the group thread, matching the existing 1:1 isolation guarantee"
+  },
+  {
+    "id": "XP-12",
+    "surface": "Backend/SQL",
+    "persona": "n/a",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "Every illegal edge is rejected with the correct exception code; zero rows written in each case"
+  },
+  {
+    "id": "XP-13",
+    "surface": "Backend/SQL",
+    "persona": "n/a",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "Exactly one donations row results; record_donation_rpc raises INVALID_TRANSITION on the duplicate fire"
+  }
+]
