@@ -132,8 +132,13 @@ export default function ChatThreadScreen() {
           if (previous.some((existing) => existing.id === message.id)) return previous;
           // `postgres_changes` ships the raw chat_messages row, no
           // PostgREST embed, so a group message never arrives with
-          // `senderName` already set; the roster loaded above backfills it.
-          return [...previous, { ...message, senderName: message.senderName ?? memberNameById.get(message.senderId) }];
+          // `senderName` already set. We deliberately do NOT freeze a name
+          // in here from the roster: if `listThreadMembers` has not resolved
+          // yet when this INSERT lands, that lookup is empty and the name
+          // would be stored `undefined` forever. The display name is
+          // resolved at render time from the live roster Map instead, so it
+          // fills in the moment the roster loads (CH-02).
+          return [...previous, message];
         });
       },
       (status) => {
@@ -148,7 +153,7 @@ export default function ChatThreadScreen() {
       // the singleton client crashes the next open of this same thread.
       void supabase.removeChannel(channel);
     };
-  }, [id, memberNameById]);
+  }, [id]);
 
   async function handleSend() {
     const text = draft.trim();
@@ -255,10 +260,19 @@ export default function ChatThreadScreen() {
               ref={listRef}
               data={messages}
               keyExtractor={(item) => item.id}
+              // Re-render rows when the roster resolves so a message that
+              // arrived before `listThreadMembers` returned picks up its
+              // sender name (CH-02).
+              extraData={memberNameById}
               contentContainerStyle={{ padding: spacing.lg, gap: spacing.sm }}
               onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
               renderItem={({ item }) => (
-                <MessageBubble message={item} isMine={item.senderId === me?.id} showSenderName={Boolean(thread?.isGroup)} />
+                <MessageBubble
+                  message={item}
+                  isMine={item.senderId === me?.id}
+                  showSenderName={Boolean(thread?.isGroup)}
+                  senderName={item.senderName ?? memberNameById.get(item.senderId)}
+                />
               )}
             />
           )}
@@ -303,19 +317,21 @@ function MessageBubble({
   message,
   isMine,
   showSenderName,
+  senderName,
 }: {
   message: DisplayMessage;
   isMine: boolean;
   showSenderName: boolean;
+  senderName?: string;
 }) {
   const colors = useThemeColors();
   const time = new Date(message.createdAt).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
 
   return (
     <View className={isMine ? 'items-end' : 'items-start'}>
-      {showSenderName && message.senderName ? (
+      {showSenderName && senderName ? (
         <Text className="font-sans-semibold text-xs text-text-tertiary" style={{ marginBottom: 2 }}>
-          {message.senderName}
+          {senderName}
         </Text>
       ) : null}
       <View
