@@ -14,6 +14,14 @@ test.beforeEach(async ({}, testInfo) => {
   test.skip(testInfo.project.name !== "admin", "AD spec runs only under the admin project");
 });
 
+// SUPABASE_SERVICE_ROLE_KEY is founder-supplied at runtime only. AD-03 is
+// the one case in this file that re-proves a money/audit claim directly via
+// serviceClient(); it skips cleanly when the key is absent. Every other case
+// here is UI or edge-function/RPC driven against the deployed admin app and
+// needs no key at all, which is exactly the "role gates run without the
+// key" portion of this pass's deliverable.
+const NEEDS_SERVICE_KEY = !process.env.SUPABASE_SERVICE_ROLE_KEY;
+
 const VARIANT_GLOVES = "30000000-0000-0000-0000-000000000003";
 const PLAYER_ADDRESS_ID = "c8971c75-5b0f-4a8f-824f-3b90857fdfd0";
 
@@ -41,7 +49,62 @@ test.describe("AD: admin UI gates @money", () => {
     void consoleGuard;
   });
 
+  test("AD-02 moderation approve publishes the clip; reject is blocked on a blank reason, succeeds with one @smoke", async ({ page }) => {
+    // Confirmed against apps/admin/src/pages/moderation/{list,show,api}.tsx
+    // before writing this: approve/reject both route through moderate_clip
+    // (never a client-side clips.status write), approve is only offered for
+    // status='ready' (canApprove), and reject is blocked client side on a
+    // blank reason with the exact copy asserted below. Two distinct clips
+    // are picked ahead of time via admin's own RLS-scoped client (admin
+    // reads all clips per RLS.md; no service role needed) so this test
+    // targets exact rows rather than depending on list order/click timing.
+    const admin = await personaSession("admin");
+    const { data: readyClips, error } = await admin.client
+      .from("clips")
+      .select("id,status")
+      .eq("status", "ready")
+      .limit(2);
+    expect(error, error?.message).toBeNull();
+    test.skip((readyClips?.length ?? 0) < 2, "Fewer than two 'ready' clips are live right now to exercise approve and reject on distinct rows (run CL-10 first to produce fresh ones)");
+    const [approveClipId, rejectClipId] = readyClips.map((c) => c.id);
+
+    await page.goto("/login");
+    await page.getByLabel("Email").fill("admin@atlitos.dev");
+    await page.getByLabel("Password").fill("AtlitosDemo!2026");
+    await page.getByRole("button", { name: "Sign in" }).click();
+    await expect(page).toHaveURL(/\/verification/, { timeout: 15_000 });
+
+    // Approve: publishes, notice shown, status badge flips.
+    await page.goto(`/moderation/show/${approveClipId}`);
+    const approveButton = page.getByRole("button", { name: "Approve and publish" });
+    await expect(approveButton).toBeVisible({ timeout: 15_000 });
+    await approveButton.click();
+    await expect(page.getByText("Clip approved and published to the feed.")).toBeVisible({ timeout: 15_000 });
+
+    const { data: approved } = await admin.client.from("clips").select("status").eq("id", approveClipId).single();
+    expect(approved.status).toBe("published");
+
+    // Reject: blocked on a blank reason, then succeeds with one, notifies.
+    await page.goto(`/moderation/show/${rejectClipId}`);
+    await page.getByRole("button", { name: "Reject" }).click();
+    const confirmReject = page.getByRole("button", { name: "Confirm reject" });
+    await confirmReject.click();
+    await expect(page.getByText("A rejection reason is required.")).toBeVisible();
+
+    const { data: stillReady } = await admin.client.from("clips").select("status").eq("id", rejectClipId).single();
+    expect(stillReady.status, "a blank-reason reject must not have transitioned the clip").toBe("ready");
+
+    await page.getByRole("textbox").fill("e2e AD-02 rejection reason");
+    await confirmReject.click();
+    await expect(page.getByText("Clip rejected. The creator has been notified with the reason.")).toBeVisible({ timeout: 15_000 });
+
+    const { data: rejected } = await admin.client.from("clips").select("status,rejection_reason").eq("id", rejectClipId).single();
+    expect(rejected.status).toBe("rejected");
+    expect(rejected.rejection_reason).toBeTruthy();
+  });
+
   test("AD-03 verification approve flips status with exactly one audit_log row; reject blocked on a blank reason @money", async ({ page }) => {
+    test.skip(NEEDS_SERVICE_KEY, "needs service role key");
     const [partner, admin] = await Promise.all([personaSession("partner"), personaSession("admin")]);
     const submitted = await partner.client
       .rpc("submit_upa_application", {
@@ -206,6 +269,6 @@ test.describe("AD: admin UI gates @money", () => {
   // deterministic pass/fail assertions; they are a human/agent capability
   // sweep against PRD-04 that produces a report, not a test result. Recorded
   // as fixme rather than faked into a pass.
-  test.fixme("AD-08 findings JSON naming absent PRD-04 queues/screens (EXT lane, not a deterministic Playwright assertion)");
-  test.fixme("AD-09 Dashboard Overview route is absent; ground-truth GMV/pending-count via SQL instead (P2)");
+  test.fixme("AD-08 findings JSON naming absent PRD-04 queues/screens (EXT lane, not a deterministic Playwright assertion)", async () => {});
+  test.fixme("AD-09 Dashboard Overview route is absent; ground-truth GMV/pending-count via SQL instead (P2)", async () => {});
 });

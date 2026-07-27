@@ -14,13 +14,24 @@ test.beforeEach(async ({}, testInfo) => {
   test.skip(testInfo.project.name !== "athlete-web", "SH spec runs only under the athlete-web project");
 });
 
+// Per the task brief: SUPABASE_SERVICE_ROLE_KEY is not vendored in this
+// environment and is founder-supplied at runtime only. Every case below that
+// re-proves a money claim directly against orders/ledger_entries via
+// helpers/sql.mjs's serviceClient() must skip cleanly rather than fail when
+// the key is absent, so the UI-lane/edge-function-lane portions of the suite
+// still run. helpers/sql.mjs's own assertTestDb() would throw on the first
+// serviceClient() call otherwise.
+const NEEDS_SERVICE_KEY = !process.env.SUPABASE_SERVICE_ROLE_KEY;
+
 const PLAYER_ADDRESS_ID = "c8971c75-5b0f-4a8f-824f-3b90857fdfd0";
-// A hardcoded single variant depletes over repeated live runs of this spec
-// (each SH-02/03/04/05/06 capture is a REAL order that decrements REAL
-// stock, correctly). Resolved at runtime instead, excluding the variant
-// SH-08 deliberately drains to zero for its oversell race, so this spec
-// stays runnable across many reruns without needing a reseed in between.
-const VARIANT_FOR_RACE = "30000000-0000-0000-0000-000000000008"; // "Pack of Cricket Balls", SH-08's own fixture
+// Confirmed live (product_variant_availability, 2026-07-27): both real,
+// active, in-stock SKUs. VARIANT_GLOVES is the ordinary fixture the
+// non-racing tests below checkout against; VARIANT_BALLS is SH-08's own
+// dedicated race fixture ("Pack of Cricket Balls"), excluded from
+// pickWellStockedVariant's random pick below so the race never contends
+// with an unrelated test.
+const VARIANT_GLOVES = "30000000-0000-0000-0000-000000000003";
+const VARIANT_BALLS = "30000000-0000-0000-0000-000000000008"; // "Pack of Cricket Balls", SH-08's own fixture
 
 async function readAvailableStock(client, variantId) {
   const { data, error } = await client
@@ -40,7 +51,7 @@ async function pickWellStockedVariant(client, minStock = 4) {
   const { data, error } = await client
     .from("product_variant_availability")
     .select("product_variant_id,available_stock")
-    .neq("product_variant_id", VARIANT_FOR_RACE)
+    .neq("product_variant_id", VARIANT_BALLS)
     .gte("available_stock", minStock)
     .limit(1)
     .maybeSingle();
@@ -51,6 +62,7 @@ async function pickWellStockedVariant(client, minStock = 4) {
 
 test.describe("SH: shop money + isolation @money", () => {
   test("SH-01 BillSummary math scales correctly with quantity (subtotal doubles, delivery/GST re-derive) @money", async () => {
+    test.skip(NEEDS_SERVICE_KEY, "needs service role key");
     const player = await personaSession("player");
     const one = await callFunction("checkout", player.token, {
       items: [{ product_variant_id: VARIANT_GLOVES, qty: 1 }],
@@ -98,6 +110,7 @@ test.describe("SH: shop money + isolation @money", () => {
   });
 
   test("SH-02 order confirmed; SQL-side order + ledger rows consistent with checkout's own bill @money", async () => {
+    test.skip(NEEDS_SERVICE_KEY, "needs service role key");
     const player = await personaSession("player");
     const checkout = await callFunction("checkout", player.token, {
       items: [{ product_variant_id: VARIANT_GLOVES, qty: 1 }],
@@ -131,6 +144,7 @@ test.describe("SH: shop money + isolation @money", () => {
   });
 
   test("SH-03 nonzero roundup: BillSummary delta matches the roundup exactly, linked donation row exists @money", async () => {
+    test.skip(NEEDS_SERVICE_KEY, "needs service role key");
     const player = await personaSession("player");
     const checkout = await callFunction("checkout", player.token, {
       items: [{ product_variant_id: VARIANT_GLOVES, qty: 3 }],
@@ -170,6 +184,7 @@ test.describe("SH: shop money + isolation @money", () => {
   });
 
   test("SH-04 an order's shipped-to address snapshot is immutable after the address book is edited @money", async () => {
+    test.skip(NEEDS_SERVICE_KEY, "needs service role key");
     const player = await personaSession("player");
     const { data: before } = await player.client.from("addresses").select("line1,city,pincode").eq("id", PLAYER_ADDRESS_ID).single();
 
@@ -206,6 +221,7 @@ test.describe("SH: shop money + isolation @money", () => {
   });
 
   test("SH-05 admin order advance: legal step succeeds, an illegal skip is rejected INVALID_TRANSITION @money", async () => {
+    test.skip(NEEDS_SERVICE_KEY, "needs service role key");
     const [player, admin] = await Promise.all([personaSession("player"), personaSession("admin")]);
     const checkout = await callFunction("checkout", player.token, {
       items: [{ product_variant_id: VARIANT_GLOVES, qty: 1 }],
@@ -245,6 +261,7 @@ test.describe("SH: shop money + isolation @money", () => {
   });
 
   test("SH-06 another shopper cannot read this order; zero rows, not an error leaking existence @money", async () => {
+    test.skip(NEEDS_SERVICE_KEY, "needs service role key");
     const [player, coach1] = await Promise.all([personaSession("player"), personaSession("coach1")]);
     assertIsolation(player.userId, coach1.userId, "SH-06 owner vs stranger");
 
@@ -283,6 +300,7 @@ test.describe("SH: shop money + isolation @money", () => {
   });
 
   test("SH-08 exactly one of two concurrent checkouts for the last units succeeds; stock never goes negative @money", async () => {
+    test.skip(NEEDS_SERVICE_KEY, "needs service role key");
     const [player, coach1] = await Promise.all([personaSession("player"), personaSession("coach1")]);
     assertIsolation(player.userId, coach1.userId, "SH-08 two racing shoppers");
 
@@ -325,6 +343,53 @@ test.describe("SH: shop money + isolation @money", () => {
     const sql = serviceClient();
     const { data: variant } = await sql.from("product_variants").select("stock").eq("id", VARIANT_BALLS).single();
     expect(Number(variant.stock)).toBeGreaterThanOrEqual(0);
+  });
+
+  test("SH-09 a shopper's own orders list matches the SQL orders table exactly, no stale or client-only entries @money", async () => {
+    test.skip(NEEDS_SERVICE_KEY, "needs service role key");
+    const player = await personaSession("player");
+    const checkout = await callFunction("checkout", player.token, {
+      items: [{ product_variant_id: VARIANT_GLOVES, qty: 1 }],
+      address_id: PLAYER_ADDRESS_ID,
+      donation_roundup: false,
+    });
+    expect(checkout.status, JSON.stringify(checkout.json)).toBe(200);
+    const captured = await capturePayment(player.token, checkout.json.razorpay_order_id, "SH09");
+    expect(captured.status, JSON.stringify(captured.json)).toBe(200);
+
+    // The exact own-row read "My Orders" makes: orders.user_id = auth.uid(),
+    // via the player's own RLS-scoped client, never service role.
+    const { data: ownList, error: ownErr } = await player.client
+      .from("orders")
+      .select("id,status,total")
+      .eq("user_id", player.userId)
+      .order("created_at", { ascending: false });
+    expect(ownErr, ownErr?.message).toBeNull();
+
+    const sql = serviceClient();
+    const { data: sqlList } = await sql.from("orders").select("id,status,total").eq("user_id", player.userId);
+
+    const ownIds = new Set((ownList ?? []).map((o) => o.id));
+    const sqlIds = new Set((sqlList ?? []).map((o) => o.id));
+    expect(ownIds.size, "the own-row read returned no rows at all, cannot compare a list").toBeGreaterThan(0);
+    expect(ownIds.size).toBe(sqlIds.size);
+    for (const id of sqlIds) {
+      expect(ownIds.has(id), `SQL has order ${id} that the own-row read is missing (a stale/incomplete list)`).toBe(true);
+    }
+    for (const id of ownIds) {
+      expect(sqlIds.has(id), `own-row read shows order ${id} that SQL does not have (a client-only/phantom entry)`).toBe(true);
+    }
+
+    // The just-placed order must be present in both, with the same status.
+    const { data: order } = await sql
+      .from("orders")
+      .select("id,status,total")
+      .eq("payment_intent_id", captured.json.payment_intent_id ?? checkout.json.payment_intent_id)
+      .single();
+    const ownRow = (ownList ?? []).find((o) => o.id === order.id);
+    expect(ownRow, "the just-placed order is missing from the own-row list").toBeTruthy();
+    expect(ownRow.status).toBe(order.status);
+    expect(Number(ownRow.total)).toBeCloseTo(Number(order.total), 2);
   });
 
   test("SH-11 admin reversal (order status flips backward via a fresh cancel) nets the ledger to zero, no orphaned partials @money", async () => {

@@ -25,6 +25,12 @@ test.beforeEach(async ({}, testInfo) => {
   test.skip(testInfo.project.name !== "portal-life", "EM spec runs only under the portal-life project");
 });
 
+// SUPABASE_SERVICE_ROLE_KEY is founder-supplied at runtime only, not
+// vendored here. Cases that re-prove a money/state claim directly via
+// serviceClient() skip cleanly when it is absent, so the edge-function/RPC
+// (EM-04, EM-15) and UI-lane portions of this file still run.
+const NEEDS_SERVICE_KEY = !process.env.SUPABASE_SERVICE_ROLE_KEY;
+
 const UPA_VERIFIED_ID = "4f7616f4-f43f-4dd9-b2cb-f166ec268081"; // owner: coach1@, verified, sport=cricket
 const COACH1_ID = "5b262cf1-8f95-45df-b453-0802013f82a1";
 const ITEM_GROUND_OPEN = "976221c9-aa02-4b0b-aacf-49ffee60d7f1"; // open, cost 3000, funded ~2400
@@ -32,6 +38,7 @@ const ITEM_FUNDED = "2a1c55e4-0bff-437a-a456-e69f44dfd227"; // already funded (c
 
 test.describe("EM: empower money + isolation @money", () => {
   test("EM-01 full trail donation_drafts -> donations -> ledger is SQL-consistent with the donate response @money", async () => {
+    test.skip(NEEDS_SERVICE_KEY, "needs service role key");
     // Stand-in for donor@ (unseeded): player@ donating is the identical code
     // path, `donate` takes no role gate.
     const donor = await personaSession("player");
@@ -77,6 +84,7 @@ test.describe("EM: empower money + isolation @money", () => {
   });
 
   test("EM-02 roundup accrual equals the SQL ledger aggregate, no client-summed drift @money", async () => {
+    test.skip(NEEDS_SERVICE_KEY, "needs service role key");
     const sql = serviceClient();
     const generalRef = "00000000-0000-4000-a000-0000000f0000";
     const { data: legs } = await sql.from("ledger_entries").select("direction,amount").eq("account_type", "upa_fund").eq("account_ref", generalRef);
@@ -90,6 +98,10 @@ test.describe("EM: empower money + isolation @money", () => {
   });
 
   test("EM-03 donate's three refusal paths all fire BEFORE any charge exists @money", async () => {
+    // No serviceClient() dependency: the three refusal assertions below are
+    // each proven directly off the edge function's own response (status
+    // code, error code, and the absence of a minted razorpay_order_id), so
+    // this runs regardless of SUPABASE_SERVICE_ROLE_KEY.
     const donor = await personaSession("player");
 
     const minAmount = await callFunction("donate", donor.token, { upa_id: UPA_VERIFIED_ID, amount: 5 });
@@ -106,14 +118,6 @@ test.describe("EM: empower money + isolation @money", () => {
     expect(itemFunded.status).toBe(409);
     expect(itemFunded.json.code).toBe("ITEM_FUNDED");
     expect(itemFunded.json.razorpay_order_id).toBeFalsy();
-
-    const sql = serviceClient();
-    const { count } = await sql.from("payment_intents").select("id", { count: "exact", head: true }).eq("domain", "donation").eq("user_id", donor.userId).eq("status", "created");
-    // Not a strict zero (other tests may have live created-but-uncaptured
-    // intents), but none of the three calls above should have added one for
-    // this exact amount signature; the per-call assertions above already
-    // prove no order id was minted, which is the load-bearing fact.
-    void count;
   });
 
   test("EM-04 donor and verified-UPA private fields stay on their own sides of the boundary @money", async () => {
@@ -141,6 +145,7 @@ test.describe("EM: empower money + isolation @money", () => {
   });
 
   test("EM-05 a fresh application submits into pending/submitted status @money", async () => {
+    test.skip(NEEDS_SERVICE_KEY, "needs service role key");
     // Stand-in for upa.tennis@ (unseeded): partner@ has no existing UPA row
     // (confirmed live), so it can exercise submit_upa_application fresh
     // without colliding with the one-active-row-per-user partial unique
@@ -177,6 +182,7 @@ test.describe("EM: empower money + isolation @money", () => {
   });
 
   test("EM-06 admin approve on a UPA request: verification_requests and upa_applications move TOGETHER (orphan-guard regression) @money", async () => {
+    test.skip(NEEDS_SERVICE_KEY, "needs service role key");
     // Fresh applicant + fresh request, so this proves the CURRENTLY
     // deployed admin_approve_verification_request, not a historical one.
     const applicant = await personaSession("p2-verify-partner");
@@ -255,6 +261,7 @@ test.describe("EM: empower money + isolation @money", () => {
   });
 
   test("EM-07 a fresh submission after rejection clears the rejected state @money", async () => {
+    test.skip(NEEDS_SERVICE_KEY, "needs service role key");
     // player@ already has a REJECTED upa_applications row (terminal state,
     // confirmed live), which is exactly reapply_upa_application's target.
     const applicant = await personaSession("player");
@@ -288,6 +295,7 @@ test.describe("EM: empower money + isolation @money", () => {
   });
 
   test("EM-10 a UPA's fund total is ledger-derived; no client-writable path to alter it @money", async () => {
+    test.skip(NEEDS_SERVICE_KEY, "needs service role key");
     const sql = serviceClient();
     const { data: legs } = await sql.from("ledger_entries").select("direction,amount").eq("account_type", "upa_fund").eq("account_ref", UPA_VERIFIED_ID);
     const credit = (legs ?? []).filter((l) => l.direction === "credit").reduce((s, l) => s + Number(l.amount), 0);
@@ -312,6 +320,7 @@ test.describe("EM: empower money + isolation @money", () => {
   });
 
   test("EM-11 only verified UPAs are ever listed; pending/rejected never appear to another user @money", async () => {
+    test.skip(NEEDS_SERVICE_KEY, "needs service role key");
     const donor = await personaSession("player");
     // The "public browse" read a donor's UPA list screen makes.
     const { data: listing, error } = await donor.client.from("upa_applications").select("id,status").eq("status", "verified");
@@ -343,6 +352,7 @@ test.describe("EM: empower money + isolation @money", () => {
   });
 
   test("EM-21 deactivate_upa_application rejects a caller who is not the owning UPA @money", async () => {
+    test.skip(NEEDS_SERVICE_KEY, "needs service role key");
     const outsider = await personaSession("player");
     const { error, data } = await outsider.client.rpc("deactivate_upa_application", { p_upa_id: UPA_VERIFIED_ID });
     expect(error, "an outsider deactivated another user's verified UPA").toBeTruthy();
@@ -364,12 +374,33 @@ test.describe("EM: empower money + isolation @money", () => {
   // "Deactivate my profile" calls `deactivate_upa_application` directly from
   // a confirm dialog, no support contact step anywhere in the client or the
   // RPC. Recorded as a real finding without executing it.
-  test.fixme("EM-17 self-service deactivate has no support-contact gate (PRD-05 FR-27 deviation, destructive on shared fixture)");
+  test.fixme("EM-17 self-service deactivate has no support-contact gate (PRD-05 FR-27 deviation, destructive on shared fixture)", async () => {});
 
   // EM-18 (deactivated triggers reapply mode, PRD-05 FR-10 extra-trigger
   // question) and EM-20 (edit/remove buttons disappear live without a
   // manual refresh) both require driving a UPA into `deactivated`, which
   // EM-17's fixme above already ruled out doing to the shared fixture.
-  test.fixme("EM-18 deactivated-state reapply trigger (needs a deactivated UPA fixture, not the shared verified one)");
-  test.fixme("EM-20 live edit/remove button disappearance on the boundary crossing (needs a deactivated UPA fixture)");
+  test.fixme("EM-18 deactivated-state reapply trigger (needs a deactivated UPA fixture, not the shared verified one)", async () => {});
+  test.fixme("EM-20 live edit/remove button disappearance on the boundary crossing (needs a deactivated UPA fixture)", async () => {});
+
+  // EM-08 and EM-16 name upa.tennis@ / upa.verified@ + donor@ specifically as
+  // their catalog persona, not merely "any user in the relevant state" the
+  // way EM-05/06/07/09 above stand in for. Per the task brief: those three
+  // Empower-only personas are confirmed not seeded in this environment
+  // (invalid_credentials, apps/e2e/README.md), so these two skip explicitly
+  // rather than either failing at personaSession() or reaching for a
+  // same-run stand-in whose pending/verified state this suite's own other
+  // tests (AD-03, EM-05/06/07) mutate across runs and cannot guarantee.
+  test("EM-08 a pending upa.tennis@ is redirected to /status from every verified-only route @money", async () => {
+    test.skip(true, "upa.tennis@ is not seeded in this environment; run scripts/seed-empower-upa-users.mjs with SUPABASE_SERVICE_ROLE_KEY, then unskip.");
+  });
+
+  test("EM-16 upa.verified@'s profile edit persists to the donor-facing public profile @money", async () => {
+    test.skip(true, "upa.verified@ and donor@ are not seeded in this environment; run scripts/seed-empower-upa-users.mjs with SUPABASE_SERVICE_ROLE_KEY, then unskip.");
+  });
+
+  // EM-19 (P2): donor@ landing on a graceful empty /status state. Same
+  // unseeded-persona gap as EM-08/EM-16 above, and P2 per the task brief's
+  // "stub P2/P3 as fixme" instruction.
+  test.fixme("EM-19 donor@ lands on a graceful empty /status state, not a crash (P2, donor@ not seeded)", async () => {});
 });

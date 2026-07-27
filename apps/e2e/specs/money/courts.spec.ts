@@ -25,6 +25,13 @@ test.beforeEach(async ({}, testInfo) => {
   test.skip(testInfo.project.name !== "portal-court", "CT spec runs only under the portal-court project");
 });
 
+// SUPABASE_SERVICE_ROLE_KEY is founder-supplied at runtime only, never
+// vendored in this environment. Every case below that re-proves a money
+// claim directly via helpers/sql.mjs's serviceClient() skips cleanly when
+// the key is absent, so the edge-function/UI-lane portions of the suite
+// still run instead of failing on assertTestDb()'s guard.
+const NEEDS_SERVICE_KEY = !process.env.SUPABASE_SERVICE_ROLE_KEY;
+
 // Live fixture ids (syzzfgaudpifwvbpycyi), confirmed via direct SQL before
 // writing this file, mirroring how scripts/verify-oversell-probe.mjs and
 // scripts/verify-empower-p6.mjs hardcode known seed ids rather than
@@ -65,6 +72,7 @@ async function pickAvailableSlot(client, courtId, offsetDays) {
 
 test.describe("CT: courts money + isolation @money", () => {
   test("CT-02 booking confirmed; SQL-side booking + ledger consistent with the bill @money", async () => {
+    test.skip(NEEDS_SERVICE_KEY, "needs service role key");
     const player = await personaSession("player");
     const { date, slot } = await pickAvailableSlot(player.client, COURT_ID, 1);
 
@@ -118,6 +126,7 @@ test.describe("CT: courts money + isolation @money", () => {
   });
 
   test("CT-03 exactly one booking succeeds under a concurrent double-book race @money", async () => {
+    test.skip(NEEDS_SERVICE_KEY, "needs service role key");
     const [player, coach1] = await Promise.all([personaSession("player"), personaSession("coach1")]);
     assertIsolation(player.userId, coach1.userId, "CT-03 two distinct bookers");
 
@@ -147,6 +156,7 @@ test.describe("CT: courts money + isolation @money", () => {
   });
 
   test("CT-04 client cannot write court_bookings.status directly @money", async () => {
+    test.skip(NEEDS_SERVICE_KEY, "needs service role key");
     const player = await personaSession("player");
     const { date, slot } = await pickAvailableSlot(player.client, COURT_ID, 5);
     const booked = await callFunction("book-court", player.token, {
@@ -180,6 +190,7 @@ test.describe("CT: courts money + isolation @money", () => {
   });
 
   test("CT-05 self-service book-court is structurally immune to a client-supplied price @money", async () => {
+    test.skip(NEEDS_SERVICE_KEY, "needs service role key");
     // REAL FINDING, recorded for the QA catalog: book-court's self-service
     // path (supabase/functions/book-court/index.ts) never reads a
     // client-submitted total at all — its own header comment says so
@@ -213,6 +224,7 @@ test.describe("CT: courts money + isolation @money", () => {
   });
 
   test("CT-06 requested-slot cancel refunds correctly; a completed booking cannot be re-cancelled @money", async () => {
+    test.skip(NEEDS_SERVICE_KEY, "needs service role key");
     const player = await personaSession("player");
     const { date, slot } = await pickAvailableSlot(player.client, COURT_ID, 9);
     const booked = await callFunction("book-court", player.token, {
@@ -246,6 +258,9 @@ test.describe("CT: courts money + isolation @money", () => {
   });
 
   test("CT-07 / CT-10 each partner's Live Today board shows only their own venue's bookings @money", async () => {
+    // No serviceClient() anywhere in this test (only partner1/partner2's own
+    // RLS-scoped clients), so it runs regardless of SUPABASE_SERVICE_ROLE_KEY
+    // and is part of this pass's UI/isolation-lane deliverable.
     const [partner1, partner2] = await Promise.all([
       personaSession("partner"),
       personaSession("p2-verify-partner"),
@@ -286,6 +301,7 @@ test.describe("CT: courts money + isolation @money", () => {
   });
 
   test("CT-08 check-in is idempotent, no duplicate check-in record on a second call @money", async () => {
+    test.skip(NEEDS_SERVICE_KEY, "needs service role key");
     const partner2 = await personaSession("p2-verify-partner");
     const { date, slot } = await pickAvailableSlot(partner2.client, COURT_ID, 11);
 
@@ -332,6 +348,7 @@ test.describe("CT: courts money + isolation @money", () => {
   });
 
   test("CT-11 partner earnings equal the ledger aggregate exactly @money", async () => {
+    test.skip(NEEDS_SERVICE_KEY, "needs service role key");
     const partner2 = await personaSession("p2-verify-partner");
     const sql = serviceClient();
     const { data: legs } = await sql
