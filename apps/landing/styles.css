@@ -1,5 +1,16 @@
-/* ATLITOS landing tokens. Mirrors packages/theme (Paper light, Espresso dark, ember accent)
-   plus landing band tokens declared here first, per the tokens-only rule. */
+/* ATLITOS landing styles.
+   Tokens mirror packages/theme (Paper light, Espresso dark, ember accent); landing only
+   band tokens are declared here first, per the tokens-only rule.
+   Layout systems to know before editing:
+   1. Reveal framework: [data-reveal] variants (up, side, tilt, pop, draw) hidden ONLY
+      under html.js, staggered via data-reveal-delay, re-armed when leaving the viewport
+      through the bottom. Zero JS renders everything.
+   2. Sticky files: .vhero (300vh film track), .step-file (tab plus panel, one viewport,
+      same offset, DOM order stacks), .incl-card (sticky pricing checklist). No JS pinning
+      library anywhere, so nothing can ever scroll over a stuck stage.
+   3. Seams: curved SVG edges, rounded band corners, and domes carry color across section
+      boundaries. The LED veil hands the film into the dark led-entry band.
+   See LANDING-NOTES.md for the full build log and founder taste notes. */
 
 :root {
   --paper: #FBF7F1;

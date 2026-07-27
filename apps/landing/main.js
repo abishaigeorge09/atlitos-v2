@@ -1,6 +1,18 @@
 /* ATLITOS landing motion. Progressive: full content renders with zero JS.
-   No scroll pinning library. Sticky scenes are fixed height CSS sticky
-   tracks, so later sections can never scroll over a stuck stage. */
+   No scroll pinning library. Sticky scenes are fixed height CSS sticky tracks,
+   so later sections can never scroll over a stuck stage.
+   Block map, in order: nav folder tab morph (down tucks, up reopens),
+   old way toggle with self drawing paths and one auto advance,
+   lazy three.js Empower ball (WebGL gated, fallback circle),
+   reduced motion early return (holds the film resting frame, no autoplay),
+   hero film controller (phase 1 autoplay to REST, phase 2 rAF scrub REST to END,
+   veil and nav and hint driven from the same progress, reversible, intro never replays),
+   problem word rotator, typewriters, universal reveal IntersectionObserver,
+   count ups with Indian digit grouping, footer giant mark parallax.
+   Verification gotcha for future agents: hidden or backgrounded tabs suspend scroll
+   events, IntersectionObserver, CSS transitions, and video loading. Always verify
+   with the tab actually visible (take a screenshot first to wake it) before
+   concluding anything is broken. */
 (function () {
   "use strict";
 
