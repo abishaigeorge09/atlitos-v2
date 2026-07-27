@@ -1,10 +1,5 @@
 import '../../global.css';
 
-import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
-import {
-  JetBrainsMono_500Medium,
-  JetBrainsMono_600SemiBold,
-} from '@expo-google-fonts/jetbrains-mono';
 import { PortalHost } from '@rn-primitives/portal';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
@@ -27,13 +22,32 @@ export default function RootLayout() {
   const { colorScheme: scheme } = useColorScheme();
   const colors = useThemeColors();
 
+  // Loaded from local files under assets/fonts (not from
+  // @expo-google-fonts/* package requires) so `expo export --platform web`
+  // never has to resolve a font asset through the pnpm virtual store. That
+  // matters because these packages are hoisted into the workspace root's
+  // node_modules/.pnpm/<pkg>/node_modules/<pkg>/... symlink target, which
+  // sits outside apps/mobile (the Metro projectRoot). Metro's web export
+  // resolves each font's real (symlink-followed) path to build its output
+  // location, so it lands the TTF under
+  // dist/assets/__node_modules/.pnpm/<pkg>/node_modules/<pkg>/... The
+  // deepest segment of that path is a literal directory named
+  // `node_modules`, and Vercel's static deploy silently drops any file
+  // under a `node_modules`-named directory (the same default ignore
+  // `.gitignore` applies), even though the file is present and correctly
+  // referenced in the local `expo export` output. The six fonts 404 on the
+  // deployed site as a result. Requiring local copies here keeps the asset
+  // path entirely inside the project root (dist/assets/assets/fonts/...),
+  // so it never crosses through any node_modules directory and survives
+  // the Vercel upload. See docs/design/DESIGN-LANGUAGE.md for the token
+  // names these map to (`packages/theme` `rnFontFamily`).
   const [fontsLoaded, fontError] = useFonts({
-    Inter_400Regular,
-    Inter_500Medium,
-    Inter_600SemiBold,
-    Inter_700Bold,
-    JetBrainsMono_500Medium,
-    JetBrainsMono_600SemiBold,
+    Inter_400Regular: require('../../assets/fonts/Inter_400Regular.ttf'),
+    Inter_500Medium: require('../../assets/fonts/Inter_500Medium.ttf'),
+    Inter_600SemiBold: require('../../assets/fonts/Inter_600SemiBold.ttf'),
+    Inter_700Bold: require('../../assets/fonts/Inter_700Bold.ttf'),
+    JetBrainsMono_500Medium: require('../../assets/fonts/JetBrainsMono_500Medium.ttf'),
+    JetBrainsMono_600SemiBold: require('../../assets/fonts/JetBrainsMono_600SemiBold.ttf'),
   });
 
   useEffect(() => {
