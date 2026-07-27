@@ -2,6 +2,62 @@
 
 Full-surface QA audit. Three lanes: Playwright (apps/e2e, scripted/repeatable), SQL + verify scripts (truth), Chrome-extension walks (judgment). Status: Phase A + partial B complete; the UPA-needs seat walks (founder priority) are DONE and lead this report. Remaining Playwright spec authoring + Maestro resume next session.
 
+## Suite status as of this run (2026-07-27, authoritative)
+
+Ran with `SUPABASE_SERVICE_ROLE_KEY` present, `E2E=1`, UPA/donor accounts seeded (all 9 personas log in; setup strict-mode green), against the live deploys.
+
+Method. Playwright: `E2E=1 pnpm --filter @atlitos/e2e test`, all spec files. The first 4-worker run produced ~34 reds that were almost entirely Supabase auth 429 rate-limit cascades (124 `over_request_rate_limit` hits) from concurrent per-test logins, a test-infra artifact the harness itself warns about. Re-ran serially (`--workers=1`, retries=1): the 429s vanished, leaving the true reds. SQL: every `scripts/verify-*.mjs` + the RLS matrix run one at a time with the key.
+
+Counts are mapped onto the 141-case catalog. PW specs are the execution vehicle for the PW cases and most SQL cases; two evidence-based reconciliations: SH-08 counted PASS from its catalog-designated vehicle `verify-oversell-probe.mjs` (green) rather than the shop-spec variant that tripped an unrelated address-RLS precondition; XP-08/09/10/11 counted PASS as covered green by `verify-rls-matrix.mjs` (344 of 345 assertions green). EXT (16) and MAESTRO (7) were not executed this pass.
+
+| Domain | passed | failed | skipped/not-run | total |
+|---|---|---|---|---|
+| AUTH | 5 | 2 | 5 | 12 |
+| CL | 7 | 5 | 7 | 19 |
+| FO | 7 | 2 | 1 | 10 |
+| CH | 3 | 4 | 6 | 13 |
+| CT | 11 | 0 | 9 | 20 |
+| CO | 7 | 4 | 2 | 13 |
+| SH | 5 | 5 | 1 | 11 |
+| EM | 8 | 1 | 12 | 21 |
+| AD | 3 | 2 | 4 | 9 |
+| XP | 4 | 2 | 7 | 13 |
+| **Total** | **60** | **27** | **54** | **141** |
+
+Skipped/not-run (54) = EXT judgment walks 16 + MAESTRO native 7 (need the Expo iOS sim; not run) + 31 PW/SQL cases with no green execution vehicle this pass (portal-life apply/edit PW cases, documented MISSING gaps AD-04/AD-06/AD-09, deviation-flags CT-20/EM-17/EM-18, and XP-04/XP-12/XP-13 which have no clean script).
+
+SQL/truth lane, standalone: 7 green (verify-f-donation, verify-f-rls, verify-empower-p6, verify-groups-probes, verify-oversell-probe, verify-commerce-rls, verify-learn-p7); 8 red, of which 0 are product bugs (verify-rls-matrix + verify-realtime are green on every security assertion; their nonzero exits are a consumed-fixture gratitude item and a stale coaching session respectively; verify-discovery is the known pre-groups assertion bug; verify-clutch-p5 / verify-commerce-payments / verify-shopper-ui x3 are missing-fixture/dep/env infra).
+
+### Every currently-RED case, with cause-class
+
+Product / real finding (needs fix):
+- **CO-04 [P0 money]** a coach declining an already-captured coaching request leaves `payment_intents.status='captured'` with no `refunds` row. Money does not net to zero on decline. Strongest finding; spec self-labels REAL FINDING.
+- **EM-10 [P0]** RPC `public.upa_fund_balance(account_ref)` missing from the schema cache (PGRST202). UPA fund-total is not resolvable; either not deployed or a signature drift.
+- AUTH-09 product/UI: after a guest like -> login, the app does not return to the `/clutch` clip (lost-intent redirect). The gate itself now opens correctly (CL-04, FO-09 pass); the post-login return does not land.
+- CL-05, CL-07, CL-10, CL-12 product/UI: Clutch like-toggle, comment submit (timeout), upload (timeout), and creator-profile follow-toggle do not update on the deployed athlete-web build. Partly downstream of the placeholder-clip fixtures (see CL-01).
+- FO-01, FO-02 product/UI: follow / unfollow does not flip the button text to "Following" on athlete-web.
+- CH-01, CH-02, CH-07 product/UI: the chat message input (and the group-thread member-count row) do not render on the deployed athlete-web thread screen, so the send / receive / sender-name assertions never reach. NB: the CH-02 sender-name fix (f2f928f) could not be verified because the group thread screen itself did not load.
+- AD-02 product/UI: admin moderation "approve" success toast not shown (approve did not visibly publish, or no ready clip in queue).
+- Systemic note: the athlete-web UI cluster (AUTH-09, CL-05/07/10/12, FO-01/02, CH-01/02/07) is consistent with one root, the founder-deferred React #418 dynamic-route hydration finding documented below, not eleven independent bugs. The admin SPA-404 fix (02f77ea) did land: AD-01/AD-02 pages now load, so their residual reds are assertion-level, not 404s.
+
+Seed / env (would clear on a fresh seed; not product defects):
+- CO-01, CO-03 SLOT_TAKEN: the coaching slot was already booked by a prior run (fixture staleness).
+- CO-06: the training group is already full, so a duplicate-join returns GROUP_FULL before the expected ALREADY_MEMBER.
+- CH-08: `verify-realtime.mjs` exits nonzero only on its Part-4 coaching session (seeded 'rated', not 'accepted'); the chat publication + cross-partner isolation portions all pass.
+- SH-03, SH-05, SH-06, SH-07, SH-09 OUT_OF_STOCK on shared variant `3...003`: stock was depleted by earlier money specs in the same serial run. A `seed/reset.mjs` before the shop specs should clear these.
+
+Test-infra (script/spec/copy, not product):
+- CL-01: seeded clips are placeholder bytes that cannot decode, so `video.readyState` never reaches 3.
+- AUTH-11, AD-01: the spec asserts the exact copy "This account does not have admin access."; the cross-portal / admin gate rejects the wrong role but with different copy. Gate not proven leaked; copy/spec drift.
+- XP-05 (`verify-rls-matrix`): 344/345 assertions green; the single flagged "leak" is a false positive: the verified UPA's only funded item already carries a gratitude post (verified live: existing_posts=1), so there is no valid unposted insert target. The 0083 SECURITY DEFINER insert policy is confirmed correct and applied. Non-idempotent seed, not an access defect.
+- XP-07 (all remaining verify scripts green as a suite): fails only because verify-clutch-p5 (missing `/tmp/atlitos-clip.mp4`), verify-commerce-payments (undefined-JSON parse), verify-shopper-ui x3 (`playwright` dep only under apps/e2e), verify-discovery (pre-groups assertion), and verify-realtime (coaching fixture) are red for the infra/fixture reasons above. No product bug in the set.
+
+### Not run (report only, per scope)
+
+MAESTRO native lane: 7 cases (AUTH-12, CL-15, CL-16, CH-10, CH-11, CT-01, CT-14). Not run; they need the Expo iOS simulator. EXT judgment-walk lane: 16 cases, not run this pass (the UPA seat walks were done in the prior lead section).
+
+**Headline: 60 of 141 passing, 27 failing, 54 skipped/not-run.** Of the 27 failing: 2 are clear P0 product findings (CO-04 refund-on-decline, EM-10 missing fund-balance RPC), ~11 are a single systemic athlete-web dynamic-route UI cluster, 9 are seed/env (stale slots, depleted stock, stale coaching session) that a reset should clear, and 5 are test-infra/copy drift with the underlying security/behavior proven green.
+
 ## LEAD: UPA gap matrix (founder priority) — need x capability-today x promise x seat-experience
 
 Method: three sequential Chrome-extension seat walks against the live Life portal
