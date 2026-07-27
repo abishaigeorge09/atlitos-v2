@@ -54,7 +54,7 @@ export default function BookCourtPayScreen() {
   const colors = useThemeColors();
   const courts = useCourts(supabase);
   const me = useSessionStore((state) => state.me);
-  const isGuest = useSessionStore((state) => state.status === 'guest');
+  const requiresAuthGate = useSessionStore((state) => state.status !== 'signed_in');
   const params = useLocalSearchParams<PayParams>();
 
   const [state, setState] = useState<ScreenState>('reserving');
@@ -63,7 +63,7 @@ export default function BookCourtPayScreen() {
   const [payLoading, setPayLoading] = useState(false);
 
   useEffect(() => {
-    if (isGuest) {
+    if (requiresAuthGate) {
       router.back();
       return;
     }

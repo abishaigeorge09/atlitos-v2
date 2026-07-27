@@ -36,7 +36,7 @@ type LoadState = 'loading' | 'empty' | 'populated' | 'error';
 export default function CourtsIndexScreen() {
   const colors = useThemeColors();
   const courts = useCourts(supabase);
-  const isGuest = useSessionStore((state) => state.status === 'guest');
+  const requiresAuthGate = useSessionStore((state) => state.status !== 'signed_in');
   const profileCity = useSessionStore((state) => state.me?.city ?? null);
   const [gateVisible, setGateVisible] = useState(false);
 
@@ -96,7 +96,7 @@ export default function CourtsIndexScreen() {
           accessibilityRole="button"
           className="min-h-11 flex-row items-center gap-xs rounded-pill px-md active:bg-surface-muted"
           onPress={() => {
-            if (isGuest) {
+            if (requiresAuthGate) {
               setGateVisible(true);
               return;
             }

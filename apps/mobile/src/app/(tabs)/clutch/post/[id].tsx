@@ -49,7 +49,7 @@ export default function ClutchPostDetailScreen() {
   const colors = useThemeColors();
   const { id } = useLocalSearchParams<{ id: string }>();
   const clutch = useClutch(supabase);
-  const isGuest = useSessionStore((state) => state.status === 'guest');
+  const requiresAuthGate = useSessionStore((state) => state.status !== 'signed_in');
 
   const [clip, setClip] = useState<Clip | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'error' | 'notFound'>('loading');
@@ -117,7 +117,7 @@ export default function ClutchPostDetailScreen() {
 
   function handleLike() {
     if (!clip) return;
-    if (isGuest) {
+    if (requiresAuthGate) {
       setGateVisible(true);
       return;
     }
@@ -132,7 +132,7 @@ export default function ClutchPostDetailScreen() {
 
   async function handleSend() {
     if (!id || !draft.trim()) return;
-    if (isGuest) {
+    if (requiresAuthGate) {
       setGateVisible(true);
       return;
     }
@@ -260,8 +260,9 @@ export default function ClutchPostDetailScreen() {
             )}
           />
 
-          {/* Composer. A guest sees a gate prompt instead of the input. */}
-          {isGuest ? (
+          {/* Composer. Anyone not signed in (guest or a cold web visitor
+              with no session yet) sees a gate prompt instead of the input. */}
+          {requiresAuthGate ? (
             <Pressable
               accessibilityRole="button"
               onPress={() => setGateVisible(true)}

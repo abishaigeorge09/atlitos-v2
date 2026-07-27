@@ -112,7 +112,7 @@ export default function TrainingsScreen() {
   const [myMemberships, setMyMemberships] = useState<GroupMembership[]>([]);
   const [myGroupSessions, setMyGroupSessions] = useState<MyGroupSessionEntry[]>([]);
 
-  const isGuest = status === 'guest';
+  const requiresAuthGate = status !== 'signed_in';
   const isVerifiedCoach = me?.coachStatus === 'verified';
   const isPendingOrRejectedCoach = me?.coachStatus === 'pending_review' || me?.coachStatus === 'rejected';
   const isPlayer = status === 'signed_in' && !!me && !isVerifiedCoach && !isPendingOrRejectedCoach;
@@ -309,7 +309,7 @@ export default function TrainingsScreen() {
             ctaLabel="Retry"
             onCtaPress={() => void refreshMe()}
           />
-        ) : isGuest ? (
+        ) : requiresAuthGate ? (
           <EmptyState
             icon={Lock}
             title="Set up your profile to train"

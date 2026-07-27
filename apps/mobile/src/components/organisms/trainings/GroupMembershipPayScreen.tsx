@@ -63,7 +63,7 @@ export function GroupMembershipPayScreen({
   const colors = useThemeColors();
   const groups = useGroups(supabase);
   const me = useSessionStore((state) => state.me);
-  const isGuest = useSessionStore((state) => state.status === 'guest');
+  const requiresAuthGate = useSessionStore((state) => state.status !== 'signed_in');
 
   const [state, setState] = useState<ScreenState>('reserving');
   const [reserved, setReserved] = useState<JoinGroupResult | null>(null);
@@ -71,7 +71,7 @@ export function GroupMembershipPayScreen({
   const [payLoading, setPayLoading] = useState(false);
 
   useEffect(() => {
-    if (isGuest) {
+    if (requiresAuthGate) {
       router.back();
       return;
     }

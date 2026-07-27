@@ -62,7 +62,7 @@ export default function CoachProfileScreen() {
   const groups = useGroups(supabase);
   const { id } = useLocalSearchParams<{ id: string }>();
   const status = useSessionStore((state) => state.status);
-  const isGuest = status === 'guest';
+  const requiresAuthGate = status !== 'signed_in';
   const isSignedIn = status === 'signed_in';
 
   const [state, setState] = useState<ScreenState>('loading');
@@ -154,7 +154,7 @@ export default function CoachProfileScreen() {
   }, [coach, sessionType, date, busySlots]);
 
   function handleJoinGroup(group: TrainingGroup) {
-    if (isGuest) {
+    if (requiresAuthGate) {
       setGateVisible(true);
       return;
     }
@@ -172,7 +172,7 @@ export default function CoachProfileScreen() {
 
   function handleContinue() {
     if (!coach || !sessionType || !frequency || !selectedSlot) return;
-    if (isGuest) {
+    if (requiresAuthGate) {
       setGateVisible(true);
       return;
     }

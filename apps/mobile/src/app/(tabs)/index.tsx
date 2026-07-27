@@ -38,7 +38,7 @@ export default function HomeScreen() {
   const colors = useThemeColors();
   const status = useSessionStore((state) => state.status);
   const me = useSessionStore((state) => state.me);
-  const isGuest = status === 'guest';
+  const requiresAuthGate = status !== 'signed_in';
 
   const signOut = useSessionStore((state) => state.signOut);
   const continueAsGuest = useSessionStore((state) => state.continueAsGuest);
@@ -121,14 +121,14 @@ export default function HomeScreen() {
         hasUnreadNotifications={hasUnread}
         avatarUri={me?.avatarUrl ?? undefined}
         onPressNotifications={() => {
-          if (isGuest) {
+          if (requiresAuthGate) {
             openGate();
             return;
           }
           router.push('/notifications');
         }}
         onPressProfile={() => {
-          if (isGuest) {
+          if (requiresAuthGate) {
             openGate();
             return;
           }

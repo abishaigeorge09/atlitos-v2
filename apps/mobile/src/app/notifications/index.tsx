@@ -39,8 +39,8 @@ type LoadState = 'loading' | 'empty' | 'populated' | 'error';
 export default function NotificationsScreen() {
   const colors = useThemeColors();
   const notifications = useNotifications(supabase);
-  const isGuest = useSessionStore((state) => state.status === 'guest');
   const isSignedIn = useSessionStore((state) => state.status === 'signed_in');
+  const requiresAuthGate = !isSignedIn;
   const meId = useSessionStore((state) => state.me?.id);
 
   const [gateVisible, setGateVisible] = useState(false);
@@ -71,13 +71,13 @@ export default function NotificationsScreen() {
   );
 
   useEffect(() => {
-    if (isGuest) {
+    if (requiresAuthGate) {
       setGateVisible(true);
       setState('empty');
       return;
     }
     void load();
-  }, [isGuest, load]);
+  }, [requiresAuthGate, load]);
 
   // Live: a new notification for this user prepends without a manual refresh.
   // RLS scopes the stream to the caller's own rows; the user_id filter is
@@ -160,7 +160,7 @@ export default function NotificationsScreen() {
           </Pressable>
         </View>
 
-        {isGuest ? (
+        {requiresAuthGate ? (
           <EmptyState
             icon={BellOff}
             title="Sign in to see your notifications"

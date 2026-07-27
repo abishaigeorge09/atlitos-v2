@@ -46,7 +46,7 @@ export interface ChatThreadListProps {
 export function ChatThreadList({ onOpenThread, title }: ChatThreadListProps) {
   const colors = useThemeColors();
   const chat = useChat(supabase);
-  const isGuest = useSessionStore((state) => state.status === 'guest');
+  const requiresAuthGate = useSessionStore((state) => state.status !== 'signed_in');
   const [gateVisible, setGateVisible] = useState(false);
 
   const [state, setState] = useState<LoadState>('loading');
@@ -69,20 +69,20 @@ export function ChatThreadList({ onOpenThread, title }: ChatThreadListProps) {
   }, []);
 
   useEffect(() => {
-    if (isGuest) {
+    if (requiresAuthGate) {
       setGateVisible(true);
       setState('empty');
       return;
     }
     void load();
-  }, [isGuest, load]);
+  }, [requiresAuthGate, load]);
 
   // Inbox subscription: bumps the affected thread's preview and re-sorts
   // most-recent-first on every new message, rather than refetching the
   // whole list per event. Unsubscribed on unmount so a screen the user has
   // navigated away from never keeps a socket open.
   useEffect(() => {
-    if (isGuest) return;
+    if (requiresAuthGate) return;
 
     const channel = chat.subscribeToInbox(
       (message) => {
@@ -115,7 +115,7 @@ export function ChatThreadList({ onOpenThread, title }: ChatThreadListProps) {
       // the singleton client crashes the next mount's `.on()` call.
       void supabase.removeChannel(channel);
     };
-  }, [isGuest]);
+  }, [requiresAuthGate]);
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -124,7 +124,7 @@ export function ChatThreadList({ onOpenThread, title }: ChatThreadListProps) {
   }
 
   const realtimePill =
-    !isGuest && realtimeStatus !== 'connected' ? (
+    !requiresAuthGate && realtimeStatus !== 'connected' ? (
       <View className="flex-row items-center gap-xs self-start rounded-pill bg-warning-tint px-sm py-xs">
         <CloudOff size={14} strokeWidth={1.75} color={colors.warning} />
         <Text className="font-sans-semibold text-xs text-warning">
@@ -144,7 +144,7 @@ export function ChatThreadList({ onOpenThread, title }: ChatThreadListProps) {
         realtimePill
       )}
 
-      {isGuest ? (
+      {requiresAuthGate ? (
         <EmptyState
           icon={MessageCircle}
           title="Sign in to see your messages"

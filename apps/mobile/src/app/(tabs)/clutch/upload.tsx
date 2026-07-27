@@ -35,7 +35,7 @@ type UploadState = 'idle' | 'uploading' | 'done' | 'error';
 export default function ClutchUploadScreen() {
   const colors = useThemeColors();
   const clutch = useClutch(supabase);
-  const isGuest = useSessionStore((state) => state.status === 'guest');
+  const requiresAuthGate = useSessionStore((state) => state.status !== 'signed_in');
 
   const [asset, setAsset] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [caption, setCaption] = useState('');
@@ -43,7 +43,7 @@ export default function ClutchUploadScreen() {
   const [state, setState] = useState<UploadState>('idle');
   const [error, setError] = useState<ApiError | null>(null);
 
-  if (isGuest) {
+  if (requiresAuthGate) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
         <AppBar variant="backTitle" title="Post a clip" onPressBack={() => router.back()} />

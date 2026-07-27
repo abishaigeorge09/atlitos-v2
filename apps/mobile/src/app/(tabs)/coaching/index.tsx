@@ -23,7 +23,7 @@ import { useThemeColors } from '@/theme/use-theme-colors';
  */
 export default function CoachingIndexScreen() {
   const colors = useThemeColors();
-  const isGuest = useSessionStore((state) => state.status === 'guest');
+  const requiresAuthGate = useSessionStore((state) => state.status !== 'signed_in');
   const [gateVisible, setGateVisible] = useState(false);
 
   return (
@@ -35,7 +35,7 @@ export default function CoachingIndexScreen() {
             accessibilityRole="button"
             className="min-h-11 flex-row items-center gap-xs rounded-pill px-md active:bg-surface-muted"
             onPress={() => {
-              if (isGuest) {
+              if (requiresAuthGate) {
                 setGateVisible(true);
                 return;
               }

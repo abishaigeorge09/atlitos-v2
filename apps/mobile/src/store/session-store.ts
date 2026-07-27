@@ -88,6 +88,29 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 }));
 
+/**
+ * Session selectors. Use these with `useSessionStore(...)` instead of
+ * hand-rolling `status === 'guest'` at call sites, so the guest-gate
+ * distinction stays consistent across the app:
+ *
+ *   - `selectIsSignedIn` / `selectRequiresAuthGate`: an AUTH GATE. Any tap
+ *     that would fire an authenticated RPC (like, follow, comment, book,
+ *     pay, load an owner-scoped list) must gate on `requiresAuthGate`, i.e.
+ *     trigger for everyone who is not signed in. That covers a real guest
+ *     session AND a cold web visitor who deep-linked to an interactive
+ *     screen and still has no session at all (`signed_out`), AND the brief
+ *     `loading` window before auth resolves. Gating only on `=== 'guest'`
+ *     let a `signed_out` visitor's tap skip the LoginGateModal and hit the
+ *     real RPC, which 401'd (QA AUTH-09, CL-03, CL-04, FO-09).
+ *   - `selectIsGuest`: DISPLAY ONLY. Reserve `=== 'guest'` for copy or data
+ *     paths that are genuinely specific to an anonymous guest session (the
+ *     local guest wishlist store, guest-only routing on splash), which must
+ *     NOT engage for a `signed_out`/`loading` visitor mid-bootstrap.
+ */
+export const selectIsSignedIn = (s: SessionState): boolean => s.status === "signed_in";
+export const selectIsGuest = (s: SessionState): boolean => s.status === "guest";
+export const selectRequiresAuthGate = (s: SessionState): boolean => s.status !== "signed_in";
+
 let listenerStarted = false;
 
 /** Starts the one `onAuthStateChange` subscription for the app. Called once

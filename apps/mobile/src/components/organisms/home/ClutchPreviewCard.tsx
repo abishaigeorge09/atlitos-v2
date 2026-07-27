@@ -27,7 +27,7 @@ import { useThemeColors } from '@/theme/use-theme-colors';
 export function ClutchPreviewCard({ reloadKey }: { reloadKey: number }) {
   const colors = useThemeColors();
   const clutch = useClutch(supabase);
-  const isGuest = useSessionStore((state) => state.status === 'guest');
+  const requiresAuthGate = useSessionStore((state) => state.status !== 'signed_in');
 
   const [state, setState] = useState<'loading' | 'ready'>('loading');
   const [clip, setClip] = useState<Clip | null>(null);
@@ -63,7 +63,7 @@ export function ClutchPreviewCard({ reloadKey }: { reloadKey: number }) {
   }, [load, reloadKey]);
 
   function requireAuth(action: () => void) {
-    if (isGuest) {
+    if (requiresAuthGate) {
       setGateVisible(true);
       return;
     }

@@ -46,7 +46,7 @@ export default function CourtDetailScreen() {
   const colors = useThemeColors();
   const courts = useCourts(supabase);
   const { id } = useLocalSearchParams<{ id: string }>();
-  const isGuest = useSessionStore((state) => state.status === 'guest');
+  const requiresAuthGate = useSessionStore((state) => state.status !== 'signed_in');
   const coords = useLocationStore((state) => state.coords);
 
   const [state, setState] = useState<ScreenState>('loading');
@@ -106,7 +106,7 @@ export default function CourtDetailScreen() {
 
   function handleBook() {
     if (!court || !selectedSlot) return;
-    if (isGuest) {
+    if (requiresAuthGate) {
       setGateVisible(true);
       return;
     }

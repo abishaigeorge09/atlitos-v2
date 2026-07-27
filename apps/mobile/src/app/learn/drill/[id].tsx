@@ -41,7 +41,7 @@ export default function DrillDetailScreen() {
   const learn = useLearn(supabase);
   const { id } = useLocalSearchParams<{ id: string }>();
   const status = useSessionStore((s) => s.status);
-  const isGuest = status === 'guest';
+  const requiresAuthGate = status !== 'signed_in';
 
   const [state, setState] = useState<LoadState>('loading');
   const [drill, setDrill] = useState<Drill | null>(null);
@@ -73,7 +73,7 @@ export default function DrillDetailScreen() {
   }, [load]);
 
   function onMarkCompletePress() {
-    if (isGuest) {
+    if (requiresAuthGate) {
       setGateVisible(true);
       return;
     }

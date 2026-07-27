@@ -21,7 +21,7 @@ export default function ClutchCreatorScreen() {
   const colors = useThemeColors();
   const { id } = useLocalSearchParams<{ id: string }>();
   const clutch = useClutch(supabase);
-  const isGuest = useSessionStore((state) => state.status === 'guest');
+  const requiresAuthGate = useSessionStore((state) => state.status !== 'signed_in');
   const myId = useSessionStore((state) => state.me?.id ?? null);
 
   const [profile, setProfile] = useState<CreatorProfile | null>(null);
@@ -52,7 +52,7 @@ export default function ClutchCreatorScreen() {
 
   async function toggleFollow() {
     if (!profile) return;
-    if (isGuest) {
+    if (requiresAuthGate) {
       setGateVisible(true);
       return;
     }

@@ -39,7 +39,7 @@ export default function ClutchFeedScreen() {
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const clutch = useClutch(supabase);
-  const isGuest = useSessionStore((state) => state.status === 'guest');
+  const requiresAuthGate = useSessionStore((state) => state.status !== 'signed_in');
 
   const [state, setState] = useState<LoadState>('loading');
   const [clips, setClips] = useState<Clip[]>([]);
@@ -173,7 +173,7 @@ export default function ClutchFeedScreen() {
   }, [activeId, clips, playbackUrls, mintPlayback, clearTimer]);
 
   function requireAuth(action: () => void) {
-    if (isGuest) {
+    if (requiresAuthGate) {
       setGateVisible(true);
       return;
     }
