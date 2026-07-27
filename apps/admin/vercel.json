@@ -1,5 +1,6 @@
 {
   "buildCommand": "pnpm gen-tokens && tsc --noEmit && vite build",
   "outputDirectory": "dist",
-  "installCommand": "cd ../.. && pnpm install --filter=@atlitos/admin"
+  "installCommand": "cd ../.. && pnpm install --filter=@atlitos/admin",
+  "rewrites": [{ "source": "/((?!assets/).*)", "destination": "/index.html" }]
 }
