@@ -1,0 +1,16 @@
+{
+  "name": "@atlitos/e2e",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:smoke": "playwright test specs/smoke",
+    "install-browsers": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.54.2",
+    "@supabase/supabase-js": "^2.110.2",
+    "@types/node": "^22.10.0"
+  }
+}

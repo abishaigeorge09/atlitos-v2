@@ -1,0 +1,11 @@
+# Per-persona auth storage states (contain live access tokens). Regenerated
+# by the setup project on every run. Never commit.
+state/
+
+# Playwright output
+test-results/
+playwright-report/
+blob-report/
+
+# deps
+node_modules/
