@@ -108,7 +108,7 @@ begin
   insert into public.upa_wishlist_items (
     id, upa_id, title, cost, funded_amount, status, created_at, updated_at
   ) values (
-    'w0000000-0000-0000-0000-000000000001',
+    'a1000000-0000-0000-0000-000000000001',
     v_upa_verified_id,
     'Cricket bat set for 10 girls',
     5000.00,
@@ -120,13 +120,13 @@ begin
   on conflict (id) do nothing;
 
   select id into v_wishlist_1_id from public.upa_wishlist_items
-  where id = 'w0000000-0000-0000-0000-000000000001';
+  where id = 'a1000000-0000-0000-0000-000000000001';
 
   -- Item 2: Partially funded (2000 of 3000)
   insert into public.upa_wishlist_items (
     id, upa_id, title, cost, funded_amount, status, created_at, updated_at
   ) values (
-    'w0000000-0000-0000-0000-000000000002',
+    'a1000000-0000-0000-0000-000000000002',
     v_upa_verified_id,
     'Ground rental for three months',
     3000.00,
@@ -138,13 +138,13 @@ begin
   on conflict (id) do nothing;
 
   select id into v_wishlist_2_id from public.upa_wishlist_items
-  where id = 'w0000000-0000-0000-0000-000000000002';
+  where id = 'a1000000-0000-0000-0000-000000000002';
 
   -- Item 3: Fully funded (2500 of 2500) - shows as 'funded' state
   insert into public.upa_wishlist_items (
     id, upa_id, title, cost, funded_amount, status, created_at, updated_at
   ) values (
-    'w0000000-0000-0000-0000-000000000003',
+    'a1000000-0000-0000-0000-000000000003',
     v_upa_verified_id,
     'First aid kit and safety equipment',
     2500.00,
@@ -156,13 +156,13 @@ begin
   on conflict (id) do nothing;
 
   select id into v_wishlist_3_id from public.upa_wishlist_items
-  where id = 'w0000000-0000-0000-0000-000000000003';
+  where id = 'a1000000-0000-0000-0000-000000000003';
 
   -- Gratitude post for the funded item
   insert into public.gratitude_posts (
     id, upa_id, wishlist_item_id, body, photo_url, status, created_at
   ) values (
-    'g0000000-0000-0000-0000-000000000001',
+    'b1000000-0000-0000-0000-000000000001',
     v_upa_verified_id,
     v_wishlist_3_id,
     'The safety equipment arrived yesterday and the girls are thrilled. We did our first outdoor training session with proper protective gear. This donation means we can train safely and expand our program.',
