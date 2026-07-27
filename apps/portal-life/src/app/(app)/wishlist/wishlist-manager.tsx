@@ -11,7 +11,7 @@ import { EmptyState } from "@/components/empty-state";
 import { ErrorState } from "@/components/error-state";
 import { FundingBar } from "@/components/funding-bar";
 import { Money } from "@/components/money";
-import { StatusPill, itemStatusPill } from "@/components/status-pill";
+import { StatusPill, derivedItemPill } from "@/components/status-pill";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -28,11 +28,16 @@ import {
 export function WishlistManager({
   upaId,
   initialItems,
+  initialFunded,
 }: {
   upaId: string;
   initialItems: WishlistItem[];
+  initialFunded: Record<string, number>;
 }) {
   const [items, setItems] = useState<WishlistItem[]>(initialItems);
+  // Per item DERIVED funding, keyed by item id (0084 upa_money_summary), never
+  // the funded_amount cache. Refreshed alongside the item list.
+  const [funded, setFunded] = useState<Record<string, number>>(initialFunded);
   const [state, setState] = useState<"ready" | "error">("ready");
   const [addOpen, setAddOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<WishlistItem | null>(null);
@@ -40,22 +45,29 @@ export function WishlistManager({
 
   const reload = useCallback(async () => {
     const supabase = createClient();
-    // Explicit owner scope by upa_id (permissive-OR table, 0049).
-    const { data, error } = await supabase
-      .from("upa_wishlist_items")
-      .select("*")
-      .eq("upa_id", upaId)
-      .order("created_at", { ascending: false });
+    // Explicit owner scope by upa_id (permissive-OR table, 0049). Funding comes
+    // from the derived money summary RPC, scoped to this owner inside the RPC.
+    const [{ data, error }, { data: summary }] = await Promise.all([
+      supabase
+        .from("upa_wishlist_items")
+        .select("*")
+        .eq("upa_id", upaId)
+        .order("created_at", { ascending: false }),
+      supabase.rpc("upa_money_summary", { p_upa_id: upaId }),
+    ]);
     if (error) {
       setState("error");
       return;
     }
     setItems(data ?? []);
+    const summaryItems = (summary as { items?: Record<string, number> } | null)?.items;
+    setFunded(summaryItems ?? {});
     setState("ready");
   }, [upaId]);
 
-  // Realtime (FR-15): a donation flips funded_amount and status under the
-  // service role; subscribe to this UPA's own items and refetch on any change.
+  // Realtime (FR-15): a donation flips funding under the service role; subscribe
+  // to this UPA's own items and its donations, refetch derived funding on any
+  // change.
   useEffect(() => {
     const supabase = createClient();
     const channel = supabase
@@ -68,6 +80,11 @@ export function WishlistManager({
           table: "upa_wishlist_items",
           filter: `upa_id=eq.${upaId}`,
         },
+        () => reload(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "donations", filter: `upa_id=eq.${upaId}` },
         () => reload(),
       )
       .subscribe();
@@ -110,12 +127,13 @@ export function WishlistManager({
           description="Add your first item so sponsors know exactly what to fund."
         />
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2" data-testid="wishlist-grid">
           {items.map((item) => {
-            const pill = itemStatusPill(item.status, Number(item.funded_amount));
-            const editable = item.status === "open" && Number(item.funded_amount) === 0;
+            const fundedAmount = funded[item.id] ?? 0;
+            const pill = derivedItemPill(item.status, fundedAmount, Number(item.cost));
+            const editable = item.status === "open" && fundedAmount === 0;
             return (
-              <Card key={item.id}>
+              <Card key={item.id} data-testid="wishlist-item-card">
                 <CardContent className="flex flex-col gap-4 p-5">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex flex-col gap-0.5">
@@ -127,7 +145,7 @@ export function WishlistManager({
                     <StatusPill label={pill.label} tone={pill.tone} />
                   </div>
 
-                  <FundingBar funded={Number(item.funded_amount)} cost={Number(item.cost)} />
+                  <FundingBar funded={fundedAmount} cost={Number(item.cost)} />
 
                   <div className="flex items-center justify-between">
                     <Button variant="link" size="sm" className="h-auto p-0" render={<Link href={`/wishlist/${item.id}`} />}>

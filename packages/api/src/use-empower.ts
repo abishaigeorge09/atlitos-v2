@@ -90,6 +90,22 @@ export interface UpaWishlistItem {
   status: "open" | "funded" | "delivered";
 }
 
+/** One supporter, grouped by donor. displayName is the finalize-time opt-in
+ * snapshot (0067); undefined renders "A Sponsor" (PRD-06 FR-17). */
+export interface UpaSupporter {
+  displayName?: string;
+  amount: number;
+  lastAt: string;
+}
+
+/** A published thank you note the UPA posted, shown on the public profile. */
+export interface UpaGratitude {
+  id: string;
+  body: string;
+  itemTitle: string | null;
+  createdAt: string;
+}
+
 export interface UpaProfile {
   id: string;
   headline: string;
@@ -100,7 +116,11 @@ export interface UpaProfile {
   photoUrl?: string;
   /** Ledger derived (upa_fund_balance), never a sum of funded_amount. */
   totalRaised: number;
+  /** Distinct donors, from the derived money summary (0084). */
+  donorCount: number;
   items: UpaWishlistItem[];
+  supporters: UpaSupporter[];
+  gratitude: UpaGratitude[];
 }
 
 export interface DonateInput {
@@ -202,7 +222,10 @@ interface ProfileJson {
   state: string;
   photo_url: string | null;
   total_raised: number;
+  donor_count: number;
   items: { id: string; title: string; cost: number; funded_amount: number; status: UpaWishlistItem["status"] }[];
+  supporters: { display_name: string | null; amount: number; last_at: string }[];
+  gratitude: { id: string; body: string; item_title: string | null; created_at: string }[];
 }
 
 interface ImpactJson {
@@ -337,12 +360,25 @@ function makeEmpowerApi(client: AtlitosClient) {
         state: json.state,
         photoUrl: resolvePhoto(client, UPA_PHOTOS_BUCKET, json.photo_url),
         totalRaised: json.total_raised,
+        donorCount: json.donor_count ?? 0,
         items: (json.items ?? []).map((item) => ({
           id: item.id,
           title: item.title,
           cost: item.cost,
+          // Derived from donations by the RPC (0084), the legitimate per item use.
           fundedAmount: item.funded_amount,
           status: item.status,
+        })),
+        supporters: (json.supporters ?? []).map((s) => ({
+          displayName: s.display_name ?? undefined,
+          amount: s.amount,
+          lastAt: s.last_at,
+        })),
+        gratitude: (json.gratitude ?? []).map((g) => ({
+          id: g.id,
+          body: g.body,
+          itemTitle: g.item_title,
+          createdAt: g.created_at,
         })),
       };
     },

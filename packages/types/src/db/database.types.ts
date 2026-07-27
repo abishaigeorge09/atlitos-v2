@@ -5486,6 +5486,7 @@ export type Database = {
         }
       }
       upa_fund_balance: { Args: { p_account_ref: string }; Returns: number }
+      upa_money_summary: { Args: { p_upa_id: string }; Returns: Json }
       upa_wishlist_item_transition_internal: {
         Args: {
           p_item_id: string

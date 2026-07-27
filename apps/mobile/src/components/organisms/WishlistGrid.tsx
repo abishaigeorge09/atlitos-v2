@@ -57,12 +57,15 @@ export interface WishlistGridProps {
   header?: ReactElement;
   /** Shown when `items` is empty (the profile with no wishlist yet). */
   emptyComponent?: ReactElement;
+  /** Rendered below the grid inside the SAME FlatList (the UPA profile passes
+   * its supporters and thank you notes here), keeping one scroller. */
+  footer?: ReactElement;
   /** Passed straight to the FlatList so a screen using this grid as its one
    * scroller (the unified profile's wishlist tab) can offer pull to refresh. */
   refreshControl?: ReactElement<RefreshControlProps>;
 }
 
-export function WishlistGrid({ variant, items, numColumns = 2, header, emptyComponent, refreshControl }: WishlistGridProps) {
+export function WishlistGrid({ variant, items, numColumns = 2, header, emptyComponent, footer, refreshControl }: WishlistGridProps) {
   const colors = useThemeColors();
 
   return (
@@ -73,6 +76,7 @@ export function WishlistGrid({ variant, items, numColumns = 2, header, emptyComp
       keyExtractor={(item) => item.id}
       ListHeaderComponent={header}
       ListEmptyComponent={emptyComponent}
+      ListFooterComponent={footer}
       refreshControl={refreshControl}
       columnWrapperStyle={numColumns > 1 ? { gap: spacing.md } : undefined}
       contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}

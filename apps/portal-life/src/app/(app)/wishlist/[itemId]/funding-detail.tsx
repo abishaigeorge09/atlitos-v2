@@ -11,7 +11,7 @@ import { ErrorState } from "@/components/error-state";
 import { EmptyState } from "@/components/empty-state";
 import { FundingBar } from "@/components/funding-bar";
 import { Money } from "@/components/money";
-import { StatusPill, itemStatusPill } from "@/components/status-pill";
+import { StatusPill, derivedItemPill } from "@/components/status-pill";
 import { formatDate } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -152,10 +152,13 @@ export function FundingDetail({ itemId, upaId }: { itemId: string; upaId: string
     );
   }
 
-  const pill = itemStatusPill(item.status, Number(item.funded_amount));
+  // Funding is DERIVED from the item's own donation rows (0084), never the
+  // funded_amount cache the QA audit found drifted.
+  const derivedFunded = donations.reduce((sum, d) => sum + Number(d.amount), 0);
+  const pill = derivedItemPill(item.status, derivedFunded, Number(item.cost));
 
   return (
-    <div className="flex flex-1 flex-col gap-6">
+    <div className="flex flex-1 flex-col gap-6" data-testid="funding-detail">
       {back}
 
       <PageHeader eyebrow="Funding progress" title={item.title} />
@@ -171,7 +174,7 @@ export function FundingDetail({ itemId, upaId }: { itemId: string; upaId: string
               </Button>
             ) : null}
           </div>
-          <FundingBar funded={Number(item.funded_amount)} cost={Number(item.cost)} />
+          <FundingBar funded={derivedFunded} cost={Number(item.cost)} />
         </CardContent>
       </Card>
 

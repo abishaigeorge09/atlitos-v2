@@ -10,11 +10,15 @@ import { formatRupees } from "@/lib/format";
 export function Money({
   amount,
   className,
+  "data-testid": testId,
 }: {
   amount: number | string | null | undefined;
   className?: string;
+  "data-testid"?: string;
 }) {
   return (
-    <span className={cn("font-mono tabular-nums", className)}>{formatRupees(amount)}</span>
+    <span className={cn("font-mono tabular-nums", className)} data-testid={testId}>
+      {formatRupees(amount)}
+    </span>
   );
 }

@@ -2,7 +2,7 @@ import { useEmpower, toApiError, type UpaProfile } from '@atlitos/api';
 import type { ApiError } from '@atlitos/types';
 import { formatINR, radii, spacing } from '@atlitos/theme';
 import { router, useLocalSearchParams } from 'expo-router';
-import { BadgeCheck, HeartHandshake, RefreshCw, SearchX, TriangleAlert } from 'lucide-react-native';
+import { BadgeCheck, Heart, HeartHandshake, Quote, RefreshCw, SearchX, TriangleAlert, Users } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { Image, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -171,6 +171,85 @@ export default function UpaProfileScreen() {
     </View>
   );
 
+  // Supporters (PRD-06 FR-17) and the athlete's own thank you notes (FR-14),
+  // both from public_upa_profile (0084). A donor with no opted in name renders
+  // "A Sponsor". Honest empty states when there are none.
+  const footer = (
+    <View style={{ gap: spacing.lg, marginTop: spacing.lg }} testID="upa-supporters-section">
+      <View style={{ gap: spacing.sm }}>
+        <View className="flex-row items-center gap-xs">
+          <Users size={16} color={colors.textSecondary} strokeWidth={1.75} />
+          <Text style={[textStyle('overline'), { color: colors.textTertiary }]}>
+            {profile.donorCount} {profile.donorCount === 1 ? 'supporter' : 'supporters'}
+          </Text>
+        </View>
+        {profile.supporters.length === 0 ? (
+          <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
+            No supporters yet. Be the first to fund this athlete.
+          </Text>
+        ) : (
+          profile.supporters.map((supporter, index) => (
+            <View
+              key={`${supporter.lastAt}-${index}`}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderRadius: radii.lg,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.card,
+                paddingHorizontal: spacing.md,
+                paddingVertical: spacing.sm,
+              }}
+            >
+              <View className="flex-row items-center gap-sm">
+                <Heart size={16} color={colors.accent} strokeWidth={1.75} />
+                <Text style={[textStyle('callout'), { color: colors.text }]}>
+                  {supporter.displayName ?? 'A Sponsor'}
+                </Text>
+              </View>
+              <Text style={[textStyle('numericBase'), { color: colors.text }]}>
+                {formatINR(supporter.amount)}
+              </Text>
+            </View>
+          ))
+        )}
+      </View>
+
+      <View style={{ gap: spacing.sm }} testID="upa-gratitude-section">
+        <Text style={[textStyle('overline'), { color: colors.textTertiary }]}>Thank you notes</Text>
+        {profile.gratitude.length === 0 ? (
+          <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
+            No thank you notes yet.
+          </Text>
+        ) : (
+          profile.gratitude.map((post) => (
+            <View
+              key={post.id}
+              style={{
+                gap: spacing.xs,
+                borderRadius: radii.lg,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.card,
+                padding: spacing.md,
+              }}
+            >
+              <Quote size={16} color={colors.accent} strokeWidth={1.75} />
+              <Text style={[textStyle('body'), { color: colors.text }]}>{post.body}</Text>
+              {post.itemTitle ? (
+                <Text style={[textStyle('caption'), { color: colors.textSecondary }]}>
+                  {post.itemTitle}
+                </Text>
+              ) : null}
+            </View>
+          ))
+        )}
+      </View>
+    </View>
+  );
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       <AppBar variant="backTitle" title="Athlete" onPressBack={() => router.back()} />
@@ -178,6 +257,7 @@ export default function UpaProfileScreen() {
         variant="upa"
         items={items}
         header={header}
+        footer={footer}
         emptyComponent={
           <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
             No wishlist items yet. You can still support this athlete with a general donation above.

@@ -45,3 +45,21 @@ export function itemStatusPill(
         : { label: "Open", tone: "outline" };
   }
 }
+
+/**
+ * Funding pill derived from the ledger truth (donations), not the drift-prone
+ * funded_amount cache. Delivered stays a real fulfillment fact from the status
+ * column; every other label is computed from derived funding against cost so
+ * the pill and the funding bar can never contradict (QA audit found
+ * "Funded 100% + 0 donations"). Display only, writes nothing.
+ */
+export function derivedItemPill(
+  status: ItemStatus,
+  fundedDerived: number,
+  cost: number,
+): { label: string; tone: Tone } {
+  if (status === "delivered") return { label: "Delivered", tone: "info" };
+  if (cost > 0 && fundedDerived >= cost) return { label: "Funded", tone: "success" };
+  if (fundedDerived > 0) return { label: "Partly funded", tone: "accent" };
+  return { label: "Open", tone: "outline" };
+}
