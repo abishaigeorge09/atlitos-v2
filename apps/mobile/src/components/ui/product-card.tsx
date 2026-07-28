@@ -87,7 +87,7 @@ function ProductCard({
         />
       ) : null}
 
-      <View pointerEvents="none" className={cn(isRow ? 'h-24 w-24' : 'w-full')}>
+      <View style={{ pointerEvents: 'none' }} className={cn(isRow ? 'h-24 w-24' : 'w-full')}>
         {imageUri ? (
           <Image
             source={{ uri: imageUri }}
@@ -130,11 +130,10 @@ function ProductCard({
       ) : null}
 
       <View
-        pointerEvents="box-none"
-        style={{ zIndex: 1 }}
+        style={{ pointerEvents: 'box-none', zIndex: 1 }}
         className={cn('gap-sm p-lg', isRow && 'flex-1 justify-center')}
       >
-        <View pointerEvents="none" className="gap-sm">
+        <View style={{ pointerEvents: 'none' }} className="gap-sm">
           <Text className="font-sans-medium text-sm text-text" numberOfLines={2}>
             {title}
           </Text>
@@ -163,7 +162,7 @@ function ProductCard({
             >
               <Minus size={16} strokeWidth={1.75} color={colors.text} />
             </Pressable>
-            <View pointerEvents="none">
+            <View style={{ pointerEvents: 'none' }}>
               <Text className="font-mono-semibold min-w-6 text-center text-base text-text">{quantity}</Text>
             </View>
             <Pressable

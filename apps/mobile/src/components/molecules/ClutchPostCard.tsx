@@ -100,8 +100,7 @@ export function ClutchPostCard({
 
       {/* 2. Bottom scrim for caption legibility, never a touch target. */}
       <View
-        pointerEvents="none"
-        style={[StyleSheet.absoluteFill, { top: '55%', backgroundColor: colors.overlay }]}
+        style={[StyleSheet.absoluteFill, { pointerEvents: 'none', top: '55%', backgroundColor: colors.overlay }]}
       />
 
       {/* 3. Whole-card open tap: a sibling overlay BEHIND the controls, never a
@@ -115,7 +114,7 @@ export function ClutchPostCard({
 
       {/* 4. Caption block. box-none so empty space falls through to overlay
           (3); the inner "View all comments" Pressable still captures taps. */}
-      <View pointerEvents="box-none" className="absolute inset-x-0 bottom-0 gap-xs p-md" style={{ right: spacing['6xl'] }}>
+      <View className="absolute inset-x-0 bottom-0 gap-xs p-md" style={{ pointerEvents: 'box-none', right: spacing['6xl'] }}>
         <View className="flex-row items-center gap-sm">
           <Text className="font-sans-semibold text-text-inverse">{clip.channel}</Text>
           <Text className="font-mono text-xs text-text-inverse opacity-80">{timeAgo(clip.createdAt)}</Text>
@@ -138,7 +137,7 @@ export function ClutchPostCard({
       </View>
 
       {/* 5. Action rail. box-none wrapper; each action is its own Pressable. */}
-      <View pointerEvents="box-none" className="absolute bottom-md right-md items-center gap-lg">
+      <View className="absolute bottom-md right-md items-center gap-lg" style={{ pointerEvents: 'box-none' }}>
         <Pressable
           onPress={handleLike}
           accessibilityRole="button"

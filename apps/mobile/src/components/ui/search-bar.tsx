@@ -37,7 +37,7 @@ function SearchBar({ variant = 'plain', placeholder, onPress, className, editabl
         <Search size={20} color={colors.textTertiary} strokeWidth={1.75} />
       )}
       <TextInput
-        pointerEvents={onPress ? 'none' : 'auto'}
+        style={{ pointerEvents: onPress ? 'none' : 'auto' }}
         editable={onPress ? false : editable}
         placeholder={resolvedPlaceholder}
         placeholderTextColor={colors.textTertiary}

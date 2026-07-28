@@ -47,7 +47,7 @@ export function DrillCard({ drill, completed = false, onPress }: DrillCardProps)
         style={({ pressed }) => [StyleSheet.absoluteFill, { opacity: pressed ? 0.9 : 1 }]}
       />
 
-      <View pointerEvents="none" style={{ padding: spacing.lg, gap: spacing.sm }}>
+      <View style={{ pointerEvents: 'none', padding: spacing.lg, gap: spacing.sm }}>
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
           <View style={{ flex: 1, gap: spacing.xs }}>
             <Text style={[textStyle('h3'), { color: colors.text }]} numberOfLines={2}>

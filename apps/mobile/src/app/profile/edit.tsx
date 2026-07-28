@@ -213,8 +213,8 @@ export default function EditProfileScreen() {
               </View>
             ) : (
               <View
-                pointerEvents="none"
                 style={{
+                  pointerEvents: 'none',
                   position: 'absolute',
                   right: spacing.sm,
                   bottom: spacing.sm,

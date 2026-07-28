@@ -156,7 +156,7 @@ export function ClutchProfileView({
           <View className="flex-1" style={{ maxWidth: '33%' }}>
             <ClutchPostCard clip={item} variant="thumb" onOpen={() => onOpenClip(item.id)} />
             {pill ? (
-              <View className="absolute left-xs top-xs" pointerEvents="none">
+              <View className="absolute left-xs top-xs" style={{ pointerEvents: 'none' }}>
                 <StatusPill status={pill} />
               </View>
             ) : null}

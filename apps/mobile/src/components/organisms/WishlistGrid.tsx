@@ -107,8 +107,8 @@ export function WishlistGrid({ variant, items, numColumns = 2, header, emptyComp
           />
 
           <View
-            pointerEvents="box-none"
             style={{
+              pointerEvents: 'box-none',
               zIndex: 1,
               borderRadius: radii.md,
               backgroundColor: colors.surfaceMuted,
@@ -117,7 +117,7 @@ export function WishlistGrid({ variant, items, numColumns = 2, header, emptyComp
             }}
           >
             {item.imageUrl ? (
-              <View pointerEvents="none" style={{ flex: 1 }}>
+              <View style={{ pointerEvents: 'none', flex: 1 }}>
                 <Image source={{ uri: item.imageUrl }} style={{ flex: 1 }} />
               </View>
             ) : null}
@@ -147,7 +147,7 @@ export function WishlistGrid({ variant, items, numColumns = 2, header, emptyComp
             ) : null}
           </View>
 
-          <View pointerEvents="none">
+          <View style={{ pointerEvents: 'none' }}>
             <Text style={[textStyle('callout'), { color: colors.text }]} numberOfLines={2}>
               {item.title}
             </Text>
@@ -172,8 +172,8 @@ function ProductActions({ item }: { item: WishlistProductItem }) {
   const soldOut = item.availableStock !== undefined && item.availableStock === 0;
 
   return (
-    <View pointerEvents="box-none" style={{ zIndex: 1, gap: spacing.xs }}>
-      <View pointerEvents="none" style={{ gap: spacing.xs }}>
+    <View style={{ pointerEvents: 'box-none', zIndex: 1, gap: spacing.xs }}>
+      <View style={{ pointerEvents: 'none', gap: spacing.xs }}>
         <Text style={[textStyle('numericBase'), { color: colors.text }]}>{formatINR(item.price)}</Text>
         {item.availableStock !== undefined ? (
           <Text style={[textStyle('numericSm'), { color: soldOut ? colors.danger : colors.textSecondary }]}>
@@ -195,8 +195,8 @@ function UpaProgress({ item }: { item: WishlistUpaItem }) {
   const pct = item.cost > 0 ? Math.min(1, item.fundedAmount / item.cost) : 0;
 
   return (
-    <View pointerEvents="box-none" style={{ zIndex: 1, gap: spacing.xs }}>
-      <View pointerEvents="none" style={{ gap: spacing.xs }}>
+    <View style={{ pointerEvents: 'box-none', zIndex: 1, gap: spacing.xs }}>
+      <View style={{ pointerEvents: 'none', gap: spacing.xs }}>
         <View style={{ height: 6, borderRadius: radii.pill, backgroundColor: colors.surfaceMuted, overflow: 'hidden' }}>
           <View style={{ height: 6, width: `${pct * 100}%`, backgroundColor: colors.accent }} />
         </View>
@@ -206,8 +206,8 @@ function UpaProgress({ item }: { item: WishlistUpaItem }) {
       </View>
       {item.funded ? (
         <View
-          pointerEvents="none"
           style={{
+            pointerEvents: 'none',
             minHeight: 36,
             borderRadius: radii.sm,
             alignItems: 'center',

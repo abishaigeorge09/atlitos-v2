@@ -1,4 +1,4 @@
-import { duration, spacing } from '@atlitos/theme';
+import { duration } from '@atlitos/theme';
 import { Portal } from '@rn-primitives/portal';
 import { router } from 'expo-router';
 import { useEffect, useRef } from 'react';
@@ -56,7 +56,7 @@ export function LoginGateModal({ visible, onClose }: LoginGateModalProps) {
 
   return (
     <Portal name="login-gate">
-      <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+      <View style={[StyleSheet.absoluteFill, { pointerEvents: 'box-none' }]}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Close"
@@ -64,9 +64,10 @@ export function LoginGateModal({ visible, onClose }: LoginGateModalProps) {
           onPress={onClose}
         />
         <SlideUp>
-          <View style={{ paddingBottom: spacing['2xl'] }}>
-            <LoginGateSheet onLogin={handleLogin} onRegister={handleRegister} onClose={onClose} />
-          </View>
+          {/* The sheet surface owns its own bottom safe-area padding now
+              (BUG-003); the old transparent paddingBottom wrapper here sat
+              OUTSIDE the surface and read as dead space below the sheet. */}
+          <LoginGateSheet onLogin={handleLogin} onRegister={handleRegister} onClose={onClose} />
         </SlideUp>
       </View>
     </Portal>

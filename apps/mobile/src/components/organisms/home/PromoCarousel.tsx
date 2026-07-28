@@ -90,11 +90,10 @@ export function PromoCarousel({ reloadKey }: { reloadKey: number }) {
                 overlaid title/body/CTA against any image (contrast
                 insurance called for by the promo banner fix). */}
             <View
-              pointerEvents="none"
               className="absolute inset-x-0 bottom-0"
-              style={{ height: '60%', backgroundColor: colors.overlay }}
+              style={{ pointerEvents: 'none', height: '60%', backgroundColor: colors.overlay }}
             />
-            <View pointerEvents="none" className="absolute inset-0 justify-end gap-sm p-lg">
+            <View className="absolute inset-0 justify-end gap-sm p-lg" style={{ pointerEvents: 'none' }}>
               <Text className="font-sans-semibold text-lg text-text-inverse">{item.title}</Text>
               {item.body ? (
                 <Text className="text-sm text-text-inverse opacity-90" numberOfLines={2}>

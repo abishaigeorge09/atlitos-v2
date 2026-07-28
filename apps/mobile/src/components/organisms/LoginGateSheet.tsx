@@ -4,6 +4,7 @@ import { useThemeColors } from '@/theme/use-theme-colors';
 import { radii, spacing } from '@atlitos/theme';
 import { X } from 'lucide-react-native';
 import { Pressable, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 /**
  * SPEC.md organism #37. Guest gate sheet, verbatim copy per SPEC.md:
@@ -17,6 +18,7 @@ export interface LoginGateSheetProps {
 
 export function LoginGateSheet({ onLogin, onRegister, onClose }: LoginGateSheetProps) {
   const colors = useThemeColors();
+  const insets = useSafeAreaInsets();
 
   return (
     <View
@@ -25,6 +27,10 @@ export function LoginGateSheet({ onLogin, onRegister, onClose }: LoginGateSheetP
         borderTopRightRadius: radii['2xl'],
         backgroundColor: colors.surface,
         padding: spacing.xl,
+        // Extend the surface background through the bottom safe area (BUG-003)
+        // so the Register button clears the home indicator instead of hitting
+        // the device edge, and no dead space shows below the sheet.
+        paddingBottom: spacing.xl + insets.bottom,
         gap: spacing.lg,
       }}
     >

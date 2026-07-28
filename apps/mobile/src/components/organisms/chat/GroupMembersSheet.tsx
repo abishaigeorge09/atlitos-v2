@@ -4,6 +4,7 @@ import { Portal } from '@rn-primitives/portal';
 import { X } from 'lucide-react-native';
 import { useEffect, useRef } from 'react';
 import { Animated, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -27,12 +28,13 @@ export interface GroupMembersSheetProps {
  */
 export function GroupMembersSheet({ visible, groupName, members, loading, onClose }: GroupMembersSheetProps) {
   const colors = useThemeColors();
+  const insets = useSafeAreaInsets();
 
   if (!visible) return null;
 
   return (
     <Portal name="group-members-sheet">
-      <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+      <View style={[StyleSheet.absoluteFill, { pointerEvents: 'box-none' }]}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Close"
@@ -46,7 +48,9 @@ export function GroupMembersSheet({ visible, groupName, members, loading, onClos
               borderTopRightRadius: radii['2xl'],
               backgroundColor: colors.surface,
               padding: spacing.xl,
-              paddingBottom: spacing['2xl'],
+              // Extend the surface through the bottom safe area (BUG-008)
+              // instead of a fixed pad, so the roster clears the home indicator.
+              paddingBottom: spacing.xl + insets.bottom,
               gap: spacing.lg,
               maxHeight: '70%',
             }}

@@ -45,7 +45,7 @@ const DEMO_PASSWORD = 'AtlitosDemo!2026'; // matches scripts/seed-demo-users.mjs
 const FIXTURE_COACHES = [
   {
     email: 'coach1@atlitos.dev',
-    name: 'Demo Coach Cricket',
+    name: 'Ravi Kumar', // BUG-002: distinct from coach2 so rows do not read as duplicates
     sport: 'cricket',
     city: 'Bangalore',
     state: 'Karnataka',
@@ -57,7 +57,7 @@ const FIXTURE_COACHES = [
   },
   {
     email: 'coach2@atlitos.dev',
-    name: 'Demo Coach Tennis',
+    name: 'Sana Iyer', // BUG-002: distinct from coach1 so rows do not read as duplicates
     sport: 'tennis',
     city: 'Delhi',
     state: 'Delhi',

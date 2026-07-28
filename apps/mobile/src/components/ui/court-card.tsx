@@ -54,7 +54,7 @@ function CourtCard({
         />
       ) : null}
 
-      <View pointerEvents="none">
+      <View style={{ pointerEvents: 'none' }}>
         {imageUri ? (
           <Image source={{ uri: imageUri }} className="h-36 w-full rounded-t-xl" resizeMode="cover" />
         ) : (
@@ -64,8 +64,8 @@ function CourtCard({
         )}
       </View>
 
-      <View pointerEvents="box-none" style={{ zIndex: 1 }} className="gap-sm p-lg">
-        <View pointerEvents="none" className="gap-sm">
+      <View style={{ pointerEvents: 'box-none', zIndex: 1 }} className="gap-sm p-lg">
+        <View style={{ pointerEvents: 'none' }} className="gap-sm">
           <Text className="font-sans-semibold text-lg text-text">{name}</Text>
 
           <View className="flex-row items-center gap-xs">
@@ -79,8 +79,8 @@ function CourtCard({
           </View>
         </View>
 
-        <View pointerEvents="box-none" className="flex-row items-center justify-between pt-xs">
-          <View pointerEvents="none">
+        <View style={{ pointerEvents: 'box-none' }} className="flex-row items-center justify-between pt-xs">
+          <View style={{ pointerEvents: 'none' }}>
             <Text className="font-mono-semibold text-base text-text">
               {formatINR(pricePerHour)}
               <Text className="font-sans text-sm text-text-secondary">/hour</Text>

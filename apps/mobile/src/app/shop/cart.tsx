@@ -9,7 +9,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ConfirmSheet } from '@/components/organisms/ConfirmSheet';
 import { EmptyState } from '@/components/organisms/EmptyState';
-import { LoginGateModal } from '@/components/organisms/LoginGateModal';
 import { AppBar } from '@/components/ui/app-bar';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -145,7 +144,6 @@ export default function CartScreen() {
           ctaLabel="Browse gear"
           onCtaPress={() => router.push('/shop/category/all')}
         />
-        <LoginGateModal visible={false} onClose={() => undefined} />
       </SafeAreaView>
     );
   }

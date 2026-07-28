@@ -272,8 +272,7 @@ export default function ClutchFeedScreen() {
       {/* Floating header: wordmark + upload. Sits above the feed, safe-area
           aware. Not part of the card, so it never nests inside a card tap. */}
       <View
-        pointerEvents="box-none"
-        style={{ position: 'absolute', top: insets.top, left: 0, right: 0, paddingHorizontal: spacing.lg }}
+        style={{ pointerEvents: 'box-none', position: 'absolute', top: insets.top, left: 0, right: 0, paddingHorizontal: spacing.lg }}
         className="flex-row items-center justify-between"
       >
         <Text style={[textStyle('h2'), { color: colors.textInverse }]}>Clutch</Text>

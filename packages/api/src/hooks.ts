@@ -348,27 +348,38 @@ export type UseProfileResult = ReturnType<typeof useProfile>;
  * never trusts a broad query to be safe.
  */
 export function useSearch(client: AtlitosClient) {
-  return {
-    async search(input: SearchInput): Promise<SearchResponse> {
-      if (!input.query.trim()) {
-        return { query: input.query, parsedIntent: { entityTypes: [], sport: "general", keywords: [] }, results: [] };
-      }
-      const { data, error } = await client.functions.invoke("ai-search", {
-        body: {
-          query: input.query.trim(),
-          entityTypes: input.entityTypes,
-          sport: input.sport,
-          priceMax: input.priceMax,
-          lat: input.lat,
-          lng: input.lng,
-          city: input.city,
-          limit: input.limit,
-        },
-      });
-      if (error) throw await mapEdgeFunctionError(error);
-      return data as SearchResponse;
-    },
-  };
+  // Memoize on [client] so the returned api keeps a STABLE identity across
+  // renders. The search screen feeds this into `runSearch = useCallback(...,
+  // [search, ...])` and then debounces on `[query, runSearch]`; a fresh object
+  // literal every render made `runSearch` change every render, which refired
+  // the debounce effect on every render and re-fetched forever on an unchanged
+  // query (BUG-001 flicker/buffering, the same shape fixed in useClutch above).
+  // `supabase` is a module singleton with a stable identity, so this memo
+  // resolves once and never recomputes.
+  return useMemo(
+    () => ({
+      async search(input: SearchInput): Promise<SearchResponse> {
+        if (!input.query.trim()) {
+          return { query: input.query, parsedIntent: { entityTypes: [], sport: "general", keywords: [] }, results: [] };
+        }
+        const { data, error } = await client.functions.invoke("ai-search", {
+          body: {
+            query: input.query.trim(),
+            entityTypes: input.entityTypes,
+            sport: input.sport,
+            priceMax: input.priceMax,
+            lat: input.lat,
+            lng: input.lng,
+            city: input.city,
+            limit: input.limit,
+          },
+        });
+        if (error) throw await mapEdgeFunctionError(error);
+        return data as SearchResponse;
+      },
+    }),
+    [client],
+  );
 }
 
 export type UseSearchResult = ReturnType<typeof useSearch>;

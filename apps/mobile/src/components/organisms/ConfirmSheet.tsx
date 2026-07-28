@@ -1,6 +1,7 @@
 import { radii, spacing } from '@atlitos/theme';
 import type { LucideIcon } from 'lucide-react-native';
 import { Modal, Pressable, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/button';
 import { textStyle } from '@/theme/text-style';
@@ -59,6 +60,7 @@ export function ConfirmSheet({
   onCancel,
 }: ConfirmSheetProps) {
   const colors = useThemeColors();
+  const insets = useSafeAreaInsets();
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onCancel}>
@@ -77,7 +79,10 @@ export function ConfirmSheet({
               borderTopRightRadius: radii['2xl'],
               backgroundColor: colors.surface,
               padding: spacing.xl,
-              paddingBottom: spacing['3xl'],
+              // Extend the surface through the bottom safe area (BUG-007) rather
+              // than a fixed pad guess, so the cancel button clears the home
+              // indicator on every device.
+              paddingBottom: spacing.xl + insets.bottom,
               gap: spacing.lg,
             }}
           >

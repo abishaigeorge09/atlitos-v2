@@ -431,7 +431,7 @@ export default function ProfileScreen() {
                 }
               />
               {pill ? (
-                <View className="absolute left-xs top-xs" pointerEvents="none">
+                <View className="absolute left-xs top-xs" style={{ pointerEvents: 'none' }}>
                   <StatusPill status={pill} />
                 </View>
               ) : null}

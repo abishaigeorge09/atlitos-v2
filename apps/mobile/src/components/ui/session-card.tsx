@@ -72,19 +72,19 @@ function SessionCard({
         />
       ) : null}
 
-      <View pointerEvents="none" className="flex-row items-center justify-between">
+      <View style={{ pointerEvents: 'none' }} className="flex-row items-center justify-between">
         <Text className="font-sans-semibold text-lg text-text">{personName}</Text>
         <Text className="font-mono text-sm text-text-secondary">{sessionType}</Text>
       </View>
 
-      <View pointerEvents="none" className="gap-xs">
+      <View style={{ pointerEvents: 'none' }} className="gap-xs">
         <InfoRow icon={Calendar} text={`${date}, ${timeSlot}`} />
         <InfoRow icon={Target} text={focusArea} />
         <InfoRow icon={MapPin} text={location} />
       </View>
 
       {variant === 'request' ? (
-        <View pointerEvents="box-none" style={{ zIndex: 1 }} className="flex-row gap-sm pt-xs">
+        <View style={{ pointerEvents: 'box-none', zIndex: 1 }} className="flex-row gap-sm pt-xs">
           <Button variant="primary" size="sm" className="flex-1" onPress={onAccept}>
             <Text>Accept</Text>
           </Button>

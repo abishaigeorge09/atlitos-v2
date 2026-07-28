@@ -59,8 +59,11 @@ const DEMO_USERS = [
   { email: 'player@atlitos.dev', name: 'Demo Player', roles: [] },
   { email: 'partner@atlitos.dev', name: 'Demo Court Partner', roles: ['court_partner'] },
   { email: 'admin@atlitos.dev', name: 'Demo Admin', roles: ['admin'] },
-  { email: 'coach1@atlitos.dev', name: 'Demo Coach Cricket', roles: ['coach'] },
-  { email: 'coach2@atlitos.dev', name: 'Demo Coach Tennis', roles: ['coach'] },
+  // Distinct display names (BUG-002): two verified demo coaches previously
+  // both read as "Demo Coach" in search results, so the rows looked like
+  // duplicates. Give each a clearly distinct name.
+  { email: 'coach1@atlitos.dev', name: 'Ravi Kumar', roles: ['coach'] },
+  { email: 'coach2@atlitos.dev', name: 'Sana Iyer', roles: ['coach'] },
 ];
 
 async function findUserByEmail(email) {

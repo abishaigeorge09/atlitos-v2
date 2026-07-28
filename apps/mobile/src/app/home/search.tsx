@@ -71,6 +71,10 @@ export default function SearchScreen() {
 
   // Guards a late response from an earlier keystroke overwriting a newer one.
   const requestSeq = useRef(0);
+  // The last trimmed query we actually searched. Short-circuits a repeat fetch
+  // of an unchanged query (BUG-001): the debounce must fire exactly one request
+  // per distinct query, never re-run on an unchanged one.
+  const lastSearchedRef = useRef('');
 
   useEffect(() => {
     AsyncStorage.getItem(RECENT_SEARCHES_KEY)
@@ -111,10 +115,16 @@ export default function SearchScreen() {
     async (raw: string) => {
       const q = raw.trim();
       if (q.length < 2) {
+        lastSearchedRef.current = '';
         setState('idle');
         setHits([]);
         return;
       }
+      // Already searched this exact query and it is still on screen: do nothing.
+      // Without this a repeat call (or an effect refire) re-fetches an unchanged
+      // query and flips loading<->populated (BUG-001).
+      if (q === lastSearchedRef.current) return;
+      lastSearchedRef.current = q;
       const seq = ++requestSeq.current;
       setState('loading');
       setError(null);
@@ -131,6 +141,8 @@ export default function SearchScreen() {
         rememberSearch(q);
       } catch (err) {
         if (seq !== requestSeq.current) return;
+        // Clear the guard so the Retry button can re-run the same query.
+        lastSearchedRef.current = '';
         setError(err as ApiError);
         setState('error');
       }
@@ -138,11 +150,20 @@ export default function SearchScreen() {
     [search, city, coords, rememberSearch],
   );
 
+  // Keep the debounce effect keyed only on `query`. It reads the latest
+  // `runSearch` through a ref so a change in `runSearch` identity (e.g. from a
+  // location change) never reschedules or refires the debounce. Typing once
+  // changes `query` once, which fires exactly one delayed search.
+  const runSearchRef = useRef(runSearch);
+  useEffect(() => {
+    runSearchRef.current = runSearch;
+  }, [runSearch]);
+
   // Debounce keystrokes so a query fires once the user pauses, not per letter.
   useEffect(() => {
-    const handle = setTimeout(() => void runSearch(query), 300);
+    const handle = setTimeout(() => void runSearchRef.current(query), 300);
     return () => clearTimeout(handle);
-  }, [query, runSearch]);
+  }, [query]);
 
   const segments = useMemo(() => {
     const present = new Set<SearchSegment>();

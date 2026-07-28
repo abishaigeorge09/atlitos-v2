@@ -424,7 +424,10 @@ async function fetchCoaches(supabase: any, intent: ParsedIntent, city?: string):
       entityType: "coach",
       entityId: uid,
       title: prof?.name ?? "Coach",
-      subtitle: [capitalize(r.sport as string), cityStr].filter(Boolean).join(" . "),
+      // Carry state after city (BUG-002) so two coaches with the same sport and
+      // city still read differently in the results row, which previously showed
+      // only sport . city.
+      subtitle: [capitalize(r.sport as string), cityStr, r.state as string].filter(Boolean).join(" . "),
       imageUrl: prof?.avatar_url ?? undefined,
       sport: r.sport as Sport,
       price: minPriceById.get(uid),
