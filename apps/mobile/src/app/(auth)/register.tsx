@@ -48,9 +48,13 @@ function isRealDate(iso: string): boolean {
 /**
  * Register. PRD-01 FR-6/FR-7: name, email, phone, DOB, password (twice, must
  * match); a duplicate email/phone surfaces a field-level error; success
- * proceeds to Role select. States: populated, error (field validation,
- * email/phone taken), submitting, confirmation pending (email confirmation
- * on, with resend and a log in shortcut).
+ * lands straight in Home, never a forced Role select. Onboarding (role
+ * select) is offered later, not gated here: Home's "Finish setting up" card
+ * nudges a signed-in user with no city set to pick a role and city when
+ * they are ready (`apps/mobile/src/app/(tabs)/index.tsx` showFinishSetup).
+ * States: populated, error (field validation, email/phone taken),
+ * submitting, confirmation pending (email confirmation on, with resend and
+ * a log in shortcut).
  */
 export default function RegisterScreen() {
   const colors = useThemeColors();
@@ -106,7 +110,7 @@ export default function RegisterScreen() {
         return;
       }
 
-      router.replace('/(onboarding)/role-select');
+      router.replace('/(tabs)');
     } catch (err) {
       const apiError = err as ApiError;
       if (apiError.code === 'EMAIL_TAKEN') {

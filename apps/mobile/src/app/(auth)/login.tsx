@@ -39,7 +39,17 @@ export default function LoginScreen() {
   const [error, setError] = useState<ApiError | null>(null);
 
   function afterAuth() {
-    router.replace('/(auth)/splash');
+    // PRD-01 FR-4: a gate raised from a guest's mutating tap pushes this
+    // screen ON TOP of the origin screen (LoginGateModal uses router.push,
+    // the origin never unmounts). Dismiss back to it so the user resumes
+    // exactly where they were, instead of being dropped on Home. Only when
+    // login was reached as a cold entry with nothing beneath (no history)
+    // do we route to Home.
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)');
+    }
   }
 
   async function handlePasswordLogin() {
