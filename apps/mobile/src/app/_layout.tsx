@@ -8,7 +8,8 @@ import { useColorScheme } from 'nativewind';
 import { useEffect } from 'react';
 import { StatusBar } from 'react-native';
 
-import { startSessionListener } from '@/store/session-store';
+import { applyTheme } from '@/lib/apply-theme';
+import { startSessionListener, useSessionStore } from '@/store/session-store';
 import { useThemeColors } from '@/theme/use-theme-colors';
 
 SplashScreen.preventAutoHideAsync().catch(() => {
@@ -73,6 +74,14 @@ export default function RootLayout() {
   useEffect(() => {
     startSessionListener();
   }, []);
+
+  // Apply the signed-in user's persisted appearance preference (0087) once
+  // their profile resolves. 'system' hands control back to the OS. Guests
+  // (no me row) stay on system default.
+  const themePref = useSessionStore((state) => state.me?.theme);
+  useEffect(() => {
+    if (themePref) applyTheme(themePref);
+  }, [themePref]);
 
   if (!fontsLoaded && !fontError) {
     return null;

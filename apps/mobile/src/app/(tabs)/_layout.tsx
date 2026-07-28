@@ -9,6 +9,7 @@ const ROUTE_TO_TAB: Record<string, BottomNavTab> = {
   trainings: 'trainings',
   clutch: 'clutch',
   courts: 'courts',
+  you: 'you',
   // Not a bottom tab of its own (no BottomNav button navigates here
   // directly, reached via a "book a coach" CTA from Home/Trainings, see
   // (tabs)/coaching/_layout.tsx); mapped to `trainings` purely so the tab
@@ -56,6 +57,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="trainings" options={{ title: 'Trainings' }} />
       <Tabs.Screen name="clutch" options={{ title: 'Clutch' }} />
       <Tabs.Screen name="courts" options={{ title: 'Courts' }} />
+      <Tabs.Screen name="you" options={{ title: 'You' }} />
     </Tabs>
   );
 }

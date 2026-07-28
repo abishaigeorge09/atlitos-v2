@@ -1198,5 +1198,37 @@
     "lane": "EXPO",
     "priority": "P1",
     "expected": "Affiliate product detail renders the price comparison: every retailer offer listed, sorted cheapest in stock first, cheapest highlighted with an accent border + 'Cheapest' chip. No variant selector, no add to cart, no in-app checkout. 'Buy on <retailer>' calls Linking.openURL with that offer's affiliate_url; an out-of-stock offer is dimmed with its button disabled. Coexists with the owned PDP (/shop/product/[id]) which keeps cart/checkout unchanged."
+  },
+  {
+    "id": "SET-01",
+    "surface": "mobile /(tabs)/you + /settings",
+    "persona": "signed-in player",
+    "lane": "EXPO",
+    "priority": "P1",
+    "expected": "The reusable SettingsContent surface renders the same options from all three entry points: the new You bottom tab (SlidersHorizontal icon), the Profile page Settings button, and the Trainings tab shell Settings gear. Sections: Appearance (System/Light/Dark), Preferred sports (chips), Location (city/state), Notifications (sessions/messages/promotions toggles), Account (Edit profile, Become a coach, Sign out). Bundle-proven compiled; Metro web bundle at localhost:8099 contains SettingsContent + (tabs)/you + lib/apply-theme."
+  },
+  {
+    "id": "SET-02",
+    "surface": "supabase (users.theme, users.notification_prefs) + useProfile.updateProfile",
+    "persona": "signed-in player",
+    "lane": "EXT",
+    "priority": "P1",
+    "expected": "A personalization change persists to the caller's own users row via the owner-scoped updateProfile path (no money write, no RLS bypass). Additive migration 0087 adds users.theme (CHECK system|light|dark, default 'system') and users.notification_prefs jsonb (default {sessions:true,messages:true,promotions:false}). SQL-proven on prod syzzfgaudpifwvbpycyi: a round-trip wrote theme='dark' + notification_prefs={sessions:false,messages:true,promotions:true} to a seed player, read it back exactly, then restored the originals; CHECK constraint users_theme_check present."
+  },
+  {
+    "id": "SET-03",
+    "surface": "mobile appearance (nativewind colorScheme)",
+    "persona": "guest + signed-in",
+    "lane": "EXPO",
+    "priority": "P2",
+    "expected": "Selecting System/Light/Dark in Settings applies live via lib/apply-theme.ts (colorScheme.set), the single source useThemeColors and the `dark` class both read; for a signed-in user the choice also persists to users.theme and re-applies on next app start from the root layout effect keyed on me.theme. Guests get appearance locally plus a 'Sign in to personalize' prompt for the profile-bound options."
+  },
+  {
+    "id": "COACH-APV-01",
+    "surface": "mobile become-a-coach -> Trainings pending -> admin approve",
+    "persona": "player -> pending coach -> verified coach",
+    "lane": "EXPO+EXT",
+    "priority": "P0",
+    "expected": "Becoming a coach is NOT instant. Settings Account 'Become a coach' (shown only when me.coachStatus is not verified/pending) opens the coach-setup wizard, which creates a verification_requests row + coach_profiles.status='pending_review' (PRD-02 FR-6). The Trainings tab then renders CoachVerificationStatus (pending) instead of coach tools, and only there (FR-7). Server gate: coach_profiles_public is WHERE status='verified' and is_verified_coach(uuid) checks status='verified', so a pending coach is not discoverable/bookable (SQL-proven on prod). Admin approves in apps/admin Verification Queue Coach tab via admin_approve_verification_request, which flips status to verified and unlocks coach features; reject requires a reason via admin_reject_verification_request. Wizard submit + admin click are code-proven (no in-session auth); DB gate + RPCs SQL-proven."
   }
 ]

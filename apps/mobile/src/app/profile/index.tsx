@@ -9,7 +9,7 @@ import {
 import { spacing } from '@atlitos/theme';
 import type { ApiError, Clip, ClipStatus } from '@atlitos/types';
 import { router } from 'expo-router';
-import { Bookmark, Heart, LayoutGrid, LogIn, TriangleAlert, Users } from 'lucide-react-native';
+import { Bookmark, Heart, LayoutGrid, LogIn, Settings, TriangleAlert, Users } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Image, Pressable, RefreshControl, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -195,9 +195,20 @@ export default function ProfileScreen() {
           }}
         >
           <Avatar uri={profile.avatarUrl ?? undefined} name={profile.name} size={AVATAR_SIZE} />
-          <Button variant="secondary" size="sm" onPress={() => router.push('/profile/edit')}>
-            <Text style={[textStyle('label'), { color: colors.text }]}>Edit profile</Text>
-          </Button>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+            <Button variant="secondary" size="sm" onPress={() => router.push('/profile/edit')}>
+              <Text style={[textStyle('label'), { color: colors.text }]}>Edit profile</Text>
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onPress={() => router.push('/settings')}
+              accessibilityLabel="Settings"
+            >
+              <Settings size={16} strokeWidth={1.75} color={colors.text} />
+              <Text style={[textStyle('label'), { color: colors.text }]}>Settings</Text>
+            </Button>
+          </View>
         </View>
 
         <View style={{ gap: spacing.xs }}>

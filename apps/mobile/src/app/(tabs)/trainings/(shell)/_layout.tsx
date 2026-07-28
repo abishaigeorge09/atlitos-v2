@@ -1,6 +1,7 @@
 import { spacing } from '@atlitos/theme';
 import { router, Tabs, useSegments } from 'expo-router';
-import { View } from 'react-native';
+import { Settings } from 'lucide-react-native';
+import { Pressable, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/ui/text';
@@ -84,8 +85,25 @@ export default function TrainingsShellLayout() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-      <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.lg }}>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          paddingHorizontal: spacing.lg,
+          paddingTop: spacing.lg,
+        }}
+      >
         <Text style={[textStyle('h1'), { color: colors.text }]}>Trainings</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Settings"
+          hitSlop={8}
+          onPress={() => router.push('/settings')}
+          style={{ height: 44, width: 44, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <Settings size={22} strokeWidth={1.75} color={colors.text} />
+        </Pressable>
       </View>
 
       {isVerifiedCoach || isPlayer ? (

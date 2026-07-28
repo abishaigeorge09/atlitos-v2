@@ -71,6 +71,8 @@ Extends `auth.users` with app profile fields. One row per Supabase Auth user, cr
 | `status` | `user_status` | not null default `active`, admin-locked (see below) |
 | `suspended_reason` | `text` | nullable, admin-locked (see below) |
 | `show_donor_name` | `boolean` | not null default `false`, sponsor name opt-in read by `portal-life` |
+| `theme` | `text` | not null default `system`, CHECK in (`system`,`light`,`dark`) (`users_theme_check`, `0087`); appearance preference for the Settings surface, applied client side via nativewind |
+| `notification_prefs` | `jsonb` | not null default `{"sessions":true,"messages":true,"promotions":false}` (`0087`); per-category notification opt-ins, owner-only read/write through the Settings surface |
 | `created_at`, `updated_at` | `timestamptz` | |
 
 Indexes: `idx_users_phone` on `phone`; `idx_users_handle_lower` unique on `lower(handle)` (`0072`).

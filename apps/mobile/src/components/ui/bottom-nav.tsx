@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils';
 import * as Haptics from 'expo-haptics';
-import { Dumbbell, Home, LandPlot, Play, type LucideIcon } from 'lucide-react-native';
+import { Dumbbell, Home, LandPlot, Play, SlidersHorizontal, type LucideIcon } from 'lucide-react-native';
 import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -8,18 +8,20 @@ import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/theme/use-theme-colors';
 
 /**
- * Molecule 14: BottomNav. 4 tabs: Home, Trainings, Clutch, Courts. Active tab
- * renders its icon and label in `accent`; inactive tabs render in
+ * Molecule 14: BottomNav. 5 tabs: Home, Trainings, Clutch, Courts, You. Active
+ * tab renders its icon and label in `accent`; inactive tabs render in
  * `textTertiary`. Bottom padding respects the device safe area so the bar
- * never sits under the home indicator.
+ * never sits under the home indicator. The You tab (Phase 9
+ * WS-personalization) opens the settings and personalization surface.
  */
-export type BottomNavTab = 'home' | 'trainings' | 'clutch' | 'courts';
+export type BottomNavTab = 'home' | 'trainings' | 'clutch' | 'courts' | 'you';
 
 const TABS: Array<{ key: BottomNavTab; label: string; icon: LucideIcon }> = [
   { key: 'home', label: 'Home', icon: Home },
   { key: 'trainings', label: 'Trainings', icon: Dumbbell },
   { key: 'clutch', label: 'Clutch', icon: Play },
   { key: 'courts', label: 'Courts', icon: LandPlot },
+  { key: 'you', label: 'You', icon: SlidersHorizontal },
 ];
 
 export interface BottomNavProps {

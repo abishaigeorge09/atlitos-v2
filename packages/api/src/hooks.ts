@@ -174,7 +174,14 @@ export interface MeRow {
   sports: Sport[];
   roles: AppRole[];
   coachStatus: "pending_review" | "verified" | "rejected" | null;
+  /** Appearance preference (0087). Applied client side via nativewind. */
+  theme: "system" | "light" | "dark";
+  /** Per category notification opt ins (0087). */
+  notificationPrefs: { sessions: boolean; messages: boolean; promotions: boolean };
 }
+
+/** Notification opt ins default when the column is absent/unseeded. */
+const DEFAULT_NOTIFICATION_PREFS = { sessions: true, messages: true, promotions: false };
 
 /** Own-profile edit payload (0072 columns + avatar). Every field is optional;
  * only the fields present are written. `null` clears a nullable column. */
@@ -183,6 +190,13 @@ export interface UpdateProfileInput {
   coverUrl?: string | null;
   avatarUrl?: string | null;
   handle?: string;
+  /** Personalization (0087). All own-row columns; written through the same
+   * owner scoped users update the rest of this payload uses. */
+  sports?: Sport[];
+  city?: string | null;
+  state?: string | null;
+  theme?: "system" | "light" | "dark";
+  notificationPrefs?: { sessions: boolean; messages: boolean; promotions: boolean };
 }
 
 export interface CompletePlayerSetupInput {
@@ -245,6 +259,11 @@ export function useProfile(client: AtlitosClient) {
         sports: userRow.sports ?? [],
         roles: (roleRows ?? []).map((r) => r.role as AppRole),
         coachStatus: coachRow?.status ?? null,
+        theme: (userRow.theme as MeRow["theme"] | null) ?? "system",
+        notificationPrefs: {
+          ...DEFAULT_NOTIFICATION_PREFS,
+          ...((userRow.notification_prefs as Partial<MeRow["notificationPrefs"]> | null) ?? {}),
+        },
       };
     },
 
@@ -275,12 +294,26 @@ export function useProfile(client: AtlitosClient) {
       if (authError) throw mapAuthError(authError);
       if (!authData.user) throw mapAuthError({ message: "Sign in to edit your profile.", status: 401 });
 
-      const patch: { bio?: string | null; cover_url?: string | null; avatar_url?: string | null; handle?: string } =
-        {};
+      const patch: {
+        bio?: string | null;
+        cover_url?: string | null;
+        avatar_url?: string | null;
+        handle?: string;
+        sports?: Sport[];
+        city?: string | null;
+        state?: string | null;
+        theme?: string;
+        notification_prefs?: { sessions: boolean; messages: boolean; promotions: boolean };
+      } = {};
       if (input.bio !== undefined) patch.bio = input.bio;
       if (input.coverUrl !== undefined) patch.cover_url = input.coverUrl;
       if (input.avatarUrl !== undefined) patch.avatar_url = input.avatarUrl;
       if (input.handle !== undefined) patch.handle = input.handle.trim().toLowerCase();
+      if (input.sports !== undefined) patch.sports = input.sports;
+      if (input.city !== undefined) patch.city = input.city;
+      if (input.state !== undefined) patch.state = input.state;
+      if (input.theme !== undefined) patch.theme = input.theme;
+      if (input.notificationPrefs !== undefined) patch.notification_prefs = input.notificationPrefs;
 
       const { error } = await client.from("users").update(patch).eq("id", authData.user.id);
       if (error) {

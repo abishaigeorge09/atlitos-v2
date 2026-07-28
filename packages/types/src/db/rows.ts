@@ -68,6 +68,8 @@ export interface UserRow {
   status: UserStatus;
   suspended_reason: string | null;
   show_donor_name: boolean;
+  theme: "system" | "light" | "dark";
+  notification_prefs: { sessions: boolean; messages: boolean; promotions: boolean };
   created_at: ISODateTime;
   updated_at: ISODateTime;
 }
