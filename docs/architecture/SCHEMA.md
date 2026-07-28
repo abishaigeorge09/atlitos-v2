@@ -584,6 +584,56 @@ The view joins `products` on `active` and so contains no rows for a deactivated 
 
 ---
 
+## Affiliate marketplace (Phase 9 WS4, `0086_affiliate_marketplace.sql`)
+
+The affiliate pivot (PRD-07 section 10) adds a SECOND product model alongside the owned catalog above, additive and non-destructive. Owned products (`products`/`product_variants`) are what Atlitos stocks, carts and sells in app; affiliate products are external gear Atlitos never stocks, browsed and compared across retailers and bought via a click-out that earns commission. The two coexist behind a product `source`; nothing about the owned tables changed.
+
+Both tables are PUBLIC BROWSE reference content, the same class as `promo_banners` and `categories`: no per-user rows, so there is no owner to scope by, and no client write path at all. Prices are ingested (a future price-refresh worker, or an admin via the service role), never client set. See RLS.md.
+
+### `affiliate_products`
+
+One row per canonical external product.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `uuid` | PK, default `gen_random_uuid()` |
+| `title` | `text` | not null |
+| `brand` | `text` | nullable, first-class column (not in the title) so WS3 AI search can treat brand as a HARD constraint |
+| `sport` | `sport` | nullable |
+| `category_id` | `uuid` | nullable, references `categories(id)` |
+| `skill_level` | `text` | nullable, free text (mirrors `athlete_sports.skill_level`), read by WS3 to refine intent |
+| `age_range` | `text` | nullable, free text (e.g. "adult", "kids"), read by WS3 |
+| `description` | `text` | nullable |
+| `image_url` | `text` | nullable, a direct URL (affiliate product images come from the retailer feed, not the `product-media` bucket) |
+| `active` | `boolean` | not null default `true` |
+| `created_at`, `updated_at` | `timestamptz` | `updated_at` via the shared `set_updated_at()` trigger |
+
+Indexes: `idx_affiliate_products_sport` on `sport`, `idx_affiliate_products_brand_lower` on `lower(brand)` (the brand match WS3 leans on), `idx_affiliate_products_active` on `active`.
+
+`brand`, `skill_level` and `age_range` are exactly the attributes WS3 AI search reads: the ai-search product fetch folds them into each candidate's searchable text so a query like "Babolat under 2000" matches on the brand column, and the honesty gate returns the real product rather than a broaden line. Proven by `scripts/verify-affiliate.ts` against the live project.
+
+### `product_offers`
+
+One row per retailer offer on an affiliate product. A product with three offers is the same item sold on three sites at three prices; the price-comparison view lists them cheapest in stock first.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `uuid` | PK |
+| `affiliate_product_id` | `uuid` | not null, references `affiliate_products(id)` `ON DELETE CASCADE`. Named `affiliate_product_id`, not `product_id`, so it never reads as a FK to the owned `products` table |
+| `retailer` | `text` | not null, the source/retailer name ("Amazon", "Tennis Hub", "Decathlon", "Cricket Store") |
+| `price` | `numeric(12,2)` | not null, `CHECK (price >= 0)` |
+| `currency` | `text` | not null default `'INR'` |
+| `affiliate_url` | `text` | not null, the commission-bearing outbound link the click-out opens |
+| `in_stock` | `boolean` | not null default `true` |
+| `last_checked_at` | `timestamptz` | not null default `now()`, when the ingest worker last re-checked this offer |
+| `created_at`, `updated_at` | `timestamptz` | `updated_at` via `set_updated_at()` |
+
+Constraints: `UNIQUE(affiliate_product_id, retailer)` (one offer per retailer per product; a refresh updates in place). Indexes: `idx_product_offers_product` on `affiliate_product_id`, partial `idx_product_offers_product_price` on `(affiliate_product_id, price) WHERE in_stock` (the cheapest-in-stock read the compare view does).
+
+**No `orders`, no `stock_reservations`, no payment for affiliate items.** An affiliate purchase happens on the retailer's site; Atlitos runs no charge and holds no stock for these rows. Agentic auto-ordering (a background worker placing the retailer order in app) is a FUTURE epic with its own constraints, explicitly out of scope now, documented in `docs/prd/PRD-agentic-ordering.md`.
+
+Seeded by `scripts/seed-affiliate-catalog.mjs` (8 products, 17 offers across four retailers), including a Babolat racket offered under 2000 at one retailer and higher at another for the WS3 price-comparison proof.
+
 ## The commerce bill is a third pricing shape (PHASE-4-STATUS.md D1)
 
 Recorded here because it is why `orders` has the money columns it has.

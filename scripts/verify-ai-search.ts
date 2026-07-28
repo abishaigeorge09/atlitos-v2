@@ -115,6 +115,11 @@ console.log('=== ATLITOS WS3 ai-search verification (NO ANTHROPIC_API_KEY) ===\n
 }
 
 // B. The Babolat NL query -> honest empty + the exact broaden example.
+// NOTE (WS4): this POOL is deliberately Babolat-free, so it isolates the WS3
+// honesty LOGIC (no-match -> specific broaden). Over the REAL WS4 affiliate
+// catalog, which now seeds a Babolat racket under 2000, the same query returns
+// the real product; that end-to-end behaviour is proven by
+// scripts/verify-affiliate.ts against the live project.
 {
   const { intent, results, broaden } = run(
     "I'm a 10-year-old beginner at tennis, want a racket and a Babolat under 2000",

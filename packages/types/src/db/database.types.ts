@@ -14,6 +14,106 @@ export type Database = {
   }
   public: {
     Tables: {
+      affiliate_products: {
+        Row: {
+          active: boolean
+          age_range: string | null
+          brand: string | null
+          category_id: string | null
+          created_at: string
+          description: string | null
+          id: string
+          image_url: string | null
+          skill_level: string | null
+          sport: Database["public"]["Enums"]["sport"] | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          age_range?: string | null
+          brand?: string | null
+          category_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          skill_level?: string | null
+          sport?: Database["public"]["Enums"]["sport"] | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          age_range?: string | null
+          brand?: string | null
+          category_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          skill_level?: string | null
+          sport?: Database["public"]["Enums"]["sport"] | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "affiliate_products_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_offers: {
+        Row: {
+          affiliate_product_id: string
+          affiliate_url: string
+          created_at: string
+          currency: string
+          id: string
+          in_stock: boolean
+          last_checked_at: string
+          price: number
+          retailer: string
+          updated_at: string
+        }
+        Insert: {
+          affiliate_product_id: string
+          affiliate_url: string
+          created_at?: string
+          currency?: string
+          id?: string
+          in_stock?: boolean
+          last_checked_at?: string
+          price: number
+          retailer: string
+          updated_at?: string
+        }
+        Update: {
+          affiliate_product_id?: string
+          affiliate_url?: string
+          created_at?: string
+          currency?: string
+          id?: string
+          in_stock?: boolean
+          last_checked_at?: string
+          price?: number
+          retailer?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_offers_affiliate_product_id_fkey"
+            columns: ["affiliate_product_id"]
+            isOneToOne: false
+            referencedRelation: "affiliate_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       addresses: {
         Row: {
           city: string

@@ -117,6 +117,8 @@ The guest experience (PRD-01 section 3, FR-1 through FR-5) needs `anon` to read 
 | `upa_applications`, `upa_wishlist_items`, `gratitude_posts` | `upa_applications.status = 'verified'` rows only |
 | `drills`, `roadmap_stages`, `milestones` | all rows (public reference content, no per-user data) |
 | `promo_banners` | `active = true` (0071, Home promo carousel, PRD-01 3.2; public reference content, no per-user data) |
+| `affiliate_products` | `active = true` (0086, WS4 affiliate marketplace; public reference content, no per-user data) |
+| `product_offers` | rows whose owning `affiliate_products` row is `active = true`, via an `EXISTS` in the policy (0086) |
 
 Everything else, `users` beyond the caller's own row, `sessions`, `court_bookings`, `orders`, `cart_items`, `donations`, `payment_intents`, `ledger_entries`, `notifications`, `chat_threads`/`chat_messages`, `verification_requests`, `audit_log`, requires `authenticated` at minimum and is further scoped by ownership or role below. Any mutating action a guest attempts against a write-guarded table returns a Postgres/PostgREST permission error, which the client intercepts and renders as `LoginGateSheet` per PRD-01 FR-3, never a raw 403 shown to the user.
 
@@ -184,6 +186,8 @@ Neither policy was rewritten. Re-creating a correct policy to demonstrate that i
 | Table | `SELECT` | `INSERT`/`UPDATE`/`DELETE` |
 |---|---|---|
 | `products`, `product_media`, `product_variants`, `categories` | `active = true` public; admin reads all | `has_role('admin')` only |
+| `affiliate_products` | `active = true` public browse | **no client write** (grants revoked from `anon`/`authenticated`); service-role only (ingest worker / admin). Prices and offers are ingested, never user-set: a client that could write an offer price could rewrite the price it is about to be shown. Same lock shape as `promo_banners`. `0086` |
+| `product_offers` | public browse of offers whose product is `active` (an `EXISTS` re-derives the product's `active` in the policy, so a delisted product's offers never leak) | **no client write**; service-role only. `0086` |
 | `product_wishlist_items`, `cart_items` | own rows | own rows (`cart_items` writes for add/update go through `add_to_cart`/`update_cart_item` RPCs for the stock re-check, `DELETE` is a direct own-row policy since removal needs no stock check) |
 | `orders`, `order_items`, `order_timeline` | own orders (`user_id = auth.uid()`); admin reads all | **no** `authenticated` write on any of the three; `checkout` edge function inserts, `admin-order-advance`/`admin-order-refund` edge functions and RPCs (admin-only) write timeline/status |
 | `order_feedback` | own row | own row `INSERT` only, once (`UNIQUE(order_id)` plus a policy requiring the order's `status = 'delivered'`), no `UPDATE`/`DELETE` |

@@ -1174,5 +1174,29 @@
     "lane": "EXT",
     "priority": "P2",
     "expected": "LLM path smoke (founder step): with ANTHROPIC_API_KEY set via `supabase secrets set`, a NL query parses intent via Claude (claude-haiku-4-5-20251001) and rerank rewrites rankReason per hit; a forced timeout/500 from the model degrades to the deterministic keyword result with no error. Code-proven in llm.ts (env-gated, AbortController timeout, try/catch fallback); live-provable only once the key is added."
+  },
+  {
+    "id": "AF-01",
+    "surface": "supabase (affiliate_products, product_offers)",
+    "persona": "n/a",
+    "lane": "EXT",
+    "priority": "P1",
+    "expected": "After scripts/seed-affiliate-catalog.mjs, affiliate_products holds 8 products (each with brand/skill_level/age_range) and product_offers holds 17 offers across Amazon/Tennis Hub/Decathlon/Cricket Store. The Babolat Pure Drive Team has an in-stock offer under 2000 (Tennis Hub 1799) and a higher offer (Amazon 2149). SQL-proven via execute_sql; read-back also printed by the seed script."
+  },
+  {
+    "id": "AF-02",
+    "surface": "supabase/functions/ai-search + affiliate catalog",
+    "persona": "n/a",
+    "lane": "EXT",
+    "priority": "P1",
+    "expected": "Over the LIVE catalog, 'Babolat under 2000' now returns the real Babolat Pure Drive Team (entityId affiliate:...) with a rankReason ('Within your budget'), NOT the WS3 broaden message; every returned Babolat hit is <= 2000. Honesty still holds: 'Wilson racket under 2000' (Wilson gear all over 2000) returns EMPTY + the honest broaden 'No Wilson rackets under 2000. Try raising to 3000, or removing the brand.' Proven by scripts/verify-affiliate.ts (real search core over real data) -> ALL PASS."
+  },
+  {
+    "id": "AF-03",
+    "surface": "mobile /shop/affiliate/[id]",
+    "persona": "guest + signed-in",
+    "lane": "EXPO",
+    "priority": "P1",
+    "expected": "Affiliate product detail renders the price comparison: every retailer offer listed, sorted cheapest in stock first, cheapest highlighted with an accent border + 'Cheapest' chip. No variant selector, no add to cart, no in-app checkout. 'Buy on <retailer>' calls Linking.openURL with that offer's affiliate_url; an out-of-stock offer is dimmed with its button disabled. Coexists with the owned PDP (/shop/product/[id]) which keeps cart/checkout unchanged."
   }
 ]

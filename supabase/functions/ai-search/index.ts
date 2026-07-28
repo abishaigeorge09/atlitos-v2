@@ -262,6 +262,60 @@ async function fetchProducts(supabase: any, intent: ParsedIntent): Promise<Candi
   }));
 }
 
+// Affiliate catalog (0086, WS4). External products priced per-retailer in
+// `product_offers`; the candidate carries the CHEAPEST in-stock offer as its
+// price so a "brand under N" query compares against the best available price,
+// and folds `brand`, `skill_level` and `age_range` into the searchable text so
+// the WS3 honesty gate can treat brand as a hard constraint. Same public
+// `active = true` scope as the owned catalog. Emitted as `entityType: "gear"`
+// so affiliate and owned gear rank against each other in one result set; the
+// `entityId` is prefixed `affiliate:` so the client can route it to the compare
+// view rather than the owned PDP.
+// deno-lint-ignore no-explicit-any
+async function fetchAffiliateProducts(supabase: any, intent: ParsedIntent): Promise<Candidate[]> {
+  let q = supabase
+    .from("affiliate_products")
+    .select("id, title, brand, sport, skill_level, age_range, description, image_url, product_offers ( price, in_stock )")
+    .eq("active", true)
+    .limit(50);
+  if (intent.sport !== "general") q = q.eq("sport", intent.sport);
+
+  const { data, error } = await q;
+  if (error) throw new AppError("INTERNAL", `Failed to load affiliate products: ${error.message}`, 500);
+  const rows = (data ?? []) as Array<Record<string, unknown>>;
+
+  return rows.map((r): Candidate => {
+    const offers = Array.isArray(r.product_offers) ? (r.product_offers as Array<Record<string, unknown>>) : [];
+    const inStockPrices = offers
+      .filter((o) => o.in_stock !== false)
+      .map((o) => Number(o.price))
+      .filter((p) => Number.isFinite(p));
+    const allPrices = offers.map((o) => Number(o.price)).filter((p) => Number.isFinite(p));
+    // Cheapest in-stock offer, falling back to the cheapest offer overall so a
+    // fully-sold-out product still carries a price for the ceiling test.
+    const price = inStockPrices.length > 0 ? Math.min(...inStockPrices) : allPrices.length > 0 ? Math.min(...allPrices) : undefined;
+    const brand = (r.brand as string) ?? "";
+    return {
+      entityType: "gear",
+      entityId: `affiliate:${r.id as string}`,
+      title: (r.title as string) ?? "Product",
+      subtitle: [brand, capitalize((r.sport as string) ?? "Gear")].filter(Boolean).join(" . "),
+      imageUrl: typeof r.image_url === "string" ? r.image_url : undefined,
+      sport: (r.sport as Sport) ?? undefined,
+      price,
+      rating: undefined,
+      distanceKm: undefined,
+      // brand / skill_level / age_range are the WS3 attributes: folding them into
+      // the text blob is what lets `passesHardConstraints` match `intent.brand`
+      // against a real Babolat row and answer "Babolat under 2000" precisely.
+      text: [r.title, brand, r.sport, r.skill_level, r.age_range, r.description]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase(),
+    };
+  });
+}
+
 // deno-lint-ignore no-explicit-any
 async function fetchAthletes(supabase: any, intent: ParsedIntent): Promise<Candidate[]> {
   let q = supabase
@@ -355,15 +409,16 @@ Deno.serve((req) =>
     }
 
     const want = new Set(intent.entityTypes);
-    const [coaches, courts, products, athletes, clips] = await Promise.all([
+    const [coaches, courts, products, affiliateProducts, athletes, clips] = await Promise.all([
       want.has("coach") ? fetchCoaches(supabase, intent, body.city) : Promise.resolve([]),
       want.has("court") ? fetchCourts(supabase, intent, body.lat, body.lng) : Promise.resolve([]),
       want.has("gear") ? fetchProducts(supabase, intent) : Promise.resolve([]),
+      want.has("gear") ? fetchAffiliateProducts(supabase, intent) : Promise.resolve([]),
       want.has("athlete") ? fetchAthletes(supabase, intent) : Promise.resolve([]),
       want.has("clip") ? fetchClips(supabase, intent) : Promise.resolve([]),
     ]);
 
-    const candidates = [...coaches, ...courts, ...products, ...athletes, ...clips];
+    const candidates = [...coaches, ...courts, ...products, ...affiliateProducts, ...athletes, ...clips];
     const scored = scoreCandidates(candidates, intent).sort((a, b) => b.rankScore - a.rankScore);
 
     // FR-16 honesty gate: keep only hard-constraint-qualified, confident hits.

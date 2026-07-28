@@ -231,7 +231,7 @@ All money in this PRD flows through the `checkout` edge function and Razorpay te
 
 - Product catalog CRUD, category management, and stock replenishment (admin side; PRD-04).
 - Admin driven order lifecycle advancement UI (PRD-04); this PRD only reads the lifecycle.
-- Affiliate or third party marketplace checkout of any kind; commerce is native only, per PLAN.md lock.
+- ~~Affiliate or third party marketplace checkout of any kind; commerce is native only, per PLAN.md lock.~~ SUPERSEDED by the Phase 9 WS4 founder pivot: an affiliate marketplace is now IN scope and specified in section 10 below. The owned native shop (FR-1 to FR-32 above) is unchanged and coexists with it behind a product `source`. Note that "affiliate checkout" is still out of scope in the literal sense: Atlitos never runs a payment for an affiliate item, the shopper completes the purchase on the retailer's own site.
 - Coupons, promo codes, and discount stacking logic (not in v1 scope; open question below).
 - Multi item split shipping or multi vendor fulfillment; v1 assumes a single fulfillment path per order.
 - Returns and refunds flow (not specified in v1 SPEC; separate PRD if founder wants it before P4 gate).
@@ -249,3 +249,57 @@ All money in this PRD flows through the `checkout` edge function and Razorpay te
 4. Should delivery charges be flat, free above a threshold, or pincode dependent? Not specified in v1 fixtures beyond a flat pattern.
 5. Is a returns/refunds journey required for the P4 gate, or can it be explicitly deferred to a post P8 PRD.
 6. Should wishlist have a capacity limit or expiry, given it is meant to drive re-engagement.
+
+## 10. Affiliate marketplace model (Phase 9 WS4)
+
+Added 2026-07-28 on the founder's pivot. The shop gains a SECOND product model alongside the owned one. This section is additive: sections 1 to 9 (the owned native shop) are unchanged and remain the truth for `source = 'owned'` products.
+
+### 10.1 What changed and why
+
+The owned shop makes Atlitos the seller of record: it holds inventory, runs the Razorpay charge in app, and fulfils delivery (products, product_variants, orders, the checkout edge function). That model does not scale to a broad catalog, and it ties up capital in stock.
+
+The affiliate model does not. Atlitos lists an external catalog of gear sourced from retailers (Amazon, Tennis Hub, and others), shows the shopper the SAME product priced across every retailer that carries it, and when the shopper picks one, clicks out to that retailer's site through an affiliate link. The shopper buys on the retailer's own site; Atlitos earns a commission on the referral. There is no in app cart, no in app payment, and no stock that Atlitos owns for these items.
+
+The two models coexist behind a product `source`:
+
+| | owned (`source = 'owned'`) | affiliate (`source = 'affiliate'`) |
+|---|---|---|
+| Table | `products` + `product_variants` | `affiliate_products` + `product_offers` |
+| Seller of record | Atlitos | the retailer |
+| Cart / checkout | in app (FR-8 to FR-23) | none, click-out only |
+| Stock | Atlitos inventory (`product_variant_availability`) | the retailer's, shown per offer as in stock or not |
+| Payment | Razorpay in app | on the retailer's site |
+| Atlitos revenue | order margin, delivery, GST pass through | affiliate commission on click-out |
+| Price shown | the one Atlitos sets | every retailer's price, compared |
+
+### 10.2 Data model
+
+- `affiliate_products`: one row per canonical external product. Columns include `title`, `brand`, `sport`, `category_id`, `skill_level`, `age_range`, `description`, `image_url`, `active`. `brand`, `skill_level` and `age_range` are first-class columns (not buried in the title) precisely because WS3 AI search treats brand as a HARD constraint and reads skill and age to refine intent; a query like "Babolat under 2000" must match on the brand column, not a description substring.
+- `product_offers`: one row per retailer offer on a product. Columns include `affiliate_product_id` (FK), `retailer`, `price`, `currency`, `affiliate_url`, `in_stock`, `last_checked_at`. A product with three offers is the same racket sold on three sites at three prices. Prices are INGESTED (a future price-refresh worker, or an admin), never client set: RLS gives both tables public browse and no client write, the same shape as `promo_banners`. See SCHEMA.md and RLS.md. Migration `0086_affiliate_marketplace.sql`.
+
+### 10.3 Functional requirements
+
+FR-33. The consumer app browses affiliate products from `affiliate_products` (public browse, `active = true`), alongside owned products. An affiliate product card shows title, brand, image, and a "from" price equal to the lowest in stock offer.
+
+FR-34. Affiliate product detail (`/shop/affiliate/[id]`) shows the product's title, brand, canonical attributes (category, skill level, age range), description, and image. It has NO variant selector, NO add to cart, and NO in app checkout, because Atlitos is not the seller.
+
+FR-35. Affiliate product detail shows a price comparison: every retailer offer on the product, each with its retailer name, price (JetBrains Mono, per the numeric rule), and in stock state, sorted cheapest in stock first.
+
+FR-36. The cheapest in stock offer is visually highlighted (accent border plus a "Cheapest" marker). An out of stock offer is dimmed and cannot be clicked out to, so a cheaper price the shopper cannot actually buy is never presented as buyable.
+
+FR-37. Each in stock offer has a "Buy on <retailer>" action that opens that offer's `affiliate_url` in the retailer's site (via `Linking.openURL`). This click-out is the monetised action: the shopper completes the purchase on the retailer, and Atlitos is credited the affiliate commission.
+
+FR-38. The affiliate product detail states plainly that the purchase completes on the retailer site and that Atlitos may earn a commission, so the click-out is never a surprise. Copy carries no price the app cannot stand behind: the "from" and per offer prices are read from `product_offers` at display time, never cached or recomputed client side.
+
+FR-39. AI search (PRD-01 FR-16, WS3) reads `affiliate_products.brand`, `skill_level` and `age_range` and each product's cheapest in stock offer price, so a precise brand plus price query ("Babolat under 2000") returns the real affiliate product with a rank reason, and a query with no true match (a brand priced entirely above the ceiling) still returns the honest broaden line rather than filler.
+
+### 10.4 Commission model (founder decision needed)
+
+WS4 seeds retailer offers with `affiliate_url`s but does NOT formalise the commission accounting: no `commission_rate` per retailer, no attribution tracking of which click-out led to a sale, no reconciliation of retailer payouts. The click-out is tracked only insofar as the outbound link carries an affiliate tag. Formalising commission (rate per retailer, click and conversion attribution, a ledger of accrued commission) is deferred pending the founder's decision on which retailer affiliate programmes to join and on what terms. See the open questions below.
+
+### 10.5 Open questions for the founder (affiliate)
+
+7. Which retailer affiliate programmes do we formalise first? WS4 seeds Amazon, Tennis Hub, Decathlon and Cricket Store as illustrative; the real set depends on which programmes we are accepted into and their commission rates.
+8. Commission accounting: do we track click-out attribution and accrued commission in the ledger now, or treat affiliate revenue as an out of band reconciliation until volume justifies it?
+9. Catalog ingestion: are offers refreshed by a scheduled worker against retailer feeds/APIs, by an admin paste, or both? WS4 leaves `last_checked_at` and the service-role write path ready for either.
+10. Do affiliate products appear in the same browse grids as owned products (one blended catalog), or in a separate "Compare prices" surface? WS4 keeps them addressable on their own route; the browse blend is a UI decision.

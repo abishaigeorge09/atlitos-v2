@@ -87,6 +87,48 @@ export interface ShopProduct {
   availableStock: number;
 }
 
+// ---------------------------------------------------------------------------
+// Affiliate marketplace (0086, WS4). External products the shopper compares
+// across retailers and clicks out to buy, rather than the owned products they
+// cart and check out in-app. A `source` discriminator keeps the two apart on
+// every shape the UI touches so a screen can never treat an affiliate row as a
+// cartable owned product (it has no variants, no stock, no in-app checkout).
+// ---------------------------------------------------------------------------
+
+/** One retailer's offer on an affiliate product: its price and the outbound,
+ * commission-bearing link the click-out opens. Prices are ingested server side
+ * (no client write), so nothing here is ever recomputed or set client side. */
+export interface ProductOffer {
+  id: string;
+  retailer: string;
+  price: number;
+  currency: string;
+  affiliateUrl: string;
+  inStock: boolean;
+  lastCheckedAt: string;
+}
+
+export interface AffiliateProduct {
+  /** Discriminates an affiliate product from an owned `ShopProduct` at every
+   * call site that could receive either. */
+  source: "affiliate";
+  id: string;
+  title: string;
+  brand: string | null;
+  sport: Sport | null;
+  categoryName: string | null;
+  skillLevel: string | null;
+  ageRange: string | null;
+  description: string | null;
+  imageUrl: string | null;
+  /** Every retailer offer, sorted cheapest in-stock first. The head of an
+   * in-stock-sorted list is the "cheapest" the compare view highlights. */
+  offers: ProductOffer[];
+  /** Lowest in-stock offer price, the "from" figure the browse card shows.
+   * Null only when every offer is out of stock. */
+  bestPrice: number | null;
+}
+
 export interface CartLine {
   cartItemId: string;
   variantId: string;
@@ -303,6 +345,74 @@ const PRODUCT_SELECT = `
   product_variant_availability ( product_variant_id, product_id, sku, size, color, effective_price, available_stock )
 `;
 
+interface OfferQueryRow {
+  id: string;
+  retailer: string;
+  price: number;
+  currency: string;
+  affiliate_url: string;
+  in_stock: boolean;
+  last_checked_at: string;
+}
+
+interface AffiliateProductQueryRow {
+  id: string;
+  title: string;
+  brand: string | null;
+  sport: Sport | null;
+  skill_level: string | null;
+  age_range: string | null;
+  description: string | null;
+  image_url: string | null;
+  categories: { id: string; name: string; slug: string } | null;
+  product_offers: OfferQueryRow[] | null;
+}
+
+const AFFILIATE_SELECT = `
+  id, title, brand, sport, skill_level, age_range, description, image_url,
+  categories ( id, name, slug ),
+  product_offers ( id, retailer, price, currency, affiliate_url, in_stock, last_checked_at )
+`;
+
+/** Map an affiliate product row, sorting its offers cheapest in-stock first so
+ * the head of the list is the retailer the compare view highlights. In-stock
+ * offers always sort ahead of out-of-stock ones regardless of price, because a
+ * cheaper price the shopper cannot actually buy is not the cheapest offer. */
+function mapAffiliateProductRow(row: AffiliateProductQueryRow): AffiliateProduct {
+  const offers = (row.product_offers ?? [])
+    .map(
+      (o): ProductOffer => ({
+        id: o.id,
+        retailer: o.retailer,
+        price: o.price,
+        currency: o.currency,
+        affiliateUrl: o.affiliate_url,
+        inStock: o.in_stock,
+        lastCheckedAt: o.last_checked_at,
+      }),
+    )
+    .sort((a, b) => {
+      if (a.inStock !== b.inStock) return a.inStock ? -1 : 1;
+      return a.price - b.price;
+    });
+  const inStockPrices = offers.filter((o) => o.inStock).map((o) => o.price);
+
+  return {
+    source: "affiliate",
+    id: row.id,
+    title: row.title,
+    brand: row.brand,
+    sport: row.sport,
+    categoryName: row.categories?.name ?? null,
+    skillLevel: row.skill_level,
+    ageRange: row.age_range,
+    description: row.description,
+    imageUrl: row.image_url,
+    offers,
+    bestPrice: inStockPrices.length > 0 ? Math.min(...inStockPrices) : null,
+  };
+}
+
 function resolveMediaUrls(
   client: AtlitosClient,
   media: { storage_path: string; position: number; is_primary: boolean }[] | null,
@@ -517,6 +627,50 @@ export function useShop(client: AtlitosClient) {
       if (error) throw mapPostgrestError(error);
       if (!data) return null;
       return mapProductRow(client, data);
+    },
+
+    // -----------------------------------------------------------------------
+    // affiliate marketplace (0086, WS4)
+    // -----------------------------------------------------------------------
+
+    /** Affiliate catalog list. `affiliate_products` is public browse
+     * (`active = true` in the policy, no per-user rows), the same shape
+     * `listProducts` uses; the `.eq("active", true)` mirrors the policy so
+     * PostgREST pushes it down rather than leaning on RLS alone. Offers are
+     * embedded and sorted cheapest in-stock first per product. */
+    async listAffiliateProducts(filters: { sport?: Sport; query?: string } = {}): Promise<AffiliateProduct[]> {
+      let query = client
+        .from("affiliate_products")
+        .select(AFFILIATE_SELECT)
+        .eq("active", true);
+      if (filters.sport) query = query.eq("sport", filters.sport);
+      if (filters.query?.trim()) {
+        const term = filters.query.trim().replace(/[%,()]/g, "");
+        query = query.ilike("title", `%${term}%`);
+      }
+
+      const { data, error } = await query.returns<AffiliateProductQueryRow[]>();
+      if (error) throw mapPostgrestError(error);
+      return (data ?? [])
+        .map(mapAffiliateProductRow)
+        .sort((a, b) => (a.bestPrice ?? Number.POSITIVE_INFINITY) - (b.bestPrice ?? Number.POSITIVE_INFINITY));
+    },
+
+    /** Affiliate PDP + compare view read. Returns null for a delisted or
+     * missing product so the screen routes to its not found state. The offer
+     * list comes back cheapest in-stock first, which is exactly the order the
+     * compare view renders and which puts the cheapest retailer at the head for
+     * highlighting. */
+    async getAffiliateProduct(productId: string): Promise<AffiliateProduct | null> {
+      const { data, error } = await client
+        .from("affiliate_products")
+        .select(AFFILIATE_SELECT)
+        .eq("id", productId)
+        .eq("active", true)
+        .maybeSingle<AffiliateProductQueryRow>();
+      if (error) throw mapPostgrestError(error);
+      if (!data) return null;
+      return mapAffiliateProductRow(data);
     },
 
     // -----------------------------------------------------------------------
