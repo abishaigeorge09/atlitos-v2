@@ -1,0 +1,5 @@
+{
+  "rewrites": [
+    { "source": "/((?!_expo/|assets/|.*\\.).*)", "destination": "/index.html" }
+  ]
+}

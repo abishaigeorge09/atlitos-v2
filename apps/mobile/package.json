@@ -7,7 +7,7 @@
     "dev": "expo start",
     "start": "expo start",
     "gen-tokens": "tsx scripts/gen-tokens.ts",
-    "build": "pnpm gen-tokens && expo export",
+    "build": "pnpm gen-tokens && expo export && cp vercel-dist.json dist/vercel.json",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "android": "expo run:android",
