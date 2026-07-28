@@ -65,6 +65,10 @@ export default function SearchScreen() {
   const [query, setQuery] = useState('');
   const [state, setState] = useState<LoadState>('idle');
   const [hits, setHits] = useState<SearchHit[]>([]);
+  // FR-16: the specific broaden suggestion the server returns with an honest
+  // empty result set (e.g. "No Babolat rackets under 2000. Try raising to 3000,
+  // or removing the brand."). Rendered verbatim in the empty state.
+  const [broaden, setBroaden] = useState<string | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [activeSegment, setActiveSegment] = useState<SearchSegment>('coaches');
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
@@ -137,6 +141,7 @@ export default function SearchScreen() {
         });
         if (seq !== requestSeq.current) return; // a newer query already ran
         setHits(res.results);
+        setBroaden(res.broaden ?? null);
         setState(res.results.length === 0 ? 'empty' : 'populated');
         rememberSearch(q);
       } catch (err) {
@@ -324,7 +329,7 @@ export default function SearchScreen() {
           activeSegment={activeSegment}
           onSegmentChange={setActiveSegment}
           results={visibleItems}
-          emptyLabel={`No matches for "${query.trim()}" near ${city}. Try another search.`}
+          emptyLabel={broaden ?? `No matches for "${query.trim()}" near ${city}. Try another search.`}
         />
       )}
     </SafeAreaView>

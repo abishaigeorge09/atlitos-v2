@@ -5,57 +5,55 @@
 //   query is the free-text the SearchBar collected. Everything else is an
 //   optional narrowing the client already knows (its location store, an
 //   explicit segment). All of it is advisory; the server re-derives intent
-//   from `query` regardless (parseIntent below).
+//   from `query` regardless (parseIntent in search-core.ts).
 //
-// Response: { query, parsedIntent, results: SearchHit[] } sorted rankScore desc.
+// Response: { query, parsedIntent, results: SearchHit[], broaden? } sorted
+//   rankScore desc. `broaden` is set only when the honest answer is an EMPTY
+//   result set (PRD-01 FR-16): a specific suggestion derived from the most
+//   removable constraint, never generic filler.
 //
-// Epic AT-3, story AT-144. The v1 heuristic ported verbatim behind the same
-// request/response contract: a keyword parse routes the query to entity types
-// (gear|coach|court|athlete|clip), then a weighted distance/price/rating/text
-// score ranks the rows. Track E extended the v1 three-type union with
-// athletes (verified UPAs, PRD-06) and clips (published Clutch posts,
-// PRD-01) behind the identical `SearchHit` shape; `SearchEntityType`
-// (packages/types enums.ts) carries all five now. Drills remain out of the
-// contract (no PRD asks for them in search).
+// Epic AT-3, story AT-144. Two paths behind the same contract:
+//   - DETERMINISTIC (default, no key needed): keyword parse + weighted score
+//     (search-core.ts), with a real honesty threshold so a query with no true
+//     match returns EMPTY + a broaden suggestion rather than top-N filler.
+//   - LLM (guarded, BUG-006): when the `ANTHROPIC_API_KEY` edge secret is set,
+//     Claude parses intent and reranks candidates (llm.ts). Absent key, slow
+//     call, or failure all degrade to the deterministic path; the LLM never
+//     blocks or errors the response.
 //
 // VISIBILITY (CLAUDE.md: "RLS is a floor, not scoping"). Two independent guards
 // keep a non-public row from ever reaching a caller:
 //   1. Every table is read through `userScopedClient(req)`, the caller's own
-//      JWT, so RLS applies to them exactly as PostgREST would apply it. A guest
-//      passes the anon session and gets only the anon-visible policies.
-//   2. Every query ALSO carries its own explicit public filter, so even a
-//      privileged caller (an admin, or a coach/partner who owns unverified
-//      rows) gets only the publicly-visible set out of THIS endpoint:
-//        - coaches: read from the `coach_profiles_public` view (status =
-//          'verified' baked in), never the base table.
-//        - courts: `active = true` AND an inner join asserting
-//          `venues.status = 'verified'`.
+//      JWT, so RLS applies to them exactly as PostgREST would apply it.
+//   2. Every query ALSO carries its own explicit public filter:
+//        - coaches: `coach_profiles_public` view (status = 'verified' baked in).
+//        - courts: `active = true` AND `venues.status = 'verified'` inner join.
 //        - products: `active = true`.
-//        - athletes: `upa_applications.status = 'verified'`, the same
-//          explicit scope use-empower.ts's `listUpas` applies (that table
-//          also carries an own-row policy for the applicant, any status).
-//        - clips: `clips.status = 'published'`, the same explicit scope
-//          hooks.ts's `getFeed` applies (own-row policy covers the uploader's
-//          non-published clips otherwise).
+//        - athletes: `upa_applications.status = 'verified'`.
+//        - clips: `clips.status = 'published'`.
 //   The service-role client is deliberately never constructed here; search has
 //   no money leg and must not bypass RLS.
-//
-// LLM RE-RANK SEAM. `rerank()` is a pure post-processing pass over the already
-// heuristically-scored candidates. Today it is the identity function. Swapping
-// in an LLM re-rank is entirely inside that one function: it receives the query
-// and the scored candidates and returns them reordered. Nothing else in this
-// file (the visibility queries, the contract shape) changes.
 
 import { handleCorsPreflight } from "../_shared/cors.ts";
 import { jsonResponse, withErrorHandling } from "../_shared/http.ts";
 import { AppError } from "../_shared/app-error.ts";
 import { userScopedClient } from "../_shared/supabase.ts";
 
-const SPORTS = ["football", "cricket", "badminton", "tennis"] as const;
-type Sport = (typeof SPORTS)[number];
-
-const ENTITY_TYPES = ["gear", "coach", "court", "athlete", "clip"] as const;
-type EntityType = (typeof ENTITY_TYPES)[number];
+import {
+  type Candidate,
+  capitalize,
+  ENTITY_TYPES,
+  type EntityType,
+  evaluateHonesty,
+  haversineKm,
+  type IntentOverride,
+  type ParsedIntent,
+  parseIntent,
+  scoreCandidates,
+  type Sport,
+  SPORTS,
+} from "./search-core.ts";
+import { llmEnabled, llmParseIntent, llmRerank } from "./llm.ts";
 
 // --------------------------------------------------------------------------
 // Request
@@ -115,264 +113,28 @@ function numberOrUndefined(v: unknown): number | undefined {
 }
 
 // --------------------------------------------------------------------------
-// Intent parse (keyword -> entityTypes + sport + priceMax + keywords)
+// Intent: deterministic parse, optionally refined by the LLM (hybrid)
 // --------------------------------------------------------------------------
-
-interface ParsedIntent {
-  entityTypes: EntityType[];
-  sport: Sport | "general";
-  priceMax?: number;
-  timeWindow?: "morning" | "evening";
-  keywords: string[];
-}
-
-// Router tokens map a word to an entity type. A query with none of these
-// searches all three types (a broad "show me everything for X").
-const ROUTER_TOKENS: Record<EntityType, string[]> = {
-  coach: ["coach", "coaches", "coaching", "trainer", "trainers", "train", "training", "lesson", "lessons", "academy", "mentor", "mentoring"],
-  court: ["court", "courts", "venue", "venues", "ground", "grounds", "turf", "turfs", "field", "fields", "pitch", "pitches", "slot", "slots", "booking"],
-  gear: ["gear", "buy", "shop", "equipment", "kit", "product", "products", "racket", "rackets", "racquet", "bat", "bats", "ball", "balls", "shuttlecock", "shuttlecocks", "shoe", "shoes", "jersey", "glove", "gloves", "socks", "wristband", "helmet", "cone", "cones", "legguard", "legguards"],
-  athlete: ["athlete", "athletes", "upa", "upas", "donate", "donation", "donations", "support", "sponsor", "sponsoring", "fund", "funding"],
-  clip: ["clip", "clips", "video", "videos", "watch", "highlight", "highlights", "reel", "reels", "clutch"],
-};
-
-const SPORT_SYNONYMS: Record<string, Sport> = {
-  football: "football", soccer: "football", futsal: "football",
-  cricket: "cricket",
-  badminton: "badminton", shuttle: "badminton",
-  tennis: "tennis",
-};
-
-// Words that carry no content signal: they are location/quality filler, so
-// dropping them keeps the text match from being diluted by "near", "best" etc.
-const STOPWORDS = new Set([
-  "near", "me", "nearby", "around", "in", "at", "for", "the", "a", "an", "of", "to",
-  "and", "with", "my", "best", "top", "good", "great", "cheap", "affordable", "budget",
-  "under", "below", "less", "than", "upto", "up", "rs", "rupees", "inr", "price", "priced",
-  "find", "show", "search", "looking", "want", "need", "some", "any",
-]);
-
-function tokenize(query: string): string[] {
-  return query
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .split(/\s+/)
-    .filter(Boolean);
-}
-
-function parseIntent(query: string, override?: Partial<SearchRequestBody>): ParsedIntent {
-  const tokens = tokenize(query);
-
-  const routed = new Set<EntityType>();
-  for (const t of ENTITY_TYPES) {
-    if (tokens.some((tok) => ROUTER_TOKENS[t].includes(tok))) routed.add(t);
-  }
-
-  let sport: Sport | "general" = "general";
-  for (const tok of tokens) {
-    if (SPORT_SYNONYMS[tok]) {
-      sport = SPORT_SYNONYMS[tok];
-      break;
-    }
-  }
-  if (override?.sport) sport = override.sport;
-
-  // Price ceiling: "under 1500", "below 1500", "< 1500", or a bare "1500 rupees".
-  let priceMax = override?.priceMax;
-  const ceilMatch = query.toLowerCase().match(/(?:under|below|less than|upto|up to|<)\s*(?:rs\.?\s*)?(\d{2,7})/);
-  if (ceilMatch) priceMax = Number(ceilMatch[1]);
-  else {
-    const rsMatch = query.toLowerCase().match(/(?:rs\.?\s*)(\d{2,7})|(\d{2,7})\s*(?:rupees|rs\b|inr)/);
-    if (rsMatch) priceMax = Number(rsMatch[1] ?? rsMatch[2]);
-  }
-
-  let timeWindow: "morning" | "evening" | undefined;
-  if (tokens.includes("morning")) timeWindow = "morning";
-  else if (tokens.includes("evening") || tokens.includes("night")) timeWindow = "evening";
-
-  const sportTokens = new Set(Object.keys(SPORT_SYNONYMS));
-  const routerTokens = new Set(Object.values(ROUTER_TOKENS).flat());
-  const keywords = tokens.filter(
-    (tok) =>
-      tok.length > 2 &&
-      !STOPWORDS.has(tok) &&
-      !sportTokens.has(tok) &&
-      !routerTokens.has(tok) &&
-      !/^\d+$/.test(tok),
-  );
-
-  // Explicit segment from the client wins over the keyword router; if the
-  // router found nothing and the client sent nothing, we search everything.
-  let entityTypes: EntityType[];
-  if (override?.entityTypes && override.entityTypes.length > 0) entityTypes = override.entityTypes;
-  else if (routed.size > 0) entityTypes = [...routed];
-  else entityTypes = [...ENTITY_TYPES];
-
-  return { entityTypes, sport, priceMax, timeWindow, keywords };
-}
-
-// --------------------------------------------------------------------------
-// Candidates + scoring
-// --------------------------------------------------------------------------
-
-interface Candidate {
-  entityType: EntityType;
-  entityId: string;
-  title: string;
-  subtitle: string;
-  imageUrl?: string;
-  sport?: Sport;
-  price?: number; // rupees; coach = cheapest session type, court = per hour, gear = base
-  rating?: number; // 0..5, only where a real rating exists (coaches)
-  distanceKm?: number;
-  text: string; // lowercased searchable blob
-}
-
-interface ScoredHit {
-  entityType: EntityType;
-  entityId: string;
-  title: string;
-  subtitle: string;
-  imageUrl?: string;
-  sport?: Sport;
-  price?: number;
-  distanceKm?: number;
-  rankScore: number; // 0..1
-  rankReason: string;
-}
-
-const EARTH_KM = 6371;
-function haversineKm(aLat: number, aLng: number, bLat: number, bLng: number): number {
-  const dLat = ((bLat - aLat) * Math.PI) / 180;
-  const dLng = ((bLng - aLng) * Math.PI) / 180;
-  const lat1 = (aLat * Math.PI) / 180;
-  const lat2 = (bLat * Math.PI) / 180;
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-  return 2 * EARTH_KM * Math.asin(Math.sqrt(h));
-}
-
-const MAX_DISTANCE_KM = 25; // beyond this a result scores ~0 on proximity
-const NEUTRAL = 0.5; // the score a signal contributes when it does not apply
-
-// Weights over the four v1 signals. Text relevance leads, then the three the
-// contract names (rating, price, distance).
-const W_TEXT = 0.4;
-const W_RATING = 0.25;
-const W_PRICE = 0.2;
-const W_DISTANCE = 0.15;
-
-function scoreCandidates(candidates: Candidate[], intent: ParsedIntent): ScoredHit[] {
-  // Price normalization is per entity type: a coach session and a court hour
-  // and a bat are not comparable, so cheaper-is-better is computed within a
-  // type, not across the whole pool.
-  const priceBounds = new Map<EntityType, { min: number; max: number }>();
-  for (const t of ENTITY_TYPES) {
-    const prices = candidates.filter((c) => c.entityType === t && typeof c.price === "number").map((c) => c.price as number);
-    if (prices.length > 0) priceBounds.set(t, { min: Math.min(...prices), max: Math.max(...prices) });
-  }
-
-  const hits: ScoredHit[] = [];
-  for (const c of candidates) {
-    // Text signal: fraction of content keywords present in the row's blob.
-    let textScore = NEUTRAL;
-    let textReal = false;
-    if (intent.keywords.length > 0) {
-      const hitCount = intent.keywords.filter((k) => c.text.includes(k)).length;
-      textScore = hitCount / intent.keywords.length;
-      textReal = hitCount > 0;
-    }
-
-    // Rating signal: only real where the row actually carries a rating.
-    let ratingScore = NEUTRAL;
-    let ratingReal = false;
-    if (typeof c.rating === "number" && c.rating > 0) {
-      ratingScore = Math.min(1, c.rating / 5);
-      ratingReal = true;
-    }
-
-    // Price signal.
-    let priceScore = NEUTRAL;
-    let priceReal = false;
-    if (typeof c.price === "number") {
-      if (intent.priceMax !== undefined) {
-        priceScore = c.price <= intent.priceMax ? 1 - 0.5 * (c.price / intent.priceMax) : 0.15;
-        priceReal = true;
-      } else {
-        const b = priceBounds.get(c.entityType);
-        if (b && b.max > b.min) {
-          priceScore = 1 - (c.price - b.min) / (b.max - b.min); // cheaper ranks higher
-          priceReal = true;
-        }
-      }
-    }
-
-    // Distance signal.
-    let distanceScore = NEUTRAL;
-    let distanceReal = false;
-    if (typeof c.distanceKm === "number") {
-      distanceScore = Math.max(0, 1 - c.distanceKm / MAX_DISTANCE_KM);
-      distanceReal = true;
-    }
-
-    const rankScore = W_TEXT * textScore + W_RATING * ratingScore + W_PRICE * priceScore + W_DISTANCE * distanceScore;
-
-    // rankReason: the dominant *real* contributor, so the tag never claims a
-    // signal (e.g. "Top rated") that did not actually apply to this row.
-    const contributions: { key: string; value: number; real: boolean }[] = [
-      { key: "distance", value: W_DISTANCE * distanceScore, real: distanceReal },
-      { key: "rating", value: W_RATING * ratingScore, real: ratingReal },
-      { key: "price", value: W_PRICE * priceScore, real: priceReal },
-      { key: "text", value: W_TEXT * textScore, real: textReal },
-    ].filter((x) => x.real);
-    contributions.sort((a, b) => b.value - a.value);
-    const top = contributions[0]?.key;
-
-    let rankReason: string;
-    switch (top) {
-      case "distance":
-        rankReason = typeof c.distanceKm === "number" ? `Closest, ${c.distanceKm.toFixed(1)}km` : "Nearby";
-        break;
-      case "rating":
-        rankReason = "Top rated";
-        break;
-      case "price":
-        rankReason = intent.priceMax !== undefined ? "Within your budget" : "Best price match";
-        break;
-      case "text":
-        rankReason = "Strong match";
-        break;
-      default:
-        rankReason = "Relevant";
-    }
-
-    hits.push({
-      entityType: c.entityType,
-      entityId: c.entityId,
-      title: c.title,
-      subtitle: c.subtitle,
-      imageUrl: c.imageUrl,
-      sport: c.sport,
-      price: c.price,
-      distanceKm: c.distanceKm,
-      rankScore: Math.round(rankScore * 1000) / 1000,
-      rankReason,
-    });
-  }
-
-  return hits;
-}
 
 /**
- * The LLM re-rank seam. Today the identity function over the heuristically
- * scored hits (already sorted by rankScore). To swap in an LLM re-rank, replace
- * ONLY this body: send `query` + the candidate hits to the model, take back the
- * reordered ids, and re-emit `hits` in that order (optionally rewriting
- * rankReason from the model's rationale). The request/response contract and the
- * visibility queries above are untouched by that swap, per PLAN.md.
+ * Merge a partial LLM intent OVER the deterministic parse. The deterministic
+ * parse is always the baseline (so results are stable and cheap when the key is
+ * absent or the model fails); LLM fields only overwrite where the model
+ * returned a usable value. A brand the model finds re-derives nounHint via the
+ * deterministic parse's own nounHint, which the model does not compute.
  */
-// deno-lint-ignore require-await
-async function rerank(_query: string, hits: ScoredHit[]): Promise<ScoredHit[]> {
-  return hits;
+function mergeIntent(base: ParsedIntent, llm: Partial<ParsedIntent> | null): ParsedIntent {
+  if (!llm) return base;
+  return {
+    ...base,
+    entityTypes: llm.entityTypes && llm.entityTypes.length > 0 ? llm.entityTypes : base.entityTypes,
+    sport: llm.sport ?? base.sport,
+    priceMax: llm.priceMax ?? base.priceMax,
+    brand: llm.brand ?? base.brand,
+    skillLevel: llm.skillLevel ?? base.skillLevel,
+    ageHint: llm.ageHint ?? base.ageHint,
+    keywords: llm.keywords && llm.keywords.length > 0 ? llm.keywords : base.keywords,
+  };
 }
 
 // --------------------------------------------------------------------------
@@ -382,7 +144,7 @@ async function rerank(_query: string, hits: ScoredHit[]): Promise<ScoredHit[]> {
 // deno-lint-ignore no-explicit-any
 async function fetchCoaches(supabase: any, intent: ParsedIntent, city?: string): Promise<Candidate[]> {
   let q = supabase
-    .from("coach_profiles_public") // view: status = 'verified' only
+    .from("coach_profiles_public")
     .select("user_id, sport, city, state, bio, specialization, coaching_style, rating, rating_count")
     .limit(50);
   if (intent.sport !== "general") q = q.eq("sport", intent.sport);
@@ -394,9 +156,6 @@ async function fetchCoaches(supabase: any, intent: ParsedIntent, city?: string):
 
   const ids = rows.map((r) => r.user_id as string);
 
-  // Names/avatars from the public_profiles view; cheapest active session type
-  // from session_types (its public policy is is_verified_coach, so this cannot
-  // surface a price for an unverified coach either).
   const [{ data: profiles }, { data: sessionTypes }] = await Promise.all([
     supabase.from("public_profiles").select("id, name, avatar_url").in("id", ids),
     supabase.from("session_types").select("coach_id, price, active").in("coach_id", ids),
@@ -425,8 +184,7 @@ async function fetchCoaches(supabase: any, intent: ParsedIntent, city?: string):
       entityId: uid,
       title: prof?.name ?? "Coach",
       // Carry state after city (BUG-002) so two coaches with the same sport and
-      // city still read differently in the results row, which previously showed
-      // only sport . city.
+      // city still read differently in the results row.
       subtitle: [capitalize(r.sport as string), cityStr, r.state as string].filter(Boolean).join(" . "),
       imageUrl: prof?.avatar_url ?? undefined,
       sport: r.sport as Sport,
@@ -443,8 +201,6 @@ async function fetchCoaches(supabase: any, intent: ParsedIntent, city?: string):
 
 // deno-lint-ignore no-explicit-any
 async function fetchCourts(supabase: any, intent: ParsedIntent, lat?: number, lng?: number): Promise<Candidate[]> {
-  // active courts under a VERIFIED venue only: the explicit public scope on
-  // top of RLS. venues!inner drops any court whose venue is not verified.
   let q = supabase
     .from("courts")
     .select("id, name, sport, base_price_per_hour, venues!inner(id, name, city, address, lat, lng, status)")
@@ -473,9 +229,6 @@ async function fetchCourts(supabase: any, intent: ParsedIntent, lat?: number, ln
       subtitle: [venue.name, cityStr].filter(Boolean).join(" . "),
       sport: r.sport as Sport,
       price: numberOrUndefined(r.base_price_per_hour),
-      // Court ratings live in an aggregate RPC (get_court_rating_summary) gated
-      // by court_bookings RLS; computing it per candidate is out of scope for
-      // the heuristic, so proximity/price/text rank courts.
       rating: undefined,
       distanceKm,
       text: [r.name, r.sport, venue.name, cityStr, venue.address].filter(Boolean).join(" ").toLowerCase(),
@@ -488,7 +241,7 @@ async function fetchProducts(supabase: any, intent: ParsedIntent): Promise<Candi
   let q = supabase
     .from("products")
     .select("id, title, description, sport, base_price")
-    .eq("active", true) // explicit public scope on top of RLS
+    .eq("active", true)
     .limit(50);
   if (intent.sport !== "general") q = q.eq("sport", intent.sport);
 
@@ -503,18 +256,14 @@ async function fetchProducts(supabase: any, intent: ParsedIntent): Promise<Candi
     subtitle: capitalize((r.sport as string) ?? "Gear"),
     sport: (r.sport as Sport) ?? undefined,
     price: numberOrUndefined(r.base_price),
-    rating: undefined, // products carry no rating column
-    distanceKm: undefined, // gear ships, proximity does not apply
+    rating: undefined,
+    distanceKm: undefined,
     text: [r.title, r.sport, r.description].filter(Boolean).join(" ").toLowerCase(),
   }));
 }
 
 // deno-lint-ignore no-explicit-any
 async function fetchAthletes(supabase: any, intent: ParsedIntent): Promise<Candidate[]> {
-  // Same view/filter the empower hooks read for the UPA hub (use-empower.ts
-  // listUpas): `upa_applications` explicitly scoped to `status = 'verified'`,
-  // the RLS-is-not-scoping guard, because the table also carries an own-row
-  // policy for the applicant in any status.
   let q = supabase
     .from("upa_applications")
     .select("id, story_headline, sport, region, state, photo_url")
@@ -536,8 +285,6 @@ async function fetchAthletes(supabase: any, intent: ParsedIntent): Promise<Candi
       subtitle: [capitalize((r.sport as string) ?? ""), region || state].filter(Boolean).join(" . "),
       imageUrl: typeof r.photo_url === "string" ? r.photo_url : undefined,
       sport: r.sport as Sport,
-      // No price or distance term applies to an athlete to support: text and
-      // rating (absent, so neutral) rank these, not a purchase/proximity axis.
       rating: undefined,
       distanceKm: undefined,
       text: [r.story_headline, r.sport, region, state].filter(Boolean).join(" ").toLowerCase(),
@@ -547,9 +294,6 @@ async function fetchAthletes(supabase: any, intent: ParsedIntent): Promise<Candi
 
 // deno-lint-ignore no-explicit-any
 async function fetchClips(supabase: any, intent: ParsedIntent): Promise<Candidate[]> {
-  // Published only, the same RLS-is-not-scoping guard the Clutch feed hook
-  // applies (useClutch.getFeed): `clips` also carries an own-row policy for
-  // the uploader in any status.
   let q = supabase
     .from("clips")
     .select("id, caption, sport, likes_count, thumb_path")
@@ -561,9 +305,6 @@ async function fetchClips(supabase: any, intent: ParsedIntent): Promise<Candidat
   if (error) throw new AppError("INTERNAL", `Failed to load clips: ${error.message}`, 500);
   const rows = (data ?? []) as Array<Record<string, unknown>>;
 
-  // likes_count stands in for the rating signal (no 0..5 rating on a clip);
-  // normalize onto the same 0..5 scale scoreCandidates expects so it weighs
-  // consistently against coaches' real ratings.
   const maxLikes = Math.max(1, ...rows.map((r) => Number(r.likes_count) || 0));
 
   return rows.map((r): Candidate => {
@@ -573,8 +314,6 @@ async function fetchClips(supabase: any, intent: ParsedIntent): Promise<Candidat
       entityId: r.id as string,
       title: (r.caption as string) ?? "Clip",
       subtitle: capitalize((r.sport as string) ?? "Clip"),
-      // thumb_path is a private-bucket storage key, not a loadable URL (see
-      // hooks.ts mapClipRow); only pass through an already-absolute URL.
       imageUrl: typeof thumb === "string" && /^https?:\/\//.test(thumb) ? thumb : undefined,
       sport: r.sport as Sport,
       rating: (Math.min(1, (Number(r.likes_count) || 0) / maxLikes) * 5) || undefined,
@@ -582,10 +321,6 @@ async function fetchClips(supabase: any, intent: ParsedIntent): Promise<Candidat
       text: [r.caption, r.sport].filter(Boolean).join(" ").toLowerCase(),
     };
   });
-}
-
-function capitalize(s: string): string {
-  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
 
 // --------------------------------------------------------------------------
@@ -603,16 +338,21 @@ Deno.serve((req) =>
 
     const body = parseRequestBody(await request.json().catch(() => null));
 
-    // The caller's own JWT client. Search is public discovery, so a guest
-    // (anonymous session) is a valid caller; verify_jwt still holds because a
-    // guest carries an anon session token, like get-clip-playback-url.
     const supabase = userScopedClient(request);
 
-    const intent = parseIntent(body.query, {
+    const override: IntentOverride = {
       entityTypes: body.entityTypes,
       sport: body.sport,
       priceMax: body.priceMax,
-    });
+    };
+
+    // Deterministic parse is always the baseline. When the LLM key is present,
+    // refine it with Claude's structured parse (guarded: null on any failure).
+    let intent = parseIntent(body.query, override);
+    if (llmEnabled()) {
+      const refined = await llmParseIntent(body.query).catch(() => null);
+      intent = mergeIntent(intent, refined);
+    }
 
     const want = new Set(intent.entityTypes);
     const [coaches, courts, products, athletes, clips] = await Promise.all([
@@ -625,8 +365,20 @@ Deno.serve((req) =>
 
     const candidates = [...coaches, ...courts, ...products, ...athletes, ...clips];
     const scored = scoreCandidates(candidates, intent).sort((a, b) => b.rankScore - a.rankScore);
-    const ranked = (await rerank(body.query, scored)).slice(0, body.limit);
 
-    return jsonResponse({ query: body.query, parsedIntent: intent, results: ranked }, 200);
+    // FR-16 honesty gate: keep only hard-constraint-qualified, confident hits.
+    const honesty = evaluateHonesty(candidates, scored, intent);
+    if (honesty.broaden) {
+      return jsonResponse({ query: body.query, parsedIntent: intent, results: [], broaden: honesty.broaden }, 200);
+    }
+
+    const qualified = scored.filter((h) => honesty.qualified.has(`${h.entityType}:${h.entityId}`));
+
+    // LLM rerank (guarded) refines order + rankReason over the qualified set;
+    // absent key or failure keeps the deterministic order.
+    const reranked = llmEnabled() ? await llmRerank(body.query, qualified).catch(() => qualified) : qualified;
+    const results = reranked.slice(0, body.limit);
+
+    return jsonResponse({ query: body.query, parsedIntent: intent, results }, 200);
   })
 );

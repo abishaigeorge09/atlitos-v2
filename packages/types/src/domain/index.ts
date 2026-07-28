@@ -533,6 +533,12 @@ export interface ParsedIntent {
   entityTypes: SearchEntityType[];
   sport?: Sport | 'general';
   priceMax?: number;
+  /** A gear brand the query named (lowercased), a hard constraint on results. */
+  brand?: string;
+  /** Skill level implied by the query, when the parse can infer one. */
+  skillLevel?: 'beginner' | 'intermediate' | 'advanced';
+  /** The searcher's age in years, when stated (e.g. "10 year old"). */
+  ageHint?: number;
   timeWindow?: 'morning' | 'evening';
   keywords: string[];
 }
@@ -585,4 +591,12 @@ export interface SearchResponse {
   query: string;
   parsedIntent: ParsedIntent;
   results: SearchHit[];
+  /**
+   * Set only when the honest answer is an empty result set (PRD-01 FR-16): a
+   * specific suggestion derived from the most removable constraint in the
+   * parsed query (e.g. "No Babolat rackets under 2000. Try raising to 3000, or
+   * removing the brand."), never a generic "no results" message. The client
+   * empty state renders this verbatim.
+   */
+  broaden?: string;
 }

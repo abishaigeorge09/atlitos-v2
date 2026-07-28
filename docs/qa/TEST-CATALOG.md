@@ -261,3 +261,16 @@ By domain: AUTH 12, CL 19, FO 10, CH 13, CT 20, CO 13, SH 11, EM 21, AD 9, XP 13
 | XP-12 | Backend/SQL | n/a | one example of each state machine (session, order, clip, upa_application) | Attempt every documented illegal edge (session accepted->abandoned, order placed->delivered direct, clip uploading->published, upa_application terminal->under_review) | Every illegal edge is rejected with the correct exception code; zero rows written in each case | SQL | P0 | TODO |
 | XP-13 | Backend/SQL | n/a | a single payment/webhook event | Replay the verify-payment / webhook call for the same payment (simulating a race/duplicate delivery) | Exactly one donations row results; record_donation_rpc raises INVALID_TRANSITION on the duplicate fire | SQL | P0 | TODO |
 
+
+## SR — AI Search (Phase 9 WS3, BUG-006: real AI search + honesty threshold) (6 cases)
+
+Deterministic path (no key) is provable now via `node_modules/.bin/tsx scripts/verify-ai-search.ts` (imports the pure `supabase/functions/ai-search/search-core.ts`). The LLM path is env-gated on the `ANTHROPIC_API_KEY` edge secret and is code-proven until the founder activates it.
+
+| ID | Surface | Persona | Preconditions | Steps | Expected | Lane | Priority | Status |
+|---|---|---|---|---|---|---|---|---|
+| SR-01 | mobile / ai-search | n/a | current seed catalog, no ANTHROPIC_API_KEY | Parse the NL query "I'm a 10-year-old beginner at tennis, want a racket and a Babolat under 2000" via parseIntent | Intent = sport=tennis, brand=babolat, priceMax=2000, skillLevel=beginner, ageHint=10, nounHint=racket. Proven by verify-ai-search.ts case B | UNIT | P1 | PASS |
+| SR-02 | mobile / ai-search | guest/player | seed has no Babolat, tennis racket = 2500 | Run the Babolat-under-2000 query through the honesty gate | EMPTY results + broaden = "No Babolat rackets under 2000. Try raising to 3000, or removing the brand." (specific, from removable brand+price). Proven by verify-ai-search.ts case B | UNIT | P1 | PASS |
+| SR-03 | mobile / ai-search | guest | no ANTHROPIC_API_KEY set | Run plain "tennis" and "cricket bat" | Non-empty ranked results via the deterministic weighted score, no broaden, no error/hang without the key. Proven by verify-ai-search.ts cases A + D | UNIT | P1 | PASS |
+| SR-04 | mobile / ai-search | guest | seed cricket products, no key | Run "cricket bat under 1000" and "Babolat racket" | Over-budget bat (1500) dropped, only items <= 1000 returned; absent named brand yields empty+broaden not a substitute brand. Proven by verify-ai-search.ts cases C + E | UNIT | P1 | PASS |
+| SR-05 | mobile / home search empty state | guest/player | Babolat query returning a broaden | Observe the AI Search results empty state | The server broaden string renders verbatim (SearchResults emptyLabel binds res.broaden in search.tsx), not the generic "Try another search" fallback | PW | P2 | TODO |
+| SR-06 | supabase/functions/ai-search | n/a | ANTHROPIC_API_KEY set via supabase secrets | Run a NL query with the key present; separately force a model timeout/500 | Claude (claude-haiku-4-5-20251001) parses intent + rerank rewrites rankReason; a slow/failed model call degrades to the deterministic keyword result with no error. Code-proven in llm.ts (env gate + AbortController + try/catch); live-provable once the key is added | EXT | P2 | TODO |

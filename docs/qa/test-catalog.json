@@ -1126,5 +1126,53 @@
     "lane": "SQL",
     "priority": "P0",
     "expected": "Exactly one donations row results; record_donation_rpc raises INVALID_TRANSITION on the duplicate fire"
+  },
+  {
+    "id": "SR-01",
+    "surface": "mobile / ai-search",
+    "persona": "n/a",
+    "lane": "UNIT",
+    "priority": "P1",
+    "expected": "NL intent parse: \"I'm a 10-year-old beginner at tennis, want a racket and a Babolat under 2000\" parses to sport=tennis, brand=babolat, priceMax=2000, skillLevel=beginner, ageHint=10, nounHint=racket (deterministic, no key). Proven by scripts/verify-ai-search.ts case B."
+  },
+  {
+    "id": "SR-02",
+    "surface": "mobile / ai-search",
+    "persona": "guest/player",
+    "lane": "UNIT",
+    "priority": "P1",
+    "expected": "Honest no-match + broaden (FR-16): the Babolat-under-2000 query returns an EMPTY result set plus broaden = \"No Babolat rackets under 2000. Try raising to 3000, or removing the brand.\" (specific, derived from removable brand+price constraints over current seed). Proven by verify-ai-search.ts case B."
+  },
+  {
+    "id": "SR-03",
+    "surface": "mobile / ai-search",
+    "persona": "guest",
+    "lane": "UNIT",
+    "priority": "P1",
+    "expected": "Hybrid keyword fallback with key ABSENT: plain \"tennis\" and \"cricket bat\" return sensible non-empty results via the deterministic weighted score with no broaden; the function never errors or hangs without ANTHROPIC_API_KEY. Proven by verify-ai-search.ts cases A and D."
+  },
+  {
+    "id": "SR-04",
+    "surface": "mobile / ai-search",
+    "persona": "guest",
+    "lane": "UNIT",
+    "priority": "P1",
+    "expected": "Price/brand precision: \"cricket bat under 1000\" drops the over-budget bat (1500) and returns only items <= 1000; a named brand absent from the catalog yields empty+broaden rather than substituting another brand. Proven by verify-ai-search.ts cases C and E."
+  },
+  {
+    "id": "SR-05",
+    "surface": "mobile / home search empty state",
+    "persona": "guest/player",
+    "lane": "PW",
+    "priority": "P2",
+    "expected": "Client empty state renders the server broaden string verbatim: SearchResults emptyLabel binds to res.broaden (search.tsx), so the Babolat query shows the specific broaden line, not the generic \"Try another search\" fallback."
+  },
+  {
+    "id": "SR-06",
+    "surface": "supabase/functions/ai-search",
+    "persona": "n/a",
+    "lane": "EXT",
+    "priority": "P2",
+    "expected": "LLM path smoke (founder step): with ANTHROPIC_API_KEY set via `supabase secrets set`, a NL query parses intent via Claude (claude-haiku-4-5-20251001) and rerank rewrites rankReason per hit; a forced timeout/500 from the model degrades to the deterministic keyword result with no error. Code-proven in llm.ts (env-gated, AbortController timeout, try/catch fallback); live-provable only once the key is added."
   }
 ]
