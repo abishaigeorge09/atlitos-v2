@@ -14,11 +14,18 @@ import type { ClipVideoProps } from './clip-video.types';
  * card until the first frame decodes. The web target resolves
  * clip-video.web.tsx instead, which plays a real DOM <video>.
  */
-export function ClipVideo({ url, thumbUrl, active }: ClipVideoProps) {
+export function ClipVideo({ url, thumbUrl, active, muted = true }: ClipVideoProps) {
   const player = useVideoPlayer(url ?? null, (instance) => {
     instance.loop = true;
-    instance.muted = true;
+    instance.muted = muted;
   });
+
+  // `muted` is controlled (the profile viewer's unmute toggle flips it). The
+  // player is created once, so react to later changes imperatively rather than
+  // recreating it (which would drop playback state).
+  useEffect(() => {
+    player.muted = muted;
+  }, [player, muted]);
 
   // The signed `url` is short-lived and refreshed on its TTL, so a visible
   // card's source changes underneath us. `useVideoPlayer` creates the player
