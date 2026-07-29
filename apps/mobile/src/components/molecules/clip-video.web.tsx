@@ -10,8 +10,15 @@ import type { ClipVideoProps } from './clip-video.types';
  * fixture clips carry placeholder bytes, so a browser cannot decode them yet;
  * real-MP4 playback is verified against a separately uploaded clip.
  */
-export function ClipVideo({ url, thumbUrl, active }: ClipVideoProps) {
+export function ClipVideo({ url, thumbUrl, active, muted = true }: ClipVideoProps) {
   const ref = useRef<HTMLVideoElement>(null);
+
+  // Keep the DOM element's mute state in sync with the controlled prop so the
+  // profile viewer's unmute toggle takes effect (feed stays muted by default).
+  useEffect(() => {
+    const el = ref.current;
+    if (el) el.muted = muted;
+  }, [muted]);
 
   useEffect(() => {
     const el = ref.current;
@@ -30,7 +37,7 @@ export function ClipVideo({ url, thumbUrl, active }: ClipVideoProps) {
       ref={ref}
       src={url}
       poster={thumbUrl}
-      muted
+      muted={muted}
       loop
       playsInline
       preload="metadata"

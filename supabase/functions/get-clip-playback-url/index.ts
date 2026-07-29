@@ -12,18 +12,27 @@
 // WHO GETS A URL (checked against the live row every call):
 //   * status = 'published'  -> anyone, including a guest with no session
 //                              (the feed is guest browsable, FR-42/FR-3).
-//   * the caller is the OWNER -> their own clip in ANY non-terminal status
-//                              (uploading/processing/ready), for the profile
-//                              and the immediate post-upload view (FR-45).
-//   * the caller is admin/moderator -> any non-terminal clip.
+//   * the caller is the OWNER -> their own clip in ANY status, terminal
+//                              included (uploading/processing/ready AND
+//                              rejected/removed). The owner opening their own
+//                              clip from their profile must always be able to
+//                              watch it back regardless of moderation outcome
+//                              (FR-45, FB-004): a rejected/pending upload that
+//                              silently refused to play was the founder-review
+//                              bug this function fixes.
+//   * the caller is admin/moderator -> any NON-terminal clip.
 //
-// WHO IS REFUSED, no URL, for everyone INCLUDING the owner and admin:
-//   * status = 'removed'  (a takedown; terminal)
-//   * status = 'rejected' (terminal)
-// This is the takedown's teeth: because the mint reads the LIVE row, the
-// instant a clip is `removed` this path refuses for everyone, and any already
-// minted URL stops resolving once its 300s TTL elapses (residual playability is
-// bounded by the TTL, never indefinite). Verified adversarially in AT-107.
+// WHO IS REFUSED, no URL:
+//   * status = 'removed'/'rejected' -> everyone EXCEPT the clip's own owner.
+// This is the takedown's teeth, intact for the whole world: because the mint
+// reads the LIVE row, the instant a clip is `removed` this path refuses for
+// every non-owner (public, other members, and even an admin here, who previews
+// through get-clip-moderation-url instead), and any already minted non-owner
+// URL stops resolving once its 300s TTL elapses (residual playability is
+// bounded by the TTL, never indefinite). The FB-004 widening is scoped strictly
+// to owner-of-row (auth.uid() == clip.owner_id): a takedown still hides the clip
+// from everyone else, it just no longer hides the owner's own clip from the
+// owner. Verified adversarially in AT-107 (and re-proven for FB-004).
 //
 // Deployed with verify_jwt = false BECAUSE it is public callable: a guest has
 // no user JWT. Auth is read OPTIONALLY inside (getOptionalUserId), and a valid
@@ -70,18 +79,22 @@ Deno.serve((req) =>
     // The LIVE row, every call. Never a cached or stored decision.
     const clip = await fetchLiveClip(supabase, clipId);
 
-    // Terminal states refuse for EVERYONE, before any owner/admin escalation.
-    if (clip.status === "removed" || clip.status === "rejected") {
-      throw new AppError("FORBIDDEN", "This clip is not available.", 403);
-    }
-
     if (clip.status !== "published") {
-      // Non-published (uploading/processing/ready): owner or admin only.
+      // The OWNER always gets their own clip, any status, terminal included
+      // (FB-004). Everyone else: a terminal clip (removed/rejected) refuses
+      // outright (takedown teeth), and a non-terminal clip is previewable only
+      // by an admin/moderator. Resolve owner first so the owner branch never
+      // depends on the moderation/terminal checks below.
       const userId = await getOptionalUserId(request);
       const isOwner = userId !== null && userId === clip.owner_id;
-      const isAdmin = isOwner ? false : await isAdminOrModerator(supabase, userId);
-      if (!isOwner && !isAdmin) {
-        throw new AppError("FORBIDDEN", "This clip is not available.", 403);
+      if (!isOwner) {
+        if (clip.status === "removed" || clip.status === "rejected") {
+          throw new AppError("FORBIDDEN", "This clip is not available.", 403);
+        }
+        const isAdmin = await isAdminOrModerator(supabase, userId);
+        if (!isAdmin) {
+          throw new AppError("FORBIDDEN", "This clip is not available.", 403);
+        }
       }
     }
 

@@ -11,4 +11,8 @@ export interface ClipVideoProps {
    * muted autoplay on web and, in the native pass, react-native-video, so
    * offscreen cards stay paused. */
   active?: boolean;
+  /** Mute state, controlled. Defaults to `true` so the feed keeps its
+   * muted-autoplay behavior untouched; the profile clip viewer passes a
+   * controlled value so its unmute toggle can turn sound on (FB-004). */
+  muted?: boolean;
 }
