@@ -1,27 +1,12 @@
-import { spacing } from '@atlitos/theme';
-import { View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-
-import { SettingsContent } from '@/components/organisms/settings/SettingsContent';
-import { Text } from '@/components/ui/text';
-import { textStyle } from '@/theme/text-style';
-import { useThemeColors } from '@/theme/use-theme-colors';
+import ProfileScreen from '@/app/profile/index';
 
 /**
- * You tab (Phase 9 WS-personalization). The fifth bottom tab: a personalization
- * home rendering the shared SettingsContent surface, the same options reachable
- * from the Profile page and the Trainings tab. No back header (it is a tab
- * root); the title renders inline above the content.
+ * You tab (Phase 9, FB-001). The fifth bottom tab lands on the athlete's own
+ * PROFILE, not settings. It renders the shared ProfileScreen in its tab mode
+ * (`asTab`), which drops the pushed back header for a plain title. Settings is
+ * one tap deeper via the Settings button on the profile header (and the
+ * Trainings gear), so You = profile and settings is nested inside it.
  */
 export default function YouScreen() {
-  const colors = useThemeColors();
-
-  return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-      <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.lg }}>
-        <Text style={[textStyle('h1'), { color: colors.text }]}>You</Text>
-      </View>
-      <SettingsContent />
-    </SafeAreaView>
-  );
+  return <ProfileScreen asTab />;
 }

@@ -58,7 +58,10 @@ function CourtCard({
         {imageUri ? (
           <Image source={{ uri: imageUri }} className="h-36 w-full rounded-t-xl" resizeMode="cover" />
         ) : (
-          <View className="h-36 w-full items-center justify-center rounded-t-xl bg-surface-muted">
+          <View
+            style={{ backgroundColor: colors.surfaceMuted }}
+            className="h-36 w-full items-center justify-center rounded-t-xl"
+          >
             <LandPlot size={32} strokeWidth={1.75} color={colors.textTertiary} />
           </View>
         )}
