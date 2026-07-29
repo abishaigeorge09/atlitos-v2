@@ -55,13 +55,25 @@ type FollowSegment = 'following' | 'followers';
  * owner filter), and this screen is reachable only for the signed-in self.
  * Guests get the standard login gate.
  */
-export default function ProfileScreen() {
+export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {}) {
   const colors = useThemeColors();
   const clutch = useClutch(supabase);
   const wishlist = useWishlist(supabase);
   const status = useSessionStore((state) => state.status);
   const myId = useSessionStore((state) => state.me?.id ?? null);
   const isGuest = status === 'guest';
+
+  // When rendered as the "You" bottom tab (asTab), there is no back stack, so
+  // the screen shows a plain centered title instead of the pushed backTitle
+  // AppBar. The pushed /profile route (reached from the Home avatar shortcut
+  // and Trainings MySportsCard) keeps its back chevron.
+  const topBar = asTab ? (
+    <View style={{ height: spacing['5xl'], alignItems: 'center', justifyContent: 'center' }}>
+      <Text style={[textStyle('h3'), { color: colors.text }]}>Profile</Text>
+    </View>
+  ) : (
+    <AppBar variant="backTitle" title="Profile" onPressBack={() => router.back()} />
+  );
 
   const [profile, setProfile] = useState<CreatorProfile | null>(null);
   const [clips, setClips] = useState<Clip[]>([]);
@@ -127,7 +139,7 @@ export default function ProfileScreen() {
   if (isGuest || !myId) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-        <AppBar variant="backTitle" title="Profile" onPressBack={() => router.back()} />
+        {topBar}
         <View className="flex-1 items-center justify-center">
           <EmptyState
             icon={LogIn}
@@ -144,7 +156,7 @@ export default function ProfileScreen() {
   if (state === 'loading') {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-        <AppBar variant="backTitle" title="Profile" onPressBack={() => router.back()} />
+        {topBar}
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator color={colors.accent} />
         </View>
@@ -155,7 +167,7 @@ export default function ProfileScreen() {
   if (state === 'error' || !profile) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-        <AppBar variant="backTitle" title="Profile" onPressBack={() => router.back()} />
+        {topBar}
         <View className="flex-1 items-center justify-center gap-md p-lg">
           <TriangleAlert size={40} color={colors.danger} strokeWidth={1.75} />
           <Text style={[textStyle('h3'), { color: colors.text, textAlign: 'center' }]}>Couldn't load profile</Text>
@@ -211,17 +223,19 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        <View style={{ gap: spacing.xs }}>
-          <Text style={[textStyle('h2'), { color: colors.text }]}>{profile.name}</Text>
+        <View style={{ gap: spacing.xs, alignItems: 'center' }}>
+          <Text style={[textStyle('h2'), { color: colors.text, textAlign: 'center' }]}>{profile.name}</Text>
           {profile.handle ? (
-            <Text style={[textStyle('numericSm'), { color: colors.textSecondary }]}>@{profile.handle}</Text>
+            <Text style={[textStyle('numericSm'), { color: colors.textSecondary, textAlign: 'center' }]}>
+              @{profile.handle}
+            </Text>
           ) : null}
           {profile.bio ? (
-            <Text style={[textStyle('callout'), { color: colors.text }]}>{profile.bio}</Text>
+            <Text style={[textStyle('callout'), { color: colors.text, textAlign: 'center' }]}>{profile.bio}</Text>
           ) : null}
         </View>
 
-        <View style={{ flexDirection: 'row', gap: spacing.xl }}>
+        <View style={{ flexDirection: 'row', gap: spacing.xl, justifyContent: 'center' }}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="See who you follow"
@@ -314,7 +328,7 @@ export default function ProfileScreen() {
     // PRIVATE tab: listWishlist reads only the caller's own rows.
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-        <AppBar variant="backTitle" title="Profile" onPressBack={() => router.back()} />
+        {topBar}
         <WishlistGrid
           variant="product"
           header={header}
@@ -352,7 +366,7 @@ export default function ProfileScreen() {
     const rows = segment === 'following' ? following : followers;
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-        <AppBar variant="backTitle" title="Profile" onPressBack={() => router.back()} />
+        {topBar}
         <FlatList
           key="follows"
           data={rows}
@@ -402,7 +416,7 @@ export default function ProfileScreen() {
   const gridClips = tab === 'posts' ? clips : liked;
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-      <AppBar variant="backTitle" title="Profile" onPressBack={() => router.back()} />
+      {topBar}
       <FlatList
         key={tab}
         data={gridClips}

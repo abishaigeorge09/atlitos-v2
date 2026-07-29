@@ -132,7 +132,10 @@ export default function HomeScreen() {
             openGate();
             return;
           }
-          router.push('/profile');
+          // The profile now lives on the You tab (FB-001), so the header
+          // avatar switches to that tab instead of pushing a duplicate
+          // /profile screen onto the Home stack.
+          router.push('/(tabs)/you');
         }}
       />
 

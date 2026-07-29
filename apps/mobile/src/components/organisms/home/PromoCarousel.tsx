@@ -79,8 +79,8 @@ export function PromoCarousel({ reloadKey }: { reloadKey: number }) {
             onPress={() => {
               if (item.ctaRoute) router.push(item.ctaRoute as Href);
             }}
-            className="overflow-hidden rounded-xl bg-surface-muted"
-            style={{ width: CARD_WIDTH, height: 160 }}
+            className="overflow-hidden rounded-xl"
+            style={{ width: CARD_WIDTH, height: 160, backgroundColor: colors.surfaceMuted }}
           >
             {item.imageUrl ? (
               <Image source={{ uri: item.imageUrl }} className="absolute inset-0 h-full w-full" resizeMode="cover" />

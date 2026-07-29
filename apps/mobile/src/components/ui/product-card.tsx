@@ -97,8 +97,9 @@ function ProductCard({
         ) : (
           <View
             accessibilityLabel="Product photo coming soon"
+            style={{ backgroundColor: colors.surfaceMuted }}
             className={cn(
-              'items-center justify-center bg-surface-muted',
+              'items-center justify-center',
               isRow ? 'h-24 w-24 rounded-lg' : 'h-32 w-full rounded-t-xl',
             )}
           >
