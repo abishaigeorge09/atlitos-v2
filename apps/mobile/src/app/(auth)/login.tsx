@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AuthCta, AuthGlassCard, AuthReveal, AuthScene } from '@/components/organisms/auth/AuthScene';
 import { Chip } from '@/components/ui/chip';
 import { Input } from '@/components/ui/input';
 import { OTPInput } from '@/components/ui/otp-input';
@@ -23,6 +24,10 @@ type LoginMode = 'password' | 'otp';
  * register link, 'Continue as guest' link", plus an email OTP option per
  * PRD-01's auth surface (mirrors the forgot-password OTP flow, FR-9). States:
  * populated, error (invalid credentials), submitting.
+ *
+ * Visual: a translucent glass form card floats over the shared AuthScene
+ * aurora, its rows staggering in on mount. Every auth handler, the
+ * afterAuth() deferred-login return path, and the guest path are unchanged.
  */
 export default function LoginScreen() {
   const colors = useThemeColors();
@@ -104,113 +109,125 @@ export default function LoginScreen() {
     }
   }
 
+  const canSubmit =
+    mode === 'password' ? Boolean(identifier && password) : otpSent ? otp.length >= 6 : Boolean(identifier);
+
+  function onSubmit() {
+    if (mode === 'password') {
+      void handlePasswordLogin();
+    } else if (otpSent) {
+      void handleVerifyCode();
+    } else {
+      void handleSendCode();
+    }
+  }
+
+  const ctaLabel = mode === 'password' ? 'Log in' : otpSent ? 'Verify and continue' : 'Send code';
+
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView
-        contentContainerStyle={{ padding: spacing.lg, gap: spacing.xl, flexGrow: 1, justifyContent: 'center' }}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={{ gap: spacing.xs }}>
-          <Text style={[textStyle('h1'), { color: colors.text }]}>Log in</Text>
-          <Text style={[textStyle('body'), { color: colors.textSecondary }]}>
-            Pick up your training, bookings and orders where you left off.
-          </Text>
-        </View>
+    <AuthScene>
+      <SafeAreaView style={{ flex: 1 }}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ScrollView
+            contentContainerStyle={{ padding: spacing.lg, gap: spacing.xl, flexGrow: 1, justifyContent: 'center' }}
+            keyboardShouldPersistTaps="handled"
+          >
+            <AuthReveal index={0}>
+              <View style={{ gap: spacing.xs }}>
+                <Text style={[textStyle('overline'), { color: colors.accent }]}>Welcome back</Text>
+                <Text style={[textStyle('h1'), { color: colors.text }]}>Log in</Text>
+                <Text style={[textStyle('body'), { color: colors.textSecondary }]}>
+                  Pick up your training, bookings and orders where you left off.
+                </Text>
+              </View>
+            </AuthReveal>
 
-        <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-          <Chip
-            label="Password"
-            variant="select"
-            selected={mode === 'password'}
-            onPress={() => {
-              setMode('password');
-              setError(null);
-            }}
-          />
-          <Chip
-            label="Email or phone code"
-            variant="select"
-            selected={mode === 'otp'}
-            onPress={() => {
-              setMode('otp');
-              setError(null);
-            }}
-          />
-        </View>
+            <AuthReveal index={1}>
+              <AuthGlassCard style={{ gap: spacing.lg }}>
+                <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                  <Chip
+                    label="Password"
+                    variant="select"
+                    selected={mode === 'password'}
+                    onPress={() => {
+                      setMode('password');
+                      setError(null);
+                    }}
+                  />
+                  <Chip
+                    label="Email or phone code"
+                    variant="select"
+                    selected={mode === 'otp'}
+                    onPress={() => {
+                      setMode('otp');
+                      setError(null);
+                    }}
+                  />
+                </View>
 
-        <View style={{ gap: spacing.md }}>
-          <Input
-            label="Email or phone"
-            required
-            autoCapitalize="none"
-            value={identifier}
-            onChangeText={setIdentifier}
-            editable={!submitting}
-          />
+                <View style={{ gap: spacing.md }}>
+                  <Input
+                    label="Email or phone"
+                    required
+                    autoCapitalize="none"
+                    value={identifier}
+                    onChangeText={setIdentifier}
+                    editable={!submitting}
+                  />
 
-          {mode === 'password' ? (
-            <Input
-              type="password"
-              label="Password"
-              required
-              value={password}
-              onChangeText={setPassword}
-              editable={!submitting}
-            />
-          ) : otpSent ? (
-            <View style={{ gap: spacing.sm }}>
-              <Text style={[textStyle('label'), { color: colors.textSecondary }]}>Enter the 6 digit code</Text>
-              <OTPInput value={otp} onChange={setOtp} error={Boolean(error)} autoFocus />
-              <Button variant="text" size="sm" onPress={() => void handleSendCode()} disabled={submitting}>
-                <Text style={[textStyle('caption'), { color: colors.accent }]}>Resend code</Text>
-              </Button>
-            </View>
-          ) : null}
+                  {mode === 'password' ? (
+                    <Input
+                      type="password"
+                      label="Password"
+                      required
+                      value={password}
+                      onChangeText={setPassword}
+                      editable={!submitting}
+                    />
+                  ) : otpSent ? (
+                    <View style={{ gap: spacing.sm }}>
+                      <Text style={[textStyle('label'), { color: colors.textSecondary }]}>Enter the 6 digit code</Text>
+                      <OTPInput value={otp} onChange={setOtp} error={Boolean(error)} autoFocus />
+                      <Button variant="text" size="sm" onPress={() => void handleSendCode()} disabled={submitting}>
+                        <Text style={[textStyle('caption'), { color: colors.accent }]}>Resend code</Text>
+                      </Button>
+                    </View>
+                  ) : null}
 
-          {error ? (
-            <Text style={[textStyle('caption'), { color: colors.danger }]}>{friendlyAuthMessage(error)}</Text>
-          ) : null}
-        </View>
+                  {error ? (
+                    <Text style={[textStyle('caption'), { color: colors.danger }]}>{friendlyAuthMessage(error)}</Text>
+                  ) : null}
+                </View>
 
-        <View style={{ gap: spacing.sm }}>
-          {mode === 'password' ? (
-            <Button
-              loading={submitting}
-              disabled={!identifier || !password}
-              onPress={() => void handlePasswordLogin()}
-            >
-              <Text style={[textStyle('label'), { color: colors.inkOnAccent }]}>Log in</Text>
-            </Button>
-          ) : otpSent ? (
-            <Button loading={submitting} disabled={otp.length < 6} onPress={() => void handleVerifyCode()}>
-              <Text style={[textStyle('label'), { color: colors.inkOnAccent }]}>Verify and continue</Text>
-            </Button>
-          ) : (
-            <Button loading={submitting} disabled={!identifier} onPress={() => void handleSendCode()}>
-              <Text style={[textStyle('label'), { color: colors.inkOnAccent }]}>Send code</Text>
-            </Button>
-          )}
+                <View style={{ gap: spacing.sm }}>
+                  <AuthCta label={ctaLabel} loading={submitting} disabled={!canSubmit} onPress={onSubmit} />
 
-          <Link href="/(auth)/forgot" asChild>
-            <Button variant="text" size="sm">
-              <Text style={[textStyle('caption'), { color: colors.accent }]}>Forgot password</Text>
-            </Button>
-          </Link>
-        </View>
+                  <Link href="/(auth)/forgot" asChild>
+                    <Button variant="text" size="sm">
+                      <Text style={[textStyle('caption'), { color: colors.accent }]}>Forgot password</Text>
+                    </Button>
+                  </Link>
+                </View>
+              </AuthGlassCard>
+            </AuthReveal>
 
-        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.xs }}>
-          <Text style={[textStyle('body'), { color: colors.textSecondary }]}>New to Atlitos.</Text>
-          <Link href="/(auth)/register" style={[textStyle('body'), { color: colors.accent }]}>
-            Create account
-          </Link>
-        </View>
+            <AuthReveal index={2}>
+              <View style={{ gap: spacing.sm }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.xs }}>
+                  <Text style={[textStyle('body'), { color: colors.textSecondary }]}>New to Atlitos.</Text>
+                  <Link href="/(auth)/register" style={[textStyle('body'), { color: colors.accent }]}>
+                    Create account
+                  </Link>
+                </View>
 
-        <Button variant="text" loading={guestSubmitting} onPress={() => void handleContinueAsGuest()}>
-          <Text style={[textStyle('label'), { color: colors.textSecondary }]}>Continue as guest</Text>
-        </Button>
-      </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+                <Button variant="text" loading={guestSubmitting} onPress={() => void handleContinueAsGuest()}>
+                  <Text style={[textStyle('label'), { color: colors.textSecondary }]}>Continue as guest</Text>
+                </Button>
+              </View>
+            </AuthReveal>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </AuthScene>
   );
 }

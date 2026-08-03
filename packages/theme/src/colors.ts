@@ -31,6 +31,21 @@ const accentPressed: Record<"orange" | "ember", string> = {
 };
 
 /**
+ * Aurora gradient stop set for the auth/onboarding backdrop (AuthScene). The
+ * two brand accents plus two hand picked warm intermediate points between
+ * them and the paper background, so the animated mesh has warm stops to
+ * interpolate through that no semantic surface/accent token names. This is
+ * the ONE place these auth-backdrop stops live; screens import `auroraStops`
+ * rather than hardcoding hex. See docs/design/DESIGN-LANGUAGE.md.
+ */
+export const auroraStops = {
+  ember: brand.ember,
+  orange: brand.orange,
+  gold: "#F4A15D",
+  cream: "#FFE3CE",
+} as const;
+
+/**
  * Deep warm brown-black ink used for text/icons ON TOP of an accent fill
  * (primary CTA labels, active tab indicators, selected chip text, badge
  * glyphs). Both accent candidates sit at ~0.25 relative luminance, so dark

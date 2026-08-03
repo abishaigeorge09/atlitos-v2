@@ -1,9 +1,19 @@
-import { spacing } from '@atlitos/theme';
+import { spacing, spring } from '@atlitos/theme';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withDelay,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AuthCta, AuthScene } from '@/components/organisms/auth/AuthScene';
 import { Button } from '@/components/ui/button';
 import { friendlyAuthMessage } from '@/lib/auth-copy';
 import { useSessionStore } from '@/store/session-store';
@@ -37,6 +47,10 @@ import { useThemeColors } from '@/theme/use-theme-colors';
  *   - A signed-in session whose profile fetch FAILED (meError, me null) no
  *     longer routes to tabs as if fully onboarded; it shows a retry state
  *     wired to `refreshMe` instead (defect 3).
+ *
+ * Visual: the wordmark and tagline spring in over the shared AuthScene
+ * aurora, so even the loading moment feels alive. All routing logic below is
+ * unchanged.
  */
 export default function SplashScreen() {
   const colors = useThemeColors();
@@ -54,6 +68,29 @@ export default function SplashScreen() {
   // resolves it), and against retrying forever after a hard failure without
   // the "Try again" tap below.
   const guestAttempted = useRef(false);
+
+  // Wordmark spring entrance.
+  const reduced = useReducedMotion();
+  const scale = useSharedValue(reduced ? 1 : 0.8);
+  const opacity = useSharedValue(reduced ? 1 : 0);
+
+  useEffect(() => {
+    if (reduced) return;
+    opacity.value = withTiming(1, { duration: 360, easing: Easing.out(Easing.cubic) });
+    scale.value = withSpring(1, spring.standard);
+  }, [reduced, opacity, scale]);
+
+  const taglineOpacity = useSharedValue(reduced ? 1 : 0);
+  useEffect(() => {
+    if (reduced) return;
+    taglineOpacity.value = withDelay(220, withTiming(1, { duration: 420, easing: Easing.out(Easing.cubic) }));
+  }, [reduced, taglineOpacity]);
+
+  const wordmarkStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ scale: scale.value }],
+  }));
+  const taglineStyle = useAnimatedStyle(() => ({ opacity: taglineOpacity.value }));
 
   useEffect(() => {
     if (!hydrated) return;
@@ -91,50 +128,50 @@ export default function SplashScreen() {
     !showMeRetry;
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
-      <View style={styles.content}>
-        <Text style={[textStyle('display'), styles.wordmark, { color: colors.text }]}>Atlitos</Text>
-        <Text style={[textStyle('body'), styles.tagline, { color: colors.textSecondary }]}>
-          Train, play and follow the game, all in one place.
-        </Text>
+    <AuthScene>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.content}>
+          <Animated.View style={wordmarkStyle}>
+            <Text style={[textStyle('overline'), styles.eyebrow, { color: colors.accent }]}>Your game, one app</Text>
+            <Text style={[textStyle('display'), styles.wordmark, { color: colors.text }]}>Atlitos</Text>
+          </Animated.View>
+          <Animated.Text style={[textStyle('body'), styles.tagline, taglineStyle, { color: colors.textSecondary }]}>
+            Train, play and follow the game, all in one place.
+          </Animated.Text>
 
-        {showSpinner ? (
-          <ActivityIndicator color={colors.accent} style={styles.spinner} />
-        ) : null}
+          {showSpinner ? <ActivityIndicator color={colors.accent} style={styles.spinner} /> : null}
 
-        {showMeRetry ? (
-          <View style={styles.actions}>
-            <Text style={[textStyle('caption'), { color: colors.danger, textAlign: 'center' }]}>
-              We could not load your profile. Check your connection and try again.
-            </Text>
-            <Button onPress={() => void refreshMe()}>
-              <Text style={[textStyle('label'), { color: colors.inkOnAccent }]}>Try again</Text>
-            </Button>
-          </View>
-        ) : null}
+          {showMeRetry ? (
+            <View style={styles.actions}>
+              <Text style={[textStyle('caption'), styles.centered, { color: colors.danger }]}>
+                We could not load your profile. Check your connection and try again.
+              </Text>
+              <AuthCta label="Try again" onPress={() => void refreshMe()} />
+            </View>
+          ) : null}
 
-        {showGuestRetry ? (
-          <View style={styles.actions}>
-            <Text style={[textStyle('caption'), { color: colors.danger, textAlign: 'center' }]}>{guestError}</Text>
-            <Button
-              onPress={() => {
-                guestAttempted.current = true;
-                setGuestError(null);
-                continueAsGuest().catch((e: unknown) => {
-                  guestAttempted.current = false;
-                  setGuestError(friendlyAuthMessage(e));
-                });
-              }}
-            >
-              <Text style={[textStyle('label'), { color: colors.inkOnAccent }]}>Try again</Text>
-            </Button>
-            <Button variant="text" onPress={() => router.push('/(auth)/login')}>
-              <Text style={[textStyle('label'), { color: colors.accent }]}>Log in instead</Text>
-            </Button>
-          </View>
-        ) : null}
-      </View>
-    </SafeAreaView>
+          {showGuestRetry ? (
+            <View style={styles.actions}>
+              <Text style={[textStyle('caption'), styles.centered, { color: colors.danger }]}>{guestError}</Text>
+              <AuthCta
+                label="Try again"
+                onPress={() => {
+                  guestAttempted.current = true;
+                  setGuestError(null);
+                  continueAsGuest().catch((e: unknown) => {
+                    guestAttempted.current = false;
+                    setGuestError(friendlyAuthMessage(e));
+                  });
+                }}
+              />
+              <Button variant="text" onPress={() => router.push('/(auth)/login')}>
+                <Text style={[textStyle('label'), { color: colors.accent }]}>Log in instead</Text>
+              </Button>
+            </View>
+          ) : null}
+        </View>
+      </SafeAreaView>
+    </AuthScene>
   );
 }
 
@@ -147,8 +184,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     gap: spacing.lg,
   },
-  wordmark: { textAlign: 'center' },
+  eyebrow: { textAlign: 'center', marginBottom: spacing.sm },
+  wordmark: { textAlign: 'center', fontSize: 56, lineHeight: 60 },
   tagline: { textAlign: 'center', maxWidth: 300 },
+  centered: { textAlign: 'center' },
   spinner: { marginTop: spacing.lg },
   actions: { width: '100%', maxWidth: 320, gap: spacing.sm, marginTop: spacing.lg },
 });
