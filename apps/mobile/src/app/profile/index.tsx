@@ -1,22 +1,15 @@
-import {
-  toApiError,
-  useClutch,
-  useWishlist,
-  type CreatorProfile,
-  type FollowListEntry,
-  type WishlistEntry,
-} from '@atlitos/api';
+import { toApiError, useClutch, type CreatorProfile } from '@atlitos/api';
 import { spacing } from '@atlitos/theme';
 import type { ApiError, Clip, ClipStatus } from '@atlitos/types';
 import { router } from 'expo-router';
-import { Bookmark, Heart, LayoutGrid, LogIn, Settings, TriangleAlert, Users } from 'lucide-react-native';
-import { useCallback, useEffect, useState } from 'react';
+import { Bookmark, Heart, LayoutGrid, LogIn, Settings, TriangleAlert } from 'lucide-react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Image, Pressable, RefreshControl, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
 import { ClutchPostCard } from '@/components/molecules/ClutchPostCard';
 import { EmptyState } from '@/components/organisms/EmptyState';
-import { WishlistGrid } from '@/components/organisms/WishlistGrid';
 import { AppBar } from '@/components/ui/app-bar';
 import { Avatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -42,23 +35,25 @@ const AVATAR_SIZE = 80 as const;
 /** Cover banner height, derived from the spacing scale (no raw literal). */
 const COVER_HEIGHT = spacing['4xl'] * 4;
 
-type ProfileTab = 'posts' | 'liked' | 'follows' | 'wishlist';
-type FollowSegment = 'following' | 'followers';
+type ProfileTab = 'posts' | 'liked' | 'saved';
 
 /**
- * The unified own profile (Track C, Instagram-style reference): cover photo,
- * overlapping avatar, name, @handle, bio, Following/Followers counts, then
- * four icon tabs: my posts grid (any status, with a status label on
- * non-published clips), liked posts grid, follow lists, and my wishlist.
- * The wishlist tab is PRIVATE by construction: `useWishlist.listWishlist`
- * only ever reads the caller's own `product_wishlist_items` rows (explicit
- * owner filter), and this screen is reachable only for the signed-in self.
- * Guests get the standard login gate.
+ * The unified own social profile (Track C, Instagram style): cover banner,
+ * overlapping avatar, name, @handle, bio, Following/Followers counts, then three
+ * content tabs: my posts (any status, with a status label on non-published
+ * clips), liked clips, and saved clips. The Following/Followers counts are the
+ * only follow affordance here (a tap opens the dedicated Follows screen); the
+ * social profile no longer carries the shop wishlist, which lives in the Shop
+ * area (`/account/wishlist`).
+ *
+ * GRID POSTERS: `clips.thumb_path` is a raw private-bucket path that cannot load
+ * as an <Image> source, so each grid tile shows a SIGNED poster minted per clip
+ * via getPlaybackUrl (the same seam the feed uses), never clip.thumbUrl. Guests
+ * get the standard login gate.
  */
 export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {}) {
   const colors = useThemeColors();
   const clutch = useClutch(supabase);
-  const wishlist = useWishlist(supabase);
   const status = useSessionStore((state) => state.status);
   const myId = useSessionStore((state) => state.me?.id ?? null);
   const isGuest = status === 'guest';
@@ -78,14 +73,17 @@ export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {
   const [profile, setProfile] = useState<CreatorProfile | null>(null);
   const [clips, setClips] = useState<Clip[]>([]);
   const [liked, setLiked] = useState<Clip[]>([]);
-  const [following, setFollowing] = useState<FollowListEntry[]>([]);
-  const [followers, setFollowers] = useState<FollowListEntry[]>([]);
-  const [wishlistEntries, setWishlistEntries] = useState<WishlistEntry[]>([]);
+  const [saved, setSaved] = useState<Clip[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState<ApiError | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [tab, setTab] = useState<ProfileTab>('posts');
-  const [segment, setSegment] = useState<FollowSegment>('following');
+
+  // Signed poster URL per grid clip, minted from getPlaybackUrl's thumbUrl.
+  const [posterUrls, setPosterUrls] = useState<Record<string, string>>({});
+  // Clips a poster mint has already been attempted for, so a static grid never
+  // re-mints every render (and a failed mint is not retried in a loop).
+  const mintAttempted = useRef<Set<string>>(new Set());
 
   const load = useCallback(
     async (silent: boolean) => {
@@ -95,31 +93,22 @@ export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {
         setError(null);
       }
       try {
-        const [creator, myClips, likedClips, followingList, followersList, wishlistRows] = await Promise.all([
+        const [creator, myClips, likedClips, savedClips] = await Promise.all([
           clutch.getCreator(myId),
           clutch.getMyClips(),
           clutch.listLikedClips(),
-          clutch.listFollowing(myId),
-          clutch.listFollowers(myId),
-          wishlist.listWishlist(),
+          clutch.listSavedClips(),
         ]);
         setProfile(creator);
         setClips(myClips);
         setLiked(likedClips);
-        setFollowing(followingList);
-        setFollowers(followersList);
-        setWishlistEntries(wishlistRows);
+        setSaved(savedClips);
         setState(creator ? 'ready' : 'error');
       } catch (err) {
         setError(toApiError(err));
         setState('error');
       }
     },
-    // wishlist (useWishlist) is intentionally not a dep: unlike useClutch it
-    // is not memoized and would refire this callback every render (the F1
-    // lesson documented on useClutch). supabase is a module singleton, so the
-    // api objects only ever wrap the same client.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [clutch, myId],
   );
 
@@ -130,11 +119,41 @@ export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
+      // Re-mint posters on an explicit pull to refresh (a save/unsave elsewhere
+      // may have changed the saved grid).
+      mintAttempted.current.clear();
+      setPosterUrls({});
       await load(true);
     } finally {
       setRefreshing(false);
     }
   }, [load]);
+
+  const gridClips = tab === 'posts' ? clips : tab === 'liked' ? liked : saved;
+
+  // Mint a signed poster for every clip in the active grid that has not been
+  // attempted yet, mirroring the feed's per-card mint (clutch/index.tsx).
+  useEffect(() => {
+    let cancelled = false;
+    const pending = gridClips.filter((clip) => !mintAttempted.current.has(clip.id));
+    if (pending.length === 0) return;
+    pending.forEach((clip) => mintAttempted.current.add(clip.id));
+    void Promise.all(
+      pending.map(async (clip) => {
+        try {
+          const playback = await clutch.getPlaybackUrl(clip.id);
+          if (!cancelled && playback.thumbUrl) {
+            setPosterUrls((prev) => ({ ...prev, [clip.id]: playback.thumbUrl as string }));
+          }
+        } catch {
+          // A placeholder-bytes or 403 clip keeps its solid poster surface.
+        }
+      }),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [gridClips, clutch]);
 
   if (isGuest || !myId) {
     return (
@@ -183,21 +202,35 @@ export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {
   }
 
   const tabs: Array<{ key: ProfileTab; icon: typeof LayoutGrid; label: string }> = [
-    { key: 'posts', icon: LayoutGrid, label: 'My posts' },
-    { key: 'liked', icon: Heart, label: 'Liked posts' },
-    { key: 'follows', icon: Users, label: 'Follows' },
-    { key: 'wishlist', icon: Bookmark, label: 'My wishlist' },
+    { key: 'posts', icon: LayoutGrid, label: 'My clips' },
+    { key: 'liked', icon: Heart, label: 'Liked clips' },
+    { key: 'saved', icon: Bookmark, label: 'Saved clips' },
   ];
 
   const header = (
     <View>
-      {profile.coverUrl ? (
-        <Image source={{ uri: profile.coverUrl }} style={{ height: COVER_HEIGHT, width: '100%' }} resizeMode="cover" />
-      ) : (
-        <View style={{ height: COVER_HEIGHT, width: '100%', backgroundColor: colors.surfaceMuted }} />
-      )}
+      {/* Cover banner. A real image when set, otherwise a subtle vertical
+          gradient placeholder (token stops), never a flat empty band. */}
+      <View style={{ height: COVER_HEIGHT, width: '100%' }}>
+        {profile.coverUrl ? (
+          <Image source={{ uri: profile.coverUrl }} style={{ height: COVER_HEIGHT, width: '100%' }} resizeMode="cover" />
+        ) : (
+          <Svg width="100%" height="100%">
+            <Defs>
+              <LinearGradient id="cover-wash" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0" stopColor={colors.surface} />
+                <Stop offset="1" stopColor={colors.surfaceMuted} />
+              </LinearGradient>
+            </Defs>
+            <Rect x="0" y="0" width="100%" height="100%" fill="url(#cover-wash)" />
+          </Svg>
+        )}
+      </View>
 
       <View style={{ paddingHorizontal: spacing.lg, gap: spacing.sm }}>
+        {/* Avatar overlaps the banner on the left; the edit/settings actions sit
+            opposite it, anchored to the same baseline so neither floats over the
+            empty band. */}
         <View
           style={{
             marginTop: -(AVATAR_SIZE / 2),
@@ -207,42 +240,34 @@ export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {
           }}
         >
           <Avatar uri={profile.avatarUrl ?? undefined} name={profile.name} size={AVATAR_SIZE} />
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingBottom: spacing.xs }}>
             <Button variant="secondary" size="sm" onPress={() => router.push('/profile/edit')}>
               <Text style={[textStyle('label'), { color: colors.text }]}>Edit profile</Text>
             </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onPress={() => router.push('/settings')}
-              accessibilityLabel="Settings"
-            >
+            <Button variant="secondary" size="sm" onPress={() => router.push('/settings')} accessibilityLabel="Settings">
               <Settings size={16} strokeWidth={1.75} color={colors.text} />
               <Text style={[textStyle('label'), { color: colors.text }]}>Settings</Text>
             </Button>
           </View>
         </View>
 
-        <View style={{ gap: spacing.xs, alignItems: 'center' }}>
-          <Text style={[textStyle('h2'), { color: colors.text, textAlign: 'center' }]}>{profile.name}</Text>
+        {/* Name block, left aligned to sit under the avatar rather than fighting
+            it with a centered title. */}
+        <View style={{ gap: spacing.xs }}>
+          <Text style={[textStyle('h2'), { color: colors.text }]}>{profile.name}</Text>
           {profile.handle ? (
-            <Text style={[textStyle('numericSm'), { color: colors.textSecondary, textAlign: 'center' }]}>
-              @{profile.handle}
-            </Text>
+            <Text style={[textStyle('numericSm'), { color: colors.textSecondary }]}>@{profile.handle}</Text>
           ) : null}
-          {profile.bio ? (
-            <Text style={[textStyle('callout'), { color: colors.text, textAlign: 'center' }]}>{profile.bio}</Text>
-          ) : null}
+          {profile.bio ? <Text style={[textStyle('callout'), { color: colors.text }]}>{profile.bio}</Text> : null}
         </View>
 
-        <View style={{ flexDirection: 'row', gap: spacing.xl, justifyContent: 'center' }}>
+        {/* Stat row: the ONLY follow affordance. Each count opens the dedicated
+            Follows screen at the matching segment. */}
+        <View style={{ flexDirection: 'row', gap: spacing.xl }}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="See who you follow"
-            onPress={() => {
-              setSegment('following');
-              setTab('follows');
-            }}
+            onPress={() => router.push({ pathname: '/profile/follows', params: { segment: 'following' } })}
             style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}
           >
             <Text style={[textStyle('numericBase'), { color: colors.text }]}>{profile.followingCount}</Text>
@@ -251,10 +276,7 @@ export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="See your followers"
-            onPress={() => {
-              setSegment('followers');
-              setTab('follows');
-            }}
+            onPress={() => router.push({ pathname: '/profile/follows', params: { segment: 'followers' } })}
             style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}
           >
             <Text style={[textStyle('numericBase'), { color: colors.text }]}>{profile.followerCount}</Text>
@@ -292,31 +314,6 @@ export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {
           );
         })}
       </View>
-
-      {tab === 'follows' ? (
-        <View style={{ flexDirection: 'row', gap: spacing.sm, padding: spacing.lg, paddingBottom: spacing.sm }}>
-          {(
-            [
-              { key: 'following', label: 'Following' },
-              { key: 'followers', label: 'Followers' },
-            ] as Array<{ key: FollowSegment; label: string }>
-          ).map(({ key, label }) => {
-            const active = segment === key;
-            return (
-              <Button
-                key={key}
-                variant={active ? 'primary' : 'secondary'}
-                size="sm"
-                onPress={() => setSegment(key)}
-              >
-                <Text style={[textStyle('label'), { color: active ? colors.inkOnAccent : colors.text }]}>
-                  {label}
-                </Text>
-              </Button>
-            );
-          })}
-        </View>
-      ) : null}
     </View>
   );
 
@@ -324,96 +321,14 @@ export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {
     <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.accent} />
   );
 
-  if (tab === 'wishlist') {
-    // PRIVATE tab: listWishlist reads only the caller's own rows.
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-        {topBar}
-        <WishlistGrid
-          variant="product"
-          header={header}
-          refreshControl={refreshControl}
-          emptyComponent={
-            <View style={{ padding: spacing.xl, alignItems: 'center', gap: spacing.sm }}>
-              <Bookmark size={40} color={colors.textTertiary} strokeWidth={1.75} />
-              <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
-                Nothing saved yet. Tap the heart on any gear to keep it here.
-              </Text>
-            </View>
-          }
-          items={wishlistEntries.map((entry) => ({
-            kind: 'product' as const,
-            id: entry.productId,
-            title: entry.product.title,
-            price: entry.product.priceFrom,
-            imageUrl: entry.product.imageUrl,
-            availableStock: entry.product.availableStock,
-            onPress: () => router.push({ pathname: '/shop/product/[id]', params: { id: entry.productId } }),
-            onRemove: () => {
-              setWishlistEntries((current) => current.filter((row) => row.productId !== entry.productId));
-              wishlist
-                .toggle(entry.productId)
-                .catch(() => undefined)
-                .finally(() => void load(true));
-            },
-          }))}
-        />
-      </SafeAreaView>
-    );
-  }
+  const emptyCopy =
+    tab === 'posts'
+      ? 'You have not posted any clips yet.'
+      : tab === 'liked'
+        ? 'Clips you like show up here.'
+        : 'Clips you save show up here. Tap the bookmark on any clip to keep it.';
+  const EmptyIcon = tab === 'posts' ? LayoutGrid : tab === 'liked' ? Heart : Bookmark;
 
-  if (tab === 'follows') {
-    const rows = segment === 'following' ? following : followers;
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-        {topBar}
-        <FlatList
-          key="follows"
-          data={rows}
-          keyExtractor={(item) => item.id}
-          ListHeaderComponent={header}
-          refreshControl={refreshControl}
-          contentContainerStyle={{ paddingBottom: spacing.xl }}
-          ListEmptyComponent={
-            <View style={{ padding: spacing.xl, alignItems: 'center', gap: spacing.sm }}>
-              <Users size={40} color={colors.textTertiary} strokeWidth={1.75} />
-              <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
-                {segment === 'following'
-                  ? 'You are not following anyone yet.'
-                  : 'No followers yet. Post clips to grow your channel.'}
-              </Text>
-            </View>
-          }
-          renderItem={({ item }) => (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={item.name}
-              onPress={() =>
-                router.push({ pathname: '/(tabs)/clutch/creator/[id]', params: { id: item.id } })
-              }
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: spacing.md,
-                paddingHorizontal: spacing.lg,
-                paddingVertical: spacing.sm,
-              }}
-            >
-              <Avatar uri={item.avatarUrl ?? undefined} name={item.name} size={40} />
-              <View style={{ flex: 1, gap: spacing.xs }}>
-                <Text style={[textStyle('label'), { color: colors.text }]}>{item.name}</Text>
-                {item.handle ? (
-                  <Text style={[textStyle('numericSm'), { color: colors.textSecondary }]}>@{item.handle}</Text>
-                ) : null}
-              </View>
-            </Pressable>
-          )}
-        />
-      </SafeAreaView>
-    );
-  }
-
-  const gridClips = tab === 'posts' ? clips : liked;
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       {topBar}
@@ -428,21 +343,13 @@ export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {
         refreshControl={refreshControl}
         ListEmptyComponent={
           <View style={{ padding: spacing.xl, alignItems: 'center', gap: spacing.sm }}>
-            {tab === 'posts' ? (
-              <LayoutGrid size={40} color={colors.textTertiary} strokeWidth={1.75} />
-            ) : (
-              <Heart size={40} color={colors.textTertiary} strokeWidth={1.75} />
-            )}
-            <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
-              {tab === 'posts'
-                ? 'You have not posted any clips yet.'
-                : 'Clips you like show up here.'}
-            </Text>
+            <EmptyIcon size={40} color={colors.textTertiary} strokeWidth={1.75} />
+            <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>{emptyCopy}</Text>
           </View>
         }
         renderItem={({ item }) => {
-          // Status label only on the own-posts grid (a liked clip is always
-          // published, see listLikedClips).
+          // Status label only on the own-posts grid (a liked/saved clip is
+          // always published, see listLikedClips/listSavedClips).
           const pill = tab === 'posts' ? CLIP_STATUS_PILL[item.status] : undefined;
           return (
             // maxWidth caps a lone last-row tile at one third instead of the
@@ -451,9 +358,8 @@ export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {
               <ClutchPostCard
                 clip={item}
                 variant="thumb"
-                onOpen={() =>
-                  router.push({ pathname: '/(tabs)/clutch/post/[id]', params: { id: item.id } })
-                }
+                posterUrl={posterUrls[item.id]}
+                onOpen={() => router.push({ pathname: '/(tabs)/clutch/post/[id]', params: { id: item.id } })}
               />
               {pill ? (
                 <View className="absolute left-xs top-xs" style={{ pointerEvents: 'none' }}>
