@@ -110,7 +110,9 @@ Shopper shipping addresses (commerce domain, kept here as it is an identity-adja
 Indexes: `idx_addresses_user_id` on `user_id`.
 
 ### `athlete_sports`
-Added in `0001_identity.sql`, not originally in this doc. Normalizes an athlete's per-sport detail (skill level, which sport is primary) alongside the denormalized `users.sports sport[]` cache column, which remains the fast-path summary array; reconciling the two is an application-layer concern, not enforced by a trigger in Phase 1.
+Added in `0001_identity.sql`, not originally in this doc. Normalizes an athlete's per-sport detail (skill level, which sport is primary) alongside the denormalized `users.sports sport[]` cache column, which remains the fast-path summary array.
+
+Reconciling the two is done at the write path, not by a trigger. Both onboarding (`complete_player_setup`, 0004) and post-onboarding edits (`set_athlete_sports`, 0088) dual-write `users.sports` and `athlete_sports`/`is_primary` in one transaction, so the primary-sport model that Learn (`get_learn_home`) and the coach-search default read stays consistent with `users.sports`. Before 0088, edits patched only `users.sports`, leaving `athlete_sports` frozen on the onboarding pick (the drift 0088 closes).
 
 | Column | Type | Constraints |
 |---|---|---|

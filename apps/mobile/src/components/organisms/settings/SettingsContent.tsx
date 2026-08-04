@@ -10,6 +10,7 @@ import {
   Monitor,
   Moon,
   Palette,
+  Star,
   Sun,
   UserRoundPlus,
   UserRoundPen,
@@ -148,6 +149,7 @@ export function SettingsContent() {
   // lands; refreshMe reconciles from the row afterwards.
   const [themePref, setThemePref] = useState<ThemePref>(me?.theme ?? 'system');
   const [sports, setSports] = useState<Sport[]>(me?.sports ?? []);
+  const [primarySport, setPrimarySport] = useState<Sport | null>(me?.primarySport ?? me?.sports?.[0] ?? null);
   const [prefs, setPrefs] = useState(me?.notificationPrefs ?? { sessions: true, messages: true, promotions: false });
 
   async function persist(patch: Parameters<typeof profileApi.updateProfile>[0]) {
@@ -170,10 +172,29 @@ export function SettingsContent() {
     void persist({ theme: pref });
   }
 
+  // Sports edits write users.sports AND athlete_sports/is_primary together
+  // through the RPC (0088), so Learn and the coach-search default follow the
+  // edit. Every write carries the primary so the two models never drift.
   function toggleSport(sport: Sport) {
-    const next = sports.includes(sport) ? sports.filter((s) => s !== sport) : [...sports, sport];
+    const isSelected = sports.includes(sport);
+    // Keep at least one sport, matching onboarding. Deselecting the last one
+    // does nothing rather than clearing Learn's primary sport.
+    if (isSelected && sports.length === 1) return;
+
+    const next = isSelected ? sports.filter((s) => s !== sport) : [...sports, sport];
+    // Removing the current primary reassigns it to the first remaining sport;
+    // adding the first ever sport makes it primary.
+    const nextPrimary =
+      primarySport && next.includes(primarySport) ? primarySport : (next[0] ?? null);
     setSports(next);
-    void persist({ sports: next });
+    setPrimarySport(nextPrimary);
+    if (nextPrimary) void persist({ sports: next, primarySport: nextPrimary });
+  }
+
+  function handleSetPrimary(sport: Sport) {
+    if (!sports.includes(sport) || sport === primarySport) return;
+    setPrimarySport(sport);
+    void persist({ sports, primarySport: sport });
   }
 
   function toggleNotification(key: 'sessions' | 'messages' | 'promotions', value: boolean) {
@@ -273,7 +294,7 @@ export function SettingsContent() {
       {isSignedIn ? (
         <>
           <Section title="Preferred sports">
-            <View style={{ padding: spacing.lg, gap: spacing.sm }}>
+            <View style={{ padding: spacing.lg, gap: spacing.md }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
                 <Volleyball size={18} strokeWidth={1.75} color={colors.textSecondary} />
                 <Text style={[textStyle('body'), { color: colors.text }]}>What you play</Text>
@@ -289,6 +310,29 @@ export function SettingsContent() {
                   />
                 ))}
               </View>
+
+              {sports.length > 0 ? (
+                <View style={{ gap: spacing.sm }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                    <Star size={16} strokeWidth={1.75} color={colors.textSecondary} />
+                    <Text style={[textStyle('body'), { color: colors.text }]}>Primary sport</Text>
+                  </View>
+                  <Text style={[textStyle('caption'), { color: colors.textTertiary }]}>
+                    Your primary sport tunes your Learn roadmap and the coaches shown first.
+                  </Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+                    {sports.map((sport) => (
+                      <Chip
+                        key={sport}
+                        label={SPORT_LABEL[sport]}
+                        variant="filter"
+                        selected={sport === primarySport}
+                        onPress={() => handleSetPrimary(sport)}
+                      />
+                    ))}
+                  </View>
+                </View>
+              ) : null}
             </View>
           </Section>
 

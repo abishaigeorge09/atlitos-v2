@@ -156,7 +156,7 @@ export default function PlayerSetupStepScreen() {
             <View style={{ gap: spacing.md }}>
               <Text style={[textStyle('h2'), { color: colors.text }]}>What do you play.</Text>
               <Text style={[textStyle('body'), { color: colors.textSecondary }]}>
-                Pick at least one sport to personalize your feed and coach search.
+                Pick at least one sport. Your primary sport tunes your Learn roadmap and the coaches shown first.
               </Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
                 {SPORTS.map((sport) => {
