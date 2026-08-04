@@ -62,22 +62,29 @@ interface MessagePreview {
   senderName?: string;
 }
 
-// `users` is embedded twice (participant_a and participant_b both reference
-// it), so PostgREST needs the column-name hint to disambiguate which FK each
-// embed follows; `chat_threads_participant_a_fkey`/`_b_fkey`
-// (database.types.ts) are the underlying constraint names, the column hint
-// is the more readable, equally valid way to select between them.
+// Names/avatars resolve through `public_profiles`, NOT the `users` base
+// table (BUG-016). `users` SELECT is own-row-or-admin (`users_select_merged`,
+// 0063), so embedding `users` returns NULL for every participant/sender that
+// is not the caller: a non-admin saw "Atlitos user" in a 1:1 header and no
+// sender name on group bubbles. `public_profiles` is the definer projection
+// (id, name, avatar_url, ...) of every user, readable by `authenticated`
+// (0001, RLS.md), so it resolves names cross-user without loosening the
+// `users` RLS. The relation is still embedded twice here (participant_a and
+// participant_b both FK the same view), so PostgREST needs the column-name
+// hint to disambiguate which FK each embed follows; same shape hooks.ts
+// already uses for clips (`public_profiles!owner_id`).
 const THREAD_SELECT =
   "id, participant_a, participant_b, context_type, context_id, last_message_at, created_at, " +
-  "participant_a_profile:users!participant_a ( id, name, avatar_url ), " +
-  "participant_b_profile:users!participant_b ( id, name, avatar_url )";
+  "participant_a_profile:public_profiles!participant_a ( id, name, avatar_url ), " +
+  "participant_b_profile:public_profiles!participant_b ( id, name, avatar_url )";
 
 // The sender embed resolves a name for every message row (group and 1:1
 // alike); only group threads actually render it (mapMessageRow always
 // carries it, the thread screen decides whether to show it, per the 1:1
-// "stays as-is" requirement).
+// "stays as-is" requirement). Resolved via `public_profiles` for the same
+// cross-user reason as THREAD_SELECT (BUG-016).
 const MESSAGE_SELECT =
-  "id, thread_id, sender_id, text, created_at, sender_profile:users!sender_id ( id, name )";
+  "id, thread_id, sender_id, text, created_at, sender_profile:public_profiles!sender_id ( id, name )";
 
 function otherParticipant(row: ChatThreadRow, meId: string) {
   return row.participant_a === meId ? row.participant_b_profile : row.participant_a_profile;
@@ -206,7 +213,7 @@ export function useChat(client: AtlitosClient) {
       const [{ data: recentMessages, error: msgError }, groupInfoByThread] = await Promise.all([
         client
           .from("chat_messages")
-          .select("thread_id, text, created_at, sender_profile:users!sender_id ( name )")
+          .select("thread_id, text, created_at, sender_profile:public_profiles!sender_id ( name )")
           .in(
             "thread_id",
             rows.map((row) => row.id),
@@ -273,7 +280,9 @@ export function useChat(client: AtlitosClient) {
     },
 
     /** A group thread's seated roster (chat_thread_members joined to
-     * users), for the group conversation screen's members sheet. RLS
+     * public_profiles for the cross-user name/avatar, BUG-016: the `users`
+     * base table is own-row-or-admin so joining it listed only the caller),
+     * for the group conversation screen's members sheet. RLS
      * (`chat_thread_members_select_member`, 0078) already scopes this to
      * threads the caller is seated in; a 1:1 thread has no
      * chat_thread_members rows at all, so this resolves to an empty list
@@ -283,7 +292,7 @@ export function useChat(client: AtlitosClient) {
     async listThreadMembers(threadId: string): Promise<ChatThreadMember[]> {
       const { data, error } = await client
         .from("chat_thread_members")
-        .select("user_id, profile:users!user_id ( id, name, avatar_url )")
+        .select("user_id, profile:public_profiles!user_id ( id, name, avatar_url )")
         .eq("thread_id", threadId)
         .returns<{ user_id: string; profile: { id: string; name: string; avatar_url: string | null } | null }[]>();
       if (error) throw mapPostgrestError(error);
