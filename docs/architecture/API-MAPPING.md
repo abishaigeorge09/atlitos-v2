@@ -26,8 +26,9 @@ Every function in v1's `services/api.ts` contract (`PLAN-2-3-api-contract-and-ll
 | v1 fn | v1 route | v2 lane | Function / RPC | Note |
 |---|---|---|---|---|
 | `getMe` | GET `/me` | PostgREST | `users` select, left join `coach_profiles` | RLS `id = auth.uid()` |
-| `updateMe` | PATCH `/me` | PostgREST | `users` update | sport-immutable-once-verified rule enforced by a `BEFORE UPDATE` trigger on `coach_profiles`, not this call |
-| `setupPlayer` | POST `/me/setup/player` | RPC | `complete_player_setup(sports, avatar_url, city, state)` | writes `users` fields and the `player` `user_roles` row in one transaction; raises `ALREADY_SETUP` if the role already exists |
+| `updateMe` | PATCH `/me` | PostgREST + RPC | `users` update; `set_athlete_sports` for the sports field | non-sports fields (bio, cover, handle, city, state, theme, notification prefs) are a plain owner-scoped `users` patch. The `sports` field is the exception: it is routed through `set_athlete_sports(sports, primary)` (0088), never a bare `users.sports` write, so `athlete_sports`/`is_primary` (which Learn and the coach-search default read) stay consistent with `users.sports`. `getMe` also returns `primarySport` from `athlete_sports.is_primary` (tie break `is_primary desc, created_at asc`, same as `get_learn_home`) |
+| `setupPlayer` | POST `/me/setup/player` | RPC | `complete_player_setup(sports, avatar_url, city, state)` | writes `users` fields and the `player` `user_roles` row in one transaction; also dual-writes `athlete_sports`/`is_primary` (primary = first pick); raises `ALREADY_SETUP` if the role already exists |
+| `setAthleteSports` | POST `/me/sports` | RPC | `set_athlete_sports(sports, primary)` | SECURITY DEFINER, owner-scoped to `auth.uid()`. Rewrites `users.sports` AND rebuilds `athlete_sports` (deletes dropped sports, upserts the rest, sets `is_primary` only on `primary`) in one transaction, so the two sport models never drift after onboarding. Validates non-empty `sports` and `primary IN sports`. `authenticated` only |
 | `setupCoach` | POST `/me/setup/coach` | RPC | `submit_coach_verification(payload jsonb)` | writes `coach_profiles`, `coach_certificates`, `session_types`, `coach_availability_windows`, and the `verification_requests` row atomically; raises `ALREADY_SETUP` if a `pending_review` or `verified` profile exists |
 
 ## home

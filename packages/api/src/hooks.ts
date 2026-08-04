@@ -172,6 +172,11 @@ export interface MeRow {
   city: string | null;
   state: string | null;
   sports: Sport[];
+  /** The primary sport, read from athlete_sports.is_primary (the model Learn
+   * and coach search key off, 0060/0088), NOT users.sports[0]. null when the
+   * player has selected no sport. Drives the Learn roadmap and the coach-search
+   * default. */
+  primarySport: Sport | null;
   roles: AppRole[];
   coachStatus: "pending_review" | "verified" | "rejected" | null;
   /** Appearance preference (0087). Applied client side via nativewind. */
@@ -190,9 +195,14 @@ export interface UpdateProfileInput {
   coverUrl?: string | null;
   avatarUrl?: string | null;
   handle?: string;
-  /** Personalization (0087). All own-row columns; written through the same
-   * owner scoped users update the rest of this payload uses. */
+  /** Personalization (0087). Location/theme/notifications are own-row users
+   * columns. `sports` is the exception: it is routed through the
+   * set_athlete_sports RPC (0088) so users.sports AND athlete_sports/is_primary
+   * are rewritten together, never users.sports alone (the drift fix). */
   sports?: Sport[];
+  /** Which of `sports` is primary. Defaults to sports[0] when omitted. Only
+   * meaningful alongside `sports`; drives Learn and the coach-search default. */
+  primarySport?: Sport;
   city?: string | null;
   state?: string | null;
   theme?: "system" | "light" | "dark";
@@ -234,15 +244,30 @@ export function useProfile(client: AtlitosClient) {
       if (authError) throw mapAuthError(authError);
       if (!authData.user) return null;
 
-      const [{ data: userRow, error: userError }, { data: roleRows, error: roleError }, { data: coachRow }] =
-        await Promise.all([
-          client.from("users").select("*").eq("id", authData.user.id).maybeSingle(),
-          client.from("user_roles").select("role").eq("user_id", authData.user.id),
-          client.from("coach_profiles").select("status").eq("user_id", authData.user.id).maybeSingle(),
-        ]);
+      const [
+        { data: userRow, error: userError },
+        { data: roleRows, error: roleError },
+        { data: coachRow },
+        { data: primaryRows, error: primaryError },
+      ] = await Promise.all([
+        client.from("users").select("*").eq("id", authData.user.id).maybeSingle(),
+        client.from("user_roles").select("role").eq("user_id", authData.user.id),
+        client.from("coach_profiles").select("status").eq("user_id", authData.user.id).maybeSingle(),
+        // Primary sport from athlete_sports (is_primary first, else earliest
+        // selected), the same tie break get_learn_home uses (0060). Explicit
+        // owner filter, RLS is not scoping (CLAUDE.md).
+        client
+          .from("athlete_sports")
+          .select("sport, is_primary, created_at")
+          .eq("user_id", authData.user.id)
+          .order("is_primary", { ascending: false })
+          .order("created_at", { ascending: true })
+          .limit(1),
+      ]);
 
       if (userError) throw mapPostgrestError(userError);
       if (roleError) throw mapPostgrestError(roleError);
+      if (primaryError) throw mapPostgrestError(primaryError);
       if (!userRow) return null;
 
       return {
@@ -257,6 +282,7 @@ export function useProfile(client: AtlitosClient) {
         city: userRow.city,
         state: userRow.state,
         sports: userRow.sports ?? [],
+        primarySport: (primaryRows?.[0]?.sport as Sport | undefined) ?? null,
         roles: (roleRows ?? []).map((r) => r.role as AppRole),
         coachStatus: coachRow?.status ?? null,
         theme: (userRow.theme as MeRow["theme"] | null) ?? "system",
@@ -294,12 +320,30 @@ export function useProfile(client: AtlitosClient) {
       if (authError) throw mapAuthError(authError);
       if (!authData.user) throw mapAuthError({ message: "Sign in to edit your profile.", status: 401 });
 
+      // Sports go through the RPC, not the users patch: it rewrites
+      // users.sports AND athlete_sports/is_primary together so Learn and the
+      // coach-search default follow the edit instead of drifting (0088).
+      if (input.sports !== undefined) {
+        const primary = input.primarySport ?? input.sports[0];
+        if (primary === undefined) {
+          throw {
+            code: "VALIDATION",
+            message: "Pick at least one sport.",
+            status: 422,
+          } satisfies ApiError;
+        }
+        const { error: sportsError } = await client.rpc("set_athlete_sports", {
+          p_sports: input.sports,
+          p_primary: primary,
+        });
+        if (sportsError) throw mapPostgrestError(sportsError);
+      }
+
       const patch: {
         bio?: string | null;
         cover_url?: string | null;
         avatar_url?: string | null;
         handle?: string;
-        sports?: Sport[];
         city?: string | null;
         state?: string | null;
         theme?: string;
@@ -309,11 +353,14 @@ export function useProfile(client: AtlitosClient) {
       if (input.coverUrl !== undefined) patch.cover_url = input.coverUrl;
       if (input.avatarUrl !== undefined) patch.avatar_url = input.avatarUrl;
       if (input.handle !== undefined) patch.handle = input.handle.trim().toLowerCase();
-      if (input.sports !== undefined) patch.sports = input.sports;
       if (input.city !== undefined) patch.city = input.city;
       if (input.state !== undefined) patch.state = input.state;
       if (input.theme !== undefined) patch.theme = input.theme;
       if (input.notificationPrefs !== undefined) patch.notification_prefs = input.notificationPrefs;
+
+      // Nothing left to write to users (e.g. a sports-only edit): the RPC
+      // already ran, so return rather than firing an empty UPDATE.
+      if (Object.keys(patch).length === 0) return;
 
       const { error } = await client.from("users").update(patch).eq("id", authData.user.id);
       if (error) {

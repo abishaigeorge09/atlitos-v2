@@ -4563,6 +4563,13 @@ export type Database = {
         }
         Returns: undefined
       }
+      set_athlete_sports: {
+        Args: {
+          p_primary: Database["public"]["Enums"]["sport"]
+          p_sports: Database["public"]["Enums"]["sport"][]
+        }
+        Returns: undefined
+      }
       consume_reservation: {
         Args: { p_payment_intent_id: string }
         Returns: {

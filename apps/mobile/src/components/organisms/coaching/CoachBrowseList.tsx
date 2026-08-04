@@ -3,7 +3,7 @@ import type { ApiError, Sport } from '@atlitos/types';
 import { radii, spacing } from '@atlitos/theme';
 import { RefreshCw, TriangleAlert, Users } from 'lucide-react-native';
 import type { ReactNode } from 'react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, RefreshControl, View } from 'react-native';
 
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import { Text } from '@/components/ui/text';
 import { SPORT_LABEL } from '@/lib/sport-display';
 import { supabase } from '@/lib/supabase';
 import { useLocationStore } from '@/store/location-store';
+import { useSessionStore } from '@/store/session-store';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
 
@@ -60,7 +61,24 @@ export function CoachBrowseList({ onOpenCoach, header, scrollEnabled = true }: C
   const locationStatus = useLocationStore((state) => state.status);
   const city = useLocationStore((state) => state.city);
 
-  const [sport, setSport] = useState<Sport | null>(null);
+  // Default the sport filter to the player's primary sport (athlete_sports,
+  // via the session me) so a cricket player lands on cricket coaches, not "All
+  // sports". The manual chips below still change it. Seeded lazily and, because
+  // me can resolve after mount, applied once via the effect below, but only
+  // while the player has not touched a chip (userPickedRef) so an intentional
+  // "All sports" or another-sport pick is never overwritten.
+  const primarySport = useSessionStore((s) => s.me?.primarySport ?? null);
+  const [sport, setSport] = useState<Sport | null>(primarySport);
+  const userPickedRef = useRef(false);
+  useEffect(() => {
+    if (!userPickedRef.current && primarySport) setSport(primarySport);
+  }, [primarySport]);
+
+  function pickSport(next: Sport | null) {
+    userPickedRef.current = true;
+    setSport(next);
+  }
+
   const [state, setState] = useState<LoadState>('loading');
   const [items, setItems] = useState<CoachListItem[]>([]);
   const [error, setError] = useState<ApiError | null>(null);
@@ -108,7 +126,7 @@ export function CoachBrowseList({ onOpenCoach, header, scrollEnabled = true }: C
         style={{ flexGrow: 0 }}
         contentContainerStyle={{ gap: spacing.sm, paddingVertical: spacing.xs }}
         ListHeaderComponent={
-          <Chip label="All sports" variant="filter" selected={sport === null} onPress={() => setSport(null)} />
+          <Chip label="All sports" variant="filter" selected={sport === null} onPress={() => pickSport(null)} />
         }
         ItemSeparatorComponent={() => <View style={{ width: spacing.sm }} />}
         renderItem={({ item }) => (
@@ -116,7 +134,7 @@ export function CoachBrowseList({ onOpenCoach, header, scrollEnabled = true }: C
             label={SPORT_LABEL[item]}
             variant="filter"
             selected={sport === item}
-            onPress={() => setSport(item)}
+            onPress={() => pickSport(item)}
           />
         )}
       />

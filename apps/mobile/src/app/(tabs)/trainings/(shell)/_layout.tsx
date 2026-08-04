@@ -13,6 +13,7 @@ import { useThemeColors } from '@/theme/use-theme-colors';
 /** Route name inside this group -> sub nav tab key. `index` is Stats. */
 const SEGMENT_TO_TAB: Record<string, TrainingsSubNavTab> = {
   index: 'stats',
+  learn: 'learn',
   coaches: 'coaches',
   trainees: 'trainees',
   payments: 'payments',
@@ -59,6 +60,9 @@ export default function TrainingsShellLayout() {
     switch (tab) {
       case 'stats':
         router.navigate('/trainings');
+        return;
+      case 'learn':
+        router.navigate('/trainings/learn');
         return;
       case 'coaches':
         router.navigate('/trainings/coaches');
@@ -124,6 +128,7 @@ export default function TrainingsShellLayout() {
         }}
       >
         <Tabs.Screen name="index" />
+        <Tabs.Screen name="learn" />
         <Tabs.Screen name="coaches" />
         <Tabs.Screen name="trainees" />
         <Tabs.Screen name="payments" />
