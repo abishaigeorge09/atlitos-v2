@@ -86,6 +86,10 @@ Each has a base and a subtle tint (tint = roughly 8–10% of the base blended to
 | `info` | `#1D6FC4` | `#DFEBFB` | `#5B9FE8` | `#16273A` |
 | `danger` | `#D7263D` | `#FBE1E4` | `#F0616F` | `#3A1418` |
 
+### Aurora (auth backdrop)
+
+The auth and onboarding surface (`AuthScene`) renders a slow, warm animated aurora, a mesh of drifting react-native-svg radial glows over a cream (light) or espresso (dark) wash. Its gradient stops are the one place the palette needs warm intermediate points between the two brand accents and the paper background, so they live as a dedicated token set `auroraStops` in `packages/theme` (`ember`, `orange` reuse the brand accents; `gold` `#F4A15D` and `cream` `#FFE3CE` are the two hand picked warm mids). Screens import `auroraStops`, never hardcode these. Motion is reanimated driven and freezes to a static composition under reduced motion. Glass form cards over the aurora are translucent token derived rgba fills of `surface`, not a native blur.
+
 ## Typography
 
 **Inter** for UI text. **JetBrains Mono** for every numeric readout (prices, scores, timers, stat counters, XP, distances), always with tabular figures (`font-variant-numeric: tabular-nums` on web, tabular lining figures on mobile) so digits don't reflow as values tick.

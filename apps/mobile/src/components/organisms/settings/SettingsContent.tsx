@@ -123,13 +123,19 @@ export function SettingsContent() {
   const profileApi = useProfile(supabase);
 
   const status = useSessionStore((s) => s.status);
+  const session = useSessionStore((s) => s.session);
   const me = useSessionStore((s) => s.me);
+  const meLoading = useSessionStore((s) => s.meLoading);
   const refreshMe = useSessionStore((s) => s.refreshMe);
   const signOut = useSessionStore((s) => s.signOut);
   const continueAsGuest = useSessionStore((s) => s.continueAsGuest);
 
   const isSignedIn = status === 'signed_in';
-  const isCoach = me?.coachStatus === 'verified' || me?.coachStatus === 'pending_review';
+  // Trust `me` for the coach role only once it is loaded AND belongs to the
+  // current session user, so the "Become a coach" row never appears (or hides)
+  // based on a stale/previous user's profile while a new login resolves.
+  const meReady = !meLoading && !!me && me.id === session?.user.id;
+  const isCoach = meReady && (me.coachStatus === 'verified' || me.coachStatus === 'pending_review');
 
   const [city, setCity] = useState(me?.city ?? '');
   const [state, setState] = useState(me?.state ?? '');
@@ -336,7 +342,7 @@ export function SettingsContent() {
 
           <Section title="Account">
             <ActionRow icon={UserRoundPen} label="Edit profile" onPress={() => router.push('/profile/edit')} />
-            {!isCoach ? (
+            {meReady && !isCoach ? (
               <View style={{ borderTopWidth: 1, borderTopColor: colors.border }}>
                 <ActionRow
                   icon={UserRoundPlus}

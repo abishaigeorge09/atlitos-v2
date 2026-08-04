@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AuthCta, AuthGlassCard, AuthReveal, AuthScene } from '@/components/organisms/auth/AuthScene';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { friendlyAuthMessage } from '@/lib/auth-copy';
@@ -55,6 +56,9 @@ function isRealDate(iso: string): boolean {
  * States: populated, error (field validation, email/phone taken),
  * submitting, confirmation pending (email confirmation on, with resend and
  * a log in shortcut).
+ *
+ * Visual: a glass form card over the shared AuthScene aurora, rows
+ * staggering in on mount. All validation and auth logic is unchanged.
  */
 export default function RegisterScreen() {
   const colors = useThemeColors();
@@ -141,113 +145,127 @@ export default function RegisterScreen() {
 
   if (confirmationPending) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
-        <View style={{ flex: 1, padding: spacing.lg, gap: spacing.lg, alignItems: 'center', justifyContent: 'center' }}>
-          <MailCheck size={48} color={colors.accent} strokeWidth={1.5} />
-          <Text style={[textStyle('h2'), { color: colors.text, textAlign: 'center' }]}>Check your email</Text>
-          <Text style={[textStyle('body'), { color: colors.textSecondary, textAlign: 'center' }]}>
-            {`We sent a confirmation link to ${email.trim()}. Open it to finish creating your account.`}
-          </Text>
-          {resendNotice ? (
-            <Text style={[textStyle('caption'), { color: colors.success, textAlign: 'center' }]}>{resendNotice}</Text>
-          ) : null}
-          {resendError ? (
-            <Text style={[textStyle('caption'), { color: colors.danger, textAlign: 'center' }]}>{resendError}</Text>
-          ) : null}
-          <View style={{ width: '100%', maxWidth: 320, gap: spacing.sm }}>
-            <Button onPress={() => router.replace('/(auth)/login')}>
-              <Text style={[textStyle('label'), { color: colors.inkOnAccent }]}>I have confirmed, log in</Text>
-            </Button>
-            <Button variant="secondary" loading={resending} onPress={() => void handleResend()}>
-              <Text style={[textStyle('label'), { color: colors.text }]}>Resend email</Text>
-            </Button>
+      <AuthScene>
+        <SafeAreaView style={{ flex: 1 }}>
+          <View style={{ flex: 1, padding: spacing.lg, justifyContent: 'center' }}>
+            <AuthReveal index={0}>
+              <AuthGlassCard style={{ gap: spacing.lg, alignItems: 'center' }}>
+                <MailCheck size={48} color={colors.accent} strokeWidth={1.5} />
+                <Text style={[textStyle('h2'), { color: colors.text, textAlign: 'center' }]}>Check your email</Text>
+                <Text style={[textStyle('body'), { color: colors.textSecondary, textAlign: 'center' }]}>
+                  {`We sent a confirmation link to ${email.trim()}. Open it to finish creating your account.`}
+                </Text>
+                {resendNotice ? (
+                  <Text style={[textStyle('caption'), { color: colors.success, textAlign: 'center' }]}>
+                    {resendNotice}
+                  </Text>
+                ) : null}
+                {resendError ? (
+                  <Text style={[textStyle('caption'), { color: colors.danger, textAlign: 'center' }]}>
+                    {resendError}
+                  </Text>
+                ) : null}
+                <View style={{ width: '100%', gap: spacing.sm }}>
+                  <AuthCta label="I have confirmed, log in" onPress={() => router.replace('/(auth)/login')} />
+                  <Button variant="secondary" loading={resending} onPress={() => void handleResend()}>
+                    <Text style={[textStyle('label'), { color: colors.text }]}>Resend email</Text>
+                  </Button>
+                </View>
+              </AuthGlassCard>
+            </AuthReveal>
           </View>
-        </View>
-      </SafeAreaView>
+        </SafeAreaView>
+      </AuthScene>
     );
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }} keyboardShouldPersistTaps="handled">
-          <View style={{ gap: spacing.xs }}>
-            <Text style={[textStyle('h1'), { color: colors.text }]}>Create your account</Text>
-            <Text style={[textStyle('body'), { color: colors.textSecondary }]}>
-              Set up training, bookings and orders in one place.
-            </Text>
-          </View>
+    <AuthScene>
+      <SafeAreaView style={{ flex: 1 }}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }} keyboardShouldPersistTaps="handled">
+            <AuthReveal index={0}>
+              <View style={{ gap: spacing.xs }}>
+                <Text style={[textStyle('overline'), { color: colors.accent }]}>Join the team</Text>
+                <Text style={[textStyle('h1'), { color: colors.text }]}>Create your account</Text>
+                <Text style={[textStyle('body'), { color: colors.textSecondary }]}>
+                  Set up training, bookings and orders in one place.
+                </Text>
+              </View>
+            </AuthReveal>
 
-          <View style={{ gap: spacing.md }}>
-            <Input label="Full name" required value={name} onChangeText={setName} error={fieldErrors.name} editable={!submitting} />
-            <Input
-              label="Email"
-              required
-              autoCapitalize="none"
-              value={email}
-              onChangeText={setEmail}
-              error={fieldErrors.email}
-              editable={!submitting}
-            />
-            <Input
-              type="phone"
-              label="Phone"
-              required
-              value={phone}
-              onChangeText={setPhone}
-              error={fieldErrors.phone}
-              editable={!submitting}
-            />
-            <Input
-              type="pincode"
-              label="Date of birth"
-              required
-              placeholder="YYYY-MM-DD"
-              maxLength={10}
-              value={dob}
-              onChangeText={(value) => setDob(formatDob(value))}
-              error={fieldErrors.dob}
-              editable={!submitting}
-            />
-            <Input
-              type="password"
-              label="Password"
-              required
-              value={password}
-              onChangeText={setPassword}
-              error={fieldErrors.password}
-              editable={!submitting}
-            />
-            <Input
-              type="password"
-              label="Confirm password"
-              required
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              error={fieldErrors.confirmPassword}
-              editable={!submitting}
-            />
+            <AuthReveal index={1}>
+              <AuthGlassCard style={{ gap: spacing.lg }}>
+                <View style={{ gap: spacing.md }}>
+                  <Input label="Full name" required value={name} onChangeText={setName} error={fieldErrors.name} editable={!submitting} />
+                  <Input
+                    label="Email"
+                    required
+                    autoCapitalize="none"
+                    value={email}
+                    onChangeText={setEmail}
+                    error={fieldErrors.email}
+                    editable={!submitting}
+                  />
+                  <Input
+                    type="phone"
+                    label="Phone"
+                    required
+                    value={phone}
+                    onChangeText={setPhone}
+                    error={fieldErrors.phone}
+                    editable={!submitting}
+                  />
+                  <Input
+                    type="pincode"
+                    label="Date of birth"
+                    required
+                    placeholder="YYYY-MM-DD"
+                    maxLength={10}
+                    value={dob}
+                    onChangeText={(value) => setDob(formatDob(value))}
+                    error={fieldErrors.dob}
+                    editable={!submitting}
+                  />
+                  <Input
+                    type="password"
+                    label="Password"
+                    required
+                    value={password}
+                    onChangeText={setPassword}
+                    error={fieldErrors.password}
+                    editable={!submitting}
+                  />
+                  <Input
+                    type="password"
+                    label="Confirm password"
+                    required
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    error={fieldErrors.confirmPassword}
+                    editable={!submitting}
+                  />
 
-            {formError ? (
-              <Text style={[textStyle('caption'), { color: colors.danger }]}>{friendlyAuthMessage(formError)}</Text>
-            ) : null}
-          </View>
+                  {formError ? (
+                    <Text style={[textStyle('caption'), { color: colors.danger }]}>{friendlyAuthMessage(formError)}</Text>
+                  ) : null}
+                </View>
 
-          <Button loading={submitting} onPress={() => void handleSubmit()}>
-            <Text style={[textStyle('label'), { color: colors.inkOnAccent }]}>Create account</Text>
-          </Button>
+                <AuthCta label="Create account" loading={submitting} onPress={() => void handleSubmit()} />
+              </AuthGlassCard>
+            </AuthReveal>
 
-          <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.xs }}>
-            <Text style={[textStyle('body'), { color: colors.textSecondary }]}>Already have an account.</Text>
-            <Link href="/(auth)/login" style={[textStyle('body'), { color: colors.accent }]}>
-              Log in
-            </Link>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+            <AuthReveal index={2}>
+              <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.xs }}>
+                <Text style={[textStyle('body'), { color: colors.textSecondary }]}>Already have an account.</Text>
+                <Link href="/(auth)/login" style={[textStyle('body'), { color: colors.accent }]}>
+                  Log in
+                </Link>
+              </View>
+            </AuthReveal>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </AuthScene>
   );
 }

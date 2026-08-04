@@ -68,18 +68,35 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   refreshMe: async () => {
+    // Stale-refresh guard (same shape as the search requestSeq guard from
+    // BUG-001). Stamp this in-flight refresh with the user id it was started
+    // for and a monotonic token; if the session changes underneath it before
+    // getMe resolves (a different account signs in, or the user signs out),
+    // the result is discarded so `me` never belongs to a different user than
+    // the current session.
+    const token = ++meRefreshToken;
+    const startedForUserId = get().session?.user.id ?? null;
     set({ meLoading: true, meError: null });
     try {
       const me = await profile.getMe();
+      if (token !== meRefreshToken) return; // a newer refresh superseded this one
+      const currentUserId = get().session?.user.id ?? null;
+      if (currentUserId !== startedForUserId) return; // session changed underneath
+      if (me && me.id !== currentUserId) return; // fetched row is not this session's user
       set({ me, meLoading: false });
     } catch (error) {
+      if (token !== meRefreshToken) return;
+      const currentUserId = get().session?.user.id ?? null;
+      if (currentUserId !== startedForUserId) return;
       set({ meError: error as ApiError, meLoading: false });
     }
   },
 
   continueAsGuest: async () => {
+    // auth.continueAsGuest retries signInAnonymously with backoff before
+    // surfacing failure (packages/api hooks). onAuthStateChange picks up the
+    // resulting session and sets status.
     await auth.continueAsGuest();
-    // onAuthStateChange picks up the resulting session and sets status.
   },
 
   signOut: async () => {
@@ -111,6 +128,11 @@ export const selectIsSignedIn = (s: SessionState): boolean => s.status === "sign
 export const selectIsGuest = (s: SessionState): boolean => s.status === "guest";
 export const selectRequiresAuthGate = (s: SessionState): boolean => s.status !== "signed_in";
 
+/** Monotonic stamp for the in-flight `refreshMe`. Every call bumps it; a
+ * refresh whose stamp is stale by the time getMe resolves is ignored, so a
+ * session change never lets an older user's profile land on the new session. */
+let meRefreshToken = 0;
+
 let listenerStarted = false;
 
 /** Starts the one `onAuthStateChange` subscription for the app. Called once
@@ -135,8 +157,17 @@ function applySession(session: Session | null): void {
   useSessionStore.setState({ status, session, hydrated: true });
 
   if (status === "signed_in") {
+    // Clear the previous user's profile BEFORE the async refresh so a new
+    // login never renders the prior account's role (the "new account
+    // auto-tagged coach" bug). If the same user's session just refreshed
+    // (token refresh), keep `me` to avoid a needless loading flash; only a
+    // different user id wipes it.
+    const prevMe = useSessionStore.getState().me;
+    if (!prevMe || prevMe.id !== session!.user.id) {
+      useSessionStore.setState({ me: null, meLoading: true, meError: null });
+    }
     void useSessionStore.getState().refreshMe();
   } else {
-    useSessionStore.setState({ me: null, meError: null });
+    useSessionStore.setState({ me: null, meLoading: false, meError: null });
   }
 }
