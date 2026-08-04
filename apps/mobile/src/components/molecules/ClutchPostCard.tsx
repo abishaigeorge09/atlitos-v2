@@ -1,7 +1,7 @@
 import { spacing } from '@atlitos/theme';
 import type { Clip } from '@atlitos/types';
 import * as Haptics from 'expo-haptics';
-import { Heart, MessageCircle, Share2 } from 'lucide-react-native';
+import { Bookmark, BookmarkCheck, Heart, MessageCircle, Share2 } from 'lucide-react-native';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 
 import { ClipVideo } from '@/components/molecules/clip-video';
@@ -38,6 +38,7 @@ export interface ClutchPostCardProps {
   onLike?: () => void;
   onComment?: () => void;
   onShare?: () => void;
+  onSave?: () => void;
   onOpen?: () => void;
 }
 
@@ -60,6 +61,7 @@ export function ClutchPostCard({
   onLike,
   onComment,
   onShare,
+  onSave,
   onOpen,
 }: ClutchPostCardProps) {
   const colors = useThemeColors();
@@ -71,7 +73,17 @@ export function ClutchPostCard({
     onLike?.();
   };
 
+  const handleSave = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    onSave?.();
+  };
+
   if (variant === 'thumb') {
+    // Prefer the SIGNED poster URL minted by the grid over clip.thumbUrl:
+    // thumb_path is a raw private-bucket path that cannot load as an <Image>
+    // source, so without the signed poster the tile renders blank beige. Same
+    // rule the feed card follows for its poster.
+    const thumbSource = posterUrl ?? clip.thumbUrl;
     // Single Pressable, only non-interactive children (no nested pressables).
     return (
       <Pressable
@@ -80,8 +92,8 @@ export function ClutchPostCard({
         accessibilityLabel={`Open clip, ${clip.likes} likes`}
         className="aspect-square flex-1 overflow-hidden rounded-sm bg-surface-muted active:opacity-90"
       >
-        {clip.thumbUrl ? (
-          <Image source={{ uri: clip.thumbUrl }} className="absolute inset-0 h-full w-full" resizeMode="cover" />
+        {thumbSource ? (
+          <Image source={{ uri: thumbSource }} className="absolute inset-0 h-full w-full" resizeMode="cover" />
         ) : null}
         <View className="absolute bottom-xs left-xs flex-row items-center gap-xs">
           <Heart size={16} strokeWidth={2} color={colors.textInverse} fill={colors.textInverse} />
@@ -160,6 +172,19 @@ export function ClutchPostCard({
         >
           <MessageCircle size={24} strokeWidth={1.75} color={colors.textInverse} />
           <Text className="font-mono text-xs text-text-inverse">{clip.commentCount}</Text>
+        </Pressable>
+        <Pressable
+          onPress={handleSave}
+          accessibilityRole="button"
+          accessibilityLabel={clip.savedByMe ? 'Remove from saved' : 'Save'}
+          className="min-h-11 min-w-11 items-center justify-center gap-xs"
+        >
+          {clip.savedByMe ? (
+            <BookmarkCheck size={24} strokeWidth={1.75} color={colors.accent} fill={colors.accent} />
+          ) : (
+            <Bookmark size={24} strokeWidth={1.75} color={colors.textInverse} />
+          )}
+          <Text className="text-xs text-text-inverse">Save</Text>
         </Pressable>
         <Pressable
           onPress={onShare}

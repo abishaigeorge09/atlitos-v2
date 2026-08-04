@@ -4,7 +4,7 @@ import type { ApiError, Clip } from '@atlitos/types';
 import { router } from 'expo-router';
 import { Play, Plus, TriangleAlert } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, View, type ViewToken } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, Share, View, type ViewToken } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ClutchPostCard } from '@/components/molecules/ClutchPostCard';
@@ -22,6 +22,12 @@ type LoadState = 'loading' | 'empty' | 'populated' | 'error';
 /** Refresh a signed playback URL this many seconds before its 300s TTL so an
  * on-screen clip never stalls on an expired URL mid-watch. */
 const PLAYBACK_REFRESH_LEAD_S = 15;
+
+/** Deep link into a single clip in the viewer. `atlitos://` is the app scheme
+ * (app.json); the share sheet carries it so a tap reopens the exact clip. */
+function clipDeepLink(clipId: string): string {
+  return `atlitos://clutch/post/${clipId}`;
+}
 
 /**
  * Clutch feed (PRD-01 3.4, FR-42/FR-43). Full-bleed vertical video feed, one
@@ -204,6 +210,29 @@ export default function ClutchFeedScreen() {
     });
   }
 
+  async function handleSave(clip: Clip) {
+    requireAuth(async () => {
+      // Optimistic flip of the bookmark; reconcile with the toggle's result.
+      setClips((prev) => prev.map((c) => (c.id === clip.id ? { ...c, savedByMe: !c.savedByMe } : c)));
+      try {
+        const saved = await clutch.toggleSaveClip(clip.id);
+        setClips((prev) => prev.map((c) => (c.id === clip.id ? { ...c, savedByMe: saved } : c)));
+      } catch {
+        // Roll back on failure.
+        setClips((prev) => prev.map((c) => (c.id === clip.id ? { ...c, savedByMe: clip.savedByMe } : c)));
+      }
+    });
+  }
+
+  async function handleShare(clip: Clip) {
+    const label = clip.caption ? clip.caption : `Clip by ${clip.channel}`;
+    try {
+      await Share.share({ message: label, url: clipDeepLink(clip.id) });
+    } catch {
+      // A dismissed or failed share sheet is a no-op.
+    }
+  }
+
   function openDetail(clipId: string) {
     router.push({ pathname: '/(tabs)/clutch/post/[id]', params: { id: clipId } });
   }
@@ -262,7 +291,8 @@ export default function ClutchFeedScreen() {
                 onOpen={() => openDetail(item.id)}
                 onComment={() => openDetail(item.id)}
                 onLike={() => void handleLike(item)}
-                onShare={() => requireAuth(() => openDetail(item.id))}
+                onSave={() => void handleSave(item)}
+                onShare={() => void handleShare(item)}
               />
             </View>
           )}

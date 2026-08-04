@@ -4,6 +4,8 @@ import type { ApiError, Clip, Comment } from '@atlitos/types';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import {
+  Bookmark,
+  BookmarkCheck,
   ChevronLeft,
   Heart,
   MessageCircle,
@@ -26,6 +28,7 @@ import {
   StyleSheet,
   TextInput,
   View,
+  type ViewToken,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -41,6 +44,12 @@ import { useThemeColors } from '@/theme/use-theme-colors';
 
 const PLAYBACK_REFRESH_LEAD_S = 15;
 
+/** Deep link into this exact clip (app scheme in app.json). Carried by the
+ * share sheet so a tap reopens the same clip in the viewer. */
+function clipDeepLink(clipId: string): string {
+  return `atlitos://clutch/post/${clipId}`;
+}
+
 function timeAgo(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
   const mins = Math.max(1, Math.round(diffMs / 60000));
@@ -52,129 +61,277 @@ function timeAgo(iso: string): string {
 }
 
 /**
- * Clutch post viewer (PRD-01 3.4, FR-45; FB-004). Instagram Reels layout: the
- * clip plays full bleed 9:16 behind a scrim, with a top header (back, avatar,
- * username, sport line), a right action rail (like, comment, share), and a
- * mute toggle. Comments open in a bottom sheet from the comment action rather
- * than a long list pushing the video up.
+ * Clutch post viewer (PRD-01 3.4, FR-45; FB-004). Opened at the tapped clip and
+ * SWIPEABLE: a vertical paging feed, not a single dead-end. It is self
+ * sufficient, so no caller changes are needed: it fetches the published feed
+ * page itself, prepends the tapped clip if the page does not include it (an
+ * owner opening their own pending clip, which the public feed omits), and opens
+ * the pager at that clip.
  *
- * The clip plays from a fresh signed URL minted here (refreshed before its 300s
- * TTL, same rule as the feed). The OWNER opening their own clip always gets a
- * URL regardless of moderation status (the edge function widening for FB-004),
- * so a pending/processing/rejected own clip plays instead of a silent poster.
- * Guest can read the thread but like/comment gate to login (FR-3). Like routes
- * through `toggle_clip_like`; a comment is an own-row insert.
+ * Each page reuses the feed's machinery (clutch/index.tsx): getItemLayout on the
+ * container height, onViewableItemsChanged to track the active card, a per-card
+ * short-lived signed playback URL minted when it becomes active and prefetched
+ * for the next, refreshed just before its 300s TTL, and dropped offscreen. Like,
+ * save and comment state are keyed per card in the `clips` list, never a single
+ * clip. The Instagram Reels overlay (FB-004) is preserved as the per-item chrome.
  */
-export default function ClutchPostDetailScreen() {
+export default function ClutchPostViewerScreen() {
   const colors = useThemeColors();
   const { id } = useLocalSearchParams<{ id: string }>();
   const clutch = useClutch(supabase);
   const requiresAuthGate = useSessionStore((state) => state.status !== 'signed_in');
 
-  const [clip, setClip] = useState<Clip | null>(null);
+  const [clips, setClips] = useState<Clip[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error' | 'notFound'>('loading');
   const [error, setError] = useState<ApiError | null>(null);
-  const [comments, setComments] = useState<Comment[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [initialIndex, setInitialIndex] = useState(0);
+
+  const [containerH, setContainerH] = useState(0);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [playbackUrls, setPlaybackUrls] = useState<Record<string, string>>({});
+  const [posterUrls, setPosterUrls] = useState<Record<string, string>>({});
+  // Autoplay policy means muted first; the viewer taps to unmute. Shared across
+  // pages so the choice persists as you swipe (IG Reels behaviour).
+  const [muted, setMuted] = useState(true);
+  const [gateVisible, setGateVisible] = useState(false);
+
+  // Comments open in a single sheet for whichever clip the viewer tapped.
+  const [commentsClip, setCommentsClip] = useState<Clip | null>(null);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [commentCursor, setCommentCursor] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
-  const [playbackUrl, setPlaybackUrl] = useState<string | undefined>(undefined);
-  const [posterUrl, setPosterUrl] = useState<string | undefined>(undefined);
-  const [gateVisible, setGateVisible] = useState(false);
-  const [commentsVisible, setCommentsVisible] = useState(false);
-  // Autoplay policy means the video starts muted; the viewer taps to unmute.
-  const [muted, setMuted] = useState(true);
 
-  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activeIdRef = useRef<string | null>(null);
+  const refreshTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
-  const mintPlayback = useCallback(async () => {
-    if (!id) return;
-    try {
-      const playback = await clutch.getPlaybackUrl(id);
-      setPlaybackUrl(playback.url);
-      if (playback.thumbUrl) setPosterUrl(playback.thumbUrl);
-      if (refreshTimer.current) clearTimeout(refreshTimer.current);
-      const refreshMs = Math.max(PLAYBACK_REFRESH_LEAD_S, playback.expiresIn - PLAYBACK_REFRESH_LEAD_S) * 1000;
-      refreshTimer.current = setTimeout(() => void mintPlayback(), refreshMs);
-    } catch {
-      // A removed/rejected clip a non-owner cannot see (403), or placeholder
-      // bytes, leaves the poster. The owner's own clip always mints (FB-004).
+  const clearTimer = useCallback((clipId: string) => {
+    const timer = refreshTimers.current[clipId];
+    if (timer) {
+      clearTimeout(timer);
+      delete refreshTimers.current[clipId];
     }
-  }, [clutch, id]);
+  }, []);
+
+  const mintPlayback = useCallback(
+    async (clipId: string) => {
+      try {
+        const playback = await clutch.getPlaybackUrl(clipId);
+        setPlaybackUrls((prev) => ({ ...prev, [clipId]: playback.url }));
+        if (playback.thumbUrl) {
+          setPosterUrls((prev) => ({ ...prev, [clipId]: playback.thumbUrl as string }));
+        }
+        clearTimer(clipId);
+        const refreshMs = Math.max(PLAYBACK_REFRESH_LEAD_S, playback.expiresIn - PLAYBACK_REFRESH_LEAD_S) * 1000;
+        refreshTimers.current[clipId] = setTimeout(() => {
+          if (activeIdRef.current === clipId) void mintPlayback(clipId);
+          else clearTimer(clipId);
+        }, refreshMs);
+      } catch {
+        // A removed/rejected clip a non-owner cannot see (403), or placeholder
+        // bytes, leaves the poster. The owner's own clip always mints (FB-004).
+      }
+    },
+    [clutch, clearTimer],
+  );
 
   const load = useCallback(async () => {
     if (!id) return;
     setState('loading');
     setError(null);
     try {
-      const [detail, page] = await Promise.all([clutch.getClip(id), clutch.getComments(id)]);
+      // The tapped clip AND the published feed page, in parallel. getClip
+      // resolves an own pending clip the public feed omits; the feed gives the
+      // pager something to swipe to.
+      const [detail, page] = await Promise.all([clutch.getClip(id), clutch.getFeed()]);
       if (!detail) {
         setState('notFound');
         return;
       }
-      setClip(detail);
-      setComments(page.comments);
+      const feed = page.clips;
+      const inFeed = feed.some((c) => c.id === detail.id);
+      // Prepend the tapped clip when the feed omits it, so it is always index 0
+      // in that case; otherwise open at its position in the feed.
+      const ordered = inFeed ? feed : [detail, ...feed];
+      const startIndex = Math.max(0, ordered.findIndex((c) => c.id === detail.id));
+      setClips(ordered);
       setCursor(page.nextCursor);
+      setInitialIndex(startIndex);
+      setActiveId(detail.id);
+      activeIdRef.current = detail.id;
       setState('ready');
-      void mintPlayback();
     } catch (err) {
       setError(err as ApiError);
       setState('error');
     }
-  }, [clutch, id, mintPlayback]);
+  }, [clutch, id]);
 
   useEffect(() => {
     void load();
+    const timers = refreshTimers.current;
     return () => {
-      if (refreshTimer.current) clearTimeout(refreshTimer.current);
+      Object.values(timers).forEach(clearTimeout);
     };
   }, [load]);
 
-  async function loadMoreComments() {
-    if (!id || !cursor) return;
+  async function loadMore() {
+    if (loadingMore || !cursor) return;
+    setLoadingMore(true);
     try {
-      const page = await clutch.getComments(id, cursor);
-      setComments((prev) => [...prev, ...page.comments]);
+      const page = await clutch.getFeed(cursor);
+      // Guard against a re-append of a clip already present (e.g. the prepended
+      // tapped clip) so keys stay unique.
+      setClips((prev) => {
+        const seen = new Set(prev.map((c) => c.id));
+        return [...prev, ...page.clips.filter((c) => !seen.has(c.id))];
+      });
       setCursor(page.nextCursor);
+    } catch {
+      // A failed page-append leaves the pager intact; the next scroll retries.
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  const onViewableItemsChanged = useRef((info: { viewableItems: ViewToken[] }) => {
+    const first = info.viewableItems[0]?.item as Clip | undefined;
+    const nextActive = first?.id ?? null;
+    activeIdRef.current = nextActive;
+    setActiveId(nextActive);
+  }).current;
+
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 80 }).current;
+
+  // Mint for the active card, prefetch the next, drop far-offscreen URLs. Same
+  // rule as the feed so a swipe reveals an already-playing card.
+  useEffect(() => {
+    if (!activeId) return;
+    if (!playbackUrls[activeId]) void mintPlayback(activeId);
+
+    const index = clips.findIndex((clip) => clip.id === activeId);
+    const next = clips[index + 1];
+    if (next && !playbackUrls[next.id]) void mintPlayback(next.id);
+
+    const keep = new Set([activeId, clips[index + 1]?.id, clips[index - 1]?.id].filter(Boolean) as string[]);
+    setPlaybackUrls((prev) => {
+      let changed = false;
+      const nextUrls: Record<string, string> = {};
+      for (const [cid, url] of Object.entries(prev)) {
+        if (keep.has(cid)) nextUrls[cid] = url;
+        else {
+          changed = true;
+          clearTimer(cid);
+        }
+      }
+      return changed ? nextUrls : prev;
+    });
+    setPosterUrls((prev) => {
+      let changed = false;
+      const nextUrls: Record<string, string> = {};
+      for (const [cid, url] of Object.entries(prev)) {
+        if (keep.has(cid)) nextUrls[cid] = url;
+        else changed = true;
+      }
+      return changed ? nextUrls : prev;
+    });
+  }, [activeId, clips, playbackUrls, mintPlayback, clearTimer]);
+
+  function requireAuth(action: () => void) {
+    if (requiresAuthGate) {
+      setGateVisible(true);
+      return;
+    }
+    action();
+  }
+
+  function handleLike(clip: Clip) {
+    requireAuth(() => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      setClips((prev) =>
+        prev.map((c) =>
+          c.id === clip.id ? { ...c, likedByMe: !c.likedByMe, likes: c.likes + (c.likedByMe ? -1 : 1) } : c,
+        ),
+      );
+      clutch
+        .toggleLike(clip.id)
+        .then((result) =>
+          setClips((prev) =>
+            prev.map((c) => (c.id === clip.id ? { ...c, likedByMe: result.liked, likes: result.likesCount } : c)),
+          ),
+        )
+        .catch(() =>
+          setClips((prev) =>
+            prev.map((c) => (c.id === clip.id ? { ...c, likedByMe: clip.likedByMe, likes: clip.likes } : c)),
+          ),
+        );
+    });
+  }
+
+  function handleSave(clip: Clip) {
+    requireAuth(() => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      setClips((prev) => prev.map((c) => (c.id === clip.id ? { ...c, savedByMe: !c.savedByMe } : c)));
+      clutch
+        .toggleSaveClip(clip.id)
+        .then((saved) =>
+          setClips((prev) => prev.map((c) => (c.id === clip.id ? { ...c, savedByMe: saved } : c))),
+        )
+        .catch(() =>
+          setClips((prev) => prev.map((c) => (c.id === clip.id ? { ...c, savedByMe: clip.savedByMe } : c))),
+        );
+    });
+  }
+
+  async function handleShare(clip: Clip) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    const label = clip.caption ? clip.caption : `Clip by ${clip.channel}`;
+    try {
+      await Share.share({ message: label, url: clipDeepLink(clip.id) });
+    } catch {
+      // A dismissed share sheet is a no-op.
+    }
+  }
+
+  async function openComments(clip: Clip) {
+    setCommentsClip(clip);
+    setComments([]);
+    setCommentCursor(null);
+    try {
+      const page = await clutch.getComments(clip.id);
+      setComments(page.comments);
+      setCommentCursor(page.nextCursor);
+    } catch {
+      // Leave the thread empty; the sheet still opens with the composer.
+    }
+  }
+
+  async function loadMoreComments() {
+    if (!commentsClip || !commentCursor) return;
+    try {
+      const page = await clutch.getComments(commentsClip.id, commentCursor);
+      setComments((prev) => [...prev, ...page.comments]);
+      setCommentCursor(page.nextCursor);
     } catch {
       // Leave the thread as-is; the next scroll retries.
     }
   }
 
-  function handleLike() {
-    if (!clip) return;
-    if (requiresAuthGate) {
-      setGateVisible(true);
-      return;
-    }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    const prev = clip;
-    setClip({ ...clip, likedByMe: !clip.likedByMe, likes: clip.likes + (clip.likedByMe ? -1 : 1) });
-    void clutch
-      .toggleLike(clip.id)
-      .then((result) => setClip((c) => (c ? { ...c, likedByMe: result.liked, likes: result.likesCount } : c)))
-      .catch(() => setClip(prev));
-  }
-
-  function handleShare() {
-    if (!clip) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    const label = clip.caption ? clip.caption : `Clip by ${clip.channel}`;
-    void Share.share({ message: label }).catch(() => {});
-  }
-
   async function handleSend() {
-    if (!id || !draft.trim()) return;
+    if (!commentsClip || !draft.trim()) return;
     if (requiresAuthGate) {
       setGateVisible(true);
       return;
     }
     setSending(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    const clipId = commentsClip.id;
     try {
-      const created = await clutch.addComment(id, draft.trim());
+      const created = await clutch.addComment(clipId, draft.trim());
       setComments((prev) => [...prev, created]);
-      setClip((c) => (c ? { ...c, commentCount: c.commentCount + 1 } : c));
+      setClips((prev) => prev.map((c) => (c.id === clipId ? { ...c, commentCount: c.commentCount + 1 } : c)));
+      setCommentsClip((c) => (c && c.id === clipId ? { ...c, commentCount: c.commentCount + 1 } : c));
       setDraft('');
     } catch {
       // Keep the draft so the athlete can retry without retyping.
@@ -183,9 +340,9 @@ export default function ClutchPostDetailScreen() {
     }
   }
 
-  // Loading / error / not-found share the dark full-bleed frame of the player
-  // so there is no light flash before the video mounts.
-  if (state !== 'ready' || !clip) {
+  // Loading / error / not-found share the dark full-bleed frame so there is no
+  // light flash before the video mounts.
+  if (state !== 'ready') {
     return (
       <View style={{ flex: 1, backgroundColor: colors.text }}>
         <SafeAreaView style={{ flex: 1 }} edges={['top']}>
@@ -230,163 +387,54 @@ export default function ClutchPostDetailScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.text }}>
-      {/* Full-bleed 9:16 video, filling the viewport behind the overlays. */}
-      <ClipVideo url={playbackUrl} thumbUrl={posterUrl ?? clip.thumbUrl} active muted={muted} />
+    <View
+      style={{ flex: 1, backgroundColor: colors.text }}
+      onLayout={(event) => setContainerH(event.nativeEvent.layout.height)}
+    >
+      {containerH > 0 ? (
+        <FlatList
+          data={clips}
+          keyExtractor={(item) => item.id}
+          pagingEnabled
+          showsVerticalScrollIndicator={false}
+          initialScrollIndex={initialIndex}
+          getItemLayout={(_, index) => ({ length: containerH, offset: containerH * index, index })}
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={viewabilityConfig}
+          onEndReachedThreshold={0.5}
+          onEndReached={() => void loadMore()}
+          renderItem={({ item }) => (
+            <View style={{ height: containerH }}>
+              <ClipPage
+                clip={item}
+                active={item.id === activeId}
+                playbackUrl={playbackUrls[item.id]}
+                posterUrl={posterUrls[item.id]}
+                muted={muted}
+                onToggleMute={() => setMuted((m) => !m)}
+                onBack={() => router.back()}
+                onOpenCreator={() =>
+                  router.push({ pathname: '/(tabs)/clutch/creator/[id]', params: { id: item.ownerId } })
+                }
+                onLike={() => handleLike(item)}
+                onComment={() => void openComments(item)}
+                onShare={() => void handleShare(item)}
+                onSave={() => handleSave(item)}
+              />
+            </View>
+          )}
+        />
+      ) : null}
 
-      {/* Top scrim for header legibility over a bright frame. */}
-      <View
-        style={[StyleSheet.absoluteFill, { pointerEvents: 'none', bottom: '78%', backgroundColor: colors.overlay }]}
-      />
-      {/* Bottom scrim for caption legibility. */}
-      <View
-        style={[StyleSheet.absoluteFill, { pointerEvents: 'none', top: '55%', backgroundColor: colors.overlay }]}
-      />
-
-      <SafeAreaView style={StyleSheet.absoluteFill} edges={['top']} pointerEvents="box-none">
-        {/* Top bar: back + "Post" title. */}
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: spacing.xs,
-            paddingHorizontal: spacing.sm,
-            paddingTop: spacing.sm,
-          }}
-        >
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Back"
-            hitSlop={8}
-            onPress={() => router.back()}
-            style={{ height: 44, width: 44, alignItems: 'center', justifyContent: 'center' }}
-          >
-            <ChevronLeft size={28} color={colors.textInverse} strokeWidth={2} />
-          </Pressable>
-          <Text style={[textStyle('h3'), { color: colors.textInverse }]}>Post</Text>
-        </View>
-
-        {/* Header row: avatar + username + sport line. */}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`View ${clip.channel}`}
-          onPress={() => router.push({ pathname: '/(tabs)/clutch/creator/[id]', params: { id: clip.ownerId } })}
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: spacing.sm,
-            paddingHorizontal: spacing.md,
-            paddingTop: spacing.sm,
-          }}
-        >
-          <Avatar name={clip.channel} size={40} />
-          <View style={{ flex: 1 }}>
-            <Text style={[textStyle('label'), { color: colors.textInverse }]} numberOfLines={1}>
-              {clip.channel}
-            </Text>
-            <Text className="font-mono text-xs" style={{ color: colors.textInverse, opacity: 0.8 }} numberOfLines={1}>
-              {clip.sport} · {timeAgo(clip.createdAt)}
-            </Text>
-          </View>
-        </Pressable>
-      </SafeAreaView>
-
-      {/* Right action rail: like, comment, share. */}
-      <SafeAreaView
-        style={{ position: 'absolute', bottom: 0, right: 0 }}
-        edges={['bottom']}
-        pointerEvents="box-none"
+      {/* Comments sheet for the tapped clip. Single modal at the screen level so
+          the thread never pushes a video up; the composer gates a guest (FR-3). */}
+      <Modal
+        visible={commentsClip !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setCommentsClip(null)}
       >
-        <View style={{ alignItems: 'center', gap: spacing.lg, paddingHorizontal: spacing.md, paddingBottom: spacing.lg }}>
-          <Pressable
-            onPress={handleLike}
-            accessibilityRole="button"
-            accessibilityLabel={clip.likedByMe ? 'Unlike' : 'Like'}
-            className="min-h-11 min-w-11 items-center justify-center gap-xs"
-          >
-            <Heart
-              size={30}
-              strokeWidth={1.75}
-              color={clip.likedByMe ? colors.danger : colors.textInverse}
-              fill={clip.likedByMe ? colors.danger : 'transparent'}
-            />
-            <Text className="font-mono text-xs" style={{ color: colors.textInverse }}>
-              {clip.likes}
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setCommentsVisible(true)}
-            accessibilityRole="button"
-            accessibilityLabel="Comments"
-            className="min-h-11 min-w-11 items-center justify-center gap-xs"
-          >
-            <MessageCircle size={30} strokeWidth={1.75} color={colors.textInverse} />
-            <Text className="font-mono text-xs" style={{ color: colors.textInverse }}>
-              {clip.commentCount}
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={handleShare}
-            accessibilityRole="button"
-            accessibilityLabel="Share"
-            className="min-h-11 min-w-11 items-center justify-center gap-xs"
-          >
-            <Share2 size={30} strokeWidth={1.75} color={colors.textInverse} />
-          </Pressable>
-        </View>
-      </SafeAreaView>
-
-      {/* Bottom-left caption + bottom-right mute toggle. */}
-      <SafeAreaView
-        style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}
-        edges={['bottom']}
-        pointerEvents="box-none"
-      >
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'flex-end',
-            justifyContent: 'space-between',
-            gap: spacing.md,
-            paddingLeft: spacing.md,
-            paddingRight: spacing['6xl'],
-            paddingBottom: spacing.lg,
-          }}
-        >
-          <View style={{ flex: 1, gap: spacing.xs }}>
-            {clip.caption ? (
-              <Text style={{ color: colors.textInverse }} numberOfLines={3}>
-                {clip.caption}
-              </Text>
-            ) : null}
-          </View>
-          <Pressable
-            onPress={() => setMuted((m) => !m)}
-            accessibilityRole="button"
-            accessibilityLabel={muted ? 'Unmute' : 'Mute'}
-            hitSlop={8}
-            style={{
-              height: 40,
-              width: 40,
-              borderRadius: radii.pill,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: colors.overlay,
-            }}
-          >
-            {muted ? (
-              <VolumeX size={20} color={colors.textInverse} strokeWidth={1.75} />
-            ) : (
-              <Volume2 size={20} color={colors.textInverse} strokeWidth={1.75} />
-            )}
-          </Pressable>
-        </View>
-      </SafeAreaView>
-
-      {/* Comments sheet. Opened from the comment action so the thread never
-          pushes the video up; the composer gates to login for a guest (FR-3). */}
-      <Modal visible={commentsVisible} transparent animationType="slide" onRequestClose={() => setCommentsVisible(false)}>
-        <Pressable style={{ flex: 1, backgroundColor: colors.overlay }} onPress={() => setCommentsVisible(false)} />
+        <Pressable style={{ flex: 1, backgroundColor: colors.overlay }} onPress={() => setCommentsClip(null)} />
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View
             style={{
@@ -408,13 +456,13 @@ export default function ClutchPostDetailScreen() {
               }}
             >
               <Text style={[textStyle('h3'), { color: colors.text }]}>
-                {clip.commentCount === 1 ? '1 comment' : `${clip.commentCount} comments`}
+                {commentsClip?.commentCount === 1 ? '1 comment' : `${commentsClip?.commentCount ?? 0} comments`}
               </Text>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Close"
                 hitSlop={8}
-                onPress={() => setCommentsVisible(false)}
+                onPress={() => setCommentsClip(null)}
                 style={{ height: 44, width: 44, alignItems: 'center', justifyContent: 'center' }}
               >
                 <X size={24} color={colors.textSecondary} strokeWidth={1.75} />
@@ -509,6 +557,196 @@ export default function ClutchPostDetailScreen() {
       </Modal>
 
       <LoginGateModal visible={gateVisible} onClose={() => setGateVisible(false)} />
+    </View>
+  );
+}
+
+interface ClipPageProps {
+  clip: Clip;
+  active: boolean;
+  playbackUrl?: string;
+  posterUrl?: string;
+  muted: boolean;
+  onToggleMute: () => void;
+  onBack: () => void;
+  onOpenCreator: () => void;
+  onLike: () => void;
+  onComment: () => void;
+  onShare: () => void;
+  onSave: () => void;
+}
+
+/**
+ * One full-bleed page of the viewer: the 9:16 video behind the Instagram Reels
+ * chrome (FB-004) preserved from the single-clip viewer. Header (back, avatar,
+ * sport line), right rail (like, comment, share, save), caption, and mute.
+ */
+function ClipPage({
+  clip,
+  active,
+  playbackUrl,
+  posterUrl,
+  muted,
+  onToggleMute,
+  onBack,
+  onOpenCreator,
+  onLike,
+  onComment,
+  onShare,
+  onSave,
+}: ClipPageProps) {
+  const colors = useThemeColors();
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.text }}>
+      <ClipVideo url={playbackUrl} thumbUrl={posterUrl ?? clip.thumbUrl} active={active} muted={muted} />
+
+      {/* Top scrim for header legibility. */}
+      <View style={[StyleSheet.absoluteFill, { pointerEvents: 'none', bottom: '78%', backgroundColor: colors.overlay }]} />
+      {/* Bottom scrim for caption legibility. */}
+      <View style={[StyleSheet.absoluteFill, { pointerEvents: 'none', top: '55%', backgroundColor: colors.overlay }]} />
+
+      <SafeAreaView style={StyleSheet.absoluteFill} edges={['top']} pointerEvents="box-none">
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing.xs,
+            paddingHorizontal: spacing.sm,
+            paddingTop: spacing.sm,
+          }}
+        >
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            hitSlop={8}
+            onPress={onBack}
+            style={{ height: 44, width: 44, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <ChevronLeft size={28} color={colors.textInverse} strokeWidth={2} />
+          </Pressable>
+          <Text style={[textStyle('h3'), { color: colors.textInverse }]}>Clutch</Text>
+        </View>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`View ${clip.channel}`}
+          onPress={onOpenCreator}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing.sm,
+            paddingHorizontal: spacing.md,
+            paddingTop: spacing.sm,
+          }}
+        >
+          <Avatar name={clip.channel} size={40} />
+          <View style={{ flex: 1 }}>
+            <Text style={[textStyle('label'), { color: colors.textInverse }]} numberOfLines={1}>
+              {clip.channel}
+            </Text>
+            <Text className="font-mono text-xs" style={{ color: colors.textInverse, opacity: 0.8 }} numberOfLines={1}>
+              {clip.sport} · {timeAgo(clip.createdAt)}
+            </Text>
+          </View>
+        </Pressable>
+      </SafeAreaView>
+
+      {/* Right action rail: like, comment, share, save. */}
+      <SafeAreaView style={{ position: 'absolute', bottom: 0, right: 0 }} edges={['bottom']} pointerEvents="box-none">
+        <View style={{ alignItems: 'center', gap: spacing.lg, paddingHorizontal: spacing.md, paddingBottom: spacing.lg }}>
+          <Pressable
+            onPress={onLike}
+            accessibilityRole="button"
+            accessibilityLabel={clip.likedByMe ? 'Unlike' : 'Like'}
+            className="min-h-11 min-w-11 items-center justify-center gap-xs"
+          >
+            <Heart
+              size={30}
+              strokeWidth={1.75}
+              color={clip.likedByMe ? colors.danger : colors.textInverse}
+              fill={clip.likedByMe ? colors.danger : 'transparent'}
+            />
+            <Text className="font-mono text-xs" style={{ color: colors.textInverse }}>
+              {clip.likes}
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={onComment}
+            accessibilityRole="button"
+            accessibilityLabel="Comments"
+            className="min-h-11 min-w-11 items-center justify-center gap-xs"
+          >
+            <MessageCircle size={30} strokeWidth={1.75} color={colors.textInverse} />
+            <Text className="font-mono text-xs" style={{ color: colors.textInverse }}>
+              {clip.commentCount}
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={onSave}
+            accessibilityRole="button"
+            accessibilityLabel={clip.savedByMe ? 'Remove from saved' : 'Save'}
+            className="min-h-11 min-w-11 items-center justify-center gap-xs"
+          >
+            {clip.savedByMe ? (
+              <BookmarkCheck size={30} strokeWidth={1.75} color={colors.accent} fill={colors.accent} />
+            ) : (
+              <Bookmark size={30} strokeWidth={1.75} color={colors.textInverse} />
+            )}
+          </Pressable>
+          <Pressable
+            onPress={onShare}
+            accessibilityRole="button"
+            accessibilityLabel="Share"
+            className="min-h-11 min-w-11 items-center justify-center gap-xs"
+          >
+            <Share2 size={30} strokeWidth={1.75} color={colors.textInverse} />
+          </Pressable>
+        </View>
+      </SafeAreaView>
+
+      {/* Bottom-left caption + bottom-right mute toggle. */}
+      <SafeAreaView style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }} edges={['bottom']} pointerEvents="box-none">
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'flex-end',
+            justifyContent: 'space-between',
+            gap: spacing.md,
+            paddingLeft: spacing.md,
+            paddingRight: spacing['6xl'],
+            paddingBottom: spacing.lg,
+          }}
+        >
+          <View style={{ flex: 1, gap: spacing.xs }}>
+            {clip.caption ? (
+              <Text style={{ color: colors.textInverse }} numberOfLines={3}>
+                {clip.caption}
+              </Text>
+            ) : null}
+          </View>
+          <Pressable
+            onPress={onToggleMute}
+            accessibilityRole="button"
+            accessibilityLabel={muted ? 'Unmute' : 'Mute'}
+            hitSlop={8}
+            style={{
+              height: 40,
+              width: 40,
+              borderRadius: radii.pill,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: colors.overlay,
+            }}
+          >
+            {muted ? (
+              <VolumeX size={20} color={colors.textInverse} strokeWidth={1.75} />
+            ) : (
+              <Volume2 size={20} color={colors.textInverse} strokeWidth={1.75} />
+            )}
+          </Pressable>
+        </View>
+      </SafeAreaView>
     </View>
   );
 }
