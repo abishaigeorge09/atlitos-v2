@@ -1,6 +1,6 @@
 import { spacing, spring } from '@atlitos/theme';
 import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
@@ -14,8 +14,6 @@ import Animated, {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AuthCta, AuthScene } from '@/components/organisms/auth/AuthScene';
-import { Button } from '@/components/ui/button';
-import { friendlyAuthMessage } from '@/lib/auth-copy';
 import { useSessionStore } from '@/store/session-store';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
@@ -38,10 +36,13 @@ import { useThemeColors } from '@/theme/use-theme-colors';
  *         shown to a signed-in user who has not set a city yet
  *         (`apps/mobile/src/app/(tabs)/index.tsx` `showFinishSetup`), plus
  *         Account and any role-specific action ("become a coach").
- *     `continueAsGuest` failing outright (e.g. anonymous sign-ins disabled
- *     on the Supabase project) is the one case this screen still shows UI
- *     for, since a guest with no working path into the app has nowhere
- *     else to go.
+ *     `continueAsGuest` retries a few times with backoff (packages/api
+ *     `useAuth`); if it STILL fails (e.g. anonymous sign-ins disabled on the
+ *     Supabase project) this screen degrades gracefully and routes into
+ *     `/(tabs)` anyway rather than raising a full-screen login wall. Public
+ *     browse works with the anon key, and any authenticated tap already
+ *     raises the LoginGateModal, so a first-time user always lands in the
+ *     app; there is no guest-to-login wall on launch.
  *
  * Track D hardening carried over:
  *   - A signed-in session whose profile fetch FAILED (meError, me null) no
@@ -54,7 +55,6 @@ import { useThemeColors } from '@/theme/use-theme-colors';
  */
 export default function SplashScreen() {
   const colors = useThemeColors();
-  const [guestError, setGuestError] = useState<string | null>(null);
   const status = useSessionStore((state) => state.status);
   const hydrated = useSessionStore((state) => state.hydrated);
   const me = useSessionStore((state) => state.me);
@@ -65,8 +65,8 @@ export default function SplashScreen() {
 
   // Guards against firing continueAsGuest more than once while its promise
   // is still in flight (status stays 'signed_out' until onAuthStateChange
-  // resolves it), and against retrying forever after a hard failure without
-  // the "Try again" tap below.
+  // resolves it). On persistent failure the catch below degrades to /(tabs)
+  // rather than looping, so no unbounded retry here either.
   const guestAttempted = useRef(false);
 
   // Wordmark spring entrance.
@@ -111,21 +111,20 @@ export default function SplashScreen() {
 
     if (status === 'signed_out' && !guestAttempted.current) {
       guestAttempted.current = true;
-      setGuestError(null);
-      continueAsGuest().catch((e: unknown) => {
-        // Surfaces infra failures (e.g. anonymous sign ins disabled on the
-        // Supabase project) instead of a silent, stuck spinner.
-        guestAttempted.current = false;
-        setGuestError(friendlyAuthMessage(e));
+      continueAsGuest().catch(() => {
+        // Persistent guest bootstrap failure (continueAsGuest already retried
+        // with backoff). Degrade gracefully instead of a login wall: route
+        // into the app anyway. Public browse works with the anon key, and any
+        // authenticated tap raises the LoginGateModal, so a first-time user is
+        // never stranded on launch.
+        router.replace('/(tabs)');
       });
     }
   }, [status, hydrated, me, meLoading, meError, continueAsGuest]);
 
   const showMeRetry = hydrated && status === 'signed_in' && !meLoading && !me && meError != null;
-  const showGuestRetry = hydrated && status === 'signed_out' && guestError != null;
   const showSpinner =
-    (!hydrated || (status === 'signed_in' && meLoading) || (status === 'signed_out' && !guestError)) &&
-    !showMeRetry;
+    (!hydrated || (status === 'signed_in' && meLoading) || status === 'signed_out') && !showMeRetry;
 
   return (
     <AuthScene>
@@ -147,26 +146,6 @@ export default function SplashScreen() {
                 We could not load your profile. Check your connection and try again.
               </Text>
               <AuthCta label="Try again" onPress={() => void refreshMe()} />
-            </View>
-          ) : null}
-
-          {showGuestRetry ? (
-            <View style={styles.actions}>
-              <Text style={[textStyle('caption'), styles.centered, { color: colors.danger }]}>{guestError}</Text>
-              <AuthCta
-                label="Try again"
-                onPress={() => {
-                  guestAttempted.current = true;
-                  setGuestError(null);
-                  continueAsGuest().catch((e: unknown) => {
-                    guestAttempted.current = false;
-                    setGuestError(friendlyAuthMessage(e));
-                  });
-                }}
-              />
-              <Button variant="text" onPress={() => router.push('/(auth)/login')}>
-                <Text style={[textStyle('label'), { color: colors.accent }]}>Log in instead</Text>
-              </Button>
             </View>
           ) : null}
         </View>

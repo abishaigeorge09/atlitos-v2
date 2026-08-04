@@ -42,11 +42,18 @@ export default function TrainingsShellLayout() {
   const segments = useSegments() as string[];
 
   const status = useSessionStore((state) => state.status);
+  const session = useSessionStore((state) => state.session);
   const me = useSessionStore((state) => state.me);
+  const meLoading = useSessionStore((state) => state.meLoading);
 
-  const isVerifiedCoach = me?.coachStatus === 'verified';
-  const isPendingOrRejectedCoach = me?.coachStatus === 'pending_review' || me?.coachStatus === 'rejected';
-  const isPlayer = status === 'signed_in' && !!me && !isVerifiedCoach && !isPendingOrRejectedCoach;
+  // `me` is only trustworthy as a role source once it is loaded AND belongs to
+  // the current session's user. While loading, or if a previous user's row is
+  // still momentarily in memory, treat the user as "not yet a verified coach"
+  // so the coach sub nav never flashes for the wrong account.
+  const meReady = !meLoading && !!me && me.id === session?.user.id;
+  const isVerifiedCoach = meReady && me.coachStatus === 'verified';
+  const isPendingOrRejectedCoach = meReady && (me.coachStatus === 'pending_review' || me.coachStatus === 'rejected');
+  const isPlayer = meReady && !isVerifiedCoach && !isPendingOrRejectedCoach;
 
   // Active tab from the current route segment: the segment after this
   // "(shell)" group, or Stats at the group root (/trainings -> index).

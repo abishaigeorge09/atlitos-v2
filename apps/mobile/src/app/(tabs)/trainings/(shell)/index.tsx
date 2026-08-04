@@ -81,6 +81,7 @@ export default function TrainingsScreen() {
   const learn = useLearn(supabase);
 
   const status = useSessionStore((state) => state.status);
+  const session = useSessionStore((state) => state.session);
   const me = useSessionStore((state) => state.me);
   const meLoading = useSessionStore((state) => state.meLoading);
   const meError = useSessionStore((state) => state.meError);
@@ -113,9 +114,13 @@ export default function TrainingsScreen() {
   const [myGroupSessions, setMyGroupSessions] = useState<MyGroupSessionEntry[]>([]);
 
   const requiresAuthGate = status !== 'signed_in';
-  const isVerifiedCoach = me?.coachStatus === 'verified';
-  const isPendingOrRejectedCoach = me?.coachStatus === 'pending_review' || me?.coachStatus === 'rejected';
-  const isPlayer = status === 'signed_in' && !!me && !isVerifiedCoach && !isPendingOrRejectedCoach;
+  // `me` is a trustworthy role source only once loaded AND matching the
+  // current session user; otherwise treat the role as unknown (loading) so the
+  // coach dashboard never renders for a stale/previous user's profile.
+  const meReady = !meLoading && !!me && me.id === session?.user.id;
+  const isVerifiedCoach = meReady && me.coachStatus === 'verified';
+  const isPendingOrRejectedCoach = meReady && (me.coachStatus === 'pending_review' || me.coachStatus === 'rejected');
+  const isPlayer = meReady && !isVerifiedCoach && !isPendingOrRejectedCoach;
 
   const loadDashboard = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -254,7 +259,7 @@ export default function TrainingsScreen() {
     }
   }
 
-  const showLoading = status === 'signed_in' && meLoading && !me;
+  const showLoading = status === 'signed_in' && !meReady && !meError;
 
   // Athlete derivations, all from the player's own rows (FR-27: real
   // history, never cached estimates). Same stat definitions as the

@@ -138,12 +138,24 @@ export function useAuth(client: AtlitosClient) {
     },
 
     /** v1 `continueAsGuest`. An anonymous auth user with zero `user_roles`
-     * rows is the guest state everywhere else (RLS.md). */
+     * rows is the guest state everywhere else (RLS.md). Guest-first-open is
+     * the app's default landing path, so a transient failure (a dropped
+     * request, a cold edge) must not strand a first-time user on a login
+     * wall: retry signInAnonymously a few times with short linear backoff
+     * before surfacing failure. Only a persistent failure throws, which the
+     * splash screen then degrades into public browsing rather than a wall. */
     async continueAsGuest(): Promise<Session> {
-      const { data, error } = await client.auth.signInAnonymously();
-      if (error) throw mapAuthError(error);
-      if (!data.session) throw mapAuthError({ message: "No session returned for guest sign-in." });
-      return data.session;
+      const maxAttempts = 3;
+      let lastError: unknown = { message: "No session returned for guest sign-in." };
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        const { data, error } = await client.auth.signInAnonymously();
+        if (!error && data.session) return data.session;
+        lastError = error ?? lastError;
+        if (attempt < maxAttempts) {
+          await new Promise((resolve) => setTimeout(resolve, attempt * 300));
+        }
+      }
+      throw mapAuthError(lastError as Parameters<typeof mapAuthError>[0]);
     },
 
     async signOut(): Promise<void> {

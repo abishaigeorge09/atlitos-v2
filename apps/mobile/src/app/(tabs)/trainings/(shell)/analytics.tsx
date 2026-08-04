@@ -62,10 +62,29 @@ function BarRow({
  * and TrainingsSubNav.
  */
 export default function TrainingsAnalyticsScreen() {
+  const colors = useThemeColors();
+  const status = useSessionStore((state) => state.status);
+  const session = useSessionStore((state) => state.session);
   const me = useSessionStore((state) => state.me);
+  const meLoading = useSessionStore((state) => state.meLoading);
+
+  // `me` is only a trustworthy role source once loaded AND belonging to the
+  // current session user; until then render a neutral loading state rather
+  // than defaulting to the player view, so a coach's analytics never flashes
+  // the wrong (player) screen, and a stale previous user never picks the view.
+  const meReady = !meLoading && !!me && me.id === session?.user.id;
+  if (status === 'signed_in' && !meReady) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.bg, padding: spacing.lg, gap: spacing.lg }}>
+        <Skeleton shape="card" height={96} />
+        <Skeleton shape="card" height={140} />
+      </View>
+    );
+  }
+
   // Verified coaches get the coach analytics; every other signed in user is
   // an athlete and gets the player view (PRD-01 3.3 "Analytics (player)").
-  if (me?.coachStatus === 'verified') return <CoachAnalyticsScreen />;
+  if (meReady && me.coachStatus === 'verified') return <CoachAnalyticsScreen />;
   return <PlayerAnalyticsScreen />;
 }
 
