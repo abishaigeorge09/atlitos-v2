@@ -1037,7 +1037,7 @@ function isHttpUrl(value: string | null | undefined): boolean {
   return typeof value === "string" && /^https?:\/\//.test(value);
 }
 
-function mapClipRow(row: ClipFeedRow, likedByMe: boolean): Clip {
+function mapClipRow(row: ClipFeedRow, likedByMe: boolean, savedByMe = false): Clip {
   return {
     id: row.id,
     ownerId: row.owner_id,
@@ -1058,6 +1058,7 @@ function mapClipRow(row: ClipFeedRow, likedByMe: boolean): Clip {
     commentCount: row.comment_count,
     createdAt: row.created_at,
     likedByMe,
+    savedByMe,
   };
 }
 
@@ -1134,6 +1135,24 @@ function makeClutchApi(client: AtlitosClient) {
     return new Set((data ?? []).map((r) => r.clip_id));
   }
 
+  /** The subset of `ids` the caller has saved, for the feed/viewer bookmark
+   * state. Explicit owner filter on `clip_saves` (owner-only RLS is the
+   * ceiling; the query still scopes itself, CLAUDE.md). A guest has no saves. */
+  async function savedClipIds(ids: string[]): Promise<Set<string>> {
+    if (ids.length === 0) return new Set();
+    const { data: authData } = await client.auth.getUser();
+    if (!authData.user || authData.user.is_anonymous) return new Set();
+
+    const { data, error } = await db
+      .from("clip_saves")
+      .select("clip_id")
+      .eq("user_id", authData.user.id)
+      .in("clip_id", ids)
+      .returns<{ clip_id: string }[]>();
+    if (error) throw mapPostgrestError(error);
+    return new Set((data ?? []).map((r) => r.clip_id));
+  }
+
   return {
     /** v1 `clutch.feed`. Keyset pagination on `created_at`, newest first.
      * `status='published'` is filtered EXPLICITLY here, never left to RLS:
@@ -1154,10 +1173,11 @@ function makeClutchApi(client: AtlitosClient) {
       if (error) throw mapPostgrestError(error);
 
       const rows = data ?? [];
-      const liked = await likedClipIds(rows.map((r) => r.id));
+      const ids = rows.map((r) => r.id);
+      const [liked, saved] = await Promise.all([likedClipIds(ids), savedClipIds(ids)]);
       const last = rows.at(-1);
       return {
-        clips: rows.map((r) => mapClipRow(r, liked.has(r.id))),
+        clips: rows.map((r) => mapClipRow(r, liked.has(r.id), saved.has(r.id))),
         nextCursor: rows.length === CLUTCH_PAGE_SIZE && last ? last.created_at : null,
       };
     },
@@ -1174,8 +1194,8 @@ function makeClutchApi(client: AtlitosClient) {
       if (error) throw mapPostgrestError(error);
       if (!data) return null;
 
-      const liked = await likedClipIds([data.id]);
-      return mapClipRow(data, liked.has(data.id));
+      const [liked, saved] = await Promise.all([likedClipIds([data.id]), savedClipIds([data.id])]);
+      return mapClipRow(data, liked.has(data.id), saved.has(data.id));
     },
 
     /** v1 `clutch.comments`. Keyset on `created_at`, oldest first (a comment
@@ -1349,6 +1369,68 @@ function makeClutchApi(client: AtlitosClient) {
       if (error) throw mapPostgrestError(error);
 
       return (data ?? []).map((row) => mapClipRow(row.clips, true));
+    },
+
+    /** PRD-01 FR-45. Toggle a clip into or out of the caller's private saves.
+     * `clip_saves` is owner-only (0088): direct owner-scoped DML is the write
+     * path, no RPC and no count trigger. Idempotent by the unique (clip_id,
+     * user_id): a save that already exists is removed, otherwise inserted.
+     * Returns true when the clip is now saved. A guest is refused server-side
+     * (the insert policy requires `not is_guest()`); the UI gates first. */
+    async toggleSaveClip(clipId: string): Promise<boolean> {
+      const { data: authData, error: authError } = await client.auth.getUser();
+      if (authError) throw mapAuthError(authError);
+      if (!authData.user || authData.user.is_anonymous) {
+        throw mapAuthError({ message: "Sign in to save clips.", status: 401 });
+      }
+
+      const { data: existing, error: readError } = await db
+        .from("clip_saves")
+        .select("id")
+        .eq("user_id", authData.user.id)
+        .eq("clip_id", clipId)
+        .maybeSingle<{ id: string }>();
+      if (readError) throw mapPostgrestError(readError);
+
+      if (existing) {
+        const { error } = await db
+          .from("clip_saves")
+          .delete()
+          .eq("user_id", authData.user.id)
+          .eq("clip_id", clipId);
+        if (error) throw mapPostgrestError(error);
+        return false;
+      }
+
+      const { error } = await db
+        .from("clip_saves")
+        .insert({ clip_id: clipId, user_id: authData.user.id });
+      if (error) throw mapPostgrestError(error);
+      return true;
+    },
+
+    /** The caller's saved clips for the profile's Saved grid, newest save
+     * first. EXPLICIT owner filter on `clip_saves` (the owner-only RLS is a
+     * ceiling, not scoping) AND an explicit `clips.status = 'published'` on the
+     * inner join, so a save on a since-removed clip never resurfaces. Rows come
+     * back in the feed select shape so the thumb card renders unchanged;
+     * savedByMe is true by construction. */
+    async listSavedClips(): Promise<Clip[]> {
+      const { data: authData, error: authError } = await client.auth.getUser();
+      if (authError) throw mapAuthError(authError);
+      if (!authData.user || authData.user.is_anonymous) return [];
+
+      const { data, error } = await db
+        .from("clip_saves")
+        .select(`created_at, clips!inner ( ${CLIP_FEED_SELECT} )`)
+        .eq("user_id", authData.user.id)
+        .eq("clips.status", "published")
+        .order("created_at", { ascending: false })
+        .limit(100)
+        .returns<{ created_at: string; clips: ClipFeedRow }[]>();
+      if (error) throw mapPostgrestError(error);
+
+      return (data ?? []).map((row) => mapClipRow(row.clips, false, true));
     },
 
     /** A creator's public grid: their `published` clips, newest first. The

@@ -302,6 +302,7 @@ export interface Clip {
   commentCount: number;
   createdAt: string;
   likedByMe?: boolean;
+  savedByMe?: boolean; // true when the caller has this clip in their saves
   topComment?: Comment; // hydrated for feed cards
 }
 
