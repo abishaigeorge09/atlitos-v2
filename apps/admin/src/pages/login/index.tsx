@@ -16,6 +16,16 @@ export function LoginPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [accessDenied, setAccessDenied] = useState(false);
 
+  function showError(name: string | undefined) {
+    const denied = name === "AccessDenied";
+    setAccessDenied(denied);
+    setErrorMessage(
+      denied
+        ? "This account does not have admin access."
+        : "Sign in failed. Check the email and password and try again.",
+    );
+  }
+
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setErrorMessage(null);
@@ -24,14 +34,18 @@ export function LoginPage() {
     login(
       { email, password },
       {
+        // BUG-014: authProvider.login RESOLVES with { success:false, error }
+        // rather than throwing, so react-query treats it as a success and the
+        // per-call onError never fires. Read the resolved AuthActionResponse
+        // in onSuccess and surface the exact copy inline. onError stays for a
+        // genuinely thrown/rejected mutation (network, unexpected).
+        onSuccess: (data) => {
+          if (!data?.success) {
+            showError((data?.error as { name?: string } | undefined)?.name);
+          }
+        },
         onError: (error) => {
-          const name = (error as { name?: string })?.name;
-          setAccessDenied(name === "AccessDenied");
-          setErrorMessage(
-            name === "AccessDenied"
-              ? "This account does not have admin access."
-              : "Sign in failed. Check the email and password and try again.",
-          );
+          showError((error as { name?: string })?.name);
         },
       },
     );

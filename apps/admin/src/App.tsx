@@ -29,6 +29,7 @@ import { VenuesList } from "./pages/venues/list";
 import { VerificationList } from "./pages/verification/list";
 import { VerificationShow } from "./pages/verification/show";
 import { authProvider } from "./providers/authProvider";
+import { Notifications, notificationProvider } from "./providers/notificationProvider";
 import { supabaseClient } from "./providers/supabaseClient";
 
 export function App() {
@@ -37,6 +38,7 @@ export function App() {
       <Refine
         dataProvider={dataProvider(supabaseClient)}
         authProvider={authProvider}
+        notificationProvider={notificationProvider}
         routerProvider={routerBindings}
         resources={[
           {
@@ -135,6 +137,7 @@ export function App() {
             <Route path="/users" element={<UsersList />} />
           </Route>
         </Routes>
+        <Notifications />
         <UnsavedChangesNotifier />
         <DocumentTitleHandler />
       </Refine>
