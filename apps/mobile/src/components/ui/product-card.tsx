@@ -71,9 +71,15 @@ function ProductCard({
     // sibling that sits under the wishlist heart, the Add to cart button and
     // the quantity stepper, so no action control is ever a descendant of
     // another pressable.
+    // bg-card/border-border are shadcn compat slots (var(--card) -> hsl(var(--color-card))),
+    // a double-nested CSS var nativewind's native runtime does not re-resolve on the dark
+    // toggle, so they stayed at the light #FFFFFF/cream value in dark mode (FB-002). Source
+    // the card surface + border from the JS-resolved theme instead, the same path the chrome
+    // (colors.bg) already uses, so the tile follows the resolved theme.
     <View
+      style={{ backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }}
       className={cn(
-        'overflow-hidden rounded-xl border border-border bg-card',
+        'overflow-hidden rounded-xl',
         isRow ? 'flex-row' : 'flex-col',
         className,
       )}
@@ -118,8 +124,8 @@ function ProductCard({
           }}
           accessibilityRole="button"
           accessibilityLabel={wishlisted ? 'Remove from wishlist' : 'Save to wishlist'}
-          style={{ zIndex: 1 }}
-          className="absolute right-xs top-xs h-11 w-11 items-center justify-center rounded-pill bg-surface"
+          style={{ zIndex: 1, backgroundColor: colors.surface }}
+          className="absolute right-xs top-xs h-11 w-11 items-center justify-center rounded-pill"
         >
           <Heart
             size={18}

@@ -44,7 +44,14 @@ function CourtCard({
     // Pressable overlay card, see docs/design/DESIGN-LANGUAGE.md. The card is a
     // plain View so Book is a sibling of the card level press target, not a
     // button nested inside another button.
-    <View className={cn('overflow-hidden rounded-xl border border-border bg-card', className)}>
+    // bg-card/border-border are shadcn compat slots (var(--card) -> hsl(var(--color-card))),
+    // a double-nested CSS var nativewind's native runtime does not re-resolve on the dark
+    // toggle, so they stayed at the light #FFFFFF/cream value in dark mode (FB-002). Source
+    // the card surface + border from the JS-resolved theme instead, matching the chrome.
+    <View
+      style={{ backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }}
+      className={cn('overflow-hidden rounded-xl', className)}
+    >
       {onPress ? (
         <Pressable
           onPress={onPress}
