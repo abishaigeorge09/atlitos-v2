@@ -6,6 +6,7 @@
 
 import { corsHeaders } from "./cors.ts";
 import { AppError } from "./app-error.ts";
+import { captureEdgeError } from "./sentry.ts";
 
 export function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -38,6 +39,11 @@ export async function withErrorHandling(
       return errorResponse(err);
     }
     console.error("Unhandled edge function error:", err);
+    // Only the unexpected branch reports to Sentry: an AppError above is an
+    // expected, well-formed refusal (VALIDATION, NOT_FOUND, ...), not an
+    // incident. This is the one that means the server itself broke.
+    const fnName = new URL(req.url).pathname.split("/").filter(Boolean).pop() ?? "unknown";
+    await captureEdgeError(err, { fn: fnName });
     return errorResponse(
       new AppError(
         "INTERNAL",

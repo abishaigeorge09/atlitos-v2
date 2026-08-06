@@ -59,7 +59,8 @@
       ],
       "expo-font",
       "expo-status-bar",
-      "expo-video"
+      "expo-video",
+      "@sentry/react-native/expo"
     ],
     "experiments": {
       "typedRoutes": true

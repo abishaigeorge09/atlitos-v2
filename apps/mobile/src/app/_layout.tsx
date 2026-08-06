@@ -6,9 +6,10 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useColorScheme } from 'nativewind';
 import { useEffect } from 'react';
-import { StatusBar } from 'react-native';
+import { StatusBar, Text, View } from 'react-native';
 
 import { applyTheme } from '@/lib/apply-theme';
+import { Sentry } from '@/lib/sentry';
 import { startSessionListener, useSessionStore } from '@/store/session-store';
 import { useThemeColors } from '@/theme/use-theme-colors';
 
@@ -16,7 +17,7 @@ SplashScreen.preventAutoHideAsync().catch(() => {
   // Not fatal, the splash screen just hides on its own default timing.
 });
 
-export default function RootLayout() {
+function RootLayout() {
   // nativewind's resolved scheme, not RN's own useColorScheme, so the
   // status bar style always agrees with useThemeColors()/the `dark` class,
   // see src/theme/use-theme-colors.ts for why the two can disagree on web.
@@ -100,3 +101,23 @@ export default function RootLayout() {
     </>
   );
 }
+
+function RootLayoutFallback() {
+  return (
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <Text>Something went wrong. Restart the app to continue.</Text>
+    </View>
+  );
+}
+
+// Sentry.wrap adds native crash and render-error reporting when a DSN is
+// configured (src/lib/sentry.ts). The wrapped ErrorBoundary catches a render
+// crash in this tree and shows a fallback instead of a blank screen; a
+// missing DSN just means the boundary reports nowhere, it still catches.
+export default Sentry.wrap(function WrappedRootLayout() {
+  return (
+    <Sentry.ErrorBoundary fallback={<RootLayoutFallback />}>
+      <RootLayout />
+    </Sentry.ErrorBoundary>
+  );
+});
