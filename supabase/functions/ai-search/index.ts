@@ -31,13 +31,25 @@
 //        - products: `active = true`.
 //        - athletes: `upa_applications.status = 'verified'`.
 //        - clips: `clips.status = 'published'`.
-//   The service-role client is deliberately never constructed here; search has
-//   no money leg and must not bypass RLS.
+//   The service-role client is used for exactly ONE narrow purpose (below),
+//   never for any of the reads above: search has no money leg and must not
+//   bypass RLS for the data itself.
+//
+// THROTTLE + BUDGET (LAUNCH Phase 3 Track B, P1-5; PHASE-3-STATUS.md CT-2,
+// CT-3). Before any LLM call, `evaluateAiSearchGate` (spend-guard.ts) checks a
+// per-user token bucket AND the day's spend against `ai_search_daily_budget()`.
+// Over either, the request degrades to the deterministic keyword path, never
+// an error (Settled decision 5). This is the one place this function
+// constructs a SERVICE ROLE client: `take_rate_limit_token` and
+// `record_ai_spend`/`ai_search_daily_budget`/`ai_spend_daily` are service_role
+// only grants (CT-2, CT-3), and none of them touch a data table this function
+// searches. Response gains `"mode": "llm" | "keyword"`, naming which path the
+// gate actually took.
 
 import { handleCorsPreflight } from "../_shared/cors.ts";
 import { jsonResponse, withErrorHandling } from "../_shared/http.ts";
 import { AppError } from "../_shared/app-error.ts";
-import { userScopedClient } from "../_shared/supabase.ts";
+import { getAuthenticatedUser, serviceRoleClient, userScopedClient } from "../_shared/supabase.ts";
 
 import {
   type Candidate,
@@ -54,6 +66,7 @@ import {
   SPORTS,
 } from "./search-core.ts";
 import { llmEnabled, llmParseIntent, llmRerank } from "./llm.ts";
+import { evaluateAiSearchGate, recordAiSpend } from "./spend-guard.ts";
 
 // --------------------------------------------------------------------------
 // Request
@@ -393,6 +406,10 @@ Deno.serve((req) =>
     const body = parseRequestBody(await request.json().catch(() => null));
 
     const supabase = userScopedClient(request);
+    // Validated against GoTrue, never a client-supplied id; a guest's
+    // anonymous session still resolves to a real user id here (verify_jwt is
+    // true for this function, so there is always a session to validate).
+    const { id: userId } = await getAuthenticatedUser(request);
 
     const override: IntentOverride = {
       entityTypes: body.entityTypes,
@@ -400,12 +417,27 @@ Deno.serve((req) =>
       priceMax: body.priceMax,
     };
 
-    // Deterministic parse is always the baseline. When the LLM key is present,
-    // refine it with Claude's structured parse (guarded: null on any failure).
+    // The one narrow service-role client this function constructs (see file
+    // header): only ever passed to the CT-2/CT-3 rate-limit and spend RPCs,
+    // never to a data read.
+    const svc = llmEnabled() ? serviceRoleClient() : null;
+
+    // The CT-2/CT-3 gate decides ONCE per request whether either LLM call
+    // below may run; both the intent parse and the rerank obey the same
+    // decision, so a request never partially spends after already degrading.
+    const gate = svc ? await evaluateAiSearchGate(svc, userId) : { mode: "keyword" as const };
+    const useLlm = gate.mode === "llm";
+
+    // Deterministic parse is always the baseline. When the gate allows it,
+    // refine it with Claude's structured parse (guarded: falls back on any
+    // failure, and the fallback still records nothing since usage is null).
     let intent = parseIntent(body.query, override);
-    if (llmEnabled()) {
-      const refined = await llmParseIntent(body.query).catch(() => null);
+    if (useLlm && svc) {
+      const { intent: refined, usage } = await llmParseIntent(body.query).catch(
+        () => ({ intent: null, usage: null }),
+      );
       intent = mergeIntent(intent, refined);
+      if (usage) await recordAiSpend(svc, usage.inputTokens, usage.outputTokens);
     }
 
     const want = new Set(intent.entityTypes);
@@ -424,16 +456,29 @@ Deno.serve((req) =>
     // FR-16 honesty gate: keep only hard-constraint-qualified, confident hits.
     const honesty = evaluateHonesty(candidates, scored, intent);
     if (honesty.broaden) {
-      return jsonResponse({ query: body.query, parsedIntent: intent, results: [], broaden: honesty.broaden }, 200);
+      return jsonResponse(
+        { query: body.query, parsedIntent: intent, results: [], broaden: honesty.broaden, mode: gate.mode },
+        200,
+      );
     }
 
     const qualified = scored.filter((h) => honesty.qualified.has(`${h.entityType}:${h.entityId}`));
 
     // LLM rerank (guarded) refines order + rankReason over the qualified set;
-    // absent key or failure keeps the deterministic order.
-    const reranked = llmEnabled() ? await llmRerank(body.query, qualified).catch(() => qualified) : qualified;
-    const results = reranked.slice(0, body.limit);
+    // gated off (absent key, throttled, or over budget) or a call failure
+    // both keep the deterministic order.
+    let results = qualified;
+    if (useLlm && svc) {
+      const { hits: reranked, usage } = await llmRerank(body.query, qualified).catch(
+        () => ({ hits: qualified, usage: null }),
+      );
+      results = reranked;
+      if (usage) await recordAiSpend(svc, usage.inputTokens, usage.outputTokens);
+    }
 
-    return jsonResponse({ query: body.query, parsedIntent: intent, results }, 200);
+    return jsonResponse(
+      { query: body.query, parsedIntent: intent, results: results.slice(0, body.limit), mode: gate.mode },
+      200,
+    );
   })
 );

@@ -1,6 +1,8 @@
 // ATLITOS v2 — supabase/functions/get-clip-playback-url/index.ts
 //
 // AT-96. PRD-01 FR-42, FR-45; VIDEO.md + PHASE-5-STATUS.md.
+// LAUNCH Phase 3 Track B (P1-1, P1-5's rate-limit half; PHASE-3-STATUS.md
+// CT-1, CT-2): extended, in place, with a batch body and a per-IP rate limit.
 //
 // The PUBLIC-callable signed-URL mint for Clutch playback. Given a clip id it
 // returns a short lived (TTL 300s) signed download URL for the clip's video
@@ -28,11 +30,21 @@
 // reads the LIVE row, the instant a clip is `removed` this path refuses for
 // every non-owner (public, other members, and even an admin here, who previews
 // through get-clip-moderation-url instead), and any already minted non-owner
-// URL stops resolving once its 300s TTL elapses (residual playability is
-// bounded by the TTL, never indefinite). The FB-004 widening is scoped strictly
-// to owner-of-row (auth.uid() == clip.owner_id): a takedown still hides the clip
-// from everyone else, it just no longer hides the owner's own clip from the
-// owner. Verified adversarially in AT-107 (and re-proven for FB-004).
+// URL stops resolving once its TTL elapses (residual playability is bounded,
+// never indefinite). The FB-004 widening is scoped strictly to owner-of-row
+// (auth.uid() == clip.owner_id): a takedown still hides the clip from everyone
+// else, it just no longer hides the owner's own clip from the owner. Verified
+// adversarially in AT-107 (and re-proven for FB-004).
+//
+// BATCH BODY (CT-1, new this phase). `{ clip_ids: string[], kind?: "video" |
+// "thumb" }` (max 24 ids) returns `{ urls, failed }`, one entry per id, partial
+// failure INCLUDED as 200 (a forbidden id lands in `failed`, never aborts the
+// batch). Same authz decision as the legacy single-id body, same live-row read
+// every call. See `handler.ts` for the shared implementation.
+//
+// RATE LIMIT (CT-1, CT-2, new this phase). A per-IP token bucket in front of
+// BOTH bodies: 60 requests/60s. Fails OPEN on a rate-limit RPC error (never a
+// 500 on this read path); see `_shared/rate-limit.ts`.
 //
 // Deployed with verify_jwt = false BECAUSE it is public callable: a guest has
 // no user JWT. Auth is read OPTIONALLY inside (getOptionalUserId), and a valid
@@ -40,79 +52,13 @@
 // token simply means "treated as a guest", who can still see published clips.
 
 import { handleCorsPreflight } from "../_shared/cors.ts";
-import { jsonResponse, withErrorHandling } from "../_shared/http.ts";
-import { AppError } from "../_shared/app-error.ts";
-import {
-  fetchLiveClip,
-  getOptionalUserId,
-  isAdminOrModerator,
-  mintSignedClipUrl,
-  serviceRoleClient,
-  SIGNED_URL_TTL_SECONDS,
-} from "../_shared/clip-access.ts";
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function parseClipId(raw: unknown): string {
-  if (typeof raw !== "object" || raw === null) {
-    throw new AppError("VALIDATION", "Request body must be a JSON object.", 400);
-  }
-  const clipId = (raw as Record<string, unknown>).clip_id;
-  if (typeof clipId !== "string" || !UUID_RE.test(clipId)) {
-    throw new AppError("VALIDATION", "clip_id must be a valid uuid.", 400);
-  }
-  return clipId;
-}
+import { withErrorHandling } from "../_shared/http.ts";
+import { handlePlaybackRequest } from "./handler.ts";
 
 Deno.serve((req) =>
   withErrorHandling(req, async (request) => {
     const preflight = handleCorsPreflight(request);
     if (preflight) return preflight;
-
-    if (request.method !== "POST") {
-      throw new AppError("VALIDATION", "Only POST is supported.", 405);
-    }
-
-    const clipId = parseClipId(await request.json().catch(() => null));
-    const supabase = serviceRoleClient();
-
-    // The LIVE row, every call. Never a cached or stored decision.
-    const clip = await fetchLiveClip(supabase, clipId);
-
-    if (clip.status !== "published") {
-      // The OWNER always gets their own clip, any status, terminal included
-      // (FB-004). Everyone else: a terminal clip (removed/rejected) refuses
-      // outright (takedown teeth), and a non-terminal clip is previewable only
-      // by an admin/moderator. Resolve owner first so the owner branch never
-      // depends on the moderation/terminal checks below.
-      const userId = await getOptionalUserId(request);
-      const isOwner = userId !== null && userId === clip.owner_id;
-      if (!isOwner) {
-        if (clip.status === "removed" || clip.status === "rejected") {
-          throw new AppError("FORBIDDEN", "This clip is not available.", 403);
-        }
-        const isAdmin = await isAdminOrModerator(supabase, userId);
-        if (!isAdmin) {
-          throw new AppError("FORBIDDEN", "This clip is not available.", 403);
-        }
-      }
-    }
-
-    const videoUrl = await mintSignedClipUrl(supabase, clip.storage_path);
-    let thumbUrl: string | null = null;
-    if (clip.thumb_path) {
-      thumbUrl = await mintSignedClipUrl(supabase, clip.thumb_path);
-    }
-
-    return jsonResponse(
-      {
-        clipId: clip.id,
-        url: videoUrl,
-        thumbUrl,
-        expiresIn: SIGNED_URL_TTL_SECONDS,
-        status: clip.status,
-      },
-      200,
-    );
+    return handlePlaybackRequest(request);
   })
 );
