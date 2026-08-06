@@ -16,7 +16,8 @@
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://syzzfgaudpifwvbpycyi.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_w81GxOVCX2UVNoQ9NAGTaA_u2kuT29O",
-        "EXPO_PUBLIC_RAZORPAY_KEY_ID": "rzp_test_TCwxkMaUz54BPH"
+        "EXPO_PUBLIC_RAZORPAY_KEY_ID": "rzp_test_TCwxkMaUz54BPH",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://876015a1577bb6dc1bb925a5e3990be8@o4511848827256832.ingest.us.sentry.io/4511848834727936"
       }
     }
   },

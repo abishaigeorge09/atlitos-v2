@@ -6,6 +6,7 @@ import routerBindings, {
   UnsavedChangesNotifier,
 } from "@refinedev/react-router";
 import { dataProvider } from "@refinedev/supabase";
+import * as Sentry from "@sentry/react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import { Shell } from "./layout/Shell";
@@ -32,8 +33,17 @@ import { authProvider } from "./providers/authProvider";
 import { Notifications, notificationProvider } from "./providers/notificationProvider";
 import { supabaseClient } from "./providers/supabaseClient";
 
+function ErrorFallback() {
+  return (
+    <div style={{ padding: "2rem" }}>
+      <p>Something went wrong. The team has been notified. Reload the page to continue.</p>
+    </div>
+  );
+}
+
 export function App() {
   return (
+    <Sentry.ErrorBoundary fallback={<ErrorFallback />}>
     <BrowserRouter>
       <Refine
         dataProvider={dataProvider(supabaseClient)}
@@ -142,5 +152,6 @@ export function App() {
         <DocumentTitleHandler />
       </Refine>
     </BrowserRouter>
+    </Sentry.ErrorBoundary>
   );
 }
