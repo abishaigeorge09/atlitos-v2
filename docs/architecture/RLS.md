@@ -345,6 +345,8 @@ Supabase Storage buckets get their own RLS-style policies on `storage.objects`, 
 
 `product-media` was listed here from P4 but its bucket and `storage.objects` policies were never actually created (AT-81's admin catalog provisioning did not land), so product images had nowhere to live and `product_media` stayed empty. `0070_product_media_bucket.sql` finally provisions it to match this row: public read (`product_media_public_read`, guest browsable shop) and admin-scoped insert/update/delete (`has_role('admin')`, path `{product_id}/{filename}`).
 
+**Size/MIME limits (Phase 11 lockdown, `0089`).** The five public buckets in the row above (`avatars`, `venue-media`, `upa-photos`, `gratitude-photos`, `product-media`) had `file_size_limit`/`allowed_mime_types` both `null` (unlimited size, any content type) through P10. `0089_security_lockdown_phase1.sql` sets all five to `file_size_limit = 10485760` (10MB) and `allowed_mime_types = {image/jpeg, image/png, image/webp, image/heic, image/heif}`, since every one of these buckets is photo uploads only today (no `media_type`/video column on any of their owning tables). `clips`, `coach-certificates`, and `upa-evidence` are not public and were left alone. If any of these five buckets is ever asked to carry video, its `allowed_mime_types` needs a deliberate follow-up migration, not a silent widening.
+
 ## What the advisor checks at every gate
 
 Per PLAN.md's verification section, the Supabase RLS advisor runs at every phase gate and must be clean before the biased approver reviews the phase. Clean means: every table in `SCHEMA.md` has RLS enabled, no table has a policy granting `USING (true)` on a write verb, no `SECURITY DEFINER` function is callable by a role broader than it needs (checked by function `GRANT` review alongside the advisor's own output), and the guest/anon read surface table above is the complete list, nothing else leaks to `anon`.
@@ -367,6 +369,28 @@ The P8 hardening pass burned down the fixable advisor debt without changing any 
 | `rls_enabled_no_policy` | INFO | 4 | 4 | KEEP (fail-closed: `stock_reservations`, `webhook_events`, etc.) |
 
 No new ERROR was introduced. The residual accepted count the biased approver signs against: 3 ERROR (all KEEP `security_definer_view`) and the WARN residual above, every item dispositioned below.
+
+## Phase 11 security lockdown (anon RPC grant fixes, `0089`)
+
+By P11, `anon_security_definer_function_executable` had grown from the P8 baseline of 13 to
+22, and re-auditing all 22 individually (not just re-accepting the count) turned up a real
+bug in the pattern several prior migrations used: this project's schema-level default
+privileges grant `EXECUTE` on every new function directly to `anon`, `authenticated`, and
+`service_role` as named ACL entries. `0005`, `0081`, and `0088` each tried to lock a function
+down with `revoke all on function ... from public`, which only removes the `PUBLIC`
+pseudo-role's own entry, a no-op against those named grants, so the intended `anon` lockdown
+silently never took effect. `0089_security_lockdown_phase1.sql` fixes this for real with an
+explicit `revoke execute ... from anon` per function (see `docs/qa/SECURITY-LOCKDOWN.md`
+section 3 for the full per-function keep/revoke table, the evidence for each decision, and
+the post-change `set local role anon` verification). Net result: 22 -> 12
+`anon_security_definer_function_executable`, all 12 confirmed deliberate guest-facing reads
+with a real guest call site.
+
+**The lesson for any future function that must not be anon-callable**: write
+`revoke execute on function ... from anon` (and `from public` too, if the function predates
+this project's named-grant convention, check `pg_proc.proacl` to be sure) explicitly.
+`revoke ... from public` alone does not revoke a named `anon` grant and will silently leave
+the function anon-callable, exactly the bug this section fixes.
 
 ### What was fixed
 
