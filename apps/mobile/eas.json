@@ -25,6 +25,10 @@
       "ios": {
         "ascAppId": "6793626237",
         "appleTeamId": "4U493SXP52"
+      },
+      "android": {
+        "serviceAccountKeyPath": "./google-service-account.json",
+        "track": "internal"
       }
     }
   }

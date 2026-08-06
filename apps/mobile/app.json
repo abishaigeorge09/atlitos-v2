@@ -16,6 +16,7 @@
       }
     },
     "android": {
+      "package": "com.atlitos.app",
       "adaptiveIcon": {
         "backgroundColor": "#FBF7F1",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -46,6 +47,14 @@
         "expo-location",
         {
           "locationWhenInUsePermissionDescription": "Atlitos uses your location to show courts near you and sort them by distance."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Atlitos uses your photo library to upload clutch clips and profile photos.",
+          "cameraPermission": "Atlitos uses your camera to capture clutch clips and profile photos.",
+          "microphonePermission": "Atlitos needs microphone access so uploaded video clips keep their sound."
         }
       ],
       "expo-font",
