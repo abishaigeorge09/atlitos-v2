@@ -29,6 +29,21 @@ import { mapPostgrestError } from "./errors";
  * nothing to hydrate it from. The field stays on the domain type for a
  * future phase to fill in; this hook does not invent a client-side guess for
  * it.
+ *
+ * Phase 3 (P1-2, CT-4): live delivery no longer subscribes to raw row
+ * changes on `chat_messages`. That shape made the server re-evaluate RLS for every
+ * subscriber on every inserted row, the 1000-concurrent meltdown class
+ * (PHASE-3-STATUS.md). Delivery now rides a Postgres trigger's
+ * `realtime.send()` to a PRIVATE per-user Broadcast topic,
+ * `chat:user:{member_user_id}`, event `message_new`, one send per thread
+ * member (sender included) on every insert. `realtime.messages` RLS allows a
+ * socket to subscribe only its own `chat:user:{auth.uid()}` topic (Track A);
+ * this file never subscribes another user's topic and never widens that.
+ * `subscribeToUserChannel` below is the ONE channel per signed-in user the
+ * contract calls for; the inbox and thread screens both consume it (thread
+ * screen filters by `threadId` client side) rather than each opening its own
+ * socket, so a device with the inbox mounted behind an open thread still
+ * holds exactly one `chat:user:*` connection.
  */
 
 interface ChatThreadRow {
@@ -134,6 +149,101 @@ function mapMessageRow(row: ChatMessageRow): ChatMessage {
     text: row.text,
     createdAt: row.created_at,
   };
+}
+
+// ---------------------------------------------------------------------------
+// CT-4 Broadcast delivery: ONE private channel per signed-in user,
+// `chat:user:{userId}`, event `message_new`. Multiple mounted consumers on
+// the same device (the inbox behind an open thread) share one underlying
+// Realtime channel via this small ref-counted registry instead of each
+// opening its own socket, per the contract's "Track D subscribes ONE
+// channel" line. Keyed by topic string rather than by client instance:
+// the app holds a single Supabase client singleton in practice, and keying
+// by topic means a second `useChat(client)` call (a fresh hook instance from
+// a re-render) still finds and reuses the same live channel rather than
+// opening a duplicate.
+// ---------------------------------------------------------------------------
+
+/** Raw payload keys are the trigger's column values as text/ISO strings
+ * (CT-4): `thread_id`, `message_id`, `sender_id`, `body`, `created_at`. No
+ * `sender_profile` embed rides a Broadcast payload (there is no PostgREST
+ * embed over a realtime.send() payload), so a name is never available here;
+ * callers resolve it from their own roster/session state, same as the prior
+ * raw row-change shape already required (see the thread screen's
+ * CH-02 comment). */
+interface ChatBroadcastPayload {
+  thread_id: string;
+  message_id: string;
+  sender_id: string;
+  body: string;
+  created_at: string;
+}
+
+type ChatBroadcastListener = (message: ChatMessage) => void;
+type ChatStatusListener = (status: string) => void;
+
+interface ChatUserChannelEntry {
+  channel: RealtimeChannel;
+  listeners: Set<ChatBroadcastListener>;
+  statusListeners: Set<ChatStatusListener>;
+  refCount: number;
+  lastStatus: string;
+}
+
+const chatUserChannels = new Map<string, ChatUserChannelEntry>();
+
+function mapBroadcastPayload(raw: ChatBroadcastPayload): ChatMessage {
+  return {
+    id: raw.message_id,
+    threadId: raw.thread_id,
+    senderId: raw.sender_id,
+    senderName: undefined,
+    text: raw.body,
+    createdAt: raw.created_at,
+  };
+}
+
+function getOrCreateChatUserChannel(client: AtlitosClient, userId: string): ChatUserChannelEntry {
+  const topic = `chat:user:${userId}`;
+  const existing = chatUserChannels.get(topic);
+  if (existing) return existing;
+
+  const entry: ChatUserChannelEntry = {
+    channel: undefined as unknown as RealtimeChannel, // assigned immediately below
+    listeners: new Set(),
+    statusListeners: new Set(),
+    refCount: 0,
+    lastStatus: "connecting",
+  };
+
+  // `private: true` is required: this topic carries no row-level filter
+  // to fall back on, the whole authorization boundary is the
+  // `realtime.messages` RLS policy Track A owns (CT-4), which only evaluates
+  // for private channels.
+  entry.channel = client
+    .channel(topic, { config: { private: true } })
+    .on("broadcast", { event: "message_new" }, (payload) => {
+      const message = mapBroadcastPayload(payload.payload as ChatBroadcastPayload);
+      for (const listener of entry.listeners) listener(message);
+    })
+    .subscribe((status) => {
+      entry.lastStatus = status;
+      for (const statusListener of entry.statusListeners) statusListener(status);
+    });
+
+  chatUserChannels.set(topic, entry);
+  return entry;
+}
+
+function releaseChatUserChannel(client: AtlitosClient, userId: string) {
+  const topic = `chat:user:${userId}`;
+  const entry = chatUserChannels.get(topic);
+  if (!entry) return;
+  entry.refCount -= 1;
+  if (entry.refCount <= 0) {
+    void client.removeChannel(entry.channel);
+    chatUserChannels.delete(topic);
+  }
 }
 
 /** Group name + live seat count for every group row in `rows`, batched into
@@ -382,61 +492,55 @@ export function useChat(client: AtlitosClient) {
       return created.id;
     },
 
-    /** Subscribes to every new message in one thread (thread screen). RLS
-     * (`chat_messages_select_participant`) is what Realtime evaluates per
-     * subscriber before delivering a row (0022_chat.sql header); the
-     * `thread_id=eq.` filter here is only about volume, not authorization.
-     * The caller removes the channel on unmount (removeChannel, not just
-     * unsubscribe, so the named channel does not linger on the client). */
-    subscribeToThread(
-      threadId: string,
-      onInsert: (message: ChatMessage) => void,
+    /** CT-4: subscribes the caller's ONE private Broadcast channel,
+     * `chat:user:{userId}`, event `message_new`. Every new message in every
+     * thread the caller is seated in arrives here (the trigger fans out to
+     * every member, sender included); the thread screen passes its own
+     * `threadId` to filter to just this conversation, the inbox passes none
+     * and handles every event to bump whichever row changed. `userId` must
+     * be the CALLER's own id (never another member's): `realtime.messages`
+     * RLS refuses a subscribe to any other `chat:user:*` topic (Track A),
+     * so passing someone else's id here fails the subscribe rather than
+     * silently reading their mail, but callers should not rely on the
+     * refusal, they should never construct another user's topic in the
+     * first place.
+     *
+     * Multiple call sites for the SAME userId (inbox mounted behind an open
+     * thread) share one underlying channel via the ref-counted registry
+     * above, satisfying the contract's "ONE channel" line rather than one
+     * socket per screen. Returns an unsubscribe function; call it on
+     * unmount instead of `client.removeChannel` directly, the shared
+     * channel is only actually removed once its last subscriber releases
+     * it. */
+    subscribeToUserChannel(
+      userId: string,
+      threadId: string | undefined,
+      onMessage: (message: ChatMessage) => void,
       onStatusChange?: (status: string) => void,
-    ): RealtimeChannel {
-      // A channel object survives on the client under its name even after
-      // `.unsubscribe()`, and calling `.on("postgres_changes", ...)` on a
-      // channel that has already been subscribed once throws ("cannot add
-      // postgres_changes callbacks after subscribe()"). Reopening the same
-      // thread, or remounting the list, must therefore drop any stale
-      // instance before building a fresh one.
-      const staleThread = client
-        .getChannels()
-        .find((channel) => channel.topic === `realtime:chat:${threadId}`);
-      if (staleThread) void client.removeChannel(staleThread);
-      return client
-        .channel(`chat:${threadId}`)
-        .on(
-          "postgres_changes",
-          { event: "INSERT", schema: "public", table: "chat_messages", filter: `thread_id=eq.${threadId}` },
-          (payload) => onInsert(mapMessageRow(payload.new as ChatMessageRow)),
-        )
-        .subscribe((status) => onStatusChange?.(status));
-    },
+    ): () => void {
+      const entry = getOrCreateChatUserChannel(client, userId);
 
-    /** Subscribes to every new message across every thread the caller is
-     * in (thread list screen, PRD-02 FR-31's "the thread list updates live
-     * too"). No `filter`: RLS already scopes the unfiltered stream to this
-     * user's own threads (0022_chat.sql header: "an unfiltered subscription
-     * is safe here and is the intended shape"). The caller uses each
-     * event's `threadId` to bump that row's preview and re-sort, rather
-     * than refetching the whole list. */
-    subscribeToInbox(
-      onInsert: (message: ChatMessage) => void,
-      onStatusChange?: (status: string) => void,
-    ): RealtimeChannel {
-      // Same stale channel guard as subscribeToThread above.
-      const staleInbox = client
-        .getChannels()
-        .find((channel) => channel.topic === "realtime:chat:inbox");
-      if (staleInbox) void client.removeChannel(staleInbox);
-      return client
-        .channel("chat:inbox")
-        .on(
-          "postgres_changes",
-          { event: "INSERT", schema: "public", table: "chat_messages" },
-          (payload) => onInsert(mapMessageRow(payload.new as ChatMessageRow)),
-        )
-        .subscribe((status) => onStatusChange?.(status));
+      const listener: ChatBroadcastListener = (message) => {
+        if (threadId && message.threadId !== threadId) return;
+        onMessage(message);
+      };
+      entry.listeners.add(listener);
+      entry.refCount += 1;
+
+      if (onStatusChange) {
+        entry.statusListeners.add(onStatusChange);
+        // A listener attaching after the channel already connected (the
+        // inbox is already subscribed when a thread screen opens) still
+        // needs to see the current status immediately, not just the next
+        // change.
+        onStatusChange(entry.lastStatus);
+      }
+
+      return () => {
+        entry.listeners.delete(listener);
+        if (onStatusChange) entry.statusListeners.delete(onStatusChange);
+        releaseChatUserChannel(client, userId);
+      };
     },
   };
 }

@@ -65,8 +65,15 @@ Response `{ query, parsedIntent, results: SearchHit[] }` sorted `rankScore` desc
 
 | v1 fn | v1 route | v2 lane | Function / RPC | Note |
 |---|---|---|---|---|
-| `list` | GET `/coaches` | PostgREST | `coach_profiles` select, filters as query params | RLS restricts to `status = 'verified'` for non-owner readers |
+| `list` | GET `/coaches` | PostgREST | `coach_profiles_public` select, filters as query params | RLS restricts the base table to `status = 'verified'`; the public view already narrows to that status so no client-side filter is needed |
 | `get` | GET `/coaches/:id` | PostgREST + RPC | `coach_profiles` select + `get_coach_busy_slots(coach_id, from, to)` | busy slots must hide other players' session details, so it is a `SECURITY DEFINER` RPC returning only occupied `(date, slot_start)` pairs, never the session rows themselves |
+
+**`useCoaching().listCoaches` keyset pagination (CT-5, P1-3, PHASE-3-STATUS.md Phase 3, Track D).** Prior to Phase 3 this issued one unbounded `select("*")` over `coach_profiles_public`, the P1-3 meltdown item at 1000 concurrent verified coaches. It now takes `{ sport?, city?, limit?, cursor? }` and returns `{ items, nextCursor }` instead of a bare array:
+
+- Stable order `created_at desc, user_id desc` on every page, `limit` defaulting to 20 and clamped to a max of 50 (`.limit(limit + 1)` server side, the extra row decides `nextCursor` without a separate count query).
+- `cursor` is base64 of the JSON tuple `[created_at_iso, user_id]`, the exact key the order sorts by; decoded and applied as `(created_at, user_id) < (cursorCreatedAt, cursorUserId)` via a PostgREST `.or()` predicate (`created_at.lt.X,and(created_at.eq.X,user_id.lt.Y)`), since the JS client has no native tuple comparison.
+- `nextCursor` is `null` exactly on the last page. `CoachBrowseList` (`apps/mobile/src/components/organisms/coaching/CoachBrowseList.tsx`) paginates via `FlatList.onEndReached`, appending pages rather than refetching from the top; a sport/city filter change still resets to page 1 through the existing `load()` path.
+- `sport`/`city` filtering and the same-city-first client sort are unchanged; the sort only reorders items already on a page, it never moves a row across a page boundary.
 
 ## sessions
 
@@ -322,10 +329,17 @@ Training groups with monthly subscription fares (founder-ratified: manual renewa
 | `createGroupSession` | `create_group_session` RPC | inserted `accepted`, zero money columns, participants seeded from active members, SLOT_TAKEN on a coach slot clash |
 | `startGroupSession` / `completeGroupSession` | `session_transition` `'start'` / `'complete'` | 0077: start is coach-only from accepted, no time gate; complete via the client door is allowed ONLY for group sessions (no money half), 1:1 stays on complete-session |
 | `markAttendance` | `mark_attendance` RPC | coach-only, session must be `in_progress` (INVALID_TRANSITION), marks only active members (NOT_A_MEMBER), no money effect |
-| `getGroupThreadId` | `chat_threads` context_type 'group' | one thread per group, trigger-created; messages flow through the existing chat_messages surface, group SELECT/INSERT policies enforce membership (and Realtime enforces the SELECT per subscriber) |
+| `getGroupThreadId` | `chat_threads` context_type 'group' | one thread per group, trigger-created; messages flow through the existing chat_messages surface, group SELECT/INSERT policies enforce membership (delivery is Broadcast, see the CT-4 note below, gated by `realtime.messages` RLS) |
 | `useChat().listThreads` / `getThread` (group threads) | `chat_threads` + `training_groups` (scoped to context_ids from the caller's own thread rows) + `chat_thread_members` count | `ChatThread` gained `isGroup` / `groupName` / `memberCount` / `lastSenderName`; a group row's `participantName` holds the group's name so an unaware caller still renders something sane |
-| `useChat().listMessages` / `sendMessage` / Realtime inbound (group threads) | `chat_messages` (sender embedded via `users!sender_id`) | `ChatMessage` gained `senderName`, joined on every PostgREST read; a Realtime `postgres_changes` payload carries no join, so the thread screen backfills it from the loaded roster |
+| `useChat().listMessages` / `sendMessage` / live inbound (group threads) | `chat_messages` (sender embedded via `users!sender_id`) | `ChatMessage` gained `senderName`, joined on every PostgREST read; the Broadcast payload below carries no join, so the thread screen backfills it from the loaded roster |
 | `useChat().listThreadMembers` | `chat_thread_members` joined to `users` | group thread's seated roster for the members sheet (ChatThreadList / conversation screen, COACH-TRAININGS-GAP.md screen 17); RLS (`chat_thread_members_select_member`) scopes to threads the caller is seated in; empty list for a 1:1 thread rather than an error |
+
+**Chat live delivery moved to Broadcast (CT-4, P1-2, PHASE-3-STATUS.md Phase 3, Track A serves / Track D consumes).** Prior to Phase 3, `useChat().subscribeToThread`/`subscribeToInbox` each opened a `postgres_changes` subscription on `chat_messages`; the server re-evaluated `chat_messages` RLS for every subscriber on every insert, the P1-2 meltdown class at 1000 concurrent chat users. Both are gone, replaced by one method:
+
+- An `AFTER INSERT` trigger on `chat_messages` (Track A) calls `realtime.send()` once per row in `chat_thread_members` for that thread (sender included), to topic `chat:user:{member_user_id}`, event `message_new`, payload `{ thread_id, message_id, sender_id, body, created_at }` (column values as text/ISO strings).
+- `realtime.messages` RLS (Track A) allows a socket to subscribe ONLY its own `chat:user:{(select auth.uid())::text}` topic; a private channel, `{ config: { private: true } }`, is required for that policy to evaluate at all.
+- `useChat().subscribeToUserChannel(userId, threadId, onMessage, onStatusChange)` subscribes the caller's own `chat:user:{userId}` topic. `threadId` is optional: the thread screen passes its own id to filter to one conversation, the inbox omits it to see every thread's events. Multiple mounted call sites for the SAME `userId` (the inbox behind an open thread) share one physical Realtime channel via a ref-counted registry in `use-chat.ts`, since the contract calls for exactly one channel per signed-in user, not one per screen. Returns an unsubscribe function; the shared channel is only actually torn down once its last subscriber releases it.
+- `ChatThreadList` and the thread screen (`apps/mobile/src/app/(tabs)/chat/[id].tsx`) both consume this; `git grep postgres_changes` over `packages/api/src/use-chat.ts` and the chat app/component trees returns nothing as of this change.
 | `listMyTraineeNotes` / `addTraineeNote` / `deleteTraineeNote` | `coach_trainee_notes` | coach-private, insert gated by `coach_has_trainee`, no update ever |
 | `listTraineeSessions` / `listTraineePayments` | `sessions` (coach_id = me AND player_id = trainee) + memberships join | the trainee profile tabs; payments derive from coach-readable rows since payment_intents is owner-only |
 | `getTraineeProfile` | `public_profiles` | Track C, trainee profile Overview tab identity (name/handle/bio); `users` base table stays own-row/admin only so this never touches it |
