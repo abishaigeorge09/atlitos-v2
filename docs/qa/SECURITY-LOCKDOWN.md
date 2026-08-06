@@ -24,29 +24,20 @@ removed from the repo and only remain deployed on prod.
 | `seed-promo-media` | none | delete |
 | `fix-home-media-p12` | none | delete |
 
-**Not deleted. Blocked, needs founder action.** The Supabase MCP server available in this
-session has `list_edge_functions`, `get_edge_function`, and `deploy_edge_function`, but no
-delete tool. The `supabase` CLI is installed and logged in, but to a different Supabase
-account (`projects list` shows `gmv_project`, `side-projects`, `Synth_PitchDeck`,
-`synth-mvp`, no Atlitos project), and `supabase functions list --project-ref
-syzzfgaudpifwvbpycyi` / `api-keys --project-ref ...` both 403 "account does not have the
-necessary privileges." `.env.local` (which may hold a management token) is blocked from
-read by this session's own permission settings, by design, so it could not be used to work
-around this either.
+**DONE (2026-08-07, via Chrome extension on the dashboard).** All four deleted through
+Project > Edge Functions > (function) > Settings > Delete edge function, confirming each
+delete dialog by name. Verified before deleting `fix-home-media-p12`: its Overview showed
+`TOTAL INVOCATIONS 0` and "0 invocations since last deploy and no errors" (the three `seed-*`
+functions were already confirmed dead earlier). Function count on prod went 26 -> 22, each
+delete acknowledged by a "Successfully deleted \"<name>\"" toast. The tooling gap noted below
+was the reason this was done by hand in the dashboard rather than the CLI.
 
-Founder action, once run with the correct Supabase account:
-
-```
-supabase functions delete tmp-seed-demo-users --project-ref syzzfgaudpifwvbpycyi
-supabase functions delete seed-media --project-ref syzzfgaudpifwvbpycyi
-supabase functions delete seed-promo-media --project-ref syzzfgaudpifwvbpycyi
-supabase functions delete fix-home-media-p12 --project-ref syzzfgaudpifwvbpycyi
-```
-
-Or via the dashboard: Project > Edge Functions > select each > Delete. They remain
-`ACTIVE` on prod as of this writing (confirmed via `list_edge_functions`); each is
-`verify_jwt: true` (auth required) except none is anonymous, so this is a real but bounded
-gap, not an open door, until deleted.
+Tooling gap (why the CLI could not do it): the Supabase MCP server in this session has
+`list_edge_functions`, `get_edge_function`, and `deploy_edge_function`, but no delete tool.
+The `supabase` CLI is logged in to a different account (no Atlitos project visible;
+`functions list --project-ref syzzfgaudpifwvbpycyi` 403s). `.env.local` is read-blocked by
+this session's permission settings, by design. So the dashboard, driven by the founder's
+authenticated browser via the Chrome extension, was the path.
 
 ## 2. Storage bucket limits
 
@@ -169,9 +160,12 @@ a GoTrue/Auth service setting, not a database row, confirmed by querying for an 
 table (`relation "auth.config" does not exist`). No tool in this session's Supabase MCP set
 can change it (no `update_auth_config` style tool was available).
 
-**Founder action needed.** Supabase Dashboard > Authentication > Sign In / Providers >
-Password (the "Leaked password protection" toggle, checks new passwords against
-HaveIBeenPwned.org). Turn it on. Not yet done.
+**DONE (2026-08-07, via Chrome extension on the dashboard).** Supabase Dashboard >
+Authentication > Attack Protection > "Prevent use of leaked passwords" (the same setting also
+reachable via the Email provider panel it links to). Toggled on inside the Email provider
+sheet and saved. Re-opened Attack Protection afterward to verify: the row now reads
+`ENABLED` (was `DISABLED`). Rejects HaveIBeenPwned-known passwords on sign up and password
+change.
 
 ## 5. SECURITY DEFINER views
 
@@ -206,8 +200,14 @@ All three are documented, deliberate designs already, not accidental. No changes
 3. 12 anon-executable RPCs reviewed and kept as is (already intentional guest surface).
 4. 3 SECURITY DEFINER views reviewed, all intentional, no changes.
 
-## Not done, needs founder action
+## Done since first writing (2026-08-07, Chrome extension)
 
-- Delete `tmp-seed-demo-users`, `seed-media`, `seed-promo-media`, `fix-home-media-p12` from
-  prod (blocked on tooling/account access, see section 1).
-- Turn on leaked password protection in the dashboard (see section 4).
+- Deleted `tmp-seed-demo-users`, `seed-media`, `seed-promo-media`, `fix-home-media-p12` from
+  prod (26 -> 22 functions; see section 1).
+- Turned on leaked password protection; Attack Protection now reads `ENABLED` (see section 4).
+
+## Still deferred to Phase 6 (needs founder action)
+
+- Seed account password rotation (would break the ongoing native QA session; see "Deferred
+  to Phase 6" above).
+- Reviewer/demo account setup for store submission.
