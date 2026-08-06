@@ -146,24 +146,65 @@ ship, walk each of these:
   app" vs "only this time") differs from iOS's; confirm the courts-near-me flow degrades
   gracefully on "only this time" or a denial.
 
-## Founder actions needed
+## Play Console reality (CORRECTED 2026-08-07)
 
-- **Google Play Console account.** No Play Console developer account has been referenced
-  anywhere in this repo or in `eas.json`/`app.json`. Needs the $25 one-time Play developer
-  registration (organization or individual) before any internal-track upload can land
-  anywhere.
-- **Play Console app record.** Once the account exists, create the app record with package
-  name `com.atlitos.app` (must match `android.package` above exactly).
-- **Google Play service account key.** `eas submit --platform android` needs a service
-  account JSON key with the Play Android Developer API enabled and access granted to the
-  app in Play Console (Users and permissions > Invite new user > Service account, with at
-  least "Release to testing tracks" permission). Save it as
-  `apps/mobile/google-service-account.json` (already gitignored) or point
-  `submit.production.android.serviceAccountKeyPath` in `eas.json` at wherever it actually
-  lives. This is a founder-only credential; do not paste the key contents into chat or a
-  commit.
-- **EAS auth for the Android submit step.** The build step itself did not need fresh Play
-  auth (EAS owns and auto-generated the Android signing keystore, and `eas build` doesn't
-  touch Play). Only `eas submit --platform android` will need the service account key above
-  — nothing further needed for build/compile itself under the current `synthorgtech`
-  EAS login.
+An earlier draft of this doc said "no Play Console developer account has been referenced." That
+was wrong at the founder level. The founder has an **existing organization Play developer
+account**, used to ship BelieversDiary:
+
+- **ELSHEPH SYSTEMS INDIA PRIVATE LIMITED**, developer ID `8696807675061268676`, signed into
+  Chrome under Google account **`/u/3`** (the ELSHEPH account, NOT synthsports /u/0,/u/1 or
+  abishaigosula@gmail.com /u/2 which Play treats as brand-new signups). Console URL base:
+  `https://play.google.com/console/u/3/developers/8696807675061268676/...`.
+- **It is an ORGANIZATION account with a live app already.** Therefore the new-account
+  20-tester / 14-day closed-testing requirement (which only applies to personal/individual
+  accounts created after 2023-11-13) does NOT apply. Atlitos can go to production review
+  directly. Play review is typically hours to a few days.
+
+The open question is publisher identity: Atlitos is Synth-branded (EAS owner `synthorgtech`,
+Supabase org `Synth_Web_&_App`), but this Play account publishes as "ELSHEPH SYSTEMS INDIA
+PRIVATE LIMITED". Publishing Atlitos here means the store publisher name reads ELSHEPH unless
+the app is later transferred. Founder call; default is to use it (fast path).
+
+## Founder actions needed (Android)
+
+- **Create the Atlitos app record** under the ELSHEPH developer (`/u/3`,
+  `8696807675061268676`) with package `com.atlitos.app` (must match `android.package` above
+  exactly). Can be driven in-browser with the Chrome extension once signed in.
+- **Google Play service account key.** `eas submit --platform android` needs a service account
+  JSON key with the Android Publisher API enabled and access granted to the Atlitos app. Two
+  options: (a) reuse/extend the existing BelieversDiary SA
+  `eas-play-publisher@believersdiary-play.iam.gserviceaccount.com` (grant it access to the new
+  Atlitos app), or (b) mint a new SA under the same GCP/Play org. **PERMISSIONS GOTCHA that
+  cost hours on BelieversDiary:** the SA needs BOTH "Manage store presence" AND "Edit and
+  delete draft apps" (the app is a Draft until first publish). With only release permissions,
+  `edits().commit()` returns 403 but a no-op commit succeeds, masking it; and
+  `eas ... --auto-submit` needs "Edit and delete draft apps" to upload the AAB to a draft app.
+  Save the key as `apps/mobile/google-service-account.json` (gitignored) or repoint
+  `submit.production.android.serviceAccountKeyPath`. Founder-only credential; never paste it
+  into chat or a commit.
+- **`submit.production.android.track`.** Currently set to `internal` in `eas.json`. Because
+  there is no 14-day gate on this org account, this can move to `production` when ready (that
+  is what BelieversDiary used). Leave at `internal` for the first upload smoke, then switch.
+
+## Reusable Play store-listing recipe (from BelieversDiary, applies to Atlitos)
+
+- **Store-listing images must be uploaded via the Android Publisher API, not the Console UI.**
+  The Console image uploader uses the browser File System Access API with no `<input type=file>`,
+  so browser automation cannot drive it. Recipe: `google.oauth2.service_account` +
+  `googleapiclient`, `edits().insert()` -> `listings().update()` ->
+  `images().deleteall()`+`images().upload()` per imageType (icon, featureGraphic,
+  phoneScreenshots) -> `edits().commit()`.
+- **Screenshot aspect must be <= 2:1.** A 6.7"/6.9" phone screenshot (e.g. iPhone 1320x2868 =
+  2.17:1) gets rejected; pad the sides with black to bring it under 2:1. The iPhone 16 Pro Max
+  6.7" set doubles as the Android phone screenshot set after padding.
+- **Account-deletion page required.** Play requires a public account-deletion URL for any app
+  with account creation (Atlitos has accounts). BelieversDiary built one at
+  `/delete-account`. Atlitos needs the equivalent on its privacy-policy/marketing domain,
+  alongside the privacy policy itself.
+
+## EAS auth for the Android submit step
+
+The build step did not need fresh Play auth (EAS owns and auto-generated the Android signing
+keystore; `eas build` does not touch Play). Only `eas submit --platform android` needs the
+service account key above, under the current `synthorgtech` EAS login.
