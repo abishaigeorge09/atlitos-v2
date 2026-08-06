@@ -414,3 +414,94 @@ the function anon-callable, exactly the bug this section fixes.
 ### Isolation proof (non-vacuous, the AT-62 lesson)
 
 Every migration was proven not to change any role's visible-row set, using two real users whose ids were asserted to **differ first**: `A` = `58756043…` (player; owns 5 orders, 35 payment_intents, 11 sessions as player, 6 donations, 4 clips, 2 drill_completions) and `B` = `b290a0c8…` (roleless guest; owns 3 clips), plus `C` = coach `5b262cf1…`, two court partners, and the true `anon` role. For each of `orders, order_items, sessions, payment_intents, ledger_entries, refunds, transfers, donations, upa_applications, drill_completions, xp_events, user_milestones, cart_items, addresses, product_wishlist_items, clips, clip_likes, follows, coach_profiles, venues` a fingerprint (`md5` of the ordered `row::text` of the full visible set) plus row count and cross-owner counts were captured under each user's simulated JWT before any change and after each of `0062`, `0063`, `0064`. **The before-vs-after diff was 0 rows every time** — the visible-row set was byte-identical for all six viewers across all twenty tables. On the strictly-private money tables (`orders`, `payment_intents`, `order_items`, `refunds`, `transfers`, `ledger_entries`) the non-owner `B` and the unrelated coach `C` saw **zero** of `A`'s rows; the only nonzero cross-user counts were the by-design dual-key surfaces (a coach sees the sessions they coach; a UPA sees donations attributed to it), and those too were identical before and after. No non-owner gained visibility. The catastrophic case "user B sees user A's orders" was tested directly and returned 0.
+
+## LAUNCH Phase 3 RLS work (Track A, migrations 0090-0094)
+
+The launch program's Phase 3 (1000-concurrent readiness) touches RLS in three
+places. The permissive-OR rule above governs all of it: no merge folds an owner
+disjunct into an anon-reachable expression.
+
+### 0090 / 0091 — P1-4 initplan + duplicate-permissive consolidation
+
+Since `0062`/`0063` drove `auth_rls_initplan` and the targeted
+`multiple_permissive_policies` to their P8 baseline, migrations `0065-0089` added
+new policies that (a) call `auth.uid()`/`auth.jwt()` directly and (b) duplicate
+permissive SELECT policies. `0090` and `0091` re-apply the `0062`/`0063` fixes to
+whatever accumulated, PROGRAMMATICALLY rather than by a hand list, so they rewrite
+the live set and are idempotent:
+
+- **`0090_rls_initplan_subselect_wrap.sql`** finds every public-schema policy whose
+  USING/WITH CHECK still contains a BARE `auth.uid()`/`auth.jwt()` and wraps only
+  the bare occurrences via `ALTER POLICY` (already-wrapped calls from `0062` are
+  neutralized and left byte-identical, so a re-run rewrites nothing). This is
+  EXPRESSION-ONLY: `ALTER POLICY` preserves roles, command, and
+  permissive/restrictive verbatim, and `(select auth.uid())` returns the identical
+  scalar, so the visible-row set cannot change. Access-preserving by construction;
+  the isolation matrix proves it empirically regardless.
+
+- **`0091_consolidate_duplicate_permissive_select.sql`** merges, per table, the
+  permissive SELECT policies whose role set is EXACTLY `{authenticated}` into one
+  `<table>_select_merged` whose USING is their OR union. Postgres OR-combines
+  permissive policies, so the union is identical to the separate policies BY
+  CONSTRUCTION (the OR-union theorem, the `0063` argument). The hard safety rule is
+  encoded in the WHERE clause: it NEVER touches a policy whose roles include `anon`
+  or `public` (a cross-role-set merge is the permissive-OR footgun CLAUDE.md
+  records three incidents for), and it NEVER touches a `FOR ALL` policy (splitting
+  one risks a write path; its SELECT contribution is simply OR'd at evaluation
+  time). Tables that carry a public/guest SELECT policy alongside their owner ones
+  (the P8 "21 KEEP" set) are therefore LEFT INTACT here and only take the `0090`
+  initplan win. When equivalence of a merge cannot be shown, the policy stays
+  separate; that is the default, not the exception.
+
+Proven on a faithful local slice: after `0090` an authenticated SELECT plan shows
+`InitPlan ... (returns $0)` instead of a per-row `auth.uid()`; after `0091` a table
+with two `{authenticated}` SELECT policies plus an `{anon,authenticated}` public
+policy collapses to one merged authenticated policy with the public policy
+untouched, and the AT-62 isolation matrix (A.id asserted `<>` B.id first) shows A
+sees zero of B's private rows, B sees zero of A's, and anon sees only the public
+row. The biased approver re-derives A1/A2/A3 and the A8 advisor diff against prod
+via the MCP (`scripts/verify-rls-phase3.mjs` carries the exact queries).
+
+### 0092 — CT-4 chat Broadcast, `realtime.messages` policy (money-grade)
+
+Chat realtime moves off `postgres_changes` (which re-evaluates the SELECT policy
+per subscriber per row, the meltdown class) to Broadcast from the database. The
+`broadcast_chat_message()` trigger `realtime.send()`s a `message_new` event to
+each thread member's PRIVATE topic `chat:user:{member_uid}`. Delivery
+authorization is a single SELECT policy on `realtime.messages`:
+
+```sql
+create policy chat_broadcast_receive_own on realtime.messages
+  for select to authenticated
+  using (
+    realtime.messages.extension = 'broadcast'
+    and realtime.topic() = 'chat:user:' || (select auth.uid())::text
+  );
+```
+
+A socket may receive a broadcast ONLY on its own `chat:user:{own uid}` topic.
+There is deliberately NO client insert/send policy on these topics: they are fed
+only by the definer trigger, so a client cannot inject a forged `message_new`.
+Proven: inserting a message broadcasts exactly to the two 1:1 participants (and to
+all three members of a group thread), a non-member receives nothing, and under the
+policy user B may access its own topic while user C (asserted `C.id <> B.id`) is
+refused B's topic (0 rows). A wrong topic predicate here broadcasts private chat,
+so this is Opus-class review scope; the refused-subscription proof is the gate.
+
+### 0093 / 0094 — service-role-only infra (CT-2, CT-3, CT-6, CT-7)
+
+`edge_rate_limits`, `ai_spend_daily`, `sweep_failures` all follow the
+`stock_reservations`/`webhook_events` fail-closed pattern: RLS enabled, ZERO
+policies, `anon`/`authenticated` grants revoked, `service_role` granted (and
+relying on `service_role`'s BYPASSRLS to read past the empty policy set). The
+functions `take_rate_limit_token`, `record_ai_spend`, `ai_search_daily_budget` are
+SECURITY DEFINER with EXECUTE `service_role` ONLY, each revoked from `anon` and
+`authenticated` BY NAME (the `0089` lesson: `revoke ... from public` alone does not
+strip the named client grants). `retry_failed_clip` is the one client-facing
+addition: SECURITY DEFINER, owner-scoped, EXECUTE `authenticated` + `service_role`,
+revoked from `anon`; a non-owner call raises `FORBIDDEN`, a non-`failed` clip
+raises `INVALID_TRANSITION`. Proven: `take_rate_limit_token` returns 60 true then
+false over 61 takes and is `permission denied` for both client roles; the clip
+machine refuses `ready -> failed` with `INVALID_TRANSITION`; the sweep marks a
+planted object-absent stranded clip `failed` and captures a rigged arm's failure
+in `sweep_failures` while the other arms still run.

@@ -1286,3 +1286,71 @@ PLAN.md calls out `UNIQUE(court_id, date, slot_start)` as the mechanism that res
 The read path is `get_coach_wallet_balance()` and `get_my_transactions(kind?, limit?, offset?)` (`0025_wallet_and_transactions_rpcs.sql`, AT-44), both `security definer`, both scoped by `auth.uid()`, both deriving every figure at call time from `ledger_entries` and `payment_intents`. No screen sums money client side and no table anywhere gained a balance column.
 
 `ledger_entries` is insert-only and every economic event writes a balanced group (see the worked example above). This gives three properties the product requires: a coach's or partner's balance is always `sum(credits) - sum(debits)` computed live, never a value that can drift from reality; a refund or a payout failure is a new reversing group, never a mutation of history, so `audit_log` and `ledger_entries` together form a complete replayable record; and every screen that shows money (`Earnings`, `My Impact`, admin's `Order Detail` refund panel) reads the same table through a different filter, so there is exactly one place a money bug could live.
+
+## LAUNCH Phase 3 scale hardening (Track A, migrations 0090-0094)
+
+The launch program's Phase 3 (1000-concurrent readiness) adds one enum value,
+two columns, four tables, and a set of service-role functions. No existing
+table's ownership or money semantics change; every addition is additive.
+
+### Enum + column changes
+
+- `clip_status` gains `failed` (`0094`). The full machine is now
+  `uploading -> processing | rejected | failed`, `processing -> ready | rejected | failed`,
+  `ready -> published | rejected`, `published -> removed`, `failed -> uploading`
+  (retry), `rejected`/`removed` terminal. `failed` is a technical upload failure,
+  deliberately distinct from `rejected` (moderation) so the moderation queue
+  semantics are not corrupted (PHASE-3 CT-6, settled decision 6).
+- `clips.failure_reason text` (`0094`): why a clip is `failed`, shown to the
+  owner beside Retry. NULL unless `status = failed`. Set when transitioning to
+  `failed`, cleared on `failed -> uploading`.
+- `feature_flags.value_numeric numeric` (`0093`): optional numeric parameter for
+  a flag needing a threshold. NULL for boolean-only flags. Seeded row
+  `ai_search_daily_budget_usd = 10` (enabled), the daily USD ceiling for
+  ai-search LLM spend (CT-3).
+
+### New tables
+
+- `edge_rate_limits (bucket text, key text, window_start timestamptz, count int, PK(bucket,key,window_start))`
+  (`0093`, CT-2). The Postgres-backed token-bucket counter; one row per active
+  (bucket, key) window. RLS enabled, zero policies, all grants revoked from
+  `anon`/`authenticated`, `service_role` only (the `stock_reservations`
+  fail-closed house pattern). Relies on `service_role` BYPASSRLS to read/write.
+- `ai_spend_daily (day date PK, input_tokens bigint, output_tokens bigint, est_usd numeric)`
+  (`0093`, CT-3). Per-day AI spend meter. Same service-role-only lockdown.
+- `sweep_failures (id uuid PK, arm text, error text, created_at timestamptz)`
+  (`0094`, CT-7). Per-arm capture of `expire_stale_holds()` failures so one arm's
+  error does not abort the siblings. Same service-role-only lockdown; index on
+  `created_at desc`. Watched by the Phase 2 alert channel (DEBT.md records the
+  wiring if that channel is not yet merged).
+
+### New / changed functions (all service-role only unless noted)
+
+- `take_rate_limit_token(bucket text, key text, max int, window_seconds int) returns boolean`
+  (`0093`, CT-2). Atomic fixed-window take via `INSERT ... ON CONFLICT ... DO
+  UPDATE ... RETURNING`. False once the window is exhausted. SECURITY DEFINER,
+  EXECUTE `service_role` only. Callers fail OPEN on error (scale guard, not a
+  security boundary).
+- `record_ai_spend(input_tokens int, output_tokens int, est_usd numeric) returns numeric`
+  (`0093`, CT-3). Upserts today's `ai_spend_daily` row, returns the day's running
+  `est_usd`. SECURITY DEFINER, `service_role` only.
+- `ai_search_daily_budget() returns numeric` (`0093`, CT-3). Reads
+  `feature_flags.value_numeric` for `ai_search_daily_budget_usd`, defaults to 10
+  when absent/null. SECURITY DEFINER, `service_role` only.
+- `clip_transition_internal(...)` (`0094`): the 0043 machine extended with the
+  three `failed` edges. Sets/clears `failure_reason`. service_role only, unchanged
+  grants.
+- `retry_failed_clip(clip_id uuid) returns clips` (`0094`, CT-6). Owner-scoped
+  (`owner_id = auth.uid()`) SECURITY DEFINER retry, `failed -> uploading`. EXECUTE
+  `authenticated` + `service_role`, revoked from `anon`. The upload URL re-mint is
+  `stream-upload-url` (Track C), called after this.
+- `reconcile_stranded_clips()` (`0094`): object-absent stranded clips now become
+  `failed` (retryable) instead of `rejected`. service_role only.
+- `expire_stale_holds()` (`0094`, CT-7): each arm (courts, sessions, commerce,
+  clutch) wrapped in an exception handler that records to `sweep_failures` and
+  lets siblings run. Returns per-domain counts plus `arm_failures`.
+- `broadcast_chat_message()` trigger fn (`0092`, CT-4): AFTER INSERT on
+  `chat_messages`, `realtime.send()` a `message_new` event to each thread member's
+  private `chat:user:{uid}` topic. Members = `participant_a`/`participant_b`
+  (1:1 threads) UNION `chat_thread_members` (group threads). SECURITY DEFINER,
+  EXECUTE revoked from all client roles.
