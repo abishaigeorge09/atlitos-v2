@@ -22,6 +22,17 @@ import { supabase } from "@/lib/supabase";
 export type SessionStatus =
   | "loading" // auth state not yet resolved on app start
   | "signed_out" // no session at all
+  // P0-4 (Phase 3 LAUNCH, 1000-user readiness). continueAsGuest's own quick
+  // retries (packages/api useAuth) exhausted, so the app is NOT stranded on
+  // a login wall: it proceeds to Home on whatever the `anon` role can
+  // already read (public browse policies, public thumb buckets), pure
+  // client degradation, no RLS/bucket widened. A slower jittered background
+  // remint (session-store's scheduleBackgroundRemint) keeps trying; success
+  // fires onAuthStateChange, which moves status straight to "guest" with no
+  // reinstall or user action needed. Any authenticated tap already gates
+  // through requiresAuthGate the same as a real guest, so nothing here needs
+  // its own gate logic.
+  | "guest_unminted"
   | "guest" // anonymous session (Continue as guest)
   | "signed_in"; // real player/coach session
 
@@ -52,6 +63,13 @@ interface SessionState {
   refreshMe: () => Promise<void>;
   continueAsGuest: () => Promise<void>;
   signOut: () => Promise<void>;
+
+  /** P0-4: called once continueAsGuest's own retries are exhausted. Flips
+   * status to "guest_unminted" (Home renders on the anon role's public
+   * reads) and starts a slower background remint loop that keeps retrying
+   * until either it succeeds (onAuthStateChange takes it from there) or the
+   * app is backgrounded/torn down. */
+  enterGuestUnminted: () => void;
 }
 
 export const useSessionStore = create<SessionState>((set, get) => ({
@@ -103,6 +121,17 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     await auth.signOut();
     set({ me: null });
   },
+
+  enterGuestUnminted: () => {
+    const alreadyUnminted = get().status === "guest_unminted";
+    set({ status: "guest_unminted", hydrated: true });
+    // A fresh cycle (not already unminted, e.g. a NEW mint attempt after a
+    // prior one eventually succeeded and the user later signed out) starts
+    // the backoff over from its shortest interval rather than continuing
+    // from wherever a stale prior loop left off.
+    if (!alreadyUnminted) resetBackgroundRemint();
+    scheduleBackgroundRemint();
+  },
 }));
 
 /**
@@ -132,6 +161,61 @@ export const selectRequiresAuthGate = (s: SessionState): boolean => s.status !==
  * refresh whose stamp is stale by the time getMe resolves is ignored, so a
  * session change never lets an older user's profile land on the new session. */
 let meRefreshToken = 0;
+
+// ---------------------------------------------------------------------------
+// P0-4 background guest remint (Phase 3 LAUNCH, 1000-user readiness).
+//
+// continueAsGuest already retries signInAnonymously 3 times with a short
+// linear backoff (packages/api useAuth); by the time enterGuestUnminted
+// fires, that quick path is exhausted (a 429 from the anon rate limit, or a
+// real outage). Rather than give up, this keeps trying in the background
+// with a SLOWER jittered exponential backoff (2s doubling to a 60s cap, +/-
+// 30% jitter so many devices retrying at once do not resync onto the same
+// tick), for as long as the app stays on "guest_unminted". The moment
+// signInAnonymously succeeds, Supabase's own onAuthStateChange listener
+// (startSessionListener, applySession below) picks up the new session and
+// moves status straight to "guest": no polling of status needed here beyond
+// the guard that stops the loop once something else already changed it
+// (a real sign in, or the loop's own success).
+//
+// This is pure client retry logic. It touches no RLS policy and no storage
+// bucket ACL: whatever renders while unminted is exactly what the `anon`
+// role already reads, per the phase plan's decision 3 (P0-4 sessionless
+// path is client degradation ONLY).
+// ---------------------------------------------------------------------------
+
+let remintTimer: ReturnType<typeof setTimeout> | null = null;
+let remintAttempt = 0;
+
+function resetBackgroundRemint(): void {
+  if (remintTimer) clearTimeout(remintTimer);
+  remintTimer = null;
+  remintAttempt = 0;
+}
+
+function scheduleBackgroundRemint(): void {
+  if (remintTimer) return; // a retry is already pending
+  remintAttempt += 1;
+  const base = Math.min(60_000, 2_000 * 2 ** (remintAttempt - 1));
+  const jitter = base * (0.7 + Math.random() * 0.6);
+
+  remintTimer = setTimeout(() => {
+    remintTimer = null;
+    if (useSessionStore.getState().status !== "guest_unminted") {
+      // Something else already resolved this (a real sign in, a manual
+      // sign out, or a previous tick's own success); stop the loop.
+      remintAttempt = 0;
+      return;
+    }
+    auth.continueAsGuest().catch(() => {
+      scheduleBackgroundRemint();
+    });
+    // On success, onAuthStateChange's applySession call sets status to
+    // "guest" before this promise's .then would even run, so there is
+    // nothing to do here on the happy path; remintAttempt resets the next
+    // time enterGuestUnminted starts a fresh loop from status "signed_out".
+  }, jitter);
+}
 
 let listenerStarted = false;
 
