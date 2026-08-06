@@ -96,16 +96,20 @@ export const ORDER_TRANSITIONS: TransitionMap<OrderStatus> = {
 };
 
 /**
- * uploading -> processing (tus upload completes)
- * processing -> (ready | rejected) (Cloudflare Stream transcode result)
+ * uploading -> (processing | failed) (tus upload completes, or stranded/errors)
+ * processing -> (ready | rejected | failed) (Cloudflare Stream transcode result)
  * ready -> (published | rejected) (admin moderation decision)
  * published -> removed (admin takedown only, terminal)
+ * failed -> uploading (owner Retry, CT-6 retry_failed_clip RPC)
+ * Mirrors 0094_clip_failed_state_and_sweep_capture.sql's
+ * clip_transition_internal exactly; keep in lockstep with that file.
  */
 export const CLIP_TRANSITIONS: TransitionMap<ClipStatus> = {
-  uploading: ['processing'],
-  processing: ['ready', 'rejected'],
+  uploading: ['processing', 'failed'],
+  processing: ['ready', 'rejected', 'failed'],
   ready: ['published', 'rejected'],
   published: ['removed'],
+  failed: ['uploading'],
   rejected: [],
   removed: [],
 };

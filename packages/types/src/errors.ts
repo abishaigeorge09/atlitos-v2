@@ -88,6 +88,11 @@ export type ApiErrorCode =
   // clutch
   | 'TOO_LARGE'
   | 'BAD_FORMAT'
+  // get-clip-playback-url batch mode (Phase 3 LAUNCH CT-1): more than 24
+  // clip_ids in one call. The client (getPlaybackUrls, packages/api
+  // hooks.ts) chunks to 24 itself, so seeing this means a call site bypassed
+  // the chunker, never a user-facing state.
+  | 'BATCH_TOO_LARGE'
   // empower
   | 'ITEM_FUNDED'
   | 'MIN_AMOUNT'

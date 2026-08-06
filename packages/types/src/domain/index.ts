@@ -298,6 +298,9 @@ export interface Clip {
   caption: string;
   sport: Sport;
   status: ClipStatus;
+  /** CT-6: why a `failed` clip failed, shown to the owner beside Retry.
+   * Absent/undefined for every other status. */
+  failureReason?: string | null;
   likes: number;
   commentCount: number;
   createdAt: string;
