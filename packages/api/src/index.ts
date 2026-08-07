@@ -11,6 +11,7 @@ export * from "./use-empower";
 export * from "./use-learn";
 export * from "./use-chat";
 export * from "./use-notifications";
+export * from "./use-push";
 export * from "./use-coach";
 export * from "./use-groups";
 export * from "./use-shop";

@@ -8,6 +8,7 @@ import { useColorScheme } from 'nativewind';
 import { useEffect } from 'react';
 import { StatusBar, Text, View } from 'react-native';
 
+import { usePushRegistration } from '@/hooks/use-push-registration';
 import { applyTheme } from '@/lib/apply-theme';
 import { Sentry } from '@/lib/sentry';
 import { startSessionListener, useSessionStore } from '@/store/session-store';
@@ -83,6 +84,12 @@ function RootLayout() {
   useEffect(() => {
     if (themePref) applyTheme(themePref);
   }, [themePref]);
+
+  // Push registration: requests permission, registers/unregisters the
+  // device's Expo push token against the current session, and routes taps
+  // through expo-router. Phase 4 Track D, CT-D, PRD-01 FR-61/62. See
+  // src/hooks/use-push-registration.ts for the full lifecycle.
+  usePushRegistration();
 
   if (!fontsLoaded && !fontError) {
     return null;
