@@ -37,12 +37,19 @@ import { useThemeColors } from '@/theme/use-theme-colors';
  *         (`apps/mobile/src/app/(tabs)/index.tsx` `showFinishSetup`), plus
  *         Account and any role-specific action ("become a coach").
  *     `continueAsGuest` retries a few times with backoff (packages/api
- *     `useAuth`); if it STILL fails (e.g. anonymous sign-ins disabled on the
- *     Supabase project) this screen degrades gracefully and routes into
- *     `/(tabs)` anyway rather than raising a full-screen login wall. Public
- *     browse works with the anon key, and any authenticated tap already
- *     raises the LoginGateModal, so a first-time user always lands in the
- *     app; there is no guest-to-login wall on launch.
+ *     `useAuth`); if it STILL fails (e.g. anonymous sign-ins disabled, or
+ *     the anon mint rate limit, on the Supabase project) this screen
+ *     degrades gracefully via `enterGuestUnminted` (P0-4, Phase 3 LAUNCH)
+ *     and routes into `/(tabs)` anyway rather than raising a full-screen
+ *     login wall. Public browse works with the anon key, and any
+ *     authenticated tap already raises the LoginGateModal, so a first-time
+ *     user always lands in the app; there is no guest-to-login wall on
+ *     launch. Status sits at `guest_unminted` while a slower background
+ *     remint (session-store.ts) keeps retrying; success upgrades the
+ *     session to a real `guest` automatically, no reinstall or app restart
+ *     needed. Pure client degradation: no RLS policy or storage bucket is
+ *     widened to make this work, whatever renders is exactly what the
+ *     `anon` role already reads.
  *
  * Track D hardening carried over:
  *   - A signed-in session whose profile fetch FAILED (meError, me null) no
@@ -62,6 +69,7 @@ export default function SplashScreen() {
   const meError = useSessionStore((state) => state.meError);
   const continueAsGuest = useSessionStore((state) => state.continueAsGuest);
   const refreshMe = useSessionStore((state) => state.refreshMe);
+  const enterGuestUnminted = useSessionStore((state) => state.enterGuestUnminted);
 
   // Guards against firing continueAsGuest more than once while its promise
   // is still in flight (status stays 'signed_out' until onAuthStateChange
@@ -95,7 +103,7 @@ export default function SplashScreen() {
   useEffect(() => {
     if (!hydrated) return;
 
-    if (status === 'guest') {
+    if (status === 'guest' || status === 'guest_unminted') {
       guestAttempted.current = false;
       router.replace('/(tabs)');
       return;
@@ -112,15 +120,17 @@ export default function SplashScreen() {
     if (status === 'signed_out' && !guestAttempted.current) {
       guestAttempted.current = true;
       continueAsGuest().catch(() => {
-        // Persistent guest bootstrap failure (continueAsGuest already retried
-        // with backoff). Degrade gracefully instead of a login wall: route
-        // into the app anyway. Public browse works with the anon key, and any
-        // authenticated tap raises the LoginGateModal, so a first-time user is
-        // never stranded on launch.
-        router.replace('/(tabs)');
+        // P0-4: persistent guest bootstrap failure (continueAsGuest already
+        // retried with backoff). Degrade gracefully instead of a login wall:
+        // flip to "guest_unminted" (Home renders on whatever the anon role
+        // can already read, zero RLS/bucket change) and let the effect's
+        // guest/guest_unminted branch above route into the app. A slower
+        // background remint (session-store) keeps retrying; success upgrades
+        // the session to a real "guest" automatically, no reinstall needed.
+        enterGuestUnminted();
       });
     }
-  }, [status, hydrated, me, meLoading, meError, continueAsGuest]);
+  }, [status, hydrated, me, meLoading, meError, continueAsGuest, enterGuestUnminted]);
 
   const showMeRetry = hydrated && status === 'signed_in' && !meLoading && !me && meError != null;
   const showSpinner =

@@ -995,6 +995,31 @@ export interface ClipPlayback {
   status: ClipStatus;
 }
 
+/** CT-1 (Phase 3 LAUNCH, P1-1). One resolved URL from a batch
+ * `get-clip-playback-url` call: `expiresAt` is an ISO timestamp (thumb TTL
+ * 3600s, video TTL 300s per CT-1; the batch caller does not need to compute
+ * an expiry itself, unlike the legacy single-clip `expiresIn` seconds
+ * shape). */
+export interface ClipPlaybackBatchEntry {
+  clipId: string;
+  url: string;
+  expiresAt: string;
+}
+
+/** One clip_id the batch could not resolve a URL for (unpublished and not
+ * the caller's own, removed, or a mint error). Never thrown as an error: a
+ * partial batch is a 200 with some ids in `failed`, so one broken clip never
+ * blanks an entire grid's worth of posters. */
+export interface ClipPlaybackBatchFailure {
+  clipId: string;
+  reason: string;
+}
+
+export interface ClipPlaybackBatchResult {
+  urls: ClipPlaybackBatchEntry[];
+  failed: ClipPlaybackBatchFailure[];
+}
+
 export interface ClipLikeResult {
   liked: boolean;
   likesCount: number;
@@ -1015,6 +1040,14 @@ export interface UploadClipInput {
 
 const CLUTCH_PAGE_SIZE = 10;
 
+// CT-1 (Phase 3 LAUNCH, P1-1). The endpoint rejects a batch over 24 ids
+// (BATCH_TOO_LARGE); getPlaybackUrls chunks any longer list itself so a call
+// site never has to. Concurrency caps how many chunk requests are ever
+// in flight at once, so a big grid still cannot flood the function the way
+// the old one-call-per-tile mint did.
+const PLAYBACK_BATCH_MAX = 24;
+const PLAYBACK_BATCH_CONCURRENCY = 4;
+
 // NOTE: the column is `thumb_path` on `clips` (0042; the same column
 // stream-webhook writes and get-clip-playback-url/get-clip-moderation-url
 // read). The select previously named a non-existent `thumb_url`, so every
@@ -1031,8 +1064,13 @@ const CLUTCH_PAGE_SIZE = 10;
 // back null for every row not owned by the caller and the whole feed rendered
 // the "Athlete" fallback. The `!owner_id`/`!user_id` hints resolve the FK to
 // users through the view; the `users:` alias preserves the row shapes below.
+// failure_reason (CT-6, 0094) is selected on every read: it is null for
+// every status but `failed`, so carrying it here costs nothing and lets
+// getMyClips/getFeed/getCreatorClips all share one row shape. Only the
+// owner's own grid ever renders it (a clip is never `failed` and visible to
+// anyone else, same as `uploading`/`processing`/`rejected`).
 const CLIP_FEED_SELECT =
-  "id, owner_id, caption, sport, status, likes_count, comment_count, created_at, thumb_path, users:public_profiles!owner_id ( name, channel_name, avatar_url )";
+  "id, owner_id, caption, sport, status, likes_count, comment_count, created_at, thumb_path, failure_reason, users:public_profiles!owner_id ( name, channel_name, avatar_url )";
 
 const CLIP_COMMENT_SELECT =
   "id, clip_id, user_id, text, created_at, users:public_profiles!user_id ( name, channel_name )";
@@ -1053,6 +1091,7 @@ interface ClipFeedRow {
   comment_count: number;
   created_at: string;
   thumb_path: string | null;
+  failure_reason: string | null;
   users: ClipUserJoin | null;
 }
 
@@ -1113,6 +1152,7 @@ function mapClipRow(row: ClipFeedRow, likedByMe: boolean, savedByMe = false): Cl
     caption: row.caption,
     sport: row.sport,
     status: row.status,
+    failureReason: row.failure_reason,
     likes: row.likes_count,
     commentCount: row.comment_count,
     createdAt: row.created_at,
@@ -1210,6 +1250,91 @@ function makeClutchApi(client: AtlitosClient) {
       .returns<{ clip_id: string }[]>();
     if (error) throw mapPostgrestError(error);
     return new Set((data ?? []).map((r) => r.clip_id));
+  }
+
+  /** v1 `clutch.upload` step 1 -> `stream-upload-url` edge function. Mints
+   * the one-time signed Storage upload URL and creates (or, with `clipId`,
+   * reuses) the caller's OWN clip row in `uploading` status server side; the
+   * client then PUTs the MP4 to `uploadUrl` (or `uploadToSignedUrl(path,
+   * token, file)`), never writing the clip row itself. See VIDEO.md. Named
+   * so `retryFailedClip` (CT-6) can call it directly after the RPC flips a
+   * `failed` row back to `uploading`, without going through the public
+   * `requestUploadUrl` method a second time removed. */
+  async function requestUploadUrlImpl(input: UploadClipInput): Promise<ClipUploadTicket> {
+    const { data, error } = await client.functions.invoke("stream-upload-url", {
+      body: { caption: input.caption, sport: input.sport, clip_id: input.clipId },
+    });
+    if (error) throw await mapEdgeFunctionError(error);
+
+    const body = data as {
+      clipId: string;
+      uploadUrl: string;
+      token: string;
+      path: string;
+      bucket: string;
+      status: ClipStatus;
+    };
+    return body;
+  }
+
+  /** CT-1 (Phase 3 LAUNCH, P1-1). Resolves signed thumb/video URLs for a
+   * batch of clips in ceil(n/24) calls to `get-clip-playback-url` instead of
+   * one call per clip (the flood the profile grid and any future long list
+   * used to cause). Chunks run with bounded concurrency
+   * (PLAYBACK_BATCH_CONCURRENCY) so even a very long list never puts more
+   * than a few requests in flight at once. A chunk that errors outright
+   * (network blip, 429) degrades to "no poster this pass" for its own ids
+   * rather than throwing and blanking every other chunk's already-resolved
+   * posters; per-clip auth failures inside a successful batch arrive in the
+   * response's own `failed` array (unpublished/removed/another owner's
+   * clip), same 200-with-partial-failure shape either way. */
+  async function mintPlaybackBatch(
+    clipIds: string[],
+    kind: "thumb" | "video",
+  ): Promise<ClipPlaybackBatchResult> {
+    const ids = Array.from(new Set(clipIds));
+    const result: ClipPlaybackBatchResult = { urls: [], failed: [] };
+    if (ids.length === 0) return result;
+
+    const chunks: string[][] = [];
+    for (let i = 0; i < ids.length; i += PLAYBACK_BATCH_MAX) {
+      chunks.push(ids.slice(i, i + PLAYBACK_BATCH_MAX));
+    }
+
+    interface RawBatchResponse {
+      urls: { clip_id: string; url: string; expires_at: string }[];
+      failed: { clip_id: string; reason: string }[];
+    }
+
+    let cursor = 0;
+    async function worker(): Promise<void> {
+      while (cursor < chunks.length) {
+        const chunk = chunks[cursor];
+        cursor += 1;
+        if (!chunk) continue;
+        try {
+          const { data, error } = await client.functions.invoke("get-clip-playback-url", {
+            body: { clip_ids: chunk, kind },
+          });
+          if (error) throw await mapEdgeFunctionError(error);
+          const body = data as RawBatchResponse;
+          for (const u of body.urls ?? []) {
+            result.urls.push({ clipId: u.clip_id, url: u.url, expiresAt: u.expires_at });
+          }
+          for (const f of body.failed ?? []) {
+            result.failed.push({ clipId: f.clip_id, reason: f.reason });
+          }
+        } catch {
+          for (const clipId of chunk) {
+            result.failed.push({ clipId, reason: "MINT_FAILED" });
+          }
+        }
+      }
+    }
+
+    const workerCount = Math.min(PLAYBACK_BATCH_CONCURRENCY, chunks.length);
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
+    return result;
   }
 
   return {
@@ -1531,22 +1656,7 @@ function makeClutchApi(client: AtlitosClient) {
      * `uploading` status server side; the client then PUTs the MP4 to
      * `uploadUrl` (or `uploadToSignedUrl(path, token, file)`), never writing
      * the clip row itself. See VIDEO.md. */
-    async requestUploadUrl(input: UploadClipInput): Promise<ClipUploadTicket> {
-      const { data, error } = await client.functions.invoke("stream-upload-url", {
-        body: { caption: input.caption, sport: input.sport, clip_id: input.clipId },
-      });
-      if (error) throw await mapEdgeFunctionError(error);
-
-      const body = data as {
-        clipId: string;
-        uploadUrl: string;
-        token: string;
-        path: string;
-        bucket: string;
-        status: ClipStatus;
-      };
-      return body;
-    },
+    requestUploadUrl: requestUploadUrlImpl,
 
     /** v1 `clutch.upload` step 3 -> `stream-webhook` (on-upload finalizer).
      * Called after the MP4 PUT completes; flips the clip to `ready` (into the
@@ -1580,6 +1690,34 @@ function makeClutchApi(client: AtlitosClient) {
         status: ClipStatus;
       };
       return body;
+    },
+
+    /** CT-1 (Phase 3 LAUNCH, P1-1). Batch form of getPlaybackUrl: resolves
+     * many clips' thumb or video URLs in ceil(n/24) calls instead of one per
+     * clip, with bounded concurrency. Use `kind: "thumb"` for a poster grid
+     * (3600s TTL) and `kind: "video"` for playback (300s TTL, matching
+     * getPlaybackUrl). A clip this caller cannot read (unpublished, not
+     * their own, removed) comes back in `failed`, never thrown, so one bad
+     * id never blanks the rest of the grid. */
+    async getPlaybackUrls(clipIds: string[], kind: "thumb" | "video" = "thumb"): Promise<ClipPlaybackBatchResult> {
+      return mintPlaybackBatch(clipIds, kind);
+    },
+
+    /** CT-6 (Phase 3 LAUNCH, P1-6). The owner's Retry action for a clip in
+     * `failed` status: transitions it back to `uploading` via the
+     * owner-scoped `retry_failed_clip` RPC (clients hold no UPDATE grant on
+     * `clips`, 0042, so this SECURITY DEFINER RPC is the only client path off
+     * `failed`; non-owner retry is refused server side), then immediately
+     * re-mints a fresh `stream-upload-url` ticket against the SAME clip row,
+     * now back in `uploading`, the only status that mint will reuse rather
+     * than 409 INVALID_TRANSITION. Never a client-side status flip: both
+     * steps are real round trips, so the grid's Retry tap has honest
+     * evidence (an RPC call, an edge function call) behind it, not an
+     * optimistic local mutation pretending the clip already moved. */
+    async retryFailedClip(clip: Pick<Clip, "id" | "caption" | "sport">): Promise<ClipUploadTicket> {
+      const { error } = await db.rpc("retry_failed_clip", { p_clip_id: clip.id });
+      if (error) throw mapPostgrestError(error);
+      return requestUploadUrlImpl({ caption: clip.caption, sport: clip.sport, clipId: clip.id });
     },
   };
 }

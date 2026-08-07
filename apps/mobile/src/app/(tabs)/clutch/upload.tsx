@@ -1,7 +1,7 @@
 import { useClutch } from '@atlitos/api';
 import { spacing } from '@atlitos/theme';
 import type { ApiError, Sport } from '@atlitos/types';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { CheckCircle2, Film, TriangleAlert, Upload } from 'lucide-react-native';
 import { useState } from 'react';
@@ -31,15 +31,26 @@ type UploadState = 'idle' | 'uploading' | 'done' | 'error';
  * with supabase-js `uploadToSignedUrl`, then `stream-webhook` finalizes the
  * clip to `ready` (into the moderation queue). Uploading never writes the
  * `clips` row from the client, the edge function owns that. Guest-gated (FR-3).
+ *
+ * RETRY (CT-6, P1-6, Phase 3 LAUNCH): the profile grid's Retry action on a
+ * `failed` clip already ran retry_failed_clip (failed -> uploading) and its
+ * own fresh mint before routing here with `retryClipId`/`retryCaption`/
+ * `retrySport`, so this screen only needs to reuse that SAME clip id (never
+ * create a second row) once the athlete picks a replacement file and posts;
+ * `requestUploadUrl` with `clipId` set is the same reuse path an ordinary
+ * dropped-upload retry already used.
  */
 export default function ClutchUploadScreen() {
   const colors = useThemeColors();
   const clutch = useClutch(supabase);
   const requiresAuthGate = useSessionStore((state) => state.status !== 'signed_in');
+  const params = useLocalSearchParams<{ retryClipId?: string; retryCaption?: string; retrySport?: string }>();
+  const retryClipId = typeof params.retryClipId === 'string' && params.retryClipId ? params.retryClipId : undefined;
+  const retrySport: Sport | null = SPORTS.includes(params.retrySport as Sport) ? (params.retrySport as Sport) : null;
 
   const [asset, setAsset] = useState<ImagePicker.ImagePickerAsset | null>(null);
-  const [caption, setCaption] = useState('');
-  const [sport, setSport] = useState<Sport | null>(null);
+  const [caption, setCaption] = useState(params.retryCaption ?? '');
+  const [sport, setSport] = useState<Sport | null>(retrySport);
   const [state, setState] = useState<UploadState>('idle');
   const [error, setError] = useState<ApiError | null>(null);
 
@@ -79,7 +90,7 @@ export default function ClutchUploadScreen() {
     setState('uploading');
     setError(null);
     try {
-      const ticket = await clutch.requestUploadUrl({ caption: caption.trim(), sport });
+      const ticket = await clutch.requestUploadUrl({ caption: caption.trim(), sport, clipId: retryClipId });
 
       // Read the picked file and PUT it to the one-time signed Storage URL.
       // NATIVE PASS: swap this whole-file fetch for a resumable/streamed
@@ -129,6 +140,15 @@ export default function ClutchUploadScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       <AppBar variant="backTitle" title="Post a clip" onPressBack={() => router.back()} />
       <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }}>
+        {retryClipId ? (
+          <View className="flex-row items-center gap-sm rounded-md bg-info-tint p-md">
+            <Upload size={18} strokeWidth={1.75} color={colors.info} />
+            <Text style={[textStyle('callout'), { color: colors.info, flex: 1 }]}>
+              This clip is ready for a new upload. Pick a video to finish posting it.
+            </Text>
+          </View>
+        ) : null}
+
         {/* 1. Clip picker / preview. */}
         <Pressable
           accessibilityRole="button"

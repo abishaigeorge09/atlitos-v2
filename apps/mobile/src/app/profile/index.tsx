@@ -2,7 +2,7 @@ import { toApiError, useClutch, type CreatorProfile } from '@atlitos/api';
 import { spacing } from '@atlitos/theme';
 import type { ApiError, Clip, ClipStatus } from '@atlitos/types';
 import { router } from 'expo-router';
-import { Bookmark, Heart, LayoutGrid, LogIn, Settings, TriangleAlert } from 'lucide-react-native';
+import { Bookmark, Heart, LayoutGrid, LogIn, RotateCcw, Settings, TriangleAlert } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Image, Pressable, RefreshControl, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -22,7 +22,9 @@ import { useThemeColors } from '@/theme/use-theme-colors';
 
 /** Clip lifecycle status to the shared StatusPill vocabulary, for the posts
  * grid where an own clip can be pending/rejected, not only published. Same
- * map as ClutchProfileView. */
+ * map as ClutchProfileView. `failed` (CT-6) is deliberately absent: it gets
+ * its own overlay + Retry affordance below instead of a pill, since it is
+ * the one status that carries an actionable next step, not just a label. */
 const CLIP_STATUS_PILL: Partial<Record<ClipStatus, Status>> = {
   uploading: 'pending',
   processing: 'pending',
@@ -47,9 +49,16 @@ type ProfileTab = 'posts' | 'liked' | 'saved';
  * area (`/account/wishlist`).
  *
  * GRID POSTERS: `clips.thumb_path` is a raw private-bucket path that cannot load
- * as an <Image> source, so each grid tile shows a SIGNED poster minted per clip
- * via getPlaybackUrl (the same seam the feed uses), never clip.thumbUrl. Guests
- * get the standard login gate.
+ * as an <Image> source, so each grid tile shows a SIGNED poster minted via the
+ * batch CT-1 endpoint (`getPlaybackUrls`, kind "thumb", ceil(n/24) calls with
+ * concurrency <= 4 instead of one call per clip, Phase 3 LAUNCH P1-1), never
+ * clip.thumbUrl. Guests get the standard login gate.
+ *
+ * FAILED CLIPS (CT-6, P1-6): an own clip stuck in `failed` (a technical
+ * upload/processing failure, not moderation) shows its failure_reason and a
+ * Retry tile instead of a poster; Retry calls retryFailedClip (the owner
+ * scoped retry_failed_clip RPC, then a fresh stream-upload-url mint) and
+ * routes to Upload pre-filled to finish the re-upload.
  */
 export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {}) {
   const colors = useThemeColors();
@@ -79,11 +88,16 @@ export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {
   const [refreshing, setRefreshing] = useState(false);
   const [tab, setTab] = useState<ProfileTab>('posts');
 
-  // Signed poster URL per grid clip, minted from getPlaybackUrl's thumbUrl.
+  // Signed poster URL per grid clip, minted in batches via getPlaybackUrls.
   const [posterUrls, setPosterUrls] = useState<Record<string, string>>({});
   // Clips a poster mint has already been attempted for, so a static grid never
-  // re-mints every render (and a failed mint is not retried in a loop).
+  // re-mints every render (an unresolved mint is not retried in a loop).
   const mintAttempted = useRef<Set<string>>(new Set());
+
+  // P1-6 (CT-6): per-clip Retry busy/error state, keyed by clip id, so one
+  // tile's retry never disables the whole grid.
+  const [retryingId, setRetryingId] = useState<string | null>(null);
+  const [retryErrors, setRetryErrors] = useState<Record<string, string>>({});
 
   const load = useCallback(
     async (silent: boolean) => {
@@ -131,29 +145,68 @@ export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {
 
   const gridClips = tab === 'posts' ? clips : tab === 'liked' ? liked : saved;
 
-  // Mint a signed poster for every clip in the active grid that has not been
-  // attempted yet, mirroring the feed's per-card mint (clutch/index.tsx).
+  // Mint signed posters for every clip in the active grid that has not been
+  // attempted yet, in BATCHES (P1-1, CT-1) instead of one getPlaybackUrl call
+  // per tile: a >= 12 clip grid used to fire n network calls on mount, the
+  // exact flood this phase's readiness work targets. getPlaybackUrls chunks
+  // to <= 24 ids per call with concurrency <= 4, kind "thumb" (3600s TTL, no
+  // per-card refresh timer needed the way the feed's video URLs need).
+  // A `failed` clip is skipped: it has no storage object to mint a poster
+  // for, its tile renders the Retry overlay instead (below).
   useEffect(() => {
     let cancelled = false;
-    const pending = gridClips.filter((clip) => !mintAttempted.current.has(clip.id));
+    const pending = gridClips.filter((clip) => clip.status !== 'failed' && !mintAttempted.current.has(clip.id));
     if (pending.length === 0) return;
     pending.forEach((clip) => mintAttempted.current.add(clip.id));
-    void Promise.all(
-      pending.map(async (clip) => {
-        try {
-          const playback = await clutch.getPlaybackUrl(clip.id);
-          if (!cancelled && playback.thumbUrl) {
-            setPosterUrls((prev) => ({ ...prev, [clip.id]: playback.thumbUrl as string }));
-          }
-        } catch {
-          // A placeholder-bytes or 403 clip keeps its solid poster surface.
-        }
-      }),
-    );
+    void clutch.getPlaybackUrls(
+      pending.map((clip) => clip.id),
+      'thumb',
+    ).then((batch) => {
+      if (cancelled) return;
+      if (batch.urls.length === 0) return;
+      setPosterUrls((prev) => {
+        const next = { ...prev };
+        for (const entry of batch.urls) next[entry.clipId] = entry.url;
+        return next;
+      });
+      // A clip in `batch.failed` (placeholder-bytes fixture, or a 403) just
+      // keeps its solid poster surface; no error surfaced per tile.
+    });
     return () => {
       cancelled = true;
     };
   }, [gridClips, clutch]);
+
+  /** P1-6 (CT-6). Retry a `failed` own clip: RPC failed -> uploading, then a
+   * fresh stream-upload-url mint against the same row, then route to Upload
+   * pre-filled with this clip's id/caption/sport so the athlete can pick a
+   * replacement file and finish the post. */
+  const handleRetry = useCallback(
+    async (clip: Clip) => {
+      if (retryingId) return;
+      setRetryingId(clip.id);
+      setRetryErrors((prev) => {
+        const next = { ...prev };
+        delete next[clip.id];
+        return next;
+      });
+      try {
+        await clutch.retryFailedClip(clip);
+        setClips((prev) =>
+          prev.map((c) => (c.id === clip.id ? { ...c, status: 'uploading', failureReason: null } : c)),
+        );
+        router.push({
+          pathname: '/(tabs)/clutch/upload',
+          params: { retryClipId: clip.id, retryCaption: clip.caption, retrySport: clip.sport },
+        });
+      } catch (err) {
+        setRetryErrors((prev) => ({ ...prev, [clip.id]: toApiError(err).message }));
+      } finally {
+        setRetryingId(null);
+      }
+    },
+    [clutch, retryingId],
+  );
 
   if (isGuest || !myId) {
     return (
@@ -351,6 +404,11 @@ export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {
           // Status label only on the own-posts grid (a liked/saved clip is
           // always published, see listLikedClips/listSavedClips).
           const pill = tab === 'posts' ? CLIP_STATUS_PILL[item.status] : undefined;
+          // P1-6: a failed own clip is never silently dead, its tile carries
+          // the reason plus a working Retry, not just a status label.
+          const isFailed = tab === 'posts' && item.status === 'failed';
+          const isRetrying = retryingId === item.id;
+          const retryError = retryErrors[item.id];
           return (
             // maxWidth caps a lone last-row tile at one third instead of the
             // full-width stretch numColumns+flex-1 would otherwise give it.
@@ -359,11 +417,45 @@ export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {
                 clip={item}
                 variant="thumb"
                 posterUrl={posterUrls[item.id]}
-                onOpen={() => router.push({ pathname: '/(tabs)/clutch/post/[id]', params: { id: item.id } })}
+                onOpen={
+                  isFailed
+                    ? undefined
+                    : () => router.push({ pathname: '/(tabs)/clutch/post/[id]', params: { id: item.id } })
+                }
               />
               {pill ? (
                 <View className="absolute left-xs top-xs" style={{ pointerEvents: 'none' }}>
                   <StatusPill status={pill} />
+                </View>
+              ) : null}
+              {isFailed ? (
+                <View
+                  className="absolute inset-0 items-center justify-center gap-xs p-xs"
+                  style={{ backgroundColor: colors.overlay }}
+                >
+                  <TriangleAlert size={18} color={colors.textInverse} strokeWidth={1.75} />
+                  <Text
+                    style={[textStyle('caption'), { color: colors.textInverse, textAlign: 'center' }]}
+                    numberOfLines={2}
+                  >
+                    {retryError ?? item.failureReason ?? 'Upload failed'}
+                  </Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Retry upload"
+                    disabled={isRetrying}
+                    onPress={() => void handleRetry(item)}
+                    className="flex-row items-center gap-xs rounded-pill bg-surface px-sm py-xs"
+                  >
+                    {isRetrying ? (
+                      <ActivityIndicator size="small" color={colors.text} />
+                    ) : (
+                      <RotateCcw size={12} strokeWidth={1.75} color={colors.text} />
+                    )}
+                    <Text style={[textStyle('caption'), { color: colors.text }]}>
+                      {isRetrying ? 'Retrying' : 'Retry'}
+                    </Text>
+                  </Pressable>
                 </View>
               ) : null}
             </View>

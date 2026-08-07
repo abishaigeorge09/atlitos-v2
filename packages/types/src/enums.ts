@@ -70,7 +70,20 @@ export type OrderStatus = (typeof ORDER_STATUSES)[number];
 export const STOCK_RESERVATION_STATUSES = ['held', 'consumed', 'released'] as const;
 export type StockReservationStatus = (typeof STOCK_RESERVATION_STATUSES)[number];
 
-export const CLIP_STATUSES = ['uploading', 'processing', 'ready', 'published', 'rejected', 'removed'] as const;
+// 'failed' added Phase 3 LAUNCH (CT-6, 0094_clip_failed_state_and_sweep_capture.sql,
+// Track A). A technical upload/processing failure, distinct from `rejected`
+// (moderation): `uploading|processing -> failed`, and `failed -> uploading`
+// is the owner's Retry action (retry_failed_clip RPC). See
+// docs/architecture/SCHEMA.md and transitions/index.ts CLIP_TRANSITIONS.
+export const CLIP_STATUSES = [
+  'uploading',
+  'processing',
+  'ready',
+  'published',
+  'rejected',
+  'removed',
+  'failed',
+] as const;
 export type ClipStatus = (typeof CLIP_STATUSES)[number];
 
 export const UPA_STATUSES = ['submitted', 'under_review', 'needs_info', 'verified', 'rejected'] as const;
