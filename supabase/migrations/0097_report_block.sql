@@ -66,7 +66,7 @@ revoke update on public.blocked_users from authenticated;
 -- 'clip' or 'comment', both still allowed.
 -- ============================================================================
 
-alter table public.reports drop constraint reports_entity_type_check;
+alter table public.reports drop constraint if exists reports_entity_type_check;
 alter table public.reports add constraint reports_entity_type_check
   check (entity_type in ('clip', 'comment', 'chat_message', 'user'));
 
