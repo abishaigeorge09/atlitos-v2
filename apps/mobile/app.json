@@ -60,7 +60,14 @@
       "expo-font",
       "expo-status-bar",
       "expo-video",
-      "@sentry/react-native/expo"
+      "@sentry/react-native/expo",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#FBF7F1"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

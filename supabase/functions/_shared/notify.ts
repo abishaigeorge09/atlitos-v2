@@ -16,13 +16,19 @@
 //      authenticated INSERT), so a client can never forge a notification for
 //      another user through this path.
 //
-//   2. DEVICE push, APNs/FCM (STUBBED, carried to P9). Real device delivery
-//      needs native transport credentials (an APNs key / FCM server key) and
-//      a real provider call, neither of which exists until the native ship
-//      stage. `deliverToDevice()` below is the seam: it resolves the user's
-//      push_tokens, honors notification_prefs, and hands each token to a
-//      transport that today only logs. It does NOT pretend the push was
-//      delivered. See the TODO(P9) inside it.
+//   2. DEVICE push, via the Expo Push API (Phase 4 Track D, launch plan
+//      decision 7). `deliverToDevice()`'s single-token seam from P9 is
+//      replaced by a batched call to `exp.host/--/api/v2/push/send`: it
+//      resolves the user's push_tokens, honors BOTH notification-prefs
+//      stores (decision 8), builds one Expo push message per token, and
+//      posts them in <=100-message chunks. A token the provider reports
+//      `DeviceNotRegistered` for is pruned from push_tokens (service role).
+//      Transport failure (network error, malformed response, an individual
+//      ticket error) never throws into the in-app leg: the notifications row
+//      from leg 1 is already committed by the time leg 2 runs, and this
+//      function's callers (RPCs, edge functions placing an order/booking/
+//      chat message) must not fail their own operation because a push
+//      provider hiccuped.
 //
 // SQL RPCs that already write a notifications row directly (moderate_clip in
 // 0043, record_donation_from_draft in 0054, and the verification RPCs wired
@@ -57,20 +63,23 @@ export interface NotificationInput {
   deepLink: string;
 }
 
+export type DeviceDeliveryStatus = "sent" | "failed" | "pruned";
+
 export interface DeviceDeliveryResult {
   token: string;
   platform: "ios" | "android";
-  /** "stubbed" until the P9 transport lands; never "sent" today, so nothing
-   * downstream can mistake the stub for a delivered push. */
-  status: "stubbed";
+  status: DeviceDeliveryStatus;
+  /** Present when `status` is `"failed"` or `"pruned"`, the Expo ticket/
+   * receipt error code or message, for observability. */
+  detail?: string;
 }
 
 export interface DispatchResult {
   notificationId: string;
   userId: string;
-  /** How the device-push leg resolved. `pushSuppressed` when the user's
-   * notification_prefs opted this type out; otherwise one entry per device
-   * token, each currently `stubbed`. */
+  /** How the device-push leg resolved. `pushSuppressed` when EITHER
+   * notification-prefs store opted this type out (decision 8); otherwise one
+   * entry per device token this user has registered. */
   pushSuppressed: boolean;
   deviceDeliveries: DeviceDeliveryResult[];
 }
@@ -116,40 +125,233 @@ export function parseNotificationInput(raw: unknown): NotificationInput {
 }
 
 // ---------------------------------------------------------------------------
-// Device-push seam. STUB, carried to P9.
+// Dual notification-prefs reconciliation (launch plan decision 8).
+//
+// Two stores exist and are reconciled here, at the delivery leg, rather than
+// migrated into one: the per-type `notification_prefs` table (0002, full
+// owner CRUD, the `/notifications/preferences` screen) and the coarser
+// `users.notification_prefs` jsonb category map (0087, the Settings
+// surface). A `NotificationType` maps to at most one 0087 category; an
+// unmapped type is governed by the 0002 table alone. Push is suppressed when
+// EITHER store opts the user out. Consolidating into a single store is
+// recorded fast-follow debt (docs/DEBT.md), not built this phase.
 // ---------------------------------------------------------------------------
 
+/** The 0087 jsonb shape, `packages/api/src/hooks.ts` `MeRow.notificationPrefs`. */
+type Notification0087Category = "sessions" | "messages" | "promotions";
+
+const TYPE_TO_0087_CATEGORY: Partial<Record<NotificationType, Notification0087Category>> = {
+  booking: "sessions",
+  chat: "messages",
+  // order, clip_moderation, donation, verification, transfer, support: no
+  // 0087 category maps to these; they are governed by the 0002 table alone.
+};
+
+interface Users0087PrefsRow {
+  notification_prefs: Partial<Record<Notification0087Category, boolean>> | null;
+}
+
+interface Prefs0002Row {
+  push_enabled: boolean;
+}
+
 /**
- * TODO(P9): real device push. Replace this body with the APNs (iOS) / FCM
- * (Android) transport once native credentials exist (docs/phases/
- * PHASE-8-STATUS.md handoff: "Device push delivery through notify-dispatch's
- * stubbed seam"). It must:
- *   - build the platform-specific payload from `input`,
- *   - POST to APNs for `ios` tokens and FCM for `android` tokens,
- *   - prune tokens the provider reports as unregistered from push_tokens,
- *   - return a real per-token delivered/failed status.
- * Today it only logs and reports `stubbed`, so nothing treats a push as sent
- * when no push was actually sent.
+ * Resolves whether push is enabled for this user+type across both prefs
+ * stores. Absent a 0002 row the column default is push-enabled; absent a
+ * 0087 category mapping (or a missing/malformed jsonb key) the category is
+ * treated as enabled, matching the 0087 migration's own column default
+ * (`{"sessions": true, "messages": true, "promotions": false}`). A read
+ * failure on either store degrades to "enabled" for that store (never
+ * silently drops a delivery leg 1 already committed), matching the prior
+ * stub's fail-open behavior.
  */
-function deliverToDevice(
-  token: string,
-  platform: "ios" | "android",
+async function resolvePushEnabled(
+  service: SupabaseClient,
+  userId: string,
+  type: NotificationType,
+): Promise<boolean> {
+  const { data: pref, error: prefError } = await service
+    .from("notification_prefs")
+    .select("push_enabled")
+    .eq("user_id", userId)
+    .eq("notification_type", type)
+    .maybeSingle<Prefs0002Row>();
+  if (prefError) {
+    console.error(
+      `[notify-dispatch] 0002 prefs read failed for user ${userId}, defaulting that store to enabled:`,
+      prefError.message,
+    );
+  }
+  const table0002Enabled = pref ? pref.push_enabled : true;
+
+  const category = TYPE_TO_0087_CATEGORY[type];
+  let category0087Enabled = true;
+  if (category) {
+    const { data: userRow, error: userError } = await service
+      .from("users")
+      .select("notification_prefs")
+      .eq("id", userId)
+      .maybeSingle<Users0087PrefsRow>();
+    if (userError) {
+      console.error(
+        `[notify-dispatch] 0087 prefs read failed for user ${userId}, defaulting that store to enabled:`,
+        userError.message,
+      );
+    } else {
+      const raw = userRow?.notification_prefs?.[category];
+      category0087Enabled = raw !== false; // absent/undefined => default enabled
+    }
+  }
+
+  return table0002Enabled && category0087Enabled;
+}
+
+// ---------------------------------------------------------------------------
+// Device-push transport: Expo Push API.
+// ---------------------------------------------------------------------------
+
+const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
+/** Expo accepts at most 100 messages per request. */
+const EXPO_BATCH_SIZE = 100;
+
+interface ExpoPushMessage {
+  to: string;
+  title: string;
+  body: string;
+  data: { deepLink: string; type: NotificationType };
+}
+
+interface ExpoPushTicketOk {
+  status: "ok";
+  id: string;
+}
+
+interface ExpoPushTicketError {
+  status: "error";
+  message: string;
+  details?: { error?: string };
+}
+
+type ExpoPushTicket = ExpoPushTicketOk | ExpoPushTicketError;
+
+function buildExpoMessage(token: string, input: NotificationInput): ExpoPushMessage {
+  return {
+    to: token,
+    title: input.title,
+    body: input.body,
+    data: { deepLink: input.deepLink, type: input.type },
+  };
+}
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+/**
+ * Posts one batch (<=100) of Expo push messages and returns one ticket per
+ * message, in the same order. Never throws: a network failure or a
+ * malformed response is mapped to an `"error"` ticket per message in the
+ * batch, so the caller can still report a per-token result instead of
+ * aborting the whole dispatch.
+ */
+async function sendExpoPushBatch(messages: ExpoPushMessage[]): Promise<ExpoPushTicket[]> {
+  try {
+    const response = await fetch(EXPO_PUSH_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        "Accept-Encoding": "gzip, deflate",
+      },
+      body: JSON.stringify(messages),
+    });
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(`Expo push API responded ${response.status}: ${text.slice(0, 300)}`);
+    }
+
+    const json = (await response.json()) as { data?: ExpoPushTicket[]; errors?: unknown[] };
+    const tickets = json.data ?? [];
+    if (tickets.length !== messages.length) {
+      throw new Error(
+        `Expo push API returned ${tickets.length} tickets for ${messages.length} messages.`,
+      );
+    }
+    return tickets;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[notify-dispatch] Expo push batch failed:", message);
+    return messages.map(() => ({ status: "error", message } as ExpoPushTicketError));
+  }
+}
+
+/**
+ * Delivers one notification to every one of a user's registered devices via
+ * the Expo Push API, batching in groups of <=100. A `DeviceNotRegistered`
+ * ticket error prunes that token from `push_tokens` under the service role
+ * (the provider is telling us the install no longer exists), so a stale
+ * token stops being tried on every future dispatch. Any other per-ticket
+ * error is reported but the token is left in place (transient provider/
+ * network issues should not silently unregister a live device).
+ */
+async function deliverToDevices(
+  service: SupabaseClient,
+  tokens: PushTokenRow[],
   input: NotificationInput,
-): DeviceDeliveryResult {
-  console.log(
-    `[notify-dispatch] devicePush STUB (P9): would deliver ${input.type} ` +
-      `to ${platform} token ${token.slice(0, 8)}… for user ${input.userId}`,
-  );
-  return { token, platform, status: "stubbed" };
+): Promise<DeviceDeliveryResult[]> {
+  if (tokens.length === 0) return [];
+
+  const results: DeviceDeliveryResult[] = [];
+  for (const batch of chunk(tokens, EXPO_BATCH_SIZE)) {
+    const messages = batch.map((t) => buildExpoMessage(t.token, input));
+    const tickets = await sendExpoPushBatch(messages);
+
+    for (let i = 0; i < batch.length; i++) {
+      const t = batch[i];
+      const ticket = tickets[i];
+      if (ticket.status === "ok") {
+        results.push({ token: t.token, platform: t.platform, status: "sent" });
+        continue;
+      }
+
+      const errorCode = ticket.details?.error;
+      if (errorCode === "DeviceNotRegistered") {
+        const { error: deleteError } = await service
+          .from("push_tokens")
+          .delete()
+          .eq("token", t.token);
+        if (deleteError) {
+          console.error(
+            `[notify-dispatch] failed to prune DeviceNotRegistered token for user ${input.userId}:`,
+            deleteError.message,
+          );
+        }
+        results.push({
+          token: t.token,
+          platform: t.platform,
+          status: "pruned",
+          detail: errorCode,
+        });
+      } else {
+        results.push({
+          token: t.token,
+          platform: t.platform,
+          status: "failed",
+          detail: ticket.message,
+        });
+      }
+    }
+  }
+
+  return results;
 }
 
 // ---------------------------------------------------------------------------
 // Orchestration.
 // ---------------------------------------------------------------------------
-
-interface PrefRow {
-  push_enabled: boolean;
-}
 
 interface PushTokenRow {
   token: string;
@@ -158,9 +360,10 @@ interface PushTokenRow {
 
 /**
  * Writes the notifications row (in-app delivery) and attempts the device-push
- * leg (stubbed). `service` MUST be a service-role client: the notifications
- * table has no authenticated INSERT grant, and running under service role is
- * what keeps a client from writing a notification for someone else.
+ * leg over the Expo Push API. `service` MUST be a service-role client: the
+ * notifications table has no authenticated INSERT grant, and running under
+ * service role is what keeps a client from writing a notification for
+ * someone else.
  */
 export async function dispatchNotification(
   service: SupabaseClient,
@@ -187,24 +390,9 @@ export async function dispatchNotification(
     );
   }
 
-  // Leg 2: device push (stubbed). Honor the user's per-type opt-out first.
-  const { data: pref, error: prefError } = await service
-    .from("notification_prefs")
-    .select("push_enabled")
-    .eq("user_id", input.userId)
-    .eq("notification_type", input.type)
-    .maybeSingle<PrefRow>();
-  if (prefError) {
-    // A prefs read failure must not swallow an already-written in-app
-    // notification; log and treat as default-on rather than fail the dispatch.
-    console.error(
-      `[notify-dispatch] prefs read failed for user ${input.userId}, defaulting push on:`,
-      prefError.message,
-    );
-  }
-
-  // Absent a pref row the default is push-enabled (0002 column default).
-  const pushEnabled = pref ? pref.push_enabled : true;
+  // Leg 2: device push. Honor BOTH prefs stores first (decision 8: either
+  // opt-out suppresses).
+  const pushEnabled = await resolvePushEnabled(service, input.userId, input.type);
   if (!pushEnabled) {
     return {
       notificationId: row.id,
@@ -226,9 +414,7 @@ export async function dispatchNotification(
     );
   }
 
-  const deviceDeliveries = (tokens ?? []).map((t) =>
-    deliverToDevice(t.token, t.platform, input)
-  );
+  const deviceDeliveries = await deliverToDevices(service, tokens ?? [], input);
 
   return {
     notificationId: row.id,
