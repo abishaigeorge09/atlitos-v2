@@ -274,6 +274,31 @@ Client wiring lives in `apps/portal-court/src/lib/onboarding.ts`, one typed modu
 | `follow` | PUT `/clutch/creators/:id/follow` | RPC | `toggle_follow(followee_id)` | atomic toggle; `403 GUEST` if anonymous |
 | `retryFailedClip` (Phase 3 LAUNCH CT-6, P1-6) | tap Retry on a `failed` own clip | RPC + Edge Function | client: `useClutch(...).retryFailedClip(clip)` calls `retry_failed_clip(p_clip_id)` (Track A, `0094_clip_failed_state_and_sweep_capture.sql`; owner-scoped SECURITY DEFINER, the only client path off `failed` since clients hold no UPDATE grant on `clips`), then immediately `requestUploadUrl({ caption, sport, clipId })` against the SAME row (now back in `uploading`, the only status `stream-upload-url` will reuse rather than 409). Both are real round trips, no client-side status flip. UI: `apps/mobile/src/app/profile/index.tsx`'s own-clips grid shows `failure_reason` + a Retry tile for any `failed` clip, then routes to `(tabs)/clutch/upload` prefilled (`retryClipId`/`retryCaption`/`retrySport`) so the athlete can pick a replacement file and finish the post against the same clip id |
 
+**Phase 4 LAUNCH (CT-C, `0097_report_block.sql`): `getFeed`/`getComments` filter blocked
+authors.** Both subtract the caller's own `blocked_users` set (via `getBlockedUserIds`,
+below) from the returned rows client side; the pagination cursor is still derived from the
+UNFILTERED page so a block never causes a page to skip rows. See "moderation" below.
+
+## moderation (report + block, Phase 4 LAUNCH Track C, CT-C)
+
+PRD-04 FR-31, FR-32, FR-33; App Store 1.2 / Play UGC policy (a store approval
+requirement). `packages/api/src/hooks.ts` exports `useModeration(client)` plus a
+plain, non-hook `getBlockedUserIds(client)` both `useClutch` (above) and `useChat`
+(below) call internally to subtract the caller's own blocked set from what they
+return, since a hook's body cannot call another hook. Reports land in the SAME
+`reports` table and admin Reports Queue (`apps/admin/src/pages/reports`) that
+clip/comment reports already used (`0041-0043`), now also accepting
+`entity_type: 'chat_message' | 'user'`.
+
+| Method | v2 lane | Function / RPC | Note |
+|---|---|---|---|
+| `useModeration(...).reportEntity({ entityType, entityId, reason })` | PostgREST | `reports` insert | own-row insert (`reporter_id = auth.uid()`, `NOT is_guest()`, unchanged `reports_insert_own` policy); `entityType` is `'clip' \| 'comment' \| 'chat_message' \| 'user'`; empty-trimmed `reason` refused client side AND by the table's `btrim(reason) <> ''` check; lands `pending` in the same admin Reports Queue clip/comment reports already use |
+| `useModeration(...).getBlockedIds()` | PostgREST | `blocked_users` select | own rows (`blocker_id = auth.uid()`); empty set for a guest, no round trip cost beyond one no-op query |
+| `useModeration(...).blockUser(userId)` | PostgREST | `blocked_users` upsert | own-row (`blocker_id = auth.uid()`), `onConflict: 'blocker_id,blocked_id'` so blocking an already-blocked user is a no-op success; refuses a self-block client side (`VALIDATION`) ahead of the schema's own `check (blocker_id <> blocked_id)` |
+| `useModeration(...).unblockUser(userId)` | PostgREST | `blocked_users` delete | own-row delete; idempotent, no error if the row never existed |
+| admin: `admin_get_reported_entity(p_report_id)` | RPC | `apps/admin/src/pages/reports/api.ts`'s `fetchReportedEntity`/`fetchReportedEntitySummaries` | admin/moderator only (internal `has_role` check, `FORBIDDEN` otherwise); returns ONE reported entity's jsonb snapshot for ONE existing report; the only read path onto a chat message's content (no blanket admin SELECT policy on `chat_messages`, RLS.md Phase 4 section); also serves `clip`/`comment`/`user` report types for a single uniform admin read shape, though the Reports Queue detail screen still uses the pre-existing direct table reads for `clip`/`comment` (unchanged, already proven) |
+| admin: `resolve_report(p_report_id, p_action, p_reason)` | RPC | `apps/admin/src/pages/moderation/api.ts`'s `moderationApi.removeReport`/`dismissReport` (unchanged call sites) | `create or replace`, `0043`'s `clip`/`comment` branches byte-for-byte unchanged; gains a `chat_message` remove arm (soft-delete via `removed_at`/`removed_reason`, `chat_messages` immutability otherwise preserved) and a `user` remove arm (resolves the report `actioned`, no further mutation; account suspension is Track B's separate `admin_suspend_user`, from the User Detail screen, a deliberately separate audited step) |
+
 ## empower
 
 | v1 fn | v1 route | v2 lane | Function / RPC | Note |
@@ -337,6 +362,17 @@ Training groups with monthly subscription fares (founder-ratified: manual renewa
 | `useChat().listThreads` / `getThread` (group threads) | `chat_threads` + `training_groups` (scoped to context_ids from the caller's own thread rows) + `chat_thread_members` count | `ChatThread` gained `isGroup` / `groupName` / `memberCount` / `lastSenderName`; a group row's `participantName` holds the group's name so an unaware caller still renders something sane |
 | `useChat().listMessages` / `sendMessage` / live inbound (group threads) | `chat_messages` (sender embedded via `users!sender_id`) | `ChatMessage` gained `senderName`, joined on every PostgREST read; the Broadcast payload below carries no join, so the thread screen backfills it from the loaded roster |
 | `useChat().listThreadMembers` | `chat_thread_members` joined to `users` | group thread's seated roster for the members sheet (ChatThreadList / conversation screen, COACH-TRAININGS-GAP.md screen 17); RLS (`chat_thread_members_select_member`) scopes to threads the caller is seated in; empty list for a 1:1 thread rather than an error |
+
+**Phase 4 LAUNCH (CT-C, `0097_report_block.sql`): block + removed-message filtering.**
+`useChat().listThreads` drops a 1:1 thread whose other participant is on the caller's own
+`blocked_users` list (group threads are never dropped this way); its preview candidates
+also exclude a moderator-removed message's text and any message from a blocked sender.
+`useChat().listMessages` drops messages from a blocked sender entirely and renders "This
+message was removed." in place of a moderator-removed row's real text (`chat_messages.
+removed_at` set via `resolve_report`'s chat arm, see the "moderation" section above and
+RLS.md). The live Broadcast listener (`subscribeToUserChannel`, below) does NOT re-check
+either list mid-session, documented rather than silently promised: a screen reload
+(the next `listMessages`/`listThreads` call) closes that gap.
 
 **Chat live delivery moved to Broadcast (CT-4, P1-2, PHASE-3-STATUS.md Phase 3, Track A serves / Track D consumes).** Prior to Phase 3, `useChat().subscribeToThread`/`subscribeToInbox` each opened a `postgres_changes` subscription on `chat_messages`; the server re-evaluated `chat_messages` RLS for every subscriber on every insert, the P1-2 meltdown class at 1000 concurrent chat users. Both are gone, replaced by one method:
 

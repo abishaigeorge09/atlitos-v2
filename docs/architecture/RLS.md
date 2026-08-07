@@ -505,3 +505,54 @@ false over 61 takes and is `permission denied` for both client roles; the clip
 machine refuses `ready -> failed` with `INVALID_TRANSITION`; the sweep marks a
 planted object-absent stranded clip `failed` and captures a rigged arm's failure
 in `sweep_failures` while the other arms still run.
+
+## LAUNCH Phase 4 (Track C, `0097_report_block.sql`) — report + block
+
+CT-C, PRD-04 FR-31/FR-32/FR-33, App Store 1.2 / Play UGC store requirement.
+Extends the existing `0041-0043` reports/moderation machinery (built for
+clip/comment reports only) to also cover a chat message report and a direct
+user report, and adds the own-row `blocked_users` table client filtering
+subtracts from feed/comments/chat reads. Full design rationale lives in
+`docs/phases/PHASE-4-STATUS.md` Settled decision 4-6; this section is the RLS
+surface summary.
+
+| Table | `SELECT` | `INSERT`/`UPDATE`/`DELETE` |
+|---|---|---|
+| `blocked_users` (new) | own rows (`blocker_id = auth.uid()`) only; no admin read policy, a block list is private even to moderators | own row `INSERT` (`blocker_id = auth.uid()`, `NOT is_guest()`); own row `DELETE`; **no** `UPDATE` at all (a block is created or removed, never edited); schema-level `check (blocker_id <> blocked_id)`, the AT-62 shape baked into the table itself; `anon` has no grant at all |
+| `reports` | unchanged from `0042` (own rows; admin/moderator reads all) | unchanged; `entity_type` check widened to `'clip' \| 'comment' \| 'chat_message' \| 'user'` (was `'clip' \| 'comment'`), same `reports_insert_own` policy covers every value |
+| `chat_messages` | unchanged (`0022`'s participant-only policy; the two new columns carry no new read surface) | unchanged: still **no** client `UPDATE`/`DELETE` grant at all (`0022`), so the two new columns (`removed_at`, `removed_reason`) stay unwritable by any direct client PostgREST call after this migration exactly as before. The ONLY write path is `resolve_report`'s extended chat arm (SECURITY DEFINER, admin/moderator gated inside) |
+
+**Permissive-OR is not the risk here; there is none to subtract.** `blocked_users`
+carries exactly one SELECT policy (own row), so this table itself has no
+permissive-OR leak. The actual CT-C mechanism is the opposite problem: RLS
+*cannot subtract* a blocked user's rows from `clips`/`clip_comments`/
+`chat_messages`, all of which are legitimately readable by policy (published
+feed, thread participant, etc.). `packages/api` (`getBlockedUserIds` in
+`hooks.ts`, consumed by `useClutch`'s `getFeed`/`getComments` and `useChat`'s
+`listThreads`/`listMessages`) is where the caller's own blocked set is
+subtracted, an explicit client-layer filter, same shape and same reasoning as
+the `clips_select_published`/permissive-OR warning at the top of this
+document: **RLS is an authorization ceiling here, never a scoping mechanism,
+and this is the one place in the schema where that gap is filled by app code
+on purpose, not by omission.** DB-enforced message refusal (a restrictive
+policy that blocks the blocked party's own INSERT into a thread the blocker
+is in) is recorded fast-follow debt in `docs/DEBT.md`, not built this phase:
+a restrictive policy on `chat_messages` would sit directly on top of the
+fresh Phase 3 Broadcast delivery path (`0092`), and the store review bar
+(report, block, blocked content disappears from the blocker's own view) is
+met without it, the exact BelieversDiary Guideline 1.2 precedent.
+
+`admin_get_reported_entity(p_report_id)`: SECURITY DEFINER, internal
+`has_role('admin') OR has_role('moderator')` check (raises `FORBIDDEN`
+otherwise), EXECUTE granted to `authenticated` only (the internal check is
+the real gate, same pattern as `resolve_report`/`moderate_clip`). Returns
+exactly one reported entity's snapshot for exactly one EXISTING `reports`
+row, admin-checked inside; there is **no** blanket admin SELECT policy on
+`chat_messages` (a far wider privacy grant than moderation needs, PHASE-4-
+STATUS.md highest risk item 4), so this RPC is the ONLY way an admin/
+moderator ever reads a chat message's content. `resolve_report` (`create or
+replace`, `0043`'s clip/comment branches unchanged byte-for-byte) gains a
+`chat_message` remove arm (soft-delete via `removed_at`/`removed_reason`,
+never a hard delete) and a `user` remove arm (resolves the report as
+`actioned` with no further row mutation; account enforcement is Track B's
+separate, separately audited `admin_suspend_user`).
