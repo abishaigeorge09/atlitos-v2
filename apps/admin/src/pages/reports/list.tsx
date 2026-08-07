@@ -6,16 +6,26 @@ import { Badge, Card, EmptyState } from "../../components/ui";
 import { Mono } from "../../components/mono";
 import { supabaseClient } from "../../providers/supabaseClient";
 import { reportStatusLabel, reportStatusTone } from "../moderation/status";
-import type { ReportQueueRow, ReportStatus } from "../moderation/api";
+import type { ReportStatus } from "../moderation/api";
+import { entityTypeLabel, fetchReportedEntitySummaries, type ReportQueueRow } from "./api";
 
 // AT-103, PRD-04 FR-31, FR-33. The Reports Queue: user submitted reports against
-// published clips or comments, showing reporter, reason, the reported entity,
-// and date, with a distinct empty state when nothing is pending.
+// published clips, comments, chat messages (Phase 4 LAUNCH Track C, CT-C,
+// 0097_report_block.sql), or a user account directly. Shows reporter, reason,
+// the reported entity, and date, with a distinct empty state when nothing is
+// pending.
 //
 // `reports` carries an admin read-all policy (0042); the queue is meant to show
 // every report, which is the admin's job, so there is no per-owner filter here.
-// The reported entity's own text (clip caption, comment body) is resolved in a
-// second query, matching the buyer-name pattern in orders/list.tsx.
+// `ReportQueueRow` is defined locally in `./api` (this directory) rather than
+// imported from `../moderation/api`, whose `ReportQueueRow.entity_type` is
+// still the pre-Phase-4 `'clip' | 'comment'` union and is not this track's
+// file to widen. The reported entity's own text: clip caption and comment
+// body still resolve by a direct table read (public/admin-readable tables,
+// unchanged from before); a chat message or a user report resolves through
+// `admin_get_reported_entity`, the one RPC that can read a chat message's
+// content at all (0097, Settled decision 6: no blanket admin SELECT policy
+// on chat_messages).
 
 type StatusFilter = "all" | ReportStatus;
 type LoadState = "loading" | "error" | "ready";
@@ -75,7 +85,11 @@ export function ReportsList() {
         const { data: comments } = await supabaseClient.from("clip_comments").select("id,text").in("id", commentIds);
         for (const c of comments ?? []) labels[c.id as string] = c.text as string;
       }
-      if (!cancelled) setEntityLabels(labels);
+      // Phase 4 LAUNCH Track C (0097): chat_message and user reports resolve
+      // through admin_get_reported_entity, the only read path onto a chat
+      // message's content (Settled decision 6). See ./api.ts.
+      const rpcLabels = await fetchReportedEntitySummaries(rows);
+      if (!cancelled) setEntityLabels({ ...labels, ...rpcLabels });
 
       setState("ready");
     }
@@ -189,7 +203,7 @@ export function ReportsList() {
                   <td style={{ padding: "var(--space-md) var(--space-lg)", fontSize: 14, fontWeight: 600 }}>
                     {entityLabels[report.entity_id] ?? report.entity_id}
                     <span style={{ display: "block", fontSize: 12, fontWeight: 400, color: "var(--color-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                      {report.entity_type}
+                      {entityTypeLabel[report.entity_type]}
                     </span>
                   </td>
                   <td style={{ padding: "var(--space-md) var(--space-lg)", fontSize: 14, color: "var(--color-text-secondary)" }}>
