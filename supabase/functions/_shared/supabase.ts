@@ -73,6 +73,52 @@ export function userScopedClient(req: Request): SupabaseClient {
   });
 }
 
+/**
+ * LAUNCH Phase 4, Track B (PRD-04 FR-36, PHASE-4-STATUS.md CT-B, decision 3
+ * leg (b)). `getAuthenticatedUser` is the one place nearly every edge
+ * function establishes "who is calling", so a suspension check added HERE
+ * gates every one of them in a single edit instead of dozens.
+ *
+ * Reads the caller's OWN `users.status` through their own JWT
+ * (`users_select_own`, 0001) — never a service-role lookup, so this stays
+ * exactly the caller reading their own row, the same shape the rest of this
+ * file already uses. `.maybeSingle()` on purpose: if the `users` row is
+ * somehow missing (should not happen, `auth.users` -> `public.users` is a
+ * signup-trigger invariant) this treats the caller as active rather than
+ * throwing, matching `is_actor_active()`'s fail-open posture in 0096 — a
+ * missing row here must never be the thing that bricks a legitimate caller.
+ *
+ * MUST NOT run for anonymous/guest flows that intentionally have no bearer
+ * token at all: those go through `getOptionalUserId` (clip-access.ts), which
+ * does not call this function, so they are unaffected by construction. A
+ * guest who DOES hold a valid (anonymous) Supabase session still resolves a
+ * `users` row via the signup trigger and is checked exactly like any other
+ * authenticated caller, which is correct: an anonymous session can be
+ * suspended the same as any other account.
+ */
+async function assertNotSuspended(
+  userClient: SupabaseClient,
+  userId: string,
+): Promise<void> {
+  const { data, error } = await userClient
+    .from("users")
+    .select("status")
+    .eq("id", userId)
+    .maybeSingle();
+
+  // Fail open: a lookup error or a missing row is not evidence of
+  // suspension. Only an explicit status = 'suspended' refuses the request.
+  if (error || !data) return;
+
+  if ((data as { status: string }).status === "suspended") {
+    throw new AppError(
+      "SUSPENDED",
+      "This account has been suspended.",
+      403,
+    );
+  }
+}
+
 export async function getAuthenticatedUser(
   req: Request,
 ): Promise<AuthenticatedUser> {
@@ -86,6 +132,8 @@ export async function getAuthenticatedUser(
       401,
     );
   }
+
+  await assertNotSuspended(userClient, data.user.id);
 
   return { id: data.user.id, email: data.user.email ?? undefined };
 }

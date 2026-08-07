@@ -11,6 +11,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import { Shell } from "./layout/Shell";
 import { BookingsList } from "./pages/bookings/list";
+import { Dashboard } from "./pages/dashboard";
 import { DrillCreate } from "./pages/drills/create";
 import { DrillShow } from "./pages/drills/show";
 import { DrillsList } from "./pages/drills/list";
@@ -24,6 +25,7 @@ import { ReportsList } from "./pages/reports/list";
 import { ReportShow } from "./pages/reports/show";
 import { ProductShow } from "./pages/products/show";
 import { ProductsList } from "./pages/products/list";
+import { UserShow } from "./pages/users/show";
 import { UsersList } from "./pages/users/list";
 import { VenueShow } from "./pages/venues/show";
 import { VenuesList } from "./pages/venues/list";
@@ -51,6 +53,11 @@ export function App() {
         notificationProvider={notificationProvider}
         routerProvider={routerBindings}
         resources={[
+          {
+            name: "dashboard",
+            list: "/dashboard",
+            meta: { label: "Dashboard" },
+          },
           {
             name: "verification_requests",
             list: "/verification",
@@ -107,6 +114,7 @@ export function App() {
           {
             name: "users",
             list: "/users",
+            show: "/users/show/:id",
             meta: { label: "Users" },
           },
         ]}
@@ -126,7 +134,8 @@ export function App() {
               </Authenticated>
             }
           >
-            <Route index element={<NavigateToResource resource="verification_requests" />} />
+            <Route index element={<NavigateToResource resource="dashboard" />} />
+            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/verification" element={<VerificationList />} />
             <Route path="/verification/show/:id" element={<VerificationShow />} />
             <Route path="/venues" element={<VenuesList />} />
@@ -145,6 +154,7 @@ export function App() {
             <Route path="/fee-config" element={<FeeConfigList />} />
             <Route path="/bookings" element={<BookingsList />} />
             <Route path="/users" element={<UsersList />} />
+            <Route path="/users/show/:id" element={<UserShow />} />
           </Route>
         </Routes>
         <Notifications />

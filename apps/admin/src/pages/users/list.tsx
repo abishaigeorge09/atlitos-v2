@@ -1,6 +1,7 @@
 import type { Db } from "@atlitos/types";
 import { AlertTriangle, Search, Users as UsersIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { Badge, Card, EmptyState } from "../../components/ui";
 import { supabaseClient } from "../../providers/supabaseClient";
@@ -15,7 +16,12 @@ type UserRow = Db.UserRow & { email: string | null; user_roles: Pick<Db.UserRole
 
 type LoadState = "loading" | "error" | "ready";
 
+// LAUNCH Phase 4, Track B: rows now navigate to the new `/users/show/:id`
+// (PRD-04 FR-35 User Detail, PHASE-4-STATUS.md CT-B). Nothing else on this
+// list changed; the existing name/phone search and the admin-scoped read
+// stay exactly as P0 built them.
 export function UsersList() {
+  const navigate = useNavigate();
   const [rows, setRows] = useState<UserRow[]>([]);
   const [state, setState] = useState<LoadState>("loading");
   const [search, setSearch] = useState("");
@@ -134,7 +140,11 @@ export function UsersList() {
             </thead>
             <tbody>
               {filtered.map((row) => (
-                <tr key={row.id} style={{ borderBottom: "1px solid var(--color-border)" }}>
+                <tr
+                  key={row.id}
+                  onClick={() => navigate(`/users/show/${row.id}`)}
+                  style={{ borderBottom: "1px solid var(--color-border)", cursor: "pointer" }}
+                >
                   <td style={{ padding: "var(--space-md) var(--space-lg)", fontSize: 14, fontWeight: 600 }}>
                     {row.name}
                   </td>
