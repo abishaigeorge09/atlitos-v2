@@ -36,17 +36,19 @@ export interface ChatThreadListProps {
  * route so the Trainings module can embed it inline as its Chat tab
  * content instead of redirecting. Most recent message first
  * (`last_message_at`, trigger maintained), preview + relative timestamp per
- * row. Subscribes to every new message across the caller's own threads
- * (RLS scoped, no filter needed) to bump a row's preview and re-sort live,
- * per FR-31, no manual refresh. States: loading (skeleton rows), empty,
- * populated, error (retry), plus a realtime connection pill so a broken
- * socket doesn't read as "chat is empty". Guest taps are gated per FR-3,
- * before any thread ever loads.
+ * row. Subscribes to the caller's own private Broadcast channel
+ * (`chat:user:{uid}`, CT-4, PHASE-3-STATUS.md P1-2) to bump a row's preview
+ * and re-sort live, per FR-31, no manual refresh, and no more
+ * raw row changes waking this client on every OTHER user's insert. States:
+ * loading (skeleton rows), empty, populated, error (retry), plus a realtime
+ * connection pill so a broken socket doesn't read as "chat is empty". Guest
+ * taps are gated per FR-3, before any thread ever loads.
  */
 export function ChatThreadList({ onOpenThread, title }: ChatThreadListProps) {
   const colors = useThemeColors();
   const chat = useChat(supabase);
   const requiresAuthGate = useSessionStore((state) => state.status !== 'signed_in');
+  const meId = useSessionStore((state) => state.me?.id);
   const [gateVisible, setGateVisible] = useState(false);
 
   const [state, setState] = useState<LoadState>('loading');
@@ -77,20 +79,23 @@ export function ChatThreadList({ onOpenThread, title }: ChatThreadListProps) {
     void load();
   }, [requiresAuthGate, load]);
 
-  // Inbox subscription: bumps the affected thread's preview and re-sorts
-  // most-recent-first on every new message, rather than refetching the
-  // whole list per event. Unsubscribed on unmount so a screen the user has
-  // navigated away from never keeps a socket open.
+  // Inbox subscription: the caller's own `chat:user:{uid}` private Broadcast
+  // channel (CT-4), no `threadId` filter passed, so every event bumps
+  // whichever thread's preview changed and the list re-sorts
+  // most-recent-first. Unsubscribed on unmount so a screen the user has
+  // navigated away from never keeps holding this shared channel open.
   useEffect(() => {
-    if (requiresAuthGate) return;
+    if (requiresAuthGate || !meId) return;
 
-    const channel = chat.subscribeToInbox(
+    const unsubscribe = chat.subscribeToUserChannel(
+      meId,
+      undefined,
       (message) => {
         setThreads((previous) => {
           const next = previous.map((thread) =>
             thread.id === message.threadId
-              ? // `message.senderName` never arrives on a Realtime payload
-                // (postgres_changes ships the raw table row, no PostgREST
+              ? // `message.senderName` never arrives on a Broadcast payload
+                // (the trigger sends the raw column values, no PostgREST
                 // embed), so a group row's sender prefix is cleared here
                 // rather than left showing the PREVIOUS message's sender
                 // against the new text; the next full load/refresh
@@ -110,12 +115,8 @@ export function ChatThreadList({ onOpenThread, title }: ChatThreadListProps) {
       },
     );
 
-    return () => {
-      // removeChannel, not just unsubscribe: a lingering named channel on
-      // the singleton client crashes the next mount's `.on()` call.
-      void supabase.removeChannel(channel);
-    };
-  }, [requiresAuthGate]);
+    return unsubscribe;
+  }, [requiresAuthGate, meId]);
 
   async function handleRefresh() {
     setRefreshing(true);

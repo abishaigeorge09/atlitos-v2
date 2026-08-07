@@ -83,6 +83,12 @@ export function CoachBrowseList({ onOpenCoach, header, scrollEnabled = true }: C
   const [items, setItems] = useState<CoachListItem[]>([]);
   const [error, setError] = useState<ApiError | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  // CT-5 (P1-3): keyset pagination, page 1 has no cursor. `null` after a
+  // page load means the server said this was the last page; `loadingMore`
+  // guards against `onEndReached` firing a second request while one is
+  // already in flight (FlatList can fire it more than once per scroll).
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const load = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -90,8 +96,9 @@ export function CoachBrowseList({ onOpenCoach, header, scrollEnabled = true }: C
       setError(null);
       try {
         const result = await coaching.listCoaches({ sport: sport ?? undefined, city });
-        setItems(result);
-        setState(result.length === 0 ? 'empty' : 'populated');
+        setItems(result.items);
+        setNextCursor(result.nextCursor);
+        setState(result.items.length === 0 ? 'empty' : 'populated');
       } catch (err) {
         setError(err as ApiError);
         setState('error');
@@ -103,6 +110,25 @@ export function CoachBrowseList({ onOpenCoach, header, scrollEnabled = true }: C
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Loads the next keyset page and appends it. Never refetches page 1 and
+  // never issues a second unbounded select: every call still carries the
+  // same bounded `.limit()` CT-5 requires.
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !nextCursor) return;
+    setLoadingMore(true);
+    try {
+      const result = await coaching.listCoaches({ sport: sport ?? undefined, city, cursor: nextCursor });
+      setItems((previous) => [...previous, ...result.items]);
+      setNextCursor(result.nextCursor);
+    } catch {
+      // A failed "load more" leaves the already-shown page intact; the
+      // athlete can retry by scrolling again (onEndReached refires), no
+      // need to surface a full screen error for a tail-page fetch.
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, nextCursor, sport, city]);
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -213,6 +239,20 @@ export function CoachBrowseList({ onOpenCoach, header, scrollEnabled = true }: C
         scrollEnabled ? <RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} /> : undefined
       }
       ItemSeparatorComponent={() => <View style={{ height: spacing.md }} />}
+      // CT-5 (P1-3): the only way this screen ever sees a coach past the
+      // first bounded page. `onEndReachedThreshold` fires the next keyset
+      // fetch before the athlete hits the literal bottom, `loadMore` itself
+      // is a no-op once `nextCursor` is null (last page) or a fetch is
+      // already in flight.
+      onEndReachedThreshold={0.5}
+      onEndReached={() => void loadMore()}
+      ListFooterComponent={
+        loadingMore ? (
+          <View style={{ paddingVertical: spacing.lg, alignItems: 'center' }}>
+            <Skeleton shape="card" height={110} />
+          </View>
+        ) : null
+      }
       renderItem={({ item }) => (
         <CoachCard
           avatarUri={item.avatarUrl}

@@ -120,24 +120,30 @@ export default function ChatThreadScreen() {
     return map;
   }, [members, me]);
 
-  // Live inbound messages for this thread only. A message this same client
+  // Live inbound messages for this thread only, via the caller's own
+  // `chat:user:{uid}` private Broadcast channel (CT-4), filtered to this
+  // `id` inside subscribeToUserChannel so events for the caller's OTHER
+  // threads never touch this screen's state. A message this same client
   // just sent is de-duplicated by id against the optimistic row `handleSend`
-  // already reconciled in below, so the Realtime echo of your own send
-  // never doubles up.
+  // already reconciled in below, so the echo of your own send never doubles
+  // up.
   useEffect(() => {
-    const channel = chat.subscribeToThread(
+    if (!me) return;
+
+    const unsubscribe = chat.subscribeToUserChannel(
+      me.id,
       id,
       (message) => {
         setMessages((previous) => {
           if (previous.some((existing) => existing.id === message.id)) return previous;
-          // `postgres_changes` ships the raw chat_messages row, no
-          // PostgREST embed, so a group message never arrives with
-          // `senderName` already set. We deliberately do NOT freeze a name
-          // in here from the roster: if `listThreadMembers` has not resolved
-          // yet when this INSERT lands, that lookup is empty and the name
-          // would be stored `undefined` forever. The display name is
-          // resolved at render time from the live roster Map instead, so it
-          // fills in the moment the roster loads (CH-02).
+          // Broadcast ships the raw column values, no PostgREST embed, so a
+          // group message never arrives with `senderName` already set. We
+          // deliberately do NOT freeze a name in here from the roster: if
+          // `listThreadMembers` has not resolved yet when this event lands,
+          // that lookup is empty and the name would be stored `undefined`
+          // forever. The display name is resolved at render time from the
+          // live roster Map instead, so it fills in the moment the roster
+          // loads (CH-02).
           return [...previous, message];
         });
       },
@@ -148,12 +154,8 @@ export default function ChatThreadScreen() {
       },
     );
 
-    return () => {
-      // removeChannel, not just unsubscribe: a lingering named channel on
-      // the singleton client crashes the next open of this same thread.
-      void supabase.removeChannel(channel);
-    };
-  }, [id]);
+    return unsubscribe;
+  }, [id, me?.id]);
 
   async function handleSend() {
     const text = draft.trim();
