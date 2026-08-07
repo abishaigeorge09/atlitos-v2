@@ -1358,10 +1358,22 @@ function makeClutchApi(client: AtlitosClient) {
 
       const rows = data ?? [];
       const ids = rows.map((r) => r.id);
-      const [liked, saved] = await Promise.all([likedClipIds(ids), savedClipIds(ids)]);
+      // CT-C: subtract the caller's own blocked-owner set (permissive-OR RLS
+      // cannot subtract rows, so this is an explicit client-layer filter, same
+      // shape as the status='published' guard above; a guest has no blocks so
+      // this resolves to an empty set and costs one no-op round trip).
+      const [liked, saved, blocked] = await Promise.all([
+        likedClipIds(ids),
+        savedClipIds(ids),
+        getBlockedUserIds(client),
+      ]);
       const last = rows.at(-1);
       return {
-        clips: rows.map((r) => mapClipRow(r, liked.has(r.id), saved.has(r.id))),
+        clips: rows
+          .filter((r) => !blocked.has(r.owner_id))
+          .map((r) => mapClipRow(r, liked.has(r.id), saved.has(r.id))),
+        // Cursor is derived from the UNFILTERED page so pagination never skips
+        // a page's worth of rows just because some were blocked out of view.
         nextCursor: rows.length === CLUTCH_PAGE_SIZE && last ? last.created_at : null,
       };
     },
@@ -1397,9 +1409,13 @@ function makeClutchApi(client: AtlitosClient) {
       if (error) throw mapPostgrestError(error);
 
       const rows = data ?? [];
+      // CT-C: subtract the caller's own blocked-author set, same explicit
+      // client-layer filter shape as getFeed above.
+      const blocked = await getBlockedUserIds(client);
       const last = rows.at(-1);
       return {
-        comments: rows.map(mapCommentRow),
+        comments: rows.filter((r) => !blocked.has(r.user_id)).map(mapCommentRow),
+        // Cursor from the UNFILTERED page, same pagination-safety reason as getFeed.
         nextCursor: rows.length === CLUTCH_PAGE_SIZE && last ? last.created_at : null,
       };
     },
@@ -1723,6 +1739,132 @@ function makeClutchApi(client: AtlitosClient) {
 }
 
 export type UseClutchResult = ReturnType<typeof useClutch>;
+
+// ---------------------------------------------------------------------------
+// moderation (report + block). Phase 4 LAUNCH Track C, CT-C. PostgREST reads/
+// writes against `blocked_users` (own-row RLS) and `reports` (own-row insert,
+// `entity_type` widened to `chat_message`/`user`, both 0097_report_block.sql).
+// See API-MAPPING.md "moderation" and PHASE-4-STATUS.md Settled decision 4.
+//
+// TYPING NOTE: `blocked_users` is not yet in the generated `Database` type on
+// this branch, same as the clutch section above, so this section borrows the
+// same untyped-cast escape hatch.
+//
+// `getBlockedUserIds` is exported as a PLAIN function, not part of a React
+// hook: `useClutch`'s getFeed/getComments above and `useChat`'s
+// listThreads/listMessages (packages/api/src/use-chat.ts, same Track C file)
+// both need to subtract the caller's blocked set from what they return (CT-C:
+// "feed, clip comments, and chat inbox / thread reads filter blocked authors
+// and removed messages"), and a hook's body cannot call another hook. This is
+// the one shared query both files call, so the filtering logic lives in
+// exactly one place.
+// ---------------------------------------------------------------------------
+
+export type ReportEntityType = "clip" | "comment" | "chat_message" | "user";
+
+export interface ReportEntityInput {
+  entityType: ReportEntityType;
+  entityId: string;
+  reason: string;
+}
+
+interface BlockedUserRow {
+  blocked_id: string;
+}
+
+/** The caller's own blocked-user id set, or an empty set for a guest/signed
+ * out caller (a guest has nothing to block and nothing to block them with).
+ * Used internally by the feed/comments/chat reads to subtract blocked
+ * authors; see the section header above for why it is a plain function. */
+export async function getBlockedUserIds(client: AtlitosClient): Promise<Set<string>> {
+  const { data: authData } = await client.auth.getUser();
+  if (!authData.user || authData.user.is_anonymous) return new Set();
+
+  const db = client as unknown as SupabaseClient;
+  const { data, error } = await db
+    .from("blocked_users")
+    .select("blocked_id")
+    .eq("blocker_id", authData.user.id)
+    .returns<BlockedUserRow[]>();
+  if (error) throw mapPostgrestError(error);
+  return new Set((data ?? []).map((row) => row.blocked_id));
+}
+
+export function useModeration(client: AtlitosClient) {
+  // Memoized on [client] for the same reason useClutch is (F1 above): a
+  // consumer that feeds this object into an effect dependency array must see
+  // a STABLE identity across renders, or the effect refires every render.
+  return useMemo(() => makeModerationApi(client), [client]);
+}
+
+function makeModerationApi(client: AtlitosClient) {
+  const db = client as unknown as SupabaseClient;
+
+  async function currentUserId(): Promise<string> {
+    const { data: authData, error } = await client.auth.getUser();
+    if (error) throw mapAuthError(error);
+    if (!authData.user || authData.user.is_anonymous) {
+      throw mapAuthError({ message: "Sign in to do this.", status: 401 });
+    }
+    return authData.user.id;
+  }
+
+  return {
+    /** The caller's own blocked-user ids, for a blocked-list settings surface. */
+    getBlockedIds: () => getBlockedUserIds(client),
+
+    /** PRD-04 FR-31/32 (block half): own-row insert into `blocked_users`
+     * (0097, RLS `blocker_id = auth.uid()` and `blocker_id <> blocked_id` at
+     * the schema level, the AT-62 shape baked in rather than only tested for).
+     * Upserted on the `(blocker_id, blocked_id)` primary key so blocking an
+     * already-blocked user is a no-op success, not a duplicate-key error. */
+    async blockUser(blockedUserId: string): Promise<void> {
+      const meId = await currentUserId();
+      if (meId === blockedUserId) {
+        throw mapPostgrestError({ message: "VALIDATION: cannot block yourself." });
+      }
+      const { error } = await db
+        .from("blocked_users")
+        .upsert({ blocker_id: meId, blocked_id: blockedUserId }, { onConflict: "blocker_id,blocked_id" });
+      if (error) throw mapPostgrestError(error);
+    },
+
+    /** Own-row delete. Idempotent: unblocking a user who was never blocked
+     * succeeds silently (zero rows affected, no error), same as the block
+     * side's upsert. */
+    async unblockUser(blockedUserId: string): Promise<void> {
+      const meId = await currentUserId();
+      const { error } = await db
+        .from("blocked_users")
+        .delete()
+        .eq("blocker_id", meId)
+        .eq("blocked_id", blockedUserId);
+      if (error) throw mapPostgrestError(error);
+    },
+
+    /** PRD-04 FR-31/32 (report half): own-row insert into `reports` (0042
+     * `reports_insert_own`, `entity_type` widened in 0097). Lands `pending`;
+     * the admin Reports Queue (apps/admin/src/pages/reports) is the same
+     * queue clip/comment reports already land in, now also showing chat
+     * message and user reports. */
+    async reportEntity(input: ReportEntityInput): Promise<void> {
+      const meId = await currentUserId();
+      const reason = input.reason.trim();
+      if (reason.length === 0) {
+        throw mapPostgrestError({ message: "VALIDATION: a reason is required to file a report." });
+      }
+      const { error } = await db.from("reports").insert({
+        entity_type: input.entityType,
+        entity_id: input.entityId,
+        reporter_id: meId,
+        reason,
+      });
+      if (error) throw mapPostgrestError(error);
+    },
+  };
+}
+
+export type UseModerationResult = ReturnType<typeof useModeration>;
 
 // P6: empower (hub, UPA profile, donate, My Impact) is implemented in
 // `use-empower.ts` (AT-123, Track D), which owns `useEmpower` and re-exports it
