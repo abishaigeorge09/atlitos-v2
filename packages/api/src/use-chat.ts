@@ -3,6 +3,7 @@ import type { ChatMessage, ChatThread, ChatThreadMember } from "@atlitos/types";
 
 import type { AtlitosClient } from "./client";
 import { mapPostgrestError } from "./errors";
+import { getBlockedUserIds } from "./hooks";
 
 /**
  * chat. AT-55, PRD-01 FR-58/FR-59/FR-60, PRD-02 FR-30/FR-31, group threads
@@ -44,6 +45,21 @@ import { mapPostgrestError } from "./errors";
  * screen filters by `threadId` client side) rather than each opening its own
  * socket, so a device with the inbox mounted behind an open thread still
  * holds exactly one `chat:user:*` connection.
+ *
+ * Phase 4 (CT-C, `0097_report_block.sql`): `listThreads` drops a 1:1 thread
+ * whose other participant is on the caller's own `blocked_users` list (own-
+ * row RLS cannot subtract rows, so this is an explicit client-layer filter,
+ * same shape as the clutch feed/comments filter in `hooks.ts`; one-way, the
+ * blocked party's own inbox is unaffected). `listMessages` drops any message
+ * from a blocked sender and renders a removed placeholder (never the real
+ * text) for a message `resolve_report`'s chat arm has soft-deleted
+ * (`removed_at` set). The live Broadcast listener in `subscribeToUserChannel`
+ * does NOT re-check either list: a message from a sender blocked mid-session
+ * still lands until the next `listMessages`/`listThreads` reload, documented
+ * here rather than silently promised and not delivered (the Broadcast
+ * payload carries no sender-block context to check against without an extra
+ * round trip per inbound message, out of proportion to a launch-week gap
+ * that a screen reload already closes).
  */
 
 interface ChatThreadRow {
@@ -65,6 +81,10 @@ interface ChatMessageRow {
   text: string;
   created_at: string;
   sender_profile: { id: string; name: string } | null;
+  // CT-C (0097): non-null once an admin/moderator has taken the message down
+  // via resolve_report's chat arm. Never surfaced as the real text, see
+  // mapMessageRow below.
+  removed_at: string | null;
 }
 
 interface GroupInfo {
@@ -99,7 +119,13 @@ const THREAD_SELECT =
 // "stays as-is" requirement). Resolved via `public_profiles` for the same
 // cross-user reason as THREAD_SELECT (BUG-016).
 const MESSAGE_SELECT =
-  "id, thread_id, sender_id, text, created_at, sender_profile:public_profiles!sender_id ( id, name )";
+  "id, thread_id, sender_id, text, created_at, removed_at, sender_profile:public_profiles!sender_id ( id, name )";
+
+// CT-C (0097): a removed message never surfaces its real text to any client,
+// admin preview aside (that goes through admin_get_reported_entity, Track
+// C's admin surface, not this file). Copy follows house style: no em-dashes,
+// no hyphens.
+const REMOVED_MESSAGE_TEXT = "This message was removed.";
 
 function otherParticipant(row: ChatThreadRow, meId: string) {
   return row.participant_a === meId ? row.participant_b_profile : row.participant_a_profile;
@@ -146,7 +172,9 @@ function mapMessageRow(row: ChatMessageRow): ChatMessage {
     threadId: row.thread_id,
     senderId: row.sender_id,
     senderName: row.sender_profile?.name,
-    text: row.text,
+    // CT-C: a soft-deleted (resolve_report chat arm) row never surfaces its
+    // real text; the placeholder renders in its place, same bubble shape.
+    text: row.removed_at ? REMOVED_MESSAGE_TEXT : row.text,
     createdAt: row.created_at,
   };
 }
@@ -306,7 +334,17 @@ export function useChat(client: AtlitosClient) {
      * message preview per thread is a second, batched query: chat_threads
      * has no denormalized preview column, and a per-thread round trip does
      * not scale, so this fetches every candidate message for the visible
-     * threads once and keeps the first (most recent) row per thread_id. */
+     * threads once and keeps the first (most recent) row per thread_id.
+     *
+     * CT-C (0097): a 1:1 thread whose other participant is on the caller's
+     * own `blocked_users` list is dropped from the returned list entirely
+     * (own-row RLS cannot subtract rows, explicit client-layer filter, same
+     * shape as hooks.ts's clutch feed/comments filter); group threads are
+     * never dropped this way (blocking one member of a group does not hide
+     * the whole conversation). The preview candidates also exclude a
+     * moderator-removed message's real text and any message from a blocked
+     * sender, so neither ever leaks into the inbox row even before the
+     * thread screen itself is opened. */
     async listThreads(): Promise<ChatThread[]> {
       const meId = await currentUserId();
 
@@ -320,22 +358,33 @@ export function useChat(client: AtlitosClient) {
       const rows = data ?? [];
       if (rows.length === 0) return [];
 
-      const [{ data: recentMessages, error: msgError }, groupInfoByThread] = await Promise.all([
+      const [{ data: recentMessages, error: msgError }, groupInfoByThread, blocked] = await Promise.all([
         client
           .from("chat_messages")
-          .select("thread_id, text, created_at, sender_profile:public_profiles!sender_id ( name )")
+          .select("thread_id, sender_id, text, created_at, removed_at, sender_profile:public_profiles!sender_id ( name )")
           .in(
             "thread_id",
             rows.map((row) => row.id),
           )
           .order("created_at", { ascending: false })
-          .returns<{ thread_id: string; text: string; created_at: string; sender_profile: { name: string } | null }[]>(),
+          .returns<
+            {
+              thread_id: string;
+              sender_id: string;
+              text: string;
+              created_at: string;
+              removed_at: string | null;
+              sender_profile: { name: string } | null;
+            }[]
+          >(),
         fetchGroupInfo(client, rows),
+        getBlockedUserIds(client),
       ]);
       if (msgError) throw mapPostgrestError(msgError);
 
       const previewByThread = new Map<string, MessagePreview>();
       for (const message of recentMessages ?? []) {
+        if (message.removed_at || blocked.has(message.sender_id)) continue;
         if (!previewByThread.has(message.thread_id)) {
           previewByThread.set(message.thread_id, {
             text: message.text,
@@ -344,7 +393,13 @@ export function useChat(client: AtlitosClient) {
         }
       }
 
-      return rows.map((row) =>
+      const visibleRows = rows.filter((row) => {
+        if (row.context_type === "group") return true;
+        const other = otherParticipant(row, meId);
+        return !other || !blocked.has(other.id);
+      });
+
+      return visibleRows.map((row) =>
         mapThreadRow(
           row,
           meId,
@@ -376,17 +431,27 @@ export function useChat(client: AtlitosClient) {
     /** Full message history for one thread, oldest first. RLS
      * (`chat_messages_select_participant`, extended to
      * `chat_messages_select_group_member` for group threads in 0078)
-     * already scopes this to threads the caller participates in. */
+     * already scopes this to threads the caller participates in.
+     *
+     * CT-C (0097): messages from a sender on the caller's own
+     * `blocked_users` list are dropped entirely (never rendered, not even as
+     * a placeholder, distinct from a moderator-removed row which DOES render
+     * a placeholder via mapMessageRow); a message the caller sent themselves
+     * is never in that set, block is one-way and `blocker_id <> blocked_id`
+     * at the schema level. */
     async listMessages(threadId: string): Promise<ChatMessage[]> {
-      const { data, error } = await client
-        .from("chat_messages")
-        .select(MESSAGE_SELECT)
-        .eq("thread_id", threadId)
-        .order("created_at", { ascending: true })
-        .returns<ChatMessageRow[]>();
+      const [{ data, error }, blocked] = await Promise.all([
+        client
+          .from("chat_messages")
+          .select(MESSAGE_SELECT)
+          .eq("thread_id", threadId)
+          .order("created_at", { ascending: true })
+          .returns<ChatMessageRow[]>(),
+        getBlockedUserIds(client),
+      ]);
       if (error) throw mapPostgrestError(error);
 
-      return (data ?? []).map(mapMessageRow);
+      return (data ?? []).filter((row) => !blocked.has(row.sender_id)).map(mapMessageRow);
     },
 
     /** A group thread's seated roster (chat_thread_members joined to

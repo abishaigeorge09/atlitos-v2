@@ -1,19 +1,19 @@
-import { AlertTriangle, ArrowLeft, CircleCheck, Trash2, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CircleCheck, MessageCircleOff, Trash2, User, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { Badge, Button, Card, EmptyState } from "../../components/ui";
 import { Mono } from "../../components/mono";
-import {
-  fetchModerationUrl,
-  moderationApi,
-  type ClipQueueRow,
-  type CommerceError,
-  type ModerationUrl,
-  type ReportQueueRow,
-} from "../moderation/api";
+import { fetchModerationUrl, moderationApi, type ClipQueueRow, type CommerceError, type ModerationUrl } from "../moderation/api";
 import { clipStatusLabel, clipStatusTone, reportStatusLabel, reportStatusTone } from "../moderation/status";
 import { supabaseClient } from "../../providers/supabaseClient";
+import {
+  entityTypeLabel,
+  fetchReportedEntity,
+  type ReportedChatMessage,
+  type ReportedUser,
+  type ReportQueueRow,
+} from "./api";
 
 // AT-103, PRD-04 FR-31, FR-32, FR-53. Reports Detail: review the report and the
 // content it targets, then resolve by takedown or dismissal, both with a
@@ -26,6 +26,16 @@ import { supabaseClient } from "../../providers/supabaseClient";
 // public, owner, and moderation mints all refuse. Dismissal leaves the content
 // untouched and only resolves the report row. This screen never sets a status
 // itself; the RPC is the only write path (PRD-04 FR-26 analogue for clutch).
+//
+// Phase 4 LAUNCH Track C (CT-C, 0097_report_block.sql): a chat_message report
+// resolves through admin_get_reported_entity (the only read path onto a chat
+// message's content, Settled decision 6) and its `remove` action soft-deletes
+// the message (removed_at/removed_reason) rather than reusing moderate_clip's
+// takedown, which only knows about clips. A user report's `remove` action
+// resolves the report as actioned with no further mutation here; account
+// enforcement (suspend/ban) is Track B's separate admin_suspend_user action
+// from the User Detail screen, intentionally a second, independently audited
+// step (see 0097's header comment on resolve_report).
 
 type LoadState = "loading" | "error" | "ready" | "not_found";
 type ResolveAction = "remove" | "dismiss";
@@ -38,6 +48,8 @@ export function ReportShow() {
   const [reporter, setReporter] = useState<string | null>(null);
   const [clip, setClip] = useState<ClipQueueRow | null>(null);
   const [commentText, setCommentText] = useState<string | null>(null);
+  const [chatMessage, setChatMessage] = useState<ReportedChatMessage | null>(null);
+  const [reportedUser, setReportedUser] = useState<ReportedUser | null>(null);
   const [state, setState] = useState<LoadState>("loading");
 
   const [preview, setPreview] = useState<ModerationUrl | null>(null);
@@ -76,6 +88,8 @@ export function ReportShow() {
     setClip(null);
     setCommentText(null);
     setPreview(null);
+    setChatMessage(null);
+    setReportedUser(null);
 
     if (row.entity_type === "clip") {
       const { data: clipRow } = await supabaseClient
@@ -92,13 +106,26 @@ export function ReportShow() {
           setPreview(null);
         }
       }
-    } else {
+    } else if (row.entity_type === "comment") {
       const { data: comment } = await supabaseClient
         .from("clip_comments")
         .select("text")
         .eq("id", row.entity_id)
         .maybeSingle();
       setCommentText((comment as { text: string } | null)?.text ?? null);
+    } else {
+      // chat_message / user: the ONLY read path is admin_get_reported_entity
+      // (0097, Settled decision 6). A refusal (non-admin, malformed report)
+      // surfaces as the existing "could not be loaded" fallback below rather
+      // than a screen-level error, same swallow-and-fallback shape the
+      // clip/comment arms already use for a since-deleted row.
+      try {
+        const entity = await fetchReportedEntity(row.id);
+        if (entity?.entity_type === "chat_message") setChatMessage(entity);
+        else if (entity?.entity_type === "user") setReportedUser(entity);
+      } catch {
+        // Falls through to the "could not be loaded" branch below.
+      }
     }
 
     setState("ready");
@@ -200,7 +227,7 @@ export function ReportShow() {
                 margin: 0,
               }}
             >
-              Report on a {report.entity_type}
+              Report on a {entityTypeLabel[report.entity_type].toLowerCase()}
             </p>
             <h1 style={{ fontSize: 20, fontWeight: 700, margin: "var(--space-xs) 0 0" }}>{report.reason}</h1>
             <p style={{ fontSize: 14, color: "var(--color-text-secondary)", margin: "var(--space-xs) 0 0" }}>
@@ -266,14 +293,58 @@ export function ReportShow() {
               The reported clip could not be loaded. It may have been deleted.
             </p>
           )
-        ) : commentText ? (
-          <p style={{ fontSize: 15, margin: 0 }}>{commentText}</p>
+        ) : report.entity_type === "comment" ? (
+          commentText ? (
+            <p style={{ fontSize: 15, margin: 0 }}>{commentText}</p>
+          ) : (
+            <p style={{ fontSize: 14, color: "var(--color-text-secondary)", margin: 0 }}>
+              The reported comment could not be loaded. It may have been removed already.
+            </p>
+          )
+        ) : report.entity_type === "chat_message" ? (
+          chatMessage ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "var(--space-xs)", color: "var(--color-text-tertiary)" }}>
+                <MessageCircleOff size={14} strokeWidth={1.75} />
+                <span style={{ fontSize: 12 }}>
+                  Thread <Mono>{chatMessage.thread_id}</Mono>, sender <Mono>{chatMessage.sender_id}</Mono>
+                </span>
+              </div>
+              {chatMessage.removed_at ? (
+                <p style={{ fontSize: 14, color: "var(--color-text-secondary)", margin: 0 }}>
+                  This message was already removed on{" "}
+                  <Mono>{new Date(chatMessage.removed_at).toLocaleString()}</Mono>.
+                </p>
+              ) : (
+                <p style={{ fontSize: 15, margin: 0 }}>{chatMessage.text}</p>
+              )}
+            </div>
+          ) : (
+            <p style={{ fontSize: 14, color: "var(--color-text-secondary)", margin: 0 }}>
+              The reported message could not be loaded, or you do not have access to it.
+            </p>
+          )
+        ) : reportedUser ? (
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
+            <User size={18} strokeWidth={1.75} color="var(--color-text-tertiary)" />
+            <span style={{ fontSize: 15, fontWeight: 600 }}>{reportedUser.name}</span>
+            <Mono style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>{reportedUser.id}</Mono>
+          </div>
         ) : (
           <p style={{ fontSize: 14, color: "var(--color-text-secondary)", margin: 0 }}>
-            The reported comment could not be loaded. It may have been removed already.
+            The reported account could not be loaded. It may have been deleted.
           </p>
         )}
       </Card>
+
+      {report.entity_type === "user" && reportedUser ? (
+        <Card>
+          <p style={{ fontSize: 13, color: "var(--color-text-secondary)", margin: 0 }}>
+            Resolving this report does not suspend the account. Suspend or reinstate from the User Detail
+            screen after reviewing this report.
+          </p>
+        </Card>
+      ) : null}
 
       {/* FR-32 resolve: takedown or dismissal, both with a required reason */}
       {isPending ? (
@@ -346,7 +417,13 @@ export function ReportShow() {
               </label>
               <p style={{ fontSize: 13, color: "var(--color-text-secondary)", margin: 0 }}>
                 {action === "remove"
-                  ? "The clip becomes unplayable at once and the creator is notified. The reason is recorded in the audit log."
+                  ? report.entity_type === "clip"
+                    ? "The clip becomes unplayable at once and the creator is notified. The reason is recorded in the audit log."
+                    : report.entity_type === "chat_message"
+                      ? "The message is replaced with a removed placeholder for every thread member. The reason is recorded in the audit log."
+                      : report.entity_type === "user"
+                        ? "The report is marked actioned. This does not suspend the account, that is a separate step from the User Detail screen. The reason is recorded in the audit log."
+                        : "The comment is deleted. The reason is recorded in the audit log."
                   : "The content stays in place. The reason is recorded in the audit log."}
               </p>
               <div style={{ display: "flex", gap: "var(--space-sm)" }}>

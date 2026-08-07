@@ -1,11 +1,15 @@
 import { useClutch, type CreatorProfile } from '@atlitos/api';
 import type { ApiError, Clip } from '@atlitos/types';
+import { spacing } from '@atlitos/theme';
 import { router, useLocalSearchParams } from 'expo-router';
+import { Flag } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
+import { Pressable, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ClutchProfileView } from '@/components/organisms/ClutchProfileView';
 import { LoginGateModal } from '@/components/organisms/LoginGateModal';
+import { ModerationSheet, type ModerationTarget } from '@/components/organisms/moderation/ModerationSheet';
 import { AppBar } from '@/components/ui/app-bar';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
@@ -30,6 +34,7 @@ export default function ClutchCreatorScreen() {
   const [error, setError] = useState<ApiError | null>(null);
   const [followBusy, setFollowBusy] = useState(false);
   const [gateVisible, setGateVisible] = useState(false);
+  const [moderationTarget, setModerationTarget] = useState<ModerationTarget | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -75,9 +80,30 @@ export default function ClutchCreatorScreen() {
     }
   }
 
+  const isOwnProfile = myId != null && myId === id;
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       <AppBar variant="backTitle" title={profile?.channel ?? 'Creator'} onPressBack={() => router.back()} />
+      {!isOwnProfile && profile ? (
+        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: spacing.lg }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Report or block ${profile.channel}`}
+            hitSlop={8}
+            onPress={() => {
+              if (requiresAuthGate) {
+                setGateVisible(true);
+                return;
+              }
+              setModerationTarget({ type: 'user', entityId: profile.id, userId: profile.id, userName: profile.channel });
+            }}
+            className="min-h-11 flex-row items-center gap-xs px-sm py-xs"
+          >
+            <Flag size={16} strokeWidth={1.75} color={colors.textSecondary} />
+          </Pressable>
+        </View>
+      ) : null}
       <ClutchProfileView
         profile={profile}
         clips={clips}
@@ -90,6 +116,13 @@ export default function ClutchCreatorScreen() {
         onOpenClip={(clipId) => router.push({ pathname: '/(tabs)/clutch/post/[id]', params: { id: clipId } })}
       />
       <LoginGateModal visible={gateVisible} onClose={() => setGateVisible(false)} />
+
+      <ModerationSheet
+        visible={moderationTarget !== null}
+        target={moderationTarget}
+        onClose={() => setModerationTarget(null)}
+        onBlocked={() => router.back()}
+      />
     </SafeAreaView>
   );
 }

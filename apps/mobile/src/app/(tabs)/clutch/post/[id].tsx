@@ -7,6 +7,7 @@ import {
   Bookmark,
   BookmarkCheck,
   ChevronLeft,
+  Flag,
   Heart,
   MessageCircle,
   Send,
@@ -34,6 +35,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ClipVideo } from '@/components/molecules/clip-video';
 import { LoginGateModal } from '@/components/organisms/LoginGateModal';
+import { ModerationSheet, type ModerationTarget } from '@/components/organisms/moderation/ModerationSheet';
 import { Avatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
@@ -80,6 +82,7 @@ export default function ClutchPostViewerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const clutch = useClutch(supabase);
   const requiresAuthGate = useSessionStore((state) => state.status !== 'signed_in');
+  const myId = useSessionStore((state) => state.me?.id ?? null);
 
   const [clips, setClips] = useState<Clip[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error' | 'notFound'>('loading');
@@ -103,6 +106,7 @@ export default function ClutchPostViewerScreen() {
   const [commentCursor, setCommentCursor] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
+  const [moderationTarget, setModerationTarget] = useState<ModerationTarget | null>(null);
 
   const activeIdRef = useRef<string | null>(null);
   const refreshTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -294,6 +298,26 @@ export default function ClutchPostViewerScreen() {
     }
   }
 
+  // CT-C: report/block the clip's own owner, offered from the rail. Never
+  // shown for the caller's own clip (requireAuth is not enough here: the
+  // action targets an AUTHOR, so an own-clip tap is simply a no-op rather
+  // than opening a sheet with no useful action in it).
+  function openClipModeration(clip: Clip) {
+    if (!myId || clip.ownerId === myId) return;
+    requireAuth(() => {
+      setModerationTarget({ type: 'clip', entityId: clip.id, userId: clip.ownerId, userName: clip.channel });
+    });
+  }
+
+  // CT-C: report/block a comment's author, from a long-press on the row.
+  // Never for the caller's own comment.
+  function openCommentModeration(comment: Comment) {
+    if (!myId || comment.userId === myId) return;
+    requireAuth(() => {
+      setModerationTarget({ type: 'comment', entityId: comment.id, userId: comment.userId, userName: comment.username });
+    });
+  }
+
   async function openComments(clip: Clip) {
     setCommentsClip(clip);
     setComments([]);
@@ -420,6 +444,7 @@ export default function ClutchPostViewerScreen() {
                 onComment={() => void openComments(item)}
                 onShare={() => void handleShare(item)}
                 onSave={() => handleSave(item)}
+                onReport={item.ownerId === myId ? undefined : () => openClipModeration(item)}
               />
             </View>
           )}
@@ -483,7 +508,12 @@ export default function ClutchPostViewerScreen() {
                 </View>
               }
               renderItem={({ item }) => (
-                <View style={{ gap: spacing.xs }}>
+                <Pressable
+                  onLongPress={item.userId === myId ? undefined : () => openCommentModeration(item)}
+                  accessibilityRole={item.userId === myId ? undefined : 'button'}
+                  accessibilityLabel={item.userId === myId ? undefined : `Report or block ${item.username}`}
+                  style={{ gap: spacing.xs }}
+                >
                   <View className="flex-row items-center gap-sm">
                     <Text style={[textStyle('label'), { color: colors.text }]}>{item.username}</Text>
                     <Text className="font-mono text-xs" style={{ color: colors.textSecondary }}>
@@ -491,7 +521,7 @@ export default function ClutchPostViewerScreen() {
                     </Text>
                   </View>
                   <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>{item.text}</Text>
-                </View>
+                </Pressable>
               )}
             />
 
@@ -557,6 +587,20 @@ export default function ClutchPostViewerScreen() {
       </Modal>
 
       <LoginGateModal visible={gateVisible} onClose={() => setGateVisible(false)} />
+
+      <ModerationSheet
+        visible={moderationTarget !== null}
+        target={moderationTarget}
+        onClose={() => setModerationTarget(null)}
+        onBlocked={() => {
+          // A blocked owner's clips/comments come out of the NEXT feed/
+          // comments fetch (packages/api filters, see hooks.ts CT-C notes).
+          // Re-run both so the change is visible immediately rather than on
+          // the viewer's next cold load.
+          void load();
+          if (commentsClip) void openComments(commentsClip);
+        }}
+      />
     </View>
   );
 }
@@ -574,6 +618,8 @@ interface ClipPageProps {
   onComment: () => void;
   onShare: () => void;
   onSave: () => void;
+  /** CT-C: report/block the clip's owner. Omitted for the caller's own clip. */
+  onReport?: () => void;
 }
 
 /**
@@ -594,6 +640,7 @@ function ClipPage({
   onComment,
   onShare,
   onSave,
+  onReport,
 }: ClipPageProps) {
   const colors = useThemeColors();
 
@@ -702,6 +749,16 @@ function ClipPage({
           >
             <Share2 size={30} strokeWidth={1.75} color={colors.textInverse} />
           </Pressable>
+          {onReport ? (
+            <Pressable
+              onPress={onReport}
+              accessibilityRole="button"
+              accessibilityLabel="Report or block"
+              className="min-h-11 min-w-11 items-center justify-center gap-xs"
+            >
+              <Flag size={26} strokeWidth={1.75} color={colors.textInverse} />
+            </Pressable>
+          ) : null}
         </View>
       </SafeAreaView>
 
