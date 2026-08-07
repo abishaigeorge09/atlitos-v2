@@ -505,3 +505,108 @@ false over 61 takes and is `permission denied` for both client roles; the clip
 machine refuses `ready -> failed` with `INVALID_TRANSITION`; the sweep marks a
 planted object-absent stranded clip `failed` and captures a rigged arm's failure
 in `sweep_failures` while the other arms still run.
+
+## LAUNCH Phase 4 Track B — suspension enforcement (`0096`)
+
+PRD-04 FR-34..FR-38, FR-53. Contract: `docs/phases/PHASE-4-STATUS.md` "CT-B" /
+decision 3 ("suspension is three legs, not one"). Suspension is enforced by
+three independent mechanisms so that no single one being slow or missed
+leaves a suspended account able to act:
+
+1. **GoTrue ban** (`admin-user-suspend` edge function, `auth.admin.updateUserById`
+   with `ban_duration: "87600h"` / `"none"`). Blocks new sign-in and token
+   refresh. Not SQL: no Postgres RPC can reach the Auth admin API, hence the
+   edge function.
+2. **`getAuthenticatedUser` suspension check** (`supabase/functions/_shared/supabase.ts`).
+   Every edge function that establishes "who is calling" through this helper
+   now also reads the caller's own `users.status` (their own JWT,
+   `users_select_own`) and throws `SUSPENDED` (403) if it is `'suspended'`.
+   One edit gates every function that imports it (18 at the time of writing:
+   `cancel-session-refund`, `book-court`, `book-session`, `complete-session`,
+   `decline-session-refund`, `ai-search`, `coach-trainee-video-upload-url`,
+   `checkout`, `get-clip-moderation-url`, `donate`, `razorpay-route-onboard`,
+   `join-group`, `renew-group-membership`, `get-coach-trainee-video-url`,
+   `stream-upload-url`, `razorpay-route-transfer`, `stream-webhook`,
+   `verify-payment`, plus `admin-order-advance` and the new
+   `admin-user-suspend`). Guest/anonymous flows that call `getOptionalUserId`
+   (`_shared/clip-access.ts`) instead — `get-clip-playback-url(s)`'s public
+   feed browse — never call this function and are unaffected by construction.
+   A lookup error or a missing `users` row fails OPEN (treated as active),
+   never closed: this check must never be the thing that bricks a legitimate
+   caller.
+3. **Restrictive RLS policies scoped to `INSERT`/`UPDATE`/`DELETE` only,
+   NEVER `SELECT` or `FOR ALL`.** `0096` adds `public.is_actor_active()`
+   (`STABLE SECURITY DEFINER`, reads only the caller's own row, returns
+   `TRUE` when there is nothing to check) and a `do $$ ... $$` block that
+   scans the LIVE `pg_policies` for every `public` table carrying a
+   permissive `INSERT`/`UPDATE`/`DELETE`/`ALL` policy for `authenticated`,
+   then creates a same-named-suffix restrictive companion
+   (`<table>_active_insert` / `_active_update` / `_active_delete`) calling
+   `is_actor_active()`. A table with a `FOR ALL` permissive policy (example:
+   `product_wishlist_items_write_own`) is treated as granting all three
+   commands, since a restrictive policy binds to one command and `FOR ALL`'s
+   `pg_policies.cmd` is `'ALL'`. Deriving the table set from `pg_policies`
+   live, instead of a hand written list, is what makes this FR-36's literal
+   "any mutating action platform wide" rather than whichever tables this
+   migration's author happened to remember.
+
+   **Two tables are deliberately NOT covered here**: `clip_likes` and
+   `follows` carry no direct `INSERT`/`UPDATE`/`DELETE` policy for
+   `authenticated` at all — both write only through the `toggle_like` /
+   `toggle_follow` `SECURITY DEFINER` RPCs (`0044`). Decision 3 explicitly
+   rejects per-RPC suspension guards ("dozens of edits, guaranteed to miss
+   one"), so a suspended user's `toggle_like`/`toggle_follow` calls are not
+   blocked by this migration; the GoTrue ban is what eventually cuts them
+   off, on the caller's next sign-in or token refresh. Recorded here, not
+   silently patched around.
+
+   **Safety invariant** (this migration's highest-risk item, biased-approver
+   Opus-class review scope per `PHASE-4-STATUS.md`): the dynamic block can
+   only ever emit `for insert` / `for update` / `for delete` as a restrictive
+   policy's command, hardcoded as three literal `format()` templates. There
+   is no code path that can produce a restrictive `SELECT` or a restrictive
+   `FOR ALL`, either of which would blank reads platform wide (for a
+   suspended user, or in a `FOR ALL` bug, for everyone). `0096` closes with a
+   `do $$ ... $$` self-check that raises an exception (failing the whole
+   migration, since Supabase runs each migration file in one transaction) if
+   ANY restrictive policy in `public` ever targets a command outside
+   `INSERT`/`UPDATE`/`DELETE`.
+
+`admin_suspend_user(p_user_id, p_reason)` / `admin_reinstate_user(p_user_id,
+p_reason)` (`0096`, `SECURITY DEFINER`, internal `has_role('admin')` check)
+write `users.status`/`suspended_reason` — already admin-locked columns since
+the `0065` `FIELD_LOCKED` trigger, unchanged by this migration — and exactly
+one `audit_log` row (`user.suspend` / `user.reinstate`, FR-53). Both refuse:
+a non-admin caller (`FORBIDDEN`), a missing reason on suspend, self-suspension,
+suspending another admin account, and suspending an already-suspended (or
+reinstating an already-active) row (all `VALIDATION`). Called by
+`admin-user-suspend` through the CALLER'S OWN JWT (`userScopedClient`), never
+the service role, so `has_role('admin')`/`auth.uid()` inside the RPC resolve
+to the real acting admin — the same posture `admin-order-advance` (AT-82)
+already established for `order_transition`.
+
+## LAUNCH Phase 4 Track B — KPI dashboard RPCs (`0096`)
+
+PRD-04 FR-4, FR-5. Four grouped `SECURITY DEFINER` RPCs
+(`admin_kpi_money`, `admin_kpi_users`, `admin_kpi_queues`,
+`admin_kpi_activity`), NOT views — the Phase 1 `security_definer_view`
+advisor finding forbids that shape. Each internally requires
+`has_role('admin')`, is granted `EXECUTE` to `authenticated` only (`anon`
+revoked, the `0089` discipline), and returns `jsonb` so a tile can gain a
+field later without a signature migration. One RPC per tile CLUSTER (not
+per single tile) is what makes FR-5 ("a failure to compute one tile does not
+block the others") hold: `apps/admin`'s dashboard fetches the four
+independently and renders whichever succeed.
+
+`admin_kpi_money` returns GMV as `SUM(payment_intents.amount)` where
+`status = 'captured'` in a rolling 7-day window — GROSS, refunds NOT netted,
+labeled "GMV, gross captured" in the UI, never silently netted or invented.
+`admin_kpi_users` returns total users, a per-role breakdown
+(`user_roles` grouped), and 7-day signups. `admin_kpi_queues` returns pending
+counts for `refunds`, `verification_requests`, and `reports` (the FR-4
+"pending moderation count"). `admin_kpi_activity` returns 7-day
+`court_bookings` + `sessions` combined (FR-4's "bookings this week"), 7-day
+`orders`, and the FR-4 "open support ticket count" from `support_tickets`
+(`status = 'open'`). The 7-day rolling window (rather than a calendar week)
+is a deliberate choice, documented here and in the migration, so GMV does
+not visibly drop to 0 every Monday morning with no incident behind it.
