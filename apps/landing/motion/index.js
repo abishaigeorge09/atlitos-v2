@@ -19,6 +19,11 @@ const SECTION_INITS = [
   ["magnetic", () => import("./systems/magnetic.js")],
   ["skew", () => import("./systems/skew.js")],
   ["marquee", () => import("./systems/marquee.js")],
+  /* upper page (P3) */
+  ["problem", () => import("./sections/problem.js")],
+  ["interlude", () => import("./sections/interlude.js")],
+  ["steps", () => import("./sections/steps.js")],
+  ["features", () => import("./sections/features.js")],
 ];
 
 function detectMode() {

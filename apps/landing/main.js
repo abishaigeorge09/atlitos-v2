@@ -217,6 +217,10 @@
   };
 
   /* ---------- Problem word rotator: fade out to blank, then the next phrase ---------- */
+  /* Basic-mode text behaviours check motion-rich AT FIRE TIME so the rich
+     modules can own the same elements without double-driving them. */
+  var richOwns = function () { return docEl.classList.contains("motion-rich"); };
+
   var rotChip = document.getElementById("rotChip");
   if (rotChip) {
     var phrases = [
@@ -226,7 +230,9 @@
       "cash only and no refunds"
     ];
     var pi = 0;
+    window.__atlitosPhrases = phrases;
     observeOnce(rotChip, function () {
+      if (richOwns()) { return; }
       setInterval(function () {
         if (document.visibilityState === "hidden") { return; }
         rotChip.classList.add("is-out");
@@ -240,13 +246,14 @@
   }
 
   document.querySelectorAll("[data-type]").forEach(function (el) {
-    observeOnce(el, function () { typeOnce(el); });
+    observeOnce(el, function () { if (!richOwns()) { typeOnce(el); } });
   });
 
   /* Typewriter, looping (features headline). */
   document.querySelectorAll("[data-type-loop]").forEach(function (el) {
     var full = el.textContent;
     observeOnce(el, function () {
+      if (richOwns()) { return; }
       var loop = function () {
         el.textContent = "";
         var i = 0;

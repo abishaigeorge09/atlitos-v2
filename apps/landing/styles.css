@@ -235,6 +235,11 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--ember); outline
 .js [data-reveal-delay="4"] { transition-delay: 0.4s; }
 .js [data-reveal-delay="5"] { transition-delay: 0.5s; }
 .js [data-reveal-delay="6"] { transition-delay: 0.6s; }
+/* Rich mode (motion/) owns every data-reveal element it pre-marks is-in and
+   drives with GSAP; a live CSS transition would interpolate every inline
+   write GSAP makes, which froze the step rows mid rotation. One rule kills
+   the whole conflict class. */
+.motion-rich [data-reveal] { transition: none; }
 /* draw variant: paths get dasharray from JS; is-in releases the offset */
 .js [data-reveal="draw"] .a-path { transition: stroke-dashoffset 1s cubic-bezier(0.3, 0, 0.2, 1); }
 .js [data-reveal="draw"][data-reveal-delay="1"] .a-path { transition-delay: 0.18s; }
