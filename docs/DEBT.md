@@ -257,3 +257,27 @@ a vacuous green.
 that cannot live there is recorded here with an owner. A clean checkout that
 cannot reproduce production is not a test environment, it is a different
 product.
+The root-cause code fix was re-applied on a fresh branch off `qa-fixes/manual-pass`
+(same content as `637df13`'s script and spec changes, no DB write): `scripts/verify-groups-probes.mjs`
+and `scripts/verify-realtime.mjs` self-clean their probe rows when
+`SUPABASE_SERVICE_ROLE_KEY` is set, and `apps/e2e/specs/money/coaching.spec.ts`
+(CO-06/CO-08) tears down its test group in a `finally` block.
+
+The same read-only sweep also turned up a second, still-active source `637df13`
+missed entirely: `apps/e2e/specs/chat.spec.ts` (CH-01, CH-02, CH-07) sends real
+"e2e CH-01 <ts>" / "e2e CH-02 <ts>" / "e2e CH-07 offline <ts>" messages into
+the player@/coach1@ demo personas' real coaching and group chat threads, with
+no cleanup at all, and production still had rows from a run timestamped the
+same day as this fix. Given the house rule "when you find a bug, sweep for
+its class," the same self-teardown pattern (best-effort service-role delete
+in a `finally` block, no-op when the key is absent) was added there too, and
+the three message-text prefixes were added to `scripts/cleanup-e2e-test-data.mjs`'s
+sweep list.
+
+`scripts/cleanup-e2e-test-data.mjs`
+now exists as the standalone sweep for whatever those can't self-clean, and
+implements the payment_intent safety check flagged above: it looks up each
+candidate group's `group_memberships.payment_intent_id`, skips deleting any
+group with a `captured` payment_intent attached, and reports those as
+blocked for human review instead. It is a human-run tool, never invoked by
+an agent.

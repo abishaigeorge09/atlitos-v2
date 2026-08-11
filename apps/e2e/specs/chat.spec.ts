@@ -10,11 +10,27 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { expect, test } from "../fixtures";
 import { anonKey, EMAIL, signInAs } from "./support/rls.mjs";
+import { serviceClient } from "../helpers/sql.mjs";
 
 const execFileAsync = promisify(execFile);
 const HERE = dirname(fileURLToPath(import.meta.url));
 const STATE_DIR = join(HERE, "..", "state");
 const REPO_ROOT = join(HERE, "..", "..", "..");
+
+// 31c cleanup (docs/DEBT.md): CH-01/CH-02/CH-07 send real messages ("e2e
+// CH-01 <ts>", "e2e CH-02 <ts>", "e2e CH-07 offline <ts>") into a real
+// coaching or group chat_threads row belonging to the player@/coach1@ demo
+// personas. This is the one Supabase project the repo has, which also backs
+// the live app (see docs/DEBT.md), so an unswept message here is a real row
+// in a real demo persona's Chat thread, not a throwaway. chat_messages has
+// no participant DELETE policy (by design), so cleanup needs the service
+// role; best-effort, never fails the test when the key is absent.
+const NEEDS_SERVICE_KEY = !process.env.SUPABASE_SERVICE_ROLE_KEY;
+async function cleanupTestMessage(text) {
+  if (NEEDS_SERVICE_KEY || !text) return;
+  const sql = serviceClient();
+  await sql.from("chat_messages").delete().eq("text", text);
+}
 
 test.beforeEach(async ({}, testInfo) => {
   test.skip(testInfo.project.name !== "athlete-web", "CH domain targets athlete-web only");
@@ -117,6 +133,7 @@ test.describe("CH — chat + realtime messaging", () => {
 
     const playerContext = await browser.newContext({ storageState: join(STATE_DIR, "player.json") });
     const coach1Context = await browser.newContext({ storageState: join(STATE_DIR, "coach1.json") });
+    let text;
     try {
       const playerPage = await playerContext.newPage();
       const coach1Page = await coach1Context.newPage();
@@ -126,7 +143,7 @@ test.describe("CH — chat + realtime messaging", () => {
       await expect(playerPage.getByLabel("Message input")).toBeVisible({ timeout: 15_000 });
       await expect(coach1Page.getByLabel("Message input")).toBeVisible({ timeout: 15_000 });
 
-      const text = `e2e CH-01 ${Date.now()}`;
+      text = `e2e CH-01 ${Date.now()}`;
       await playerPage.getByLabel("Message input").fill(text);
       await playerPage.getByRole("button", { name: "Send message" }).click();
 
@@ -149,6 +166,7 @@ test.describe("CH — chat + realtime messaging", () => {
     } finally {
       await playerContext.close();
       await coach1Context.close();
+      await cleanupTestMessage(text);
     }
   });
 
@@ -188,6 +206,7 @@ test.describe("CH — chat + realtime messaging", () => {
 
     const playerContext = await browser.newContext({ storageState: join(STATE_DIR, "player.json") });
     const partnerContext = await browser.newContext({ storageState: join(STATE_DIR, "partner.json") });
+    let text;
     try {
       const playerPage = await playerContext.newPage();
       const partnerPage = await partnerContext.newPage();
@@ -198,7 +217,7 @@ test.describe("CH — chat + realtime messaging", () => {
 
       // The third member (coach1) sends via the exact real insert
       // use-chat.ts's sendMessage performs, under coach1's own JWT.
-      const text = `e2e CH-02 ${Date.now()}`;
+      text = `e2e CH-02 ${Date.now()}`;
       const { error: sendError } = await coach1.client
         .from("chat_messages")
         .insert({ thread_id: thread.id, sender_id: coach1.userId, text });
@@ -217,6 +236,7 @@ test.describe("CH — chat + realtime messaging", () => {
     } finally {
       await playerContext.close();
       await partnerContext.close();
+      await cleanupTestMessage(text);
     }
   });
 
@@ -278,30 +298,34 @@ test.describe("CH — chat + realtime messaging", () => {
       await expect(page.getByLabel("Message input")).toBeVisible({ timeout: 15_000 });
 
       const text = `e2e CH-07 offline ${Date.now()}`;
-      await page.context().setOffline(true);
-      await page.getByLabel("Message input").fill(text);
-      await page.getByRole("button", { name: "Send message" }).click();
+      try {
+        await page.context().setOffline(true);
+        await page.getByLabel("Message input").fill(text);
+        await page.getByRole("button", { name: "Send message" }).click();
 
-      // sendMessage's catch path (ChatThreadScreen.handleSend) drops the
-      // optimistic bubble and restores the draft into the composer on
-      // failure, rather than leaving a phantom "sent" bubble behind — the
-      // message text is not lost, it is back in the input, editable, ready
-      // to resend the moment connectivity returns.
-      await expect
-        .poll(async () => (await page.getByLabel("Message input").inputValue()) === text, {
-          timeout: 10_000,
-          message: "draft text must be restored to the composer after a failed offline send, not silently dropped",
-        })
-        .toBe(true);
+        // sendMessage's catch path (ChatThreadScreen.handleSend) drops the
+        // optimistic bubble and restores the draft into the composer on
+        // failure, rather than leaving a phantom "sent" bubble behind — the
+        // message text is not lost, it is back in the input, editable, ready
+        // to resend the moment connectivity returns.
+        await expect
+          .poll(async () => (await page.getByLabel("Message input").inputValue()) === text, {
+            timeout: 10_000,
+            message: "draft text must be restored to the composer after a failed offline send, not silently dropped",
+          })
+          .toBe(true);
 
-      await page.context().setOffline(false);
-      await page.getByRole("button", { name: "Send message" }).click();
-      await expect
-        .poll(async () => (await page.getByText(text).count()) > 0, {
-          timeout: 15_000,
-          message: "resend after reconnect must land the message in the thread",
-        })
-        .toBe(true);
+        await page.context().setOffline(false);
+        await page.getByRole("button", { name: "Send message" }).click();
+        await expect
+          .poll(async () => (await page.getByText(text).count()) > 0, {
+            timeout: 15_000,
+            message: "resend after reconnect must land the message in the thread",
+          })
+          .toBe(true);
+      } finally {
+        await cleanupTestMessage(text);
+      }
     });
   });
 
