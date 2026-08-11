@@ -158,38 +158,27 @@ html.lenis, html.lenis body { height: auto; }
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   background-size: 180px 180px;
 }
-/* custom cursor */
-.has-cursor body { cursor: none; }
-.has-cursor input, .has-cursor textarea, .has-cursor select { cursor: auto; }
-.has-cursor a, .has-cursor button { cursor: none; }
-.cur-dot, .cur-ring {
+/* target lock: broadcast corner brackets that snap around whatever
+   interactive element the pointer is over. The native cursor stays. */
+.target-lock {
   position: fixed; top: 0; left: 0;
+  width: 60px; height: 40px;
   pointer-events: none;
   z-index: 95;
-  border-radius: 999px;
-  translate: -50% -50%;
-}
-.cur-dot { width: 8px; height: 8px; background: var(--ember); }
-.cur-ring {
-  width: 34px; height: 34px;
-  border: 1.5px solid var(--ink);
-  display: flex; align-items: center; justify-content: center;
-  transition: width 0.25s ease, height 0.25s ease, background-color 0.25s ease, border-color 0.25s ease;
-}
-html:not(.scrolled) .cur-ring { border-color: rgba(251, 247, 241, 0.7); }
-.cur-ring.is-big {
-  width: 64px; height: 64px;
-  background: rgba(232, 179, 36, 0.9);
-  border-color: transparent;
-}
-.cur-label {
-  font-size: 10px; font-weight: 700; letter-spacing: 0.14em;
-  color: var(--ink);
   opacity: 0;
   transition: opacity 0.2s ease;
 }
-.cur-ring.is-big .cur-label { opacity: 1; }
-.cur-dot.is-hidden, .cur-ring.is-hidden { opacity: 0; }
+.target-lock.is-locked { opacity: 1; }
+.tl-corner {
+  position: absolute;
+  width: 12px; height: 12px;
+  border: 2.5px solid var(--ember);
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.25));
+}
+.tl-0 { top: 0; left: 0; border-right: none; border-bottom: none; }
+.tl-1 { top: 0; right: 0; border-left: none; border-bottom: none; }
+.tl-2 { bottom: 0; left: 0; border-right: none; border-top: none; }
+.tl-3 { bottom: 0; right: 0; border-left: none; border-top: none; }
 /* speed line wipes (elements created by motion/systems/wipe.js) */
 .wipe-wrap { position: fixed; inset: 0; pointer-events: none; z-index: 80; overflow: clip; }
 .wipe-bar {
@@ -333,7 +322,16 @@ html:not(.scrolled) .nav-card .btn-nav { background: var(--paper); color: var(--
     box-shadow 350ms ease;
 }
 .site-nav a, .nav-card .btn-nav { transition: background 350ms ease, color 350ms ease; }
-.compact .nav-card { max-width: 340px; padding: 11px 22px 10px; border-radius: 0 0 999px 999px; }
+/* Tucked pill: the wordmark must never read as sitting at the pill's edge
+   (founder note). Generous left padding pushes it inward, and the pair is
+   balanced with a centred gap rather than space-between extremes. */
+.compact .nav-card {
+  max-width: 372px;
+  padding: 11px 18px 10px 38px;
+  border-radius: 0 0 999px 999px;
+  justify-content: center;
+  gap: 30px;
+}
 .wordmark {
   font-family: var(--font-display);
   font-style: italic;
@@ -362,7 +360,6 @@ html:not(.scrolled) .nav-card .btn-nav { background: var(--paper); color: var(--
 /* (a second .compact .nav-card rule lived here from the options gallery era;
    it fought the pill rule above and cramped the tucked state. Removed.) */
 .compact .site-nav { max-width: 0; opacity: 0; margin-left: 0; transition: max-width 460ms cubic-bezier(0.65, 0, 0.35, 1), opacity 200ms ease; }
-.compact .wordmark { margin-right: auto; }
 
 /* Buttons */
 .btn-pill {
@@ -1108,17 +1105,9 @@ html.js:not(.hero-ready) .hero-rail { opacity: 0; }
   .emp-stage .empower-head .sticker-stack .sticker { font-size: clamp(1.5rem, 2.6vw, 2.4rem); }
   .emp-stage .empower-note p { font-size: 0.9375rem; }
   .emp-stage .empower-note p + p { margin-top: 6px; }
-  .emp-stage .emp-flow { position: relative; z-index: 2; margin-top: 8px; }
-  .emp-stage .emp-3d {
-    position: absolute; left: 50%; top: 52%;
-    transform: translate(-50%, -50%);
-    width: min(560px, 44vw); height: min(420px, 52svh);
-    margin-top: 0;
-    z-index: 1;
-    pointer-events: none;
-  }
-  .emp-stage .emp-stats { position: relative; z-index: 2; margin-top: 10px; }
-  .emp-stage .roundup-line { position: relative; z-index: 2; margin-top: 14px; }
+  .emp-stage .emp-flow { position: relative; z-index: 2; margin-top: 24px; }
+  .emp-stage .emp-stats { position: relative; z-index: 2; margin-top: 26px; }
+  .emp-stage .roundup-line { position: relative; z-index: 2; margin-top: 20px; }
 }
 .empower-head {
   display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: start;
@@ -1379,19 +1368,45 @@ html.js:not(.hero-ready) .hero-rail { opacity: 0; }
 .emp-stat-val { font-size: clamp(1.75rem, 3.4vw, 2.5rem); font-weight: 700; }
 .emp-stat-label { margin-top: 4px; font-size: 0.875rem; color: rgba(251, 247, 241, 0.7); }
 .emp-stat .v-tag { top: -10px; right: 14px; }
-.emp-3d { position: relative; height: 300px; margin-top: 30px; }
-.emp-3d canvas { display: block; width: 100%; height: 100%; }
-.emp-3d-fallback {
-  position: absolute; left: 50%; top: 50%;
-  transform: translate(-50%, -50%);
-  width: 200px; height: 200px;
-  border-radius: 50%;
-  border: 4px solid rgba(251, 247, 241, 0.5);
-  background:
-    radial-gradient(circle at 34% 30%, rgba(251, 247, 241, 0.22), transparent 60%),
-    var(--espresso-surface);
+/* ---------- The coin journey (elements created by motion/sections/empower.js)
+   A dashed route threads the three flow cards; a rupee coin travels it as the
+   pin scrubs, the trail inking in behind it. Same hand-drawn language as the
+   emp arrows, no WebGL. ---------- */
+.emp-journey {
+  position: absolute; inset: -40px 0;
+  z-index: 3;
+  pointer-events: none;
+  overflow: visible;
 }
-.emp-3d.has-gl .emp-3d-fallback { display: none; }
+.emp-journey .journey-track {
+  fill: none;
+  stroke: rgba(251, 247, 241, 0.18);
+  stroke-width: 2;
+  stroke-dasharray: 3 9;
+  stroke-linecap: round;
+}
+.emp-journey .journey-trail {
+  fill: none;
+  stroke: var(--green);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+.emp-coin {
+  position: absolute; left: 0; top: 0;
+  width: 44px; height: 44px;
+  margin: -22px 0 0 -22px;
+  z-index: 4;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: var(--marigold);
+  border: 2.5px solid var(--ink);
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.45), inset 0 0 0 3px rgba(28, 23, 18, 0.18);
+  font-weight: 700; font-size: 1.125rem;
+  color: var(--ink);
+  pointer-events: none;
+  opacity: 0;
+}
+.emp-coin.is-live { opacity: 1; }
 
 /* ---------- Reduced motion: final states, no pins, pre typed text ---------- */
 @media (prefers-reduced-motion: reduce) {
@@ -1409,7 +1424,7 @@ html.js:not(.hero-ready) .hero-rail { opacity: 0; }
   html.js:not(.hero-ready) .hl { transform: skewY(-8deg); opacity: 0; }
   html.js:not(.hero-ready) .hl-2 { opacity: 1; transform: skewY(-8deg) scaleY(0.1); }
   .way-path { transition: opacity 0.4s ease; }
-  .emp-3d { display: none; }
+  .emp-journey, .emp-coin { display: none; }
   .js [data-reveal]:not(.is-in) { opacity: 1; transform: none; }
   .js [data-reveal] { transition: none; }
 }

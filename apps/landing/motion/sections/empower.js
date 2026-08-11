@@ -1,7 +1,8 @@
-/* EMPOWER: THE ORBIT. The page's ONE pin, under the R1 recipe verbatim, and
-   the one WebGL scene (worker-side, lazy). Scrubbed story: headline lands,
-   the ₹293 card compresses toward the ball, +₹7 splits off into orbit, the
-   orbit tightens while stats count, the photo blooms, the roundup line types.
+/* EMPOWER: THE COIN JOURNEY. The page's ONE pin, under the R1 recipe
+   verbatim. As the pin scrubs, a rupee coin travels a dashed route that
+   threads the three flow cards, the trail inking in green behind it: the
+   ₹293 order, the +₹7 roundup, the athlete it reaches. Hand-drawn language,
+   same family as the emp arrows. No WebGL (the founder killed the 3D ball).
    Mobile <=900px: NO pin, the beats fire as plain staggered reveals.
    Reduced motion never reaches this module (mode gate in motion/index.js). */
 
@@ -22,7 +23,6 @@ export default function init(ctx) {
   const cards = ctx.q(".emp-card", stage);
   const arrows = ctx.q(".emp-arrow", stage);
   const stats = ctx.q(".emp-stat", stage);
-  const emp3d = stage.querySelector("#emp3d");
   const roundup = stage.querySelector(".roundup-line");
 
   /* seed arrow strokes */
@@ -47,30 +47,78 @@ export default function init(ctx) {
     });
   });
 
-  /* The orbit mounts HERE, inside the deferred boot chain (this module is
-     already idle-loaded), and the returned promise is awaited by the boot so
-     html.motion-full only appears once the worker is spawned. Mounting on a
-     separate timer measured 85-160ms frames whenever it raced a scroll. All
-     gating (mobile, saveData, WebGL) lives inside mountOrbit. */
-  let orbit = null;
-  let mountReady = Promise.resolve();
-  if (emp3d) {
-    mountReady = import("../three/empower-orbit.js").then((mod) => {
-      orbit = mod.mountOrbit(emp3d);
-      if (orbit) { orbit.setVisible(false); } /* render only when seen */
-    }).catch(() => { /* fallback circle stays */ });
-  }
-  ctx.onCleanup(() => { if (orbit) { orbit.dispose(); } });
+  /* ---------- the coin journey (desktop, rides the pin scrub) ---------- */
+  const flow = stage.querySelector(".emp-flow");
+  let journey = null; // { setProgress(p 0..1) }
+  const buildJourney = () => {
+    if (!flow || cards.length < 3) { return null; }
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.classList.add("emp-journey");
+    svg.setAttribute("aria-hidden", "true");
+    const track = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    track.classList.add("journey-track");
+    const trail = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    trail.classList.add("journey-trail");
+    svg.append(track, trail);
+    flow.appendChild(svg);
+    const coin = document.createElement("div");
+    coin.className = "emp-coin mono";
+    coin.textContent = "₹7";
+    flow.appendChild(coin);
 
-  /* visibility gate for the worker's render loop */
-  const visIO = new IntersectionObserver((entries) => {
-    entries.forEach((entry) => { if (orbit) { orbit.setVisible(entry.isIntersecting && document.visibilityState === "visible"); } });
-  });
-  visIO.observe(section);
-  ctx.onCleanup(() => visIO.disconnect());
+    let len = 0;
+    const layout = () => {
+      const fr = flow.getBoundingClientRect();
+      svg.setAttribute("viewBox", `0 0 ${Math.round(fr.width)} ${Math.round(fr.height) + 80}`);
+      /* anchors: out of card 1, over the top of card 2, into the heart of
+         card 3; playful arcs below then above then below the row */
+      const pts = cards.map((c) => {
+        const r = c.getBoundingClientRect();
+        return {
+          x: r.left - fr.left + r.width / 2,
+          y: r.top - fr.top + r.height / 2,
+          top: r.top - fr.top,
+          bottom: r.bottom - fr.top,
+        };
+      });
+      /* the mid anchor clears card 02's top edge so the coin never crosses
+         its title; the arc dips below the row, crests above card 02, dips
+         again, then lands in card 03 */
+      const d = [
+        `M ${pts[0].x - 30} ${pts[0].bottom - 20}`,
+        `C ${pts[0].x + 90} ${pts[0].bottom + 56}, ${((pts[0].x + pts[1].x) / 2) - 40} ${pts[1].top - 90}, ${pts[1].x} ${pts[1].top - 34}`,
+        `C ${pts[1].x + 120} ${pts[1].top + 10}, ${((pts[1].x + pts[2].x) / 2) + 20} ${pts[2].bottom + 52}, ${pts[2].x} ${pts[2].bottom - 30}`,
+      ].join(" ");
+      track.setAttribute("d", d);
+      trail.setAttribute("d", d);
+      len = trail.getTotalLength();
+      trail.style.strokeDasharray = String(len);
+      trail.style.strokeDashoffset = String(len);
+    };
+    layout();
+    const onResize = () => layout();
+    window.addEventListener("resize", onResize);
+    ctx.onCleanup(() => { window.removeEventListener("resize", onResize); svg.remove(); coin.remove(); });
+
+    let lastP = -1;
+    return {
+      setProgress(p) {
+        if (!len) { return; }
+        const clamped = Math.max(0, Math.min(1, p));
+        /* skip sub-pixel updates; every write repaints the SVG stroke */
+        if (Math.abs(clamped - lastP) < 0.0015) { return; }
+        lastP = clamped;
+        coin.classList.toggle("is-live", clamped > 0.001 && clamped < 0.999);
+        const pt = trail.getPointAtLength(clamped * len);
+        coin.style.transform = `translate(${pt.x}px, ${pt.y}px) rotate(${clamped * 540}deg)`;
+        trail.style.strokeDashoffset = String(len * (1 - clamped));
+      },
+    };
+  };
 
   /* ---------- desktop: the one pin, R1 recipe verbatim ---------- */
   ctx.mm.add("(min-width: 901px)", () => {
+    journey = buildJourney();
     const tl = gsap.timeline({ paused: true });
 
     /* 0.00-0.18 headline + note */
@@ -102,7 +150,12 @@ export default function init(ctx) {
       invalidateOnRefresh: true,
       scrub: 0.8,
       animation: tl,
-      onUpdate: (self) => { if (orbit) { orbit.setProgress(self.progress); } },
+      onUpdate: (self) => {
+        if (journey) {
+          /* the coin rides between card 01 landing and the photo bloom */
+          journey.setProgress((self.progress - 0.2) / (0.88 - 0.2));
+        }
+      },
       onLeave: () => tl.progress(1),
       onLeaveBack: () => tl.progress(0),
     });
@@ -150,6 +203,4 @@ export default function init(ctx) {
     });
   });
 
-  /* boot awaits this so motion-full means the worker is spawned too */
-  return mountReady;
 }
