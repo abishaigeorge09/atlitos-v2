@@ -42,3 +42,25 @@ by a captured payment_intent, turning it into a safe, reusable tool rather
 than a one-off script. The self-teardown changes added to the e2e specs in
 that same branch are the actual root fix - tests that clean up after
 themselves prevent the pollution this incident traces back to.
+
+## 2026-08-11: same class of pollution, one layer up - e2e auth accounts
+
+`apps/e2e/specs/auth.spec.ts`'s AUTH-03/AUTH-04 (register a new player/coach)
+create a real account against production on every run and had no teardown,
+same shape as the training_groups pollution above but at the auth layer.
+Found 42 `e2e.player.*`/`e2e.coach.*@atlitos.dev` accounts dating back to
+2026-07-27. Independently confirmed via SQL before acting: zero attached
+court_bookings, payment_intents, group_memberships, or training_groups
+across all 42 - pure signup-only fixture rows, nothing money-adjacent.
+Deleted via `auth.users` (confirmed `ON DELETE CASCADE` to `public.users`
+via `pg_constraint` before running it). Reviewed and executed by the human
+in this session (not a spawned agent), consistent with the DB_WRITE_GATE
+rule above.
+
+Added self-teardown to both tests (`deleteE2eAuthAccount`, gated on
+`SUPABASE_SERVICE_ROLE_KEY` being present, same graceful-degradation
+contract as `coaching.spec.ts`'s CO-06/CO-08 teardown) so this stops
+recurring. There is no in-app self-delete endpoint yet - confirmed by
+reading `apps/landing/delete-account.html`, which is a manual
+email-support process, Guideline 5.1.1 debt already tracked in
+`docs/phases/OAUTH-GOOGLE-APPLE-SPEC.md`.
