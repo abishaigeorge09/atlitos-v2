@@ -1,0 +1,85 @@
+<!doctype html>
+<!-- ATLITOS account + data deletion request page. Required by Google Play / App Store for
+     apps with account creation. Static page, reuses styles.css tokens.
+     NOTE (fast-follow debt): there is no automated in-app deletion or backend delete-user
+     function yet; this page is the request mechanism (email support@elsheph.com), which is
+     store-acceptable. A real deletion RPC + in-app "Delete account" row is planned.
+     Store data-deletion URL: https://atlitos-landing.vercel.app/delete-account -->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Delete your account, Atlitos</title>
+  <meta name="description" content="How to request deletion of your Atlitos account and data." />
+  <meta name="theme-color" content="#FBF7F1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .legal-wrap { max-width: 760px; margin: 0 auto; padding: 32px 20px 96px; }
+    .legal-head { display: flex; align-items: center; justify-content: space-between; padding: 18px 0 28px; }
+    .legal-head .wordmark { font-family: var(--font-display); font-weight: 900; font-size: 1.5rem; color: var(--ink); text-decoration: none; }
+    .legal-head a.back { font-family: var(--font-mono); font-size: .8rem; color: var(--ink-secondary); text-decoration: none; border: 1px solid var(--border-strong); border-radius: 999px; padding: 8px 14px; }
+    .legal-wrap h1 { font-family: var(--font-display); font-weight: 900; font-size: clamp(2rem, 5vw, 2.75rem); line-height: 1.05; margin: 8px 0 6px; }
+    .legal-wrap .eff { font-family: var(--font-mono); font-size: .8rem; color: var(--ink-tertiary); margin-bottom: 28px; }
+    .legal-wrap h2 { font-family: var(--font-display); font-weight: 700; font-size: 1.3rem; margin: 34px 0 10px; }
+    .legal-wrap p, .legal-wrap li { color: var(--ink-secondary); line-height: 1.6; }
+    .legal-wrap p { margin: 10px 0; }
+    .legal-wrap ol, .legal-wrap ul { margin: 8px 0 8px 20px; }
+    .legal-wrap li { margin: 6px 0; }
+    .legal-wrap strong { color: var(--ink); }
+    .legal-wrap a { color: var(--ember-pressed); }
+    .legal-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; margin: 20px 0; }
+    .legal-cta { display: inline-block; font-family: var(--font-mono); font-weight: 600; background: var(--ember); color: var(--ink-on-accent); text-decoration: none; border-radius: 999px; padding: 12px 22px; margin-top: 6px; }
+    .legal-foot { border-top: 1px solid var(--border); margin-top: 40px; padding-top: 20px; font-family: var(--font-mono); font-size: .78rem; color: var(--ink-tertiary); }
+  </style>
+</head>
+<body>
+  <div class="legal-wrap">
+    <div class="legal-head">
+      <a class="wordmark" href="/">Atlitos</a>
+      <a class="back" href="/">Back to home</a>
+    </div>
+
+    <h1>Delete your account and data</h1>
+    <p class="eff">Effective 7 August 2026</p>
+
+    <p>You can ask us to delete your Atlitos account and the personal data associated with it. This page explains how to request deletion, what is removed, and what we are required to keep.</p>
+
+    <h2>How to request deletion</h2>
+    <div class="legal-card">
+      <p style="margin:4px 0 12px;">Email <strong>support@elsheph.com</strong> from the email address on your Atlitos account, with the subject line <strong>Delete my account</strong>. Include your account email so we can verify the request.</p>
+      <a class="legal-cta" href="mailto:support@elsheph.com?subject=Delete%20my%20account&body=Please%20delete%20my%20Atlitos%20account%20and%20associated%20data.%20My%20account%20email%20is%3A%20">Email a deletion request</a>
+    </div>
+    <p>We verify that the request comes from the account owner before deleting anything, so we may reply to confirm your identity.</p>
+
+    <h2>What gets deleted</h2>
+    <ul>
+      <li>Your profile: name, sports, city and state, avatar, and personalization and notification preferences.</li>
+      <li>Content you created: your clips, comments, chat messages, and posts.</li>
+      <li>Uploaded media: profile photos and clip video files.</li>
+      <li>Your saved shipping addresses.</li>
+      <li>Your push notification tokens.</li>
+    </ul>
+
+    <h2>What we keep, and why</h2>
+    <p>We retain a limited set of records after deletion where the law requires it:</p>
+    <ul>
+      <li><strong>Financial and transaction records</strong> (payments, refunds, payouts, donations, and the associated ledger entries) are kept for the period required by applicable tax and accounting law. Where possible these are disassociated from your profile.</li>
+      <li>Records we must keep to resolve disputes, prevent fraud, or comply with a legal obligation.</li>
+    </ul>
+
+    <h2>Timeline</h2>
+    <p>We action verified deletion requests within <strong>30 days</strong> and email you when it is complete. Records we are legally required to keep are retained only for the period the law requires, and then deleted.</p>
+
+    <h2>Contact</h2>
+    <div class="legal-card">
+      <p style="margin:4px 0;"><strong>ELSHEPH SYSTEMS INDIA PRIVATE LIMITED</strong></p>
+      <p style="margin:4px 0;">Email: <a href="mailto:support@elsheph.com">support@elsheph.com</a></p>
+    </div>
+
+    <div class="legal-foot">See also our <a href="/privacy">privacy policy</a>.</div>
+  </div>
+</body>
+</html>
