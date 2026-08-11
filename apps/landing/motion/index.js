@@ -24,6 +24,10 @@ const SECTION_INITS = [
   ["interlude", () => import("./sections/interlude.js")],
   ["steps", () => import("./sections/steps.js")],
   ["features", () => import("./sections/features.js")],
+  /* lower page (P4) */
+  ["oldway", () => import("./sections/oldway.js")],
+  ["different", () => import("./sections/different.js")],
+  ["lower", () => import("./sections/lower.js")],
 ];
 
 function detectMode() {

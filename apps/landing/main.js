@@ -100,10 +100,15 @@
   var oldwaySection = document.querySelector(".oldway");
   if (oldwaySection) {
     observeOnce(oldwaySection, function () {
-      drawPath(document.getElementById("pathOld"));
+      /* rich mode sequences the chaos draw inside its own court timeline;
+         drawing it here too would draw the path twice */
+      if (!docEl.classList.contains("motion-rich")) {
+        drawPath(document.getElementById("pathOld"));
+      }
+      /* the auto advance is the same story in both modes */
       window.setTimeout(function () {
         if (!wayTouched) { setWay(true); }
-      }, 2600);
+      }, 3200);
     });
   }
 

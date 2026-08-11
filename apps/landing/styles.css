@@ -927,6 +927,7 @@ html.js:not(.hero-ready) .hero-rail { opacity: 0; }
   stroke: var(--green); stroke-width: 3; fill: none;
   stroke-linecap: round; stroke-linejoin: round;
 }
+.d-check { width: 16px; height: 16px; margin-top: 0; }
 .plan-col { display: flex; flex-direction: column; gap: 22px; }
 .plan {
   background: var(--surface);
