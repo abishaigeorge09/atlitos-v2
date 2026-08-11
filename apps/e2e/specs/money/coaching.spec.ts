@@ -294,39 +294,50 @@ test.describe("CO: coaching sessions @money", () => {
     expect(created.error, created.error?.message).toBeNull();
     const groupId = created.data.id;
 
-    const [a, b, c] = await Promise.all([
-      callFunction("join-group", playerA.token, { group_id: groupId, expected_total: 500 }),
-      callFunction("join-group", playerB.token, { group_id: groupId, expected_total: 500 }),
-      callFunction("join-group", playerC.token, { group_id: groupId, expected_total: 500 }),
-    ]);
-    const winners = [a, b, c].filter((r) => r.status === 200);
-    const losers = [a, b, c].filter((r) => r.status !== 200);
-    expect(winners.length, JSON.stringify({ a: a.json, b: b.json, c: c.json })).toBe(2);
-    expect(losers.length).toBe(1);
-    expect(losers[0].json.code).toBe("GROUP_FULL");
+    try {
+      const [a, b, c] = await Promise.all([
+        callFunction("join-group", playerA.token, { group_id: groupId, expected_total: 500 }),
+        callFunction("join-group", playerB.token, { group_id: groupId, expected_total: 500 }),
+        callFunction("join-group", playerC.token, { group_id: groupId, expected_total: 500 }),
+      ]);
+      const winners = [a, b, c].filter((r) => r.status === 200);
+      const losers = [a, b, c].filter((r) => r.status !== 200);
+      expect(winners.length, JSON.stringify({ a: a.json, b: b.json, c: c.json })).toBe(2);
+      expect(losers.length).toBe(1);
+      expect(losers[0].json.code).toBe("GROUP_FULL");
 
-    // Capture one winner, activate it, and confirm ALREADY_MEMBER fires
-    // before Razorpay on a repeat join by the same now-pending/active member.
-    const winner = winners[0];
-    const captured = await capturePayment(
-      [playerA, playerB, playerC][[a, b, c].indexOf(winner)].token,
-      winner.json.razorpay_order_id,
-      "CO06",
-    );
-    expect(captured.status, JSON.stringify(captured.json)).toBe(200);
+      // Capture one winner, activate it, and confirm ALREADY_MEMBER fires
+      // before Razorpay on a repeat join by the same now-pending/active member.
+      const winner = winners[0];
+      const captured = await capturePayment(
+        [playerA, playerB, playerC][[a, b, c].indexOf(winner)].token,
+        winner.json.razorpay_order_id,
+        "CO06",
+      );
+      expect(captured.status, JSON.stringify(captured.json)).toBe(200);
 
-    const sql = serviceClient();
-    const { data: membership } = await sql
-      .from("group_memberships")
-      .select("status")
-      .eq("id", winner.json.membership_id)
-      .single();
-    expect(membership.status).toBe("active");
+      const sql = serviceClient();
+      const { data: membership } = await sql
+        .from("group_memberships")
+        .select("status")
+        .eq("id", winner.json.membership_id)
+        .single();
+      expect(membership.status).toBe("active");
 
-    const winnerToken = [playerA, playerB, playerC][[a, b, c].indexOf(winner)].token;
-    const repeatJoin = await callFunction("join-group", winnerToken, { group_id: groupId, expected_total: 500 });
-    expect(repeatJoin.status).not.toBe(200);
-    expect(repeatJoin.json.code).toBe("ALREADY_MEMBER");
+      const winnerToken = [playerA, playerB, playerC][[a, b, c].indexOf(winner)].token;
+      const repeatJoin = await callFunction("join-group", winnerToken, { group_id: groupId, expected_total: 500 });
+      expect(repeatJoin.status).not.toBe(200);
+      expect(repeatJoin.json.code).toBe("ALREADY_MEMBER");
+    } finally {
+      // Test fixture teardown (BUG CO-25): this spec runs against the real
+      // production coach1 persona, so the group it creates is a real
+      // customer-facing row unless deactivated here. Deactivating (not
+      // deleting) keeps the money-bearing membership/ledger rows this test
+      // created intact for audit while pulling the fixture out of
+      // listGroupsForCoach's `active = true` browse filter. Owner's own
+      // client, no service key required.
+      await coach1.client.rpc("update_training_group", { p_group_id: groupId, p_active: false });
+    }
   });
 
   test("CO-07 scripts/verify-groups-probes.mjs exits green against the deployed backend @money", async () => {
@@ -378,47 +389,58 @@ test.describe("CO: coaching sessions @money", () => {
     expect(created.error, created.error?.message).toBeNull();
     const groupId = created.data.id;
 
-    const joined = await callFunction("join-group", member.token, { group_id: groupId, expected_total: 500 });
-    expect(joined.status, JSON.stringify(joined.json)).toBe(200);
-    const captured = await capturePayment(member.token, joined.json.razorpay_order_id, "CO08");
-    expect(captured.status, JSON.stringify(captured.json)).toBe(200);
+    try {
+      const joined = await callFunction("join-group", member.token, { group_id: groupId, expected_total: 500 });
+      expect(joined.status, JSON.stringify(joined.json)).toBe(200);
+      const captured = await capturePayment(member.token, joined.json.razorpay_order_id, "CO08");
+      expect(captured.status, JSON.stringify(captured.json)).toBe(200);
 
-    // The seated member reads their group's chat thread: exactly one row.
-    const { data: memberThreads, error: memberErr } = await member.client
-      .from("chat_threads")
-      .select("id")
-      .eq("context_type", "group")
-      .eq("context_id", groupId);
-    expect(memberErr, memberErr?.message).toBeNull();
-    expect(memberThreads?.length, "the seated member could not read their own group's chat thread").toBe(1);
-    const threadId = memberThreads[0].id;
+      // The seated member reads their group's chat thread: exactly one row.
+      const { data: memberThreads, error: memberErr } = await member.client
+        .from("chat_threads")
+        .select("id")
+        .eq("context_type", "group")
+        .eq("context_id", groupId);
+      expect(memberErr, memberErr?.message).toBeNull();
+      expect(memberThreads?.length, "the seated member could not read their own group's chat thread").toBe(1);
+      const threadId = memberThreads[0].id;
 
-    // A non-member (never joined, not the coach) reads the same thread and
-    // its member roster: zero rows both times, access denied, not another
-    // party's data.
-    const { data: strangerThreads, error: strangerThreadErr } = await stranger.client
-      .from("chat_threads")
-      .select("id")
-      .eq("context_type", "group")
-      .eq("context_id", groupId);
-    if (!strangerThreadErr) {
-      expect(strangerThreads ?? [], "a non-member read another group's chat_threads row").toEqual([]);
-    }
+      // A non-member (never joined, not the coach) reads the same thread and
+      // its member roster: zero rows both times, access denied, not another
+      // party's data.
+      const { data: strangerThreads, error: strangerThreadErr } = await stranger.client
+        .from("chat_threads")
+        .select("id")
+        .eq("context_type", "group")
+        .eq("context_id", groupId);
+      if (!strangerThreadErr) {
+        expect(strangerThreads ?? [], "a non-member read another group's chat_threads row").toEqual([]);
+      }
 
-    const { data: strangerMembers, error: strangerMembersErr } = await stranger.client
-      .from("chat_thread_members")
-      .select("user_id")
-      .eq("thread_id", threadId);
-    if (!strangerMembersErr) {
-      expect(strangerMembers ?? [], "a non-member read another group's chat_thread_members roster").toEqual([]);
-    }
+      const { data: strangerMembers, error: strangerMembersErr } = await stranger.client
+        .from("chat_thread_members")
+        .select("user_id")
+        .eq("thread_id", threadId);
+      if (!strangerMembersErr) {
+        expect(strangerMembers ?? [], "a non-member read another group's chat_thread_members roster").toEqual([]);
+      }
 
-    const { data: strangerMessages, error: strangerMessagesErr } = await stranger.client
-      .from("chat_messages")
-      .select("id")
-      .eq("thread_id", threadId);
-    if (!strangerMessagesErr) {
-      expect(strangerMessages ?? [], "a non-member read another group's chat_messages").toEqual([]);
+      const { data: strangerMessages, error: strangerMessagesErr } = await stranger.client
+        .from("chat_messages")
+        .select("id")
+        .eq("thread_id", threadId);
+      if (!strangerMessagesErr) {
+        expect(strangerMessages ?? [], "a non-member read another group's chat_messages").toEqual([]);
+      }
+    } finally {
+      // Test fixture teardown (BUG CO-25): this spec runs against the real
+      // production coach1 persona, so the group it creates is a real
+      // customer-facing row unless deactivated here. Deactivating (not
+      // deleting) keeps the money-bearing membership/ledger rows this test
+      // created intact for audit while pulling the fixture out of
+      // listGroupsForCoach's `active = true` browse filter. Owner's own
+      // client, no service key required.
+      await coach1.client.rpc("update_training_group", { p_group_id: groupId, p_active: false });
     }
   });
 
