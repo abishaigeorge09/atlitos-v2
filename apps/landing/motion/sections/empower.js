@@ -47,22 +47,18 @@ export default function init(ctx) {
     });
   });
 
-  /* The orbit mounts during POST-LOAD IDLE, not on scroll approach: even with
-     all three.js cost worker-side, the spawn plus context creation measured a
-     ~160ms main-thread frame when it happened mid-scroll. Idle mount pays it
-     while the visitor reads the hero. All gating (mobile, saveData, WebGL)
-     lives inside mountOrbit and still applies. */
+  /* The orbit mounts HERE, inside the deferred boot chain (this module is
+     already idle-loaded), and the returned promise is awaited by the boot so
+     html.motion-full only appears once the worker is spawned. Mounting on a
+     separate timer measured 85-160ms frames whenever it raced a scroll. All
+     gating (mobile, saveData, WebGL) lives inside mountOrbit. */
   let orbit = null;
+  let mountReady = Promise.resolve();
   if (emp3d) {
-    const idle = window.requestIdleCallback || ((cb) => setTimeout(cb, 2500));
-    const mount = () => {
-      import("../three/empower-orbit.js").then((mod) => {
-        orbit = mod.mountOrbit(emp3d);
-        if (orbit) { orbit.setVisible(false); } /* render only when seen */
-      }).catch(() => { /* fallback circle stays */ });
-    };
-    if (document.readyState === "complete") { idle(mount, { timeout: 5000 }); }
-    else { window.addEventListener("load", () => idle(mount, { timeout: 5000 }), { once: true }); }
+    mountReady = import("../three/empower-orbit.js").then((mod) => {
+      orbit = mod.mountOrbit(emp3d);
+      if (orbit) { orbit.setVisible(false); } /* render only when seen */
+    }).catch(() => { /* fallback circle stays */ });
   }
   ctx.onCleanup(() => { if (orbit) { orbit.dispose(); } });
 
@@ -153,4 +149,7 @@ export default function init(ctx) {
       onEnter: () => statTweens.forEach((t, i) => setTimeout(() => t.play(), i * 220)),
     });
   });
+
+  /* boot awaits this so motion-full means the worker is spawned too */
+  return mountReady;
 }

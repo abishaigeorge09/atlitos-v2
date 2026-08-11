@@ -130,6 +130,14 @@ async function withPage(fn, opts = {}) {
       await page.route("**/motion/index.js", (r) => r.abort());
     }
     await page.goto(baseUrl, { waitUntil: "load" });
+    if (opts.waitFullBoot) {
+      /* deferred section modules land at post-boot idle; steady-state checks
+         (pin sweep, frame budget) must not race them */
+      await page.waitForFunction(
+        () => document.documentElement.classList.contains("motion-full"),
+        null, { timeout: 15000 }
+      ).catch(() => { /* reduced/basic pages never set it; checks handle */ });
+    }
     await fn(page);
   } finally {
     await browser.close();
@@ -223,7 +231,7 @@ async function checkC4() {
      with pinSpacing:false before this went green. */
   if (skip("C4")) { return; }
   await withPage(async (page) => {
-    await page.waitForTimeout(2200);
+    await page.waitForTimeout(600);
     const r = await page.evaluate(async () => {
       const wrap = document.querySelector(".emp-pin-wrap");
       const stage = document.querySelector(".emp-stage");
@@ -249,7 +257,7 @@ async function checkC4() {
     if (r.skip) { report("C4", false, "empower pin structure missing"); return; }
     report("C4", r.pinnedSeen && r.worst <= 0,
       `pin overlap sweep: pinned seen=${r.pinnedSeen}, worst stage-bottom minus footer-top ${r.worst}px (must be <= 0)`);
-  });
+  }, { waitFullBoot: true });
 }
 
 async function checkC7() {
@@ -341,7 +349,7 @@ async function checkC9() {
      attempts, so the check still catches what it exists to catch. */
   const attempt = () => new Promise((resolve) => {
     withPage(async (page) => {
-      await page.waitForTimeout(2200); // hero settles
+      await page.waitForTimeout(600); // hero settles (full boot already awaited)
       const r = await page.evaluate(() => new Promise((res) => {
         const frames = [];
         let lastT = performance.now();
@@ -363,7 +371,7 @@ async function checkC9() {
         requestAnimationFrame(step);
       }));
       resolve(r);
-    });
+    }, { waitFullBoot: true });
   });
   let r = await attempt();
   let note = "";

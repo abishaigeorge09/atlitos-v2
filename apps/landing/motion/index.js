@@ -71,7 +71,7 @@ async function boot() {
     for (const [name, load] of inits) {
       try {
         const mod = await load();
-        mod.default(ctx);
+        await mod.default(ctx); /* inits may return a readiness promise */
       } catch (e) {
         /* One broken section must not take down the rest of the page. */
         console.error("[motion] section failed:", name, e);
@@ -83,7 +83,11 @@ async function boot() {
 
   const idle = window.requestIdleCallback || ((cb) => setTimeout(cb, 800));
   idle(() => {
-    runInits(DEFERRED_INITS).then(() => ScrollTrigger.refresh());
+    runInits(DEFERRED_INITS).then(() => {
+      ScrollTrigger.refresh();
+      /* the whole choreography is registered; checks wait on this marker */
+      document.documentElement.classList.add("motion-full");
+    });
   }, { timeout: 2500 });
 
   /* One refresh after fonts settle so SplitText line boxes and pin distances

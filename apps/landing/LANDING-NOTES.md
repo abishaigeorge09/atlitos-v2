@@ -1,150 +1,145 @@
 # Landing Page Build Log and Learnings
 
-Session closeout, July 2026. This is the memory for whoever touches `apps/landing/` next.
-Live: https://atlitos-landing.vercel.app · Vercel project `atlitos-landing` · Reference: heyparker.ai
+Session closeout, 2026-08-11 (the animation rebuild). This is the memory for whoever
+touches `apps/landing/` next.
+Live: https://www.atlitos.com · Vercel project `atlitos-landing` · The architecture
+contract is `docs/MOTION-ARCHITECTURE.md`; read it before writing motion code.
+Research digest behind it: `docs/RESEARCH-MOTION.md`.
 
 ## What the page is now
 
-Static HTML + CSS + vanilla JS, no framework, no build step. Deploy with
-`npx vercel deploy --prod --yes` from this directory. Commit from the REPO ROOT
-(`git add apps/landing` fails if your shell is still cd'd into apps/landing).
+Static HTML + CSS + vanilla JS + GSAP 3.13 stack, no framework, no build step. Deploy
+with `npx vercel deploy --prod --yes --archive=tgz --scope abishaigeorge09s-projects`
+from this directory. Commit from the REPO ROOT.
+
+Two-layer motion architecture (D4 in the architecture doc):
+- **`main.js` is the floor**: nav logic, way toggle, count ups, reveal IO, rotator,
+  typewriters, the 1800ms `hero-ready` fallback, `window.__atlitosBasic` handover.
+  If `motion/` never boots the page degrades to this, proven by check C12.
+- **`motion/` is the ceiling**: `index.js` boots GSAP + ScrollTrigger + SplitText +
+  Lenis (desktop pointer-fine only), then EAGER inits (fold: header, hero, ledEntry,
+  cursor, magnetic, skew, marquee) and idle-DEFERRED inits (everything below the fold
+  plus the rail). `html.motion-rich` marks rich mode; `html.motion-full` marks the
+  whole choreography registered (checks wait on it). Basic text behaviours check
+  `motion-rich` at fire time so the two layers never double-drive one element.
 
 Page story, top to bottom:
-1. **Cinematic film hero** (`.vhero`): the CLEAN PLATE film (`img/hero-clean.mp4`, a blank
-   powered LED panel, no baked text) re encoded with dense keyframes for scrubbing, poster
-   at the 7.9s resting frame. Phase 1 autoplays 0 to 7.9s then pauses; folder tab nav and
-   scroll hint fade in. Phase 2: 300vh track, scroll scrubs 7.9 to 9.88s with rAF inertia,
-   fully reversible, intro never replays. Past 80 percent an LED dot veil rises and
-   Section 2 emerges from it.
-   **The message is now LIVE HTML**, not baked into the video: `#heroLed` types
-   `HERO_LED_MESSAGE` (a JS constant in main.js, so the copy is editable) onto the blank
-   panel once the board lands, then tracks the push in (scale) and dissolves before the
-   veil. Stays sharp at every resolution. Reduced motion gets the full message statically
-   via `.is-static`; zero JS gets it via the `html:not(.js)` rule.
-   The old `hero-scoreboard.mp4` (text baked in, delogo'd watermark) is kept in `img/` as
-   the previous era's asset.
-2. **led-entry**: "Meet Atlitos." + CTAs on the LED matrix darkness.
-3. **Problem band** (ember, curved seams, word rotator chip, two icon marquees).
-4. **Interlude** typed line + drawn arrows.
-5. **Step files**: each step is ONE sticky unit, a third width colored tab attached to its
-   own full width white panel, all at the same offset; DOM order slides the next file over
-   the previous while docked tabs stay visible. The right hand slot is now a REAL HTML
-   `.demo-card` per step (courts grid, coach chat plus XP bar, roundup receipt), built from
-   the same `demo-card`/`d-row`/`d-xp` classes the differentiators section already used,
-   revealed row by row with `data-reveal="pop"` and staggered delays. No video files.
-6. **Features band** (marigold, looping typewriter, notification screen in the card language).
-7. **Old way vs Atlitos way**: espresso court diagram, starts on the old way, paths draw
-   themselves, auto advances once to the clean line.
-8. **Differentiators**: three intent rows (verified courts, ledger money, Empower link card).
-9. **Subscription strip**: the plans themselves scroll in a marigold marquee.
-10. **Pricing**: sticky What's included card while tiers scroll. Starter 0, Pro 199,
-    Elite 499, mono numerals, academy dashed box. NEVER change tiers without the founder.
-11. **Voices wall**: two opposite marquees of SAMPLE labeled placeholder quote cards.
-    Do not invent real sounding testimonials; swap in real quotes one for one.
-12. **Personas** four door cards, espresso dome into:
-13. **Empower highlight** (THE HEART OF ATLITOS): flow cards 293 to plus 7 to an athlete,
-    dashed PHOTO SLOT wired to `img/empower-story.jpg`, SAMPLE stat tiles with Indian digit
-    count ups, lazy loaded three.js seamed ball (`vendor/three.min.js`, WebGL gated,
-    CSS fallback circle, hidden under reduced motion).
-14. **Footer**: newsletter mailto, link columns, giant parallax logotype.
+1. **COLD OPEN hero** (no video): Fraunces 900 headline rises from line masks,
+   "change forever." italic ember; duotone athlete panel (angled clip-path over
+   `img/hero-panel.webp` + srcset 640w) wipes in; five speed lines sweep, one
+   survives as a thin marigold rule (transform-only settle, see learnings); four
+   kit tiles drop and tilt to the pointer; scroll parallax on the whole stack;
+   nav unfolds last. `hero-ready` (timeline end or 1800ms fallback) forces final
+   states via CSS.
+2. **GAME ON / Meet Atlitos**: SplitText word masks, word-scrub sub line, CTA rise.
+3. **Problem band**: stickers land with rotate settle, phrase rotator flips
+   vertically, velocity-reactive icon marquees, tiles skew with scroll velocity.
+4. **Interlude**: SplitText char typing, arrows draw in sequence.
+5. **Step files**: sticking is CSS STICKY, never a pin (D3, the founder's pixel
+   matched mechanic). GSAP drives internals: tab slide, copy rise, demo card rows
+   stamping, XP fill, outgoing panel recession. The demo cards are real HTML
+   (`.demo-card`/`.d-row`/`.d-xp`), never generated video.
+6. **Features band**: arch rise scrub, GSAP loop typewriter, notification stack
+   cycles top-to-bottom every 3.2s while visible.
+7. **Old way vs Atlitos way**: court draws piece by piece, chaos path snakes via the
+   shared `drawPath`, chips pop, auto-advance to the clean line (3200ms, respects
+   wayTouched, rich-aware so the path never draws twice).
+8. **Differentiators**: alternating row entrances, oversized numerals drift against
+   scroll, row-1 photo expands card-to-bleed via clip-path scrub.
+9. **Strip**: shutter open + shared velocity marquee.
+10. **Pricing**: green wipe, checks draw, plans rise (Pro overshoots), prices count
+    up in mono. Tiers NEVER change without the founder (C11 enforces).
+11. **Voices**: opposite velocity marquees, hover pause + lift, velocity skew.
+    SAMPLE tags must stay visible at every scroll position (C11).
+12. **Personas**: cards deal in like a hand, alternate drift.
+13. **EMPOWER, THE ORBIT**: the page's ONE pin (R1 recipe: `overflow-x: clip` on
+    html, `emp-pin-wrap` isolation z-30, footer z-31, pinSpacing true, `+=180%`,
+    invalidateOnRefresh) and ONE WebGL scene. The scrubbed story: headline, ₹293
+    card, +₹7 into orbit, 24 coins tighten while the key light lerps ember→green
+    and stats count, the athlete photo blooms, roundup line, release into outro
+    CTAs. three.js runs in a WORKER with OffscreenCanvas (651KB parses off-main);
+    the main thread posts progress/visibility. Gates: reduced motion, <=620px,
+    saveData, no-WebGL, no-OffscreenCanvas all fall back to the CSS circle.
+    Mobile <=900px: no pin, the beats fire as reveals.
+14. **Footer**: giant mark scrub, link columns rise, tagline accents cycle tokens.
 
-## Binding guards (checked every deploy)
+Global systems: custom cursor (dot + lagging ring, BOOK/VIEW/PLAY/OPEN labels),
+magnetic buttons, velocity skew (`data-skew`), one marquee engine, speed-line wipes
+at exactly three boundaries (steps, pricing, empower — three is the budget), static
+film grain (desktop), 6-dot chapter rail. The CURTAIN was built, measured at ~500ms
+LCP against the architecture's 250ms budget, and DROPPED per that same rule.
 
-- Zero JS: every copy string present in plain markup, curl provable. All reveal hidden
-  states live ONLY under `html.js` selectors.
-- Reduced motion: final states, no sticky tracks, film holds the resting frame without
-  autoplay, no idle float, 3D hidden.
-- Above the fold never depends on animation: hero has a 12s hard fallback that forces the
-  rested state (nav can never stay hidden), a 2.2s reveal fallback, and the poster IS the
-  resting frame.
-- House copy: no emojis, no hyphens or em dashes in user visible strings (commas and
-  periods), mono numerals via JetBrains Mono everywhere.
+## Binding guards (checked every deploy, `scripts/motion-check.mjs`)
 
-## Founder taste, learned the hard way
+Playwright-driven, resolves playwright-core from the monorepo pnpm store, wired into
+the repo pre-push hook (gated on apps/landing changes). Checks C1-C12 per the
+architecture: zero-JS copy, scoped hidden states, reduced motion, pin overlap sweep
+(planted red with pinSpacing:false, +653px overlap, then green), overflow-x clip,
+80KB first-load JS cap (eager modules; deferred reported separately), three.js
+never-before-load + never-on-mobile, C8 median LCP<2s / CLS<0.02 (opt-in, slow),
+frame budget (two-attempt, SwiftShader warmup noise), copy rules, frozen pricing +
+SAMPLE tags, the C12 fallback floor. Current prod numbers: LCP ~1.6s median,
+CLS ~0.012, first-load 69KB gz, longest frame 50ms.
 
-- **Rejects flat "AI slop" compositions**: the first rebuild was called boring and not
-  sporty. What worked: real photography (CC0 via Openverse), the cinematic film hero,
-  hard ink borders, folder tab and file metaphors carried through nav, steps, and frames.
-- **Hates cartoon illustrations**: scoreboard machine drawing, cartoon balls, the big
-  semicircle photo circle scene were all killed on request. Photography and real product
-  UI mocks only.
-- **The reference (heyparker.ai) is the bar for FEEL, not for copying**: the founder
-  keeps a DOM level audit of it and expects mechanics matched exactly when they cite them
-  (tab widths, sticky offsets, panel colors, stacking order). When they say "like the
-  reference", recapture the reference and diff side by side rather than working from memory.
-- **Iterates by pointing at deltas**: expect several rounds on any section; ship each
-  round to prod so they can react to the live page, not screenshots.
-- **Navbar journey**: solid card -> glass (rejected, "do not like the placement") ->
-  options gallery at `/nav-options.html` (kept for reference) -> picked OPTION 5, the
-  marigold folder tab. Behavior: tucks to wordmark plus CTA on scroll down, reopens on
-  any scroll up, always open near the top. They flip flopped between "expand once like
-  Parker" and bidirectional; bidirectional is the standing order.
-- Empower is the emotional center of the product. Keep it the most highlighted section.
+## Learnings this rebuild (each cost a debugging round)
 
-## Engineering learnings and gotchas
+- **GSAP vs CSS percent translates**: CSS hidden states like `translateY(110%)`
+  parse into GSAP as PIXEL x/y; a tween on `yPercent` leaves the pixel residue as a
+  second transform component. Every fromTo zeroes the parsed axis (`y: 0`).
+- **Never let CSS transitions touch GSAP-driven elements**: a live transition
+  interpolates every inline write per frame (froze the step rows mid rotation).
+  `.motion-rich [data-reveal] { transition: none }` kills the conflict class.
+- **Transforms only inside animations**: tweening `height`/`top` on the hero speed
+  line settle measured 0.055 CLS by itself. scaleY instead.
+- **Font metric fallbacks beat font preloads**: size-adjust matched local fallbacks
+  took CLS 0.062→0.012; preloading the woff2s then starved the LCP image on
+  throttled mobile and was removed.
+- **The rupee sign lives in latin-ext**: the JetBrains Mono latin subset alone
+  renders ₹ in the fallback font; ship `JetBrainsMono-var-latinext.woff2` too.
+- **Big JS parse is a scroll stall wherever it happens on main**: 651KB three.js
+  UMD = 1.4s cold frame. Worker + OffscreenCanvas moved parse, context, and render
+  off-main entirely; even worker SPAWN costs ~160ms, so it happens inside the
+  deferred boot chain, never on scroll approach.
+- **Marquee wrap math**: sign-preserving modulo (`x % half`, fold positives down);
+  the `((x%h)+h)%h*-1` form ping-pongs a full copy width per frame. And GSAP
+  ticker delta units vary; derive dt from the time param.
+- **overflow-x: clip on html, never hidden on body** — hidden creates a scroll
+  container, which was the root cause of the historical pin overlap bug.
+- **Vercel CDN propagation**: a check run right after deploy can read the previous
+  styles.css; wait ~15s or re-run before diagnosing.
 
-- **No JS pinning, ever.** The original founder reported bug (pricing scrolling over a
-  stuck features stage) came from GSAP pinning plus overflow. Everything is CSS sticky
-  inside fixed height tracks now; the bug class is structurally impossible. GSAP and
-  ScrollTrigger still sit unused in `vendor/` and are not loaded.
-- **Hidden tab verification trap** (cost hours, twice): backgrounded or automation hidden
-  tabs suspend scroll events, IntersectionObserver, CSS transitions, and video loading.
-  Symptoms look exactly like broken code (frozen mid opacity values, is-in applied but
-  invisible, video readyState 0). Wake the tab with a screenshot, wait, then capture.
-  Never conclude a handler is dead from a hidden tab test.
-- **Browser CSS cache trap**: cache busting query params on the page URL do NOT bust
-  styles.css. Hard reload (cmd shift r) or fetch with cache reload when verifying a
-  deployed CSS change. One "bug" was just a stale sheet; the real cause of that layout
-  issue was a leftover `shell` class capping width.
-- **Video scrubbing encode**: `-g 8 -bf 0 -movflags +faststart` makes currentTime seeks
-  land instantly; scrub with a rAF chase (`cur += (target-cur)*0.16`), clamp to the
-  window, and only write currentTime when readyState > 1 and the delta is meaningful.
-- **ffmpeg delogo** cleanly removes a static generator watermark on dark footage
-  (`delogo=x=1118:y=563:w=88:h=80` for the sparkle at 1280x720).
-- **Sticky stacking recipe** (the step files): each unit `position: sticky` at the SAME
-  top with the SAME z index, one viewport tall, no margins; DOM order paints later units
-  over earlier ones; a transparent tab row keeps earlier tabs visible. Deck variants use
-  staggered offsets instead.
-- **Openverse API** (`api.openverse.org/v1/images/?q=...&license=cc0,pdm`) is the free
-  image pipeline; results are hit or miss, ALWAYS eyeball downloads before shipping
-  (a "cricket batsman" query returned a gravestone). Resize with sips to 1600w q62.
-- **Higgsfield MCP is connected but out of credits**; top up to unlock generation and
-  upscale_video from here.
+## Founder taste, learned the hard way (carried forward + new)
 
-## Asset generation learnings (Higgsfield, Aug 2026 pass)
+- Rejects flat AI-slop compositions and cartoon illustrations. Photography, real
+  product UI in HTML, hard ink borders, kinetic type.
+- **"Match the reference" means pixel-level mechanics**, and "crazy animations,
+  everything smooth" set the bar for this rebuild: heyparker.ai smoothness as the
+  floor (it is a Framer export + Lenis; this page is hand-tuned GSAP).
+- Iterates by pointing at deltas on the LIVE page; ship every round to prod.
+- Navbar standing order: bidirectional tuck/reopen, always open near the top. Dark
+  glass over the espresso opening, paper glass from the problem band down (the
+  boundary is `.problem`'s offset, not a fixed y).
+- Empower is the emotional heart; it holds the page's only pin and only WebGL.
+- Pricing tiers and SAMPLE tags are untouchable without the founder.
 
-Credits are no longer the blocker (the old "out of credits" note is stale). What IS the
-blocker is that **generative models hallucinate text onto everything**, and the founder
-rule is that no invented lettering ships. Three findings, all cost a regeneration:
+## Asset generation learnings (Higgsfield)
 
-- **Video: a scoreboard case will get a fake brand badge printed on it** even with "no text
-  anywhere in the frame". The fix that worked: enumerate the surfaces ("the handle grip and
-  every plastic and metal surface is completely PLAIN and BLANK, no decals, no stickers, no
-  lettering"). Do not try to ffmpeg delogo it out, the badge grows as the camera pushes in
-  so a fixed delogo box cannot track it.
-- **Photo: a plain shirt comes back with a gibberish sponsor crest**, and one attempt even
-  added a fake watermark. `soul_2` failed twice; `nano_banana_pro` got it first try with
-  "completely plain solid colour cotton t shirt, absolutely no print".
-- **UI DEMO VIDEOS ARE A DEAD END.** Two attempts (courts grid, coach chat) both came back
-  with illegible gibberish lettering in the interface. This is a model limitation, not a
-  prompt problem, and no amount of "legible text" steering fixes it. The step slots are now
-  real HTML demo cards instead, which is strictly better: crisp at any resolution, editable
-  copy, on brand tokens, no fake text risk, and far smaller than three MP4s. **If a future
-  slot needs to show product UI, build it in HTML, do not generate it.**
-
-Also worth knowing: the starter plan allows only **2 concurrent jobs**, so batch submissions
-of 3+ fail with a rate limit; submit in pairs. `cinematic_studio_video_v2` accepts only
-1:1 / 16:9 / 9:16 (not 4:3, despite the generic docs).
+- Generative models hallucinate text onto everything; enumerate plain surfaces in
+  prompts ("completely plain solid shirt, no print, no logo, no lettering").
+- **UI demo videos are a dead end** (illegible gibberish text, model limitation).
+  Product UI is HTML, always.
+- `nano_banana_pro` beat `soul_2` for clean no-lettering photos.
+- Starter plan: 2 concurrent jobs max. `cinematic_studio_video_v2`: 1:1/16:9/9:16.
 
 ## Open threads (waiting on the founder)
 
-1. Hero scroll scrub frame sequence (`hero-seq-01..30.jpg`, ASSET-PROMPTS.md section 2) is
-   still unbuilt. One generation attempt produced visible AI physics artifacts (a distorted
-   arm on the lunging player), so nothing was shipped. Still a "future upgrade", the film
-   scrub covers this today.
-2. Ambient loop `night-court-loop.mp4` (section 6), optional, never wired.
-3. Real quotes for the Voices wall and real or approved Empower numbers to replace the
-   SAMPLE tags.
-4. Newsletter is a mailto stopgap; real capture needs an endpoint decision.
-5. Options gallery `/nav-options.html` and stale hero photos (hero-stadium, basketball,
-   badminton, used by the gallery and as film era leftovers) are kept deliberately.
+1. **Hero athlete cutout**: candidate generated and awaiting approval
+   (`img/hero-athlete-candidate.png`, plain kit, no lettering). On approval: cut
+   out, duotone, ship as `img/hero-cut.webp` panel upgrade.
+2. Real quotes for the Voices wall and real/approved Empower numbers (SAMPLE tags
+   stay until then).
+3. Newsletter is a mailto stopgap; real capture needs an endpoint decision.
+4. Retired film-era assets (`hero-clean.mp4`, `hero-scoreboard.mp4`,
+   `hero-poster.jpg`) kept in `img/` per founder precedent, off the page.
+5. `/nav-options.html` kept deliberately (references `styles.css` classes that
+   evolved; it is a museum piece, not a live surface).
