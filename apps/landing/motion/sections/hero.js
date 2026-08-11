@@ -37,8 +37,9 @@ export default function init(ctx) {
     { xPercent: 0, duration: 0.7, ease: "power4.inOut", stagger: 0.05 }, 0);
   tl.to(lines.filter((l) => !l.classList.contains("hl-2")),
     { opacity: 0, duration: 0.45, ease: "power2.out" }, 0.85);
+  /* TRANSFORM ONLY: tweening height/top here measured 0.055 CLS on prod */
   tl.to(lines.filter((l) => l.classList.contains("hl-2")),
-    { height: 2, top: "78%", duration: 0.6, ease: "power3.inOut" }, 0.85);
+    { scaleY: 0.1, duration: 0.6, ease: "power3.inOut" }, 0.85);
 
   /* headline rises from its line masks */
   tl.fromTo(inners,

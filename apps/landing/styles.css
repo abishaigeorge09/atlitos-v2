@@ -261,15 +261,16 @@ html:not(.scrolled) .nav-card .btn-nav { background: var(--paper); color: var(--
   background: var(--ember);
 }
 .hl-1 { top: 16%; background: var(--ember); }
-.hl-2 { top: 34%; background: var(--marigold); }
-.hl-3 { top: 52%; background: var(--ember); }
-.hl-4 { top: 70%; background: var(--marigold); }
+.hl-2 { top: 78%; background: var(--marigold); }
+.hl-3 { top: 34%; background: var(--ember); }
+.hl-4 { top: 52%; background: var(--marigold); }
 .hl-5 { top: 86%; background: var(--ember); opacity: 0.85; }
-/* after the sweep, only hl-2 survives as a thin rule; the timeline handles the
-   rich path, these are the final states */
+/* after the sweep, only hl-2 survives, thinned via scaleY. TRANSFORMS ONLY on
+   these bars, never height/top: tweening layout properties on the settle beat
+   measured 0.055 CLS on its own (found via layout-shift sources on prod). */
 html.js:not(.hero-ready) .hl { transform: skewY(-8deg) translateX(-140%); }
 .hero-ready .hl, html:not(.js) .hl { transform: skewY(-8deg) translateX(0); opacity: 0; }
-.hero-ready .hl-2, html:not(.js) .hl-2 { opacity: 1; height: 2px; top: 78%; }
+.hero-ready .hl-2, html:not(.js) .hl-2 { opacity: 1; transform: skewY(-8deg) scaleY(0.1); }
 /* duotone athlete panel */
 .hero-panel {
   position: absolute;
@@ -1214,7 +1215,7 @@ html.js:not(.hero-ready) .hero-rail { opacity: 0; }
   .js:not(.hero-ready) .kit-tile,
   .js:not(.hero-ready) .hero-rail { opacity: 1; transform: none; clip-path: none; transition: none; }
   html.js:not(.hero-ready) .hl { transform: skewY(-8deg); opacity: 0; }
-  html.js:not(.hero-ready) .hl-2 { opacity: 1; height: 2px; top: 78%; }
+  html.js:not(.hero-ready) .hl-2 { opacity: 1; transform: skewY(-8deg) scaleY(0.1); }
   .way-path { transition: opacity 0.4s ease; }
   .emp-3d { display: none; }
   .js [data-reveal]:not(.is-in) { opacity: 1; transform: none; }
@@ -1227,7 +1228,8 @@ html.js:not(.hero-ready) .hero-rail { opacity: 0; }
   .hero-headline { font-size: clamp(2.5rem, 12vw, 4rem); max-width: none; }
   .hero-panel { width: 74vw; height: 46%; top: auto; bottom: 0; right: -10vw; opacity: 0.55; }
   .kit-tile:nth-child(n+3) { display: none; }
-  .hl-4, .hl-5 { display: none; }
+  /* two bars on mobile: hl-1 plus the hl-2 survivor */
+  .hl-3, .hl-4, .hl-5 { display: none; }
   .problem-grid, .empower-head, .pricing-grid, .feat-grid { grid-template-columns: 1fr; gap: 36px; }
   .problem-grid h2 { justify-self: start; }
   .step-grid { grid-template-columns: 1fr; gap: 28px; }
