@@ -133,9 +133,14 @@ async function checkC1() {
       document.body.textContent.replace(/\s+/g, " ")
     );
     const missing = strings.filter((s) => !text.includes(s));
+    /* An element mid CSS keyframe pulse (e.g. .d-cta ctapulse) legitimately
+       samples below 1; a running animation means visible-by-design, never
+       stuck hidden. Transitions do not run without a trigger, so a genuinely
+       stuck reveal element has zero active animations and still gets caught. */
     const hidden = await page.evaluate(() =>
       Array.from(document.querySelectorAll("[data-reveal]"))
-        .filter((el) => parseFloat(getComputedStyle(el).opacity) < 0.99).length
+        .filter((el) => parseFloat(getComputedStyle(el).opacity) < 0.99)
+        .filter((el) => el.getAnimations().length === 0).length
     );
     report("C1", missing.length === 0 && hidden === 0,
       `no-JS copy: ${missing.length} missing, ${hidden} hidden reveal elements`);
