@@ -182,6 +182,8 @@ Error codes: `VALIDATION` 400, `UNAUTHENTICATED` 401, `NOT_FOUND` 404 (session t
 
 **Capture is finalized by `_shared/finalize-payment.ts`, not here.** That module is the single gate both `razorpay-webhook` and `verify-payment` call; it owns the `update payment_intents ... where status = 'created'` idempotency check and then dispatches on `payment_intents.domain` to `finalize-court-booking-payment.ts` or `finalize-session-payment.ts`. Neither entry point knows which domain it is finalizing. Adding `commerce`/`donation` later means one new branch plus one new file, never a second copy of the gate.
 
+**UC-96 fix (booking confirmation notification).** `finalize-court-booking-payment.ts` calls `dispatchNotification` (`_shared/notify.ts`) right after the ledger group commits, writing a `booking` type `notifications` row for the booking's `user_id` and attempting the Expo push leg. This was the one caller of `court_booking_confirm_payment` that never told the athlete their booking confirmed; the `order`/`chat`/`transfer` notification types documented in `_shared/notify.ts` still have no writer anywhere in the repo and remain open (see `docs/qa/BUG-LEDGER.md`). Best effort: a dispatch failure is caught and logged, never thrown, so it cannot fail the payment confirmation response.
+
 `verify-payment` responds `{ domain, entity_id, booking_id, session_id, status, outcome }`, where `booking_id` and `session_id` are domain-named aliases of `entity_id` (the other is null) so a court-only or session-only caller need not switch on `domain`. `outcome` is `captured` or `already_processed`.
 
 ## courts
