@@ -1,0 +1,204 @@
+#!/usr/bin/env node
+/* Motion architecture mechanical checks (docs/MOTION-ARCHITECTURE.md section 9).
+   Usage: node scripts/motion-check.mjs <baseUrl> [--checks C1,C5,...]
+   Exits non zero on any failure. Every check was planted red before green.
+
+   Playwright resolution: this repo installs @playwright/test under apps/e2e via
+   pnpm. We resolve playwright-core through the monorepo store so the landing
+   app itself stays dependency free. Override with PLAYWRIGHT_CORE=<path>. */
+
+import { createRequire } from "node:module";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { gzipSync } from "node:zlib";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const LANDING = resolve(__dirname, "..");
+
+function resolvePlaywright() {
+  if (process.env.PLAYWRIGHT_CORE) { return process.env.PLAYWRIGHT_CORE; }
+  const roots = [
+    resolve(LANDING, "../../node_modules/.pnpm"),
+    // worktrees live at <repo>/.claude/worktrees/<name>/, so the repo root's
+    // store is five levels above apps/landing there
+    resolve(LANDING, "../../../../../node_modules/.pnpm"),
+  ];
+  for (const root of roots) {
+    if (!existsSync(root)) { continue; }
+    const hit = readdirSync(root).find((d) => d.startsWith("playwright-core@"));
+    if (hit) { return join(root, hit, "node_modules/playwright-core"); }
+  }
+  throw new Error("playwright-core not found; set PLAYWRIGHT_CORE=<path>");
+}
+
+const require = createRequire(import.meta.url);
+const { chromium } = require(resolvePlaywright());
+
+const baseUrl = process.argv[2];
+if (!baseUrl) {
+  console.error("usage: node scripts/motion-check.mjs <baseUrl> [--checks C1,C5]");
+  process.exit(2);
+}
+const only = (() => {
+  const i = process.argv.indexOf("--checks");
+  return i > -1 ? process.argv[i + 1].split(",") : null;
+})();
+
+const results = [];
+function report(id, ok, detail) {
+  results.push({ id, ok, detail });
+  console.log(`${ok ? "PASS" : "FAIL"}  ${id}  ${detail}`);
+}
+function skip(id) {
+  return only && !only.includes(id);
+}
+
+/* ---------- static checks (no browser) ---------- */
+
+function checkC2() {
+  if (skip("C2")) { return; }
+  const css = readFileSync(join(LANDING, "styles.css"), "utf8");
+  // Hidden-state rules for data-reveal must be scoped under .js
+  const offenders = [];
+  css.split("\n").forEach((line, i) => {
+    if (!line.includes("[data-reveal")) { return; }
+    if (!/[{,]/.test(line) && !line.trim().startsWith(".") && !line.trim().startsWith("html")) { return; }
+    const sel = line.split("{")[0];
+    if (sel.includes(":not(.is-in)") && !/\.js\s|html\.js/.test(sel)) {
+      offenders.push(`${i + 1}: ${line.trim()}`);
+    }
+  });
+  report("C2", offenders.length === 0,
+    offenders.length ? `unscoped hidden states: ${offenders.join(" | ")}` : "all data-reveal hidden states scoped under .js");
+}
+
+function checkC6() {
+  if (skip("C6")) { return; }
+  const files = [
+    join(LANDING, "main.js"),
+    join(LANDING, "vendor/gsap-3.13.min.js"),
+    join(LANDING, "vendor/ScrollTrigger-3.13.min.js"),
+    join(LANDING, "vendor/SplitText-3.13.min.js"),
+    join(LANDING, "vendor/lenis-1.3.min.js"),
+  ];
+  const motionDir = join(LANDING, "motion");
+  const walk = (dir) => readdirSync(dir).flatMap((f) => {
+    const p = join(dir, f);
+    return statSync(p).isDirectory() ? walk(p) : (p.endsWith(".js") ? [p] : []);
+  });
+  if (existsSync(motionDir)) { files.push(...walk(motionDir)); }
+  let total = 0;
+  for (const f of files) { total += gzipSync(readFileSync(f)).length; }
+  const kb = (total / 1024).toFixed(1);
+  report("C6", total <= 80 * 1024, `first-load JS ${kb} KB gz (cap 80 KB)`);
+}
+
+/* ---------- browser checks ---------- */
+
+async function withPage(fn, opts = {}) {
+  const browser = await chromium.launch();
+  const page = await browser.newPage({
+    viewport: { width: 1440, height: 900 },
+    reducedMotion: opts.reducedMotion || "no-preference",
+    javaScriptEnabled: opts.javaScriptEnabled !== false,
+  });
+  try {
+    if (opts.blockMotion) {
+      await page.route("**/motion/index.js", (r) => r.abort());
+    }
+    await page.goto(baseUrl, { waitUntil: "load" });
+    await fn(page);
+  } finally {
+    await browser.close();
+  }
+}
+
+async function checkC1() {
+  if (skip("C1")) { return; }
+  await withPage(async (page) => {
+    // sample copy strings that must exist without JS
+    const strings = [
+      "The way you play sports is about to change forever",
+      "Meet",
+      "Playing is easy",
+      "Here is how it works",
+      "Plans built for athletes",
+      "Empower",
+    ];
+    /* textContent, not innerText: the guard is "present in plain markup",
+       and sr-only copy legitimately satisfies it while innerText hides it.
+       Whitespace collapsed, headlines legitimately break across spans. */
+    const text = await page.evaluate(() =>
+      document.body.textContent.replace(/\s+/g, " ")
+    );
+    const missing = strings.filter((s) => !text.includes(s));
+    const hidden = await page.evaluate(() =>
+      Array.from(document.querySelectorAll("[data-reveal]"))
+        .filter((el) => parseFloat(getComputedStyle(el).opacity) < 0.99).length
+    );
+    report("C1", missing.length === 0 && hidden === 0,
+      `no-JS copy: ${missing.length} missing, ${hidden} hidden reveal elements`);
+  }, { javaScriptEnabled: false });
+}
+
+async function checkC3() {
+  if (skip("C3")) { return; }
+  await withPage(async (page) => {
+    await page.waitForTimeout(1200);
+    const r = await page.evaluate(() => ({
+      pins: window.ScrollTrigger ? ScrollTrigger.getAll().filter((t) => t.pin).length : 0,
+      canvas: !!document.querySelector("#emp3d canvas"),
+      hidden: Array.from(document.querySelectorAll("[data-reveal]"))
+        .filter((el) => parseFloat(getComputedStyle(el).opacity) < 0.99).length,
+    }));
+    report("C3", r.pins === 0 && !r.canvas && r.hidden === 0,
+      `reduced motion: pins=${r.pins} canvas=${r.canvas} hidden=${r.hidden}`);
+  }, { reducedMotion: "reduce" });
+}
+
+async function checkC5() {
+  if (skip("C5")) { return; }
+  await withPage(async (page) => {
+    const r = await page.evaluate(() => ({
+      html: getComputedStyle(document.documentElement).overflowX,
+      body: getComputedStyle(document.body).overflowX,
+    }));
+    report("C5", r.html === "clip" && r.body === "visible",
+      `overflow-x html=${r.html} body=${r.body} (want clip/visible)`);
+  });
+}
+
+async function checkC12() {
+  if (skip("C12")) { return; }
+  await withPage(async (page) => {
+    await page.waitForTimeout(600);
+    // scroll past the hero track so reveal targets actually intersect; nav
+    // should compact (basic mode logic) and reveals should fire
+    await page.evaluate(() => {
+      const target = document.querySelector(".led-entry") || document.body;
+      window.scrollTo(0, target.offsetTop + 200);
+    });
+    await page.waitForTimeout(900);
+    const r = await page.evaluate(() => ({
+      compact: document.getElementById("siteHeader").classList.contains("compact"),
+      richFlag: document.documentElement.classList.contains("motion-rich"),
+      someRevealed: document.querySelectorAll("[data-reveal].is-in").length > 0,
+    }));
+    report("C12", r.compact && !r.richFlag && r.someRevealed,
+      `floor with motion/ blocked: compact=${r.compact} rich=${r.richFlag} revealed=${r.someRevealed}`);
+  }, { blockMotion: true });
+}
+
+/* ---------- run ---------- */
+
+checkC2();
+checkC6();
+await checkC1();
+await checkC3();
+await checkC5();
+await checkC12();
+
+const failed = results.filter((r) => !r.ok);
+console.log(`\n${results.length - failed.length}/${results.length} checks passed`);
+process.exit(failed.length ? 1 : 0);

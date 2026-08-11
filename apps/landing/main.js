@@ -397,9 +397,10 @@
   /* ---------- Footer giant mark parallax ---------- */
   var mark = document.getElementById("giantMark");
   var footer = document.querySelector(".site-footer");
+  var onScrollMark = null;
   if (mark && footer) {
     var ticking = false;
-    var onScrollMark = function () {
+    onScrollMark = function () {
       if (ticking) { return; }
       ticking = true;
       requestAnimationFrame(function () {
@@ -414,4 +415,19 @@
     window.addEventListener("scroll", onScrollMark, { passive: true });
     onScrollMark();
   }
+
+  /* ---------- Handover surface for motion/ (the rich ceiling) ----------
+     If motion/index.js boots it calls these to switch basic behaviours off.
+     If it never boots, nothing calls them and this file IS the page. */
+  window.__atlitosBasic = {
+    disableReveal: function () { revealIO.disconnect(); },
+    disableNavScroll: function () { window.removeEventListener("scroll", onScrollNav); },
+    disableMarkParallax: function () {
+      if (onScrollMark) { window.removeEventListener("scroll", onScrollMark); }
+    },
+    setWay: setWay,
+    drawPath: drawPath,
+    formatIN: formatIN,
+    observeOnce: observeOnce
+  };
 })();

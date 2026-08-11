@@ -53,6 +53,11 @@
 
 html:not(.js) { scroll-behavior: smooth; }
 
+/* overflow-x: clip, NEVER hidden. hidden creates a scroll container on the
+   ancestor, which is the root cause of the historical pin overlap bug (R1 in
+   docs/MOTION-ARCHITECTURE.md). clip clips paint without creating a scroller. */
+html { overflow-x: clip; }
+
 body {
   background: var(--paper);
   color: var(--ink);
@@ -60,8 +65,13 @@ body {
   font-size: 1.0625rem;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
-  overflow-x: hidden;
 }
+
+/* ---------- Lenis smooth scroll required CSS ---------- */
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-smooth [data-lenis-prevent] { overscroll-behavior: contain; }
+.lenis.lenis-stopped { overflow: hidden; }
 
 .shell { max-width: var(--shell); margin: 0 auto; padding: 0 24px; }
 

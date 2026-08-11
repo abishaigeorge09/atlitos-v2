@@ -23,6 +23,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;0,9..144,900;1,9..144,700;1,9..144,900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
+  <link rel="modulepreload" href="motion/index.js" />
 </head>
 <body>
 
@@ -607,6 +608,13 @@
 </footer>
 
 <script src="main.js" defer></script>
+<!-- Motion stack. main.js is the floor, motion/ is the ceiling; if the module
+     graph fails the page degrades to main.js behaviour, never to nothing. -->
+<script src="vendor/gsap-3.13.min.js" defer></script>
+<script src="vendor/ScrollTrigger-3.13.min.js" defer></script>
+<script src="vendor/SplitText-3.13.min.js" defer></script>
+<script src="vendor/lenis-1.3.min.js" defer></script>
+<script type="module" src="motion/index.js"></script>
 
 </body>
 </html>
