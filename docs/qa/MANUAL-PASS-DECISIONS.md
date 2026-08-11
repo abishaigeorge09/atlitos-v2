@@ -23,3 +23,27 @@ because the "right" fix is a product/content decision, not a code bug.
    with real numbers once they exist, remove the stat tiles until then, or
    leave as is. The raw-filename debug label should at minimum be removed or
    replaced with real photography, same fix pattern as BUG-017.
+
+## e2e suite triage against freshly redeployed atlitos-app.vercel.app (2026-08-11)
+
+Stale-test cluster (product behavior changed intentionally, test assertions
+did not follow): AUTH-01, AUTH-03, AUTH-04, CL-03, CL-05, FO-09 all assert
+the OLD first-run flow (a splash chooser with "Continue as guest"/"Login"
+buttons before landing in the app). Per `apps/mobile/src/app/(auth)/splash.tsx`'s
+own docstring, this was deliberately removed: "There is no first-run choice
+screen any more" — the app now silently starts a guest session and lands
+directly on Home, with Login/Register only offered later via the
+LoginGateModal when a gated action is tapped. These tests need their
+assertions updated to match; tracked as a follow-up, not re-litigated here
+to keep this pass moving.
+
+Real, unresolved finding (AUTH-09): the LoginGateModal itself still opens
+correctly and login succeeds, but the ORIGINAL gated action (liking a clip
+as a guest) does not complete afterward — the clip still shows "Like" not
+"Unlike" post-login. This is exactly the intent BUG-010 (login redirect)
+was supposed to guarantee; either it regressed or never fully covered the
+like-specific case. Needs a real fix, not a test update. Logged here rather
+than the ledger since root cause isn't yet isolated.
+
+CL-07 (comment count) and AUTH-11 (cross-portal wrong-role rejection) not
+yet triaged against the fresh deploy — carry over to the next pass.
