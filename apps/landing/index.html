@@ -1,8 +1,8 @@
 <!doctype html>
 <!-- ATLITOS landing page.
      Architecture: static HTML plus styles.css plus main.js, no framework, no build step.
-     Page story: cinematic scoreboard film hero (video scrubbed by scroll)
-     -> Meet Atlitos emerges from inside the LED board -> problem band with word rotator
+     Page story: COLD OPEN kinetic type hero (no video, GSAP load choreography)
+     -> Meet Atlitos title card -> problem band with word rotator
      -> how it works interlude -> three step FILES (sticky tab plus panel, one viewport each)
      -> always on features band -> old way vs Atlitos way toggle court
      -> three differentiator intent rows -> scrolling subscription strip
@@ -23,6 +23,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;0,9..144,900;1,9..144,700;1,9..144,900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
+  <link rel="preload" as="image" href="img/hero-panel.webp" fetchpriority="high" />
   <link rel="modulepreload" href="motion/index.js" />
 </head>
 <body>
@@ -44,24 +45,36 @@
 
 <main id="main">
 
-  <!-- HERO. The cinematic scoreboard video IS the hero. Phase 1 autoplays the
-       intro to the resting frame; phase 2 maps scroll to the final camera push
-       so the visitor scrolls INTO the LED board. Zero JS: the video autoplays
-       once and the page reads normally below. -->
-  <section class="vhero" id="top" aria-label="Atlitos opening film">
-    <div class="vhero-sticky">
-      <video id="heroVideo" class="vhero-video" src="img/hero-clean.mp4" poster="img/hero-poster.jpg" autoplay muted playsinline preload="auto"></video>
-      <div class="vhero-veil" id="heroVeil" aria-hidden="true"></div>
-      <h1 class="vhero-led mono" id="heroLed" aria-hidden="true"><span id="heroLedText"></span><span class="led-caret">&#9608;</span></h1>
-      <p class="sr-only">The way you play sports is about to change forever. Meet Atlitos.</p>
-      <p class="vhero-hint mono" id="heroHint" aria-hidden="true">SCROLL DOWN<span class="hint-arrow">&darr;</span></p>
+  <!-- HERO: COLD OPEN. No video, no waiting. The headline is real markup and
+       the LCP element is the duotone athlete panel. motion/sections/hero.js
+       runs the load choreography; html.hero-ready (1800ms hard fallback in
+       main.js, or set by the timeline finishing) forces final states so the
+       fold can never depend on animation completing. -->
+  <section class="hero" id="top" aria-label="Atlitos opening">
+    <div class="hero-lines" aria-hidden="true">
+      <i class="hl hl-1"></i><i class="hl hl-2"></i><i class="hl hl-3"></i><i class="hl hl-4"></i><i class="hl hl-5"></i>
     </div>
+    <div class="hero-panel" aria-hidden="true">
+      <img src="img/hero-panel.webp" alt="" width="1200" height="800" fetchpriority="high" decoding="async" />
+    </div>
+    <h1 class="hero-headline">
+      <span class="hh-line"><span class="hh-inner">The way you play</span></span>
+      <span class="hh-line"><span class="hh-inner">sports is about to</span></span>
+      <span class="hh-line"><span class="hh-inner"><em class="hh-accent">change forever.</em></span></span>
+    </h1>
+    <div class="hero-tiles" aria-hidden="true">
+      <span class="kit-tile mono">PLAY MORE</span>
+      <span class="kit-tile mono">COACH MORE</span>
+      <span class="kit-tile mono">EARN MORE</span>
+      <span class="kit-tile mono">GIVE MORE</span>
+    </div>
+    <p class="hero-rail mono" aria-hidden="true">SCROLL<span class="rail-line"></span></p>
   </section>
 
   <!-- INSIDE THE BOARD. Section 2 emerges from the LED close up darkness. -->
   <section class="led-entry" aria-labelledby="led-entry-title">
     <div class="shell led-entry-inner">
-      <p class="sec-eyebrow eyebrow-onDark eyebrow-center mono" data-reveal="up">YOU ARE INSIDE THE BOARD</p>
+      <p class="sec-eyebrow eyebrow-onDark eyebrow-center mono" data-reveal="up">GAME ON</p>
       <h2 id="led-entry-title" class="serif-line led-entry-title" data-reveal="up" data-reveal-delay="1">Meet <em class="meet-accent">Atlitos</em>.</h2>
       <p class="led-entry-sub" data-reveal="up" data-reveal-delay="2">Courts. Coaches. Clips. Gear. Drills. One app for your whole game.</p>
       <div class="cta-row cta-center">

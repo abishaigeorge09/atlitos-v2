@@ -1,18 +1,20 @@
-/* ATLITOS landing motion. Progressive: full content renders with zero JS.
-   No scroll pinning library. Sticky scenes are fixed height CSS sticky tracks,
-   so later sections can never scroll over a stuck stage.
+/* ATLITOS landing, the BASIC floor. Progressive: full content renders with
+   zero JS; this file renders a correct, plainer page with no library. The rich
+   ceiling lives in motion/ (GSAP + Lenis) and switches pieces of this file off
+   through window.__atlitosBasic when it boots. If motion/ never boots, nothing
+   is switched off and this file IS the page. See docs/MOTION-ARCHITECTURE.md.
    Block map, in order: nav folder tab morph (down tucks, up reopens),
    old way toggle with self drawing paths and one auto advance,
    lazy three.js Empower ball (WebGL gated, fallback circle),
-   reduced motion early return (holds the film resting frame, no autoplay),
-   hero film controller (phase 1 autoplay to REST, phase 2 rAF scrub REST to END,
-   veil and nav and hint driven from the same progress, reversible, intro never replays),
+   hero-ready hard fallback (1800ms, forces hero and nav final states),
+   reduced motion early return,
    problem word rotator, typewriters, universal reveal IntersectionObserver,
-   count ups with Indian digit grouping, footer giant mark parallax.
-   Verification gotcha for future agents: hidden or backgrounded tabs suspend scroll
-   events, IntersectionObserver, CSS transitions, and video loading. Always verify
-   with the tab actually visible (take a screenshot first to wake it) before
-   concluding anything is broken. */
+   count ups with Indian digit grouping, footer giant mark parallax,
+   the __atlitosBasic handover surface.
+   Verification gotcha for future agents: hidden or backgrounded tabs suspend
+   scroll events, IntersectionObserver, CSS transitions, and media loading.
+   Always verify with the tab actually visible (take a screenshot first to wake
+   it) before concluding anything is broken. */
 (function () {
   "use strict";
 
@@ -23,9 +25,15 @@
      any scroll up, always expanded near the top. ---------- */
   var header = document.getElementById("siteHeader");
   var lastY = window.scrollY;
+  /* the nav glass flips paper once scroll leaves the dark opening (hero +
+     title card); .problem is the first light band */
+  var darkEnd = function () {
+    var problem = document.querySelector(".problem");
+    return problem ? problem.offsetTop - 120 : 90;
+  };
   var onScrollNav = function () {
     var y = window.scrollY;
-    docEl.classList.toggle("scrolled", y > 90);
+    docEl.classList.toggle("scrolled", y > darkEnd());
     if (header) {
       if (y < 80) {
         header.classList.remove("compact");
@@ -167,24 +175,19 @@
     });
   }
 
-  var HERO_LED_MESSAGE = "THE WAY YOU PLAY SPORTS IS ABOUT TO CHANGE FOREVER";
+  /* ---------- Hero hard fallback ----------
+     hero-ready forces every hero element (and the nav) to its final state via
+     CSS. The rich path (motion/sections/hero.js) adds it when the load
+     timeline completes; this timer guarantees it regardless. The fold can
+     never depend on animation completing. Registered for every mode, before
+     the reduced-motion early return. */
+  window.setTimeout(function () {
+    docEl.classList.add("hero-ready");
+  }, 1800);
 
   if (reduced) {
-    /* Reduced motion: no autoplaying film, hold the resting frame. */
-    var rv = document.getElementById("heroVideo");
-    if (rv) {
-      rv.removeAttribute("autoplay");
-      rv.pause();
-      var seekRest = function () { try { rv.currentTime = 7.9; } catch (e) {} };
-      if (rv.readyState > 0) { seekRest(); }
-      else { rv.addEventListener("loadedmetadata", seekRest); }
-    }
-    var ledStatic = document.getElementById("heroLedText");
-    var ledWrap = document.getElementById("heroLed");
-    if (ledStatic && ledWrap) {
-      ledStatic.textContent = HERO_LED_MESSAGE;
-      ledWrap.classList.add("is-static");
-    }
+    /* Reduced motion: final states on first paint, handled in CSS. */
+    docEl.classList.add("hero-ready");
     return;
   }
 
@@ -201,87 +204,6 @@
     };
     setTimeout(tick, 250);
   };
-
-  /* ---------- Hero film: phase 1 autoplays the intro to the resting frame,
-     phase 2 maps scroll to the final camera push. Reversible, never replays
-     the intro. ---------- */
-  var vid = document.getElementById("heroVideo");
-  var vhero = document.querySelector(".vhero");
-  var heroVeil = document.getElementById("heroVeil");
-  var heroHint = document.getElementById("heroHint");
-  var heroLed = document.getElementById("heroLed");
-  var heroLedText = document.getElementById("heroLedText");
-  if (vid && vhero) {
-    var REST = 7.9, END = 9.88;
-    var phase = "intro";
-    var cur = REST;
-    var typeLed = function () {
-      if (!heroLed || !heroLedText) { return; }
-      heroLed.classList.add("is-lit");
-      var i = 0;
-      var tick = function () {
-        i += 1;
-        heroLedText.textContent = HERO_LED_MESSAGE.slice(0, i);
-        if (i < HERO_LED_MESSAGE.length) { setTimeout(tick, 34); }
-      };
-      setTimeout(tick, 200);
-    };
-    var enterRest = function () {
-      if (phase !== "intro") { return; }
-      phase = "scrub";
-      vid.pause();
-      try { vid.currentTime = REST; } catch (e) {}
-      cur = REST;
-      docEl.classList.add("v-rested");
-      if (heroHint) { heroHint.style.opacity = "1"; }
-      typeLed();
-    };
-    vid.addEventListener("timeupdate", function () {
-      if (phase === "intro" && vid.currentTime >= REST) { enterRest(); }
-    });
-    vid.addEventListener("ended", enterRest);
-    /* Hard fallback: the page must never stay navless. */
-    window.setTimeout(enterRest, 12000);
-    /* Scrolling during the intro skips straight to the resting frame. */
-    window.addEventListener("scroll", function () {
-      if (phase === "intro" && window.scrollY > 60) { enterRest(); }
-    }, { passive: true });
-
-    var heroLoop = function () {
-      requestAnimationFrame(heroLoop);
-      if (phase !== "scrub") { return; }
-      var track = vhero.offsetHeight - window.innerHeight;
-      if (track <= 0) { return; }
-      var p = Math.min(1, Math.max(0, window.scrollY / track));
-      /* chase the target with a little inertia, clamped to the push in */
-      var target = REST + p * (END - REST);
-      cur += (target - cur) * 0.16;
-      cur = Math.min(END, Math.max(REST, cur));
-      if (Math.abs(cur - (vid.currentTime || 0)) > 0.008 && vid.readyState > 1) {
-        try { vid.currentTime = cur; } catch (e) {}
-      }
-      /* scroll hint: gone within the first tenth of the push */
-      if (heroHint) { heroHint.style.opacity = String(Math.max(0, 1 - p * 10)); }
-      /* navbar: visible to 40 percent, gone by 70 */
-      if (header) {
-        var nOp = p < 0.4 ? 1 : p > 0.7 ? 0 : 1 - (p - 0.4) / 0.3;
-        header.style.opacity = String(nOp);
-        header.style.pointerEvents = nOp < 0.05 ? "none" : "";
-      }
-      /* the LED veil rises over the close up so section 2 emerges from it */
-      if (heroVeil) {
-        heroVeil.style.opacity = String(p < 0.8 ? 0 : (p - 0.8) / 0.2 * 0.92);
-      }
-      /* the typed message tracks the push in, then dissolves into the veil */
-      if (heroLed) {
-        var ledScale = 1 + p * 0.12;
-        heroLed.style.transform = "scale(" + ledScale.toFixed(3) + ")";
-        var ledFade = p < 0.72 ? 1 : Math.max(0, 1 - (p - 0.72) / 0.2);
-        heroLed.style.opacity = String(ledFade);
-      }
-    };
-    heroLoop();
-  }
 
   /* ---------- Problem word rotator: fade out to blank, then the next phrase ---------- */
   var rotChip = document.getElementById("rotChip");

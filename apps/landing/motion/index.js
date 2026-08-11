@@ -11,6 +11,9 @@ import { initSmoothScroll } from "./scroll.js";
 const SECTION_INITS = [
   /* Populated per phase. Each entry: [name, loader]. Loaders are dynamic so a
      syntax error in one section skips that section instead of killing boot. */
+  ["header", () => import("./sections/header.js")],
+  ["hero", () => import("./sections/hero.js")],
+  ["ledEntry", () => import("./sections/ledEntry.js")],
 ];
 
 function detectMode() {
