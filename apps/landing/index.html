@@ -19,13 +19,11 @@
   <title>ATLITOS, the sports superapp for Indian athletes</title>
   <meta name="description" content="Book verified courts, train with coaches, share your best plays, and give back to athletes across India. One app for your whole game." />
   <meta name="theme-color" content="#FBF7F1" />
-  <!-- fonts are self hosted (fonts/, latin subsets, variable files); the two
-       Google origins were the LCP tail on throttled mobile -->
-  <link rel="preload" as="font" type="font/woff2" href="fonts/Fraunces-var.woff2" crossorigin />
-  <link rel="preload" as="font" type="font/woff2" href="fonts/Fraunces-var-italic.woff2" crossorigin />
-  <link rel="preload" as="font" type="font/woff2" href="fonts/Inter-var.woff2" crossorigin />
+  <!-- fonts are self hosted (fonts/, latin subsets, variable files). No font
+       preloads on purpose: they starved the LCP image on throttled mobile,
+       and the metric-matched fallbacks make the later swap shift-free. -->
   <link rel="stylesheet" href="styles.css" />
-  <link rel="preload" as="image" href="img/hero-panel.webp" fetchpriority="high" />
+  <link rel="preload" as="image" href="img/hero-panel.webp" imagesrcset="img/hero-panel-640.webp 640w, img/hero-panel.webp 1200w" imagesizes="(max-width: 900px) 74vw, 42vw" fetchpriority="high" />
   <link rel="modulepreload" href="motion/index.js" />
 </head>
 <body>
@@ -57,7 +55,7 @@
       <i class="hl hl-1"></i><i class="hl hl-2"></i><i class="hl hl-3"></i><i class="hl hl-4"></i><i class="hl hl-5"></i>
     </div>
     <div class="hero-panel" aria-hidden="true">
-      <img src="img/hero-panel.webp" alt="" width="1200" height="800" fetchpriority="high" decoding="async" />
+      <img src="img/hero-panel.webp" srcset="img/hero-panel-640.webp 640w, img/hero-panel.webp 1200w" sizes="(max-width: 900px) 74vw, 42vw" alt="" width="1200" height="800" fetchpriority="high" decoding="async" />
     </div>
     <h1 class="hero-headline">
       <span class="hh-line"><span class="hh-inner">The way you play</span></span>
