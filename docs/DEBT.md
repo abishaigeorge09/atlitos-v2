@@ -281,3 +281,45 @@ candidate group's `group_memberships.payment_intent_id`, skips deleting any
 group with a `captured` payment_intent attached, and reports those as
 blocked for human review instead. It is a human-run tool, never invoked by
 an agent.
+
+### 2026-08-11 verification pass: 41 historical chat_messages rows still in production, NEEDS HUMAN SIGN-OFF
+
+Re-verified F-31c against `syzzfgaudpifwvbpycyi` with read-only SQL after the
+above fix (self-teardown in `apps/e2e/specs/chat.spec.ts` and
+`money/coaching.spec.ts`, plus `scripts/verify-groups-probes.mjs` /
+`scripts/verify-realtime.mjs`) was already committed:
+
+- `training_groups` matching `E2E CO-06 `, `E2E CO-08 `, `Oversell Probe `:
+  0 rows. Confirmed clean, matches the prior note above.
+- `group_memberships` joined to those groups: 0 rows.
+- `chat_messages` matching any of `AT-59 realtime probe `, `AT-59 realtime
+  probe trial2 `, `Native e2e CH-10 ping`, `e2e CH-01 `, `e2e CH-02 `, `e2e
+  CH-06 should be rejected`, `e2e CH-07 offline `: **41 rows**, dated
+  2026-07-27 through 2026-08-11 07:51 UTC (i.e. pre-existing, from e2e runs
+  before this session's self-teardown fix landed; nothing in this session
+  wrote any of them). All 41 are plain `chat_messages.text` rows with no
+  `payment_intent` linkage of any kind (chat messages don't carry a
+  payment_intent_id), so they carry none of the referential-integrity risk
+  the 637df13 incident did.
+
+This session did not delete them, per the hard rule: read-only SQL against
+production is fine, DELETE is not, no exceptions, even for a well-scoped
+cleanup of test-fixture rows. `scripts/cleanup-e2e-test-data.mjs` (already
+merged in this branch, includes the payment_intent safety check) is the
+correct, reviewed tool to run this by hand:
+
+```
+node scripts/cleanup-e2e-test-data.mjs --dry-run   # inspect the 41 rows first
+node scripts/cleanup-e2e-test-data.mjs             # then run for real
+```
+
+It requires `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` for
+`syzzfgaudpifwvbpycyi` in the environment, matches only the exact literal
+prefixes above (no broad LIKE), and refuses to touch any `training_groups`
+row whose membership carries a `captured` payment_intent (none currently
+match, since the 41 remaining rows are `chat_messages`, not groups). A human
+should run the `--dry-run` pass, confirm the row count and IDs look like the
+41 listed here, then run it for real. Until that happens, a small number of
+old test messages remain visible in the affected chat threads on
+atlitos-app.vercel.app; the self-teardown fix already merged stops the count
+from growing further.
