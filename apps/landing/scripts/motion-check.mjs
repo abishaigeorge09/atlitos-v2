@@ -195,6 +195,35 @@ async function checkC12() {
   }, { blockMotion: true });
 }
 
+async function checkC9() {
+  if (skip("C9")) { return; }
+  await withPage(async (page) => {
+    await page.waitForTimeout(2200); // hero settles
+    const r = await page.evaluate(() => new Promise((res) => {
+      const frames = [];
+      let lastT = performance.now();
+      let scrolled = 0;
+      const total = document.body.scrollHeight - innerHeight;
+      const step = () => {
+        const now = performance.now();
+        frames.push(now - lastT);
+        lastT = now;
+        scrolled += 24;
+        scrollTo(0, scrolled);
+        if (scrolled < total) { requestAnimationFrame(step); }
+        else {
+          const longest = Math.max(...frames);
+          const fps = 1000 / (frames.reduce((a, b) => a + b, 0) / frames.length);
+          res({ longest: Math.round(longest), fps: Math.round(fps), n: frames.length });
+        }
+      };
+      requestAnimationFrame(step);
+    }));
+    report("C9", r.longest <= 50 && r.fps >= 55,
+      `scripted scroll: longest frame ${r.longest}ms (cap 50), mean ${r.fps}fps (floor 55), ${r.n} frames`);
+  });
+}
+
 async function checkC8() {
   /* SLOW (three throttled loads); opt in with --checks C8. Median of three
      because single throttled runs over a real network are noisy. */
@@ -238,6 +267,7 @@ await checkC1();
 await checkC3();
 await checkC5();
 await checkC12();
+await checkC9();
 await checkC8();
 
 const failed = results.filter((r) => !r.ok);

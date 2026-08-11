@@ -147,6 +147,60 @@ html.lenis, html.lenis body { height: auto; }
 .lenis.lenis-smooth [data-lenis-prevent] { overscroll-behavior: contain; }
 .lenis.lenis-stopped { overflow: hidden; }
 
+/* ---------- Global overlays: grain, cursor, wipes ---------- */
+/* film grain: static SVG turbulence, one composited layer, never animated */
+.grain {
+  position: fixed; inset: 0;
+  pointer-events: none;
+  z-index: 90; /* under the header (100), above everything else */
+  opacity: 0.055;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+}
+/* custom cursor */
+.has-cursor body { cursor: none; }
+.has-cursor input, .has-cursor textarea, .has-cursor select { cursor: auto; }
+.has-cursor a, .has-cursor button { cursor: none; }
+.cur-dot, .cur-ring {
+  position: fixed; top: 0; left: 0;
+  pointer-events: none;
+  z-index: 95;
+  border-radius: 999px;
+  translate: -50% -50%;
+}
+.cur-dot { width: 8px; height: 8px; background: var(--ember); }
+.cur-ring {
+  width: 34px; height: 34px;
+  border: 1.5px solid var(--ink);
+  display: flex; align-items: center; justify-content: center;
+  transition: width 0.25s ease, height 0.25s ease, background-color 0.25s ease, border-color 0.25s ease;
+}
+html:not(.scrolled) .cur-ring { border-color: rgba(251, 247, 241, 0.7); }
+.cur-ring.is-big {
+  width: 64px; height: 64px;
+  background: rgba(232, 179, 36, 0.9);
+  border-color: transparent;
+}
+.cur-label {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.14em;
+  color: var(--ink);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.cur-ring.is-big .cur-label { opacity: 1; }
+.cur-dot.is-hidden, .cur-ring.is-hidden { opacity: 0; }
+/* speed line wipes (elements created by motion/systems/wipe.js) */
+.wipe-wrap { position: fixed; inset: 0; pointer-events: none; z-index: 80; overflow: clip; }
+.wipe-bar {
+  position: absolute; left: -20%;
+  width: 40%; height: clamp(14px, 2vw, 26px);
+  will-change: transform;
+}
+@media (pointer: coarse) {
+  .grain { display: none; } /* blend-mode layers cost real battery on mobile */
+}
+
 .shell { max-width: var(--shell); margin: 0 auto; padding: 0 24px; }
 
 .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }

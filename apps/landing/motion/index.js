@@ -14,6 +14,11 @@ const SECTION_INITS = [
   ["header", () => import("./sections/header.js")],
   ["hero", () => import("./sections/hero.js")],
   ["ledEntry", () => import("./sections/ledEntry.js")],
+  /* global systems (P2) */
+  ["cursor", () => import("./systems/cursor.js")],
+  ["magnetic", () => import("./systems/magnetic.js")],
+  ["skew", () => import("./systems/skew.js")],
+  ["marquee", () => import("./systems/marquee.js")],
 ];
 
 function detectMode() {

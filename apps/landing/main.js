@@ -107,10 +107,21 @@
     });
   }
 
-  /* ---------- Empower 3D ball: lazy loaded, WebGL gated, never above the fold. ---------- */
+  /* ---------- Empower 3D ball: lazy loaded, WebGL gated, never above the fold.
+     Loaded during POST-LOAD IDLE, not on section entry: parsing 651KB of
+     three.js on the main thread mid-scroll measured as a 200ms+ frame stall
+     in C9. Idle load pays that cost while the visitor reads the hero. ---------- */
   var emp3d = document.getElementById("emp3d");
   if (emp3d && !reduced) {
-    observeOnce(document.getElementById("empower"), function () {
+    var loadThree = function (fn) {
+      var idle = window.requestIdleCallback || function (cb) { setTimeout(cb, 2500); };
+      window.addEventListener("load", function () { idle(fn, { timeout: 6000 }); });
+    };
+    loadThree(function () {
+      /* Rich mode gets the P5 orbit (motion/three/empower-orbit.js) with its
+         own scheduled load; parsing this 651KB UMD mid-scroll measured a
+         1.4s cold frame stall, so the legacy ball is basic-floor only. */
+      if (docEl.classList.contains("motion-rich")) { return; }
       var script = document.createElement("script");
       script.src = "vendor/three.min.js";
       script.onload = function () {
