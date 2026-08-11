@@ -1,4 +1,4 @@
-import { useShop, useWishlist, toApiError, type ShopProduct } from '@atlitos/api';
+import { useShop, useWishlist, toApiError, type AffiliateProduct, type ShopProduct } from '@atlitos/api';
 import type { ApiError } from '@atlitos/types';
 import { spacing } from '@atlitos/theme';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -43,6 +43,16 @@ type LoadState = 'loading' | 'empty' | 'populated' | 'error';
  * Four states per FR-31: skeleton grid, empty (the Recommended Gears rail
  * still renders if it has anything, else an empty state pointing back to the
  * catalog), populated, error with retry.
+ *
+ * FR-33: affiliate products (Phase 9 WS4) browse alongside owned products.
+ * `listAffiliateProducts` was defined but never called by any screen (QA I48),
+ * leaving `/shop/affiliate/[id]` unreachable from the shop UI. The Compare
+ * Prices rail below fixes that: it is the shop's one stable entry point
+ * (shop home redirects here), so this is where "All gear" browse and the
+ * in-page search surface affiliate matches too. It only renders on the "All
+ * gear" view, because affiliate products carry a `sport`, not a
+ * `shopper_categories` slug, so there is no category-scoped mapping to filter
+ * them by.
  */
 export default function CategoryBrowseScreen() {
   const colors = useThemeColors();
@@ -58,6 +68,7 @@ export default function CategoryBrowseScreen() {
   const [state, setState] = useState<LoadState>('loading');
   const [products, setProducts] = useState<ShopProduct[]>([]);
   const [recommended, setRecommended] = useState<ShopProduct[]>([]);
+  const [affiliateProducts, setAffiliateProducts] = useState<AffiliateProduct[]>([]);
   const [categories, setCategories] = useState<{ id: string; name: string; slug: string }[]>([]);
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [search, setSearch] = useState('');
@@ -78,6 +89,20 @@ export default function CategoryBrowseScreen() {
         setRecommended(rail);
         setCategories(cats);
         setState(rows.length === 0 ? 'empty' : 'populated');
+
+        // FR-33: browsed alongside owned products, only on the "All gear"
+        // view (see the screen doc comment for why). Kept out of the
+        // Promise.all above and given its own catch so an affiliate read
+        // failure never takes the owned catalog down with it.
+        if (categorySlug === 'all') {
+          try {
+            setAffiliateProducts(await shop.listAffiliateProducts());
+          } catch {
+            setAffiliateProducts([]);
+          }
+        } else {
+          setAffiliateProducts([]);
+        }
       } catch (err) {
         setError(toApiError(err));
         setState('error');
@@ -138,6 +163,18 @@ export default function CategoryBrowseScreen() {
   }
 
   const visible = shop.filterBySearch(products, search);
+  // FR-33's search half for affiliate rows: the same title/brand search the
+  // owned grid applies, over the affiliate rail, so a search for a brand
+  // Atlitos does not stock still surfaces the compare-price entry point.
+  const searchTerm = search.trim().toLowerCase();
+  const visibleAffiliate = affiliateProducts
+    .filter((item): item is AffiliateProduct & { bestPrice: number } => item.bestPrice !== null) // no in-stock offer, no "from" price to show
+    .filter(
+      (item) =>
+        !searchTerm ||
+        item.title.toLowerCase().includes(searchTerm) ||
+        (item.brand ?? '').toLowerCase().includes(searchTerm),
+    );
   const activeCategoryName =
     categorySlug === 'all' ? 'All gear' : categories.find((c) => c.slug === categorySlug)?.name ?? 'Gear';
 
@@ -210,6 +247,7 @@ export default function CategoryBrowseScreen() {
       />
 
       {recommended.length > 0 ? <RecommendedRail items={recommended} /> : null}
+      {visibleAffiliate.length > 0 ? <ComparePricesRail items={visibleAffiliate} /> : null}
     </View>
   );
 
@@ -314,6 +352,38 @@ function RecommendedRail({ items }: { items: ShopProduct[] }) {
             title={item.title}
             price={item.priceFrom}
             onPress={() => router.push({ pathname: '/shop/product/[id]', params: { id: item.id } })}
+          />
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+/**
+ * FR-33 to FR-38's discoverable entry point into the affiliate marketplace.
+ * `AffiliateProduct` has no `product.priceFrom`; the "from" figure here is
+ * `bestPrice`, the lowest in-stock offer, per FR-33. Callers only pass items
+ * with a non-null `bestPrice` (an all-out-of-stock product has no "from"
+ * price to show). Routes to `/shop/affiliate/[id]`, never `/shop/product/[id]`:
+ * this is a compare and click-out surface, not a cartable item, so the row
+ * variant (no Add to cart button) is used rather than the grid variant.
+ */
+function ComparePricesRail({ items }: { items: (AffiliateProduct & { bestPrice: number })[] }) {
+  const colors = useThemeColors();
+
+  return (
+    <View style={{ gap: spacing.sm }}>
+      <Text style={[textStyle('overline'), { color: colors.textTertiary }]}>Compare prices</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md }}>
+        {items.map((item) => (
+          <ProductCard
+            key={item.id}
+            variant="row"
+            className="w-64"
+            imageUri={item.imageUrl ?? undefined}
+            title={item.title}
+            price={item.bestPrice}
+            onPress={() => router.push({ pathname: '/shop/affiliate/[id]', params: { id: item.id } })}
           />
         ))}
       </ScrollView>
