@@ -81,3 +81,49 @@ That removes Metro from the QA path entirely, eliminates this whole
 class of false failure, and tests something closer to what actually
 ships. The Android side already has a real APK, so the two platforms
 would then be tested on comparable artifacts.
+
+---
+
+## RESOLVED 2026-08-11: release build fixes it
+
+`npx expo run:ios --configuration Release` built with zero errors and
+installed `Atlitos.app` in a new container. The JS bundle is embedded,
+verified directly rather than inferred:
+
+    Atlitos.app/main.jsbundle   9,652,651 bytes
+
+`ExpoNotifications_privacy.bundle` is also present, so the push module
+is compiled into the iOS binary.
+
+`maestro test .maestro/smoke-guest-home.yaml` then passed every step:
+launch, scroll, assert ATLITOS, assert Badminton, scroll to footer,
+assert tagline, screenshot. All COMPLETED.
+
+Both earlier failures are confirmed environmental, not product bugs:
+- `Badminton` failed against the redbox from the misrooted Metro.
+- `ATLITOS` failed because the "Open in Atlitos?" system dialog held
+  accessibility focus. Dismissing it cleared the failure.
+
+Note `expo run:ios` starts its own Metro on 8081. That is harmless for a
+Release build since the bundle is embedded, but it means "no Metro
+running" is not a valid way to prove embedding. Check for
+`main.jsbundle` in the .app instead.
+
+## Visual observations for Track I, logged not fixed
+
+From `ios-release-home.png` on the iPhone 16 Pro Max:
+
+1. The Clutch video tile renders as static noise. LIKELY a simulator
+   video decoding limitation rather than a product bug. Must be
+   confirmed on a physical device before it is logged as a defect.
+2. The `Share` label overlaps its own icon in the Clutch tile, and
+   `Save` is clipped by the tile edge. This is a layout defect and is
+   not simulator specific.
+3. The first "Donate to Empower" card shows a large blank area where an
+   image should be, while the adjacent card renders a graphic. Possible
+   image load failure.
+4. Caption text renders as `Husband s`, which suggests an apostrophe is
+   being stripped or mis-encoded.
+
+None of these were fixed. Items 2, 3 and 4 belong to Track F via
+Track I's findings file.
