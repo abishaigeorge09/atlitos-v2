@@ -522,8 +522,14 @@
   </section>
 
   <!-- EMPOWER. The heart of Atlitos: the flow, the impact, the 3D ball, the CTA. -->
+  <!-- EMPOWER: the page's ONE pin (D3) and ONE WebGL scene, per the ORBIT
+       concept in docs/MOTION-ARCHITECTURE.md 3.13. .emp-pin-wrap owns its own
+       stacking context; .emp-stage is the pinned element; .emp-outro rises
+       after the pin releases. Mobile and reduced motion: no pin, the same
+       beats fire as plain reveals in DOM order. -->
   <section class="empower" id="empower" aria-labelledby="empower-title">
-    <div class="shell empower-inner">
+    <div class="emp-pin-wrap">
+    <div class="emp-stage shell empower-inner">
       <p class="sec-eyebrow eyebrow-onDark eyebrow-center mono" data-reveal="up">THE HEART OF ATLITOS</p>
       <div class="empower-head">
         <h2 id="empower-title" class="sticker-stack">
@@ -579,6 +585,9 @@
         <div class="emp-3d-fallback"></div>
       </div>
       <p class="roundup-line mono" data-reveal="up"><span class="ru" data-count="293" data-prefix="&#8377;">&#8377;293</span> order. <span class="ru" data-count="7" data-prefix="&#8377;">&#8377;7</span> rounded up. <span class="ru" data-count="7" data-prefix="&#8377;">&#8377;7</span> to an athlete.</p>
+    </div><!-- /.emp-stage -->
+    </div><!-- /.emp-pin-wrap -->
+    <div class="emp-outro shell">
       <div class="cta-row cta-center">
         <a class="btn-pill btn-lg btn-onDark" data-reveal="up" href="https://atlitos-app.vercel.app">Try the web app</a>
         <a class="btn-ghost ghost-onDark" data-reveal="up" data-reveal-delay="1" href="mailto:founder@synthsports.co?subject=Atlitos%20TestFlight%20access">Get early iOS access</a>

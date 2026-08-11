@@ -1054,6 +1054,36 @@ html.js:not(.hero-ready) .hero-rail { opacity: 0; }
   padding: 30px 0 100px;
 }
 .empower-inner { position: relative; z-index: 1; }
+/* the pin recipe, R1: own stacking context above the negative-margin band
+   (24), footer above the released pin (31). pinSpacing true always. */
+.emp-pin-wrap { position: relative; isolation: isolate; z-index: 30; }
+.emp-outro { position: relative; z-index: 1; padding-bottom: 20px; }
+/* Desktop pinned stage: everything composes into ONE viewport. The ball sits
+   behind the story in the centre; cards and stats layer over it. Mobile keeps
+   the natural stacked flow (no pin there). */
+@media (min-width: 901px) {
+  .emp-stage {
+    height: 100svh;
+    display: flex; flex-direction: column; justify-content: space-between;
+    padding-top: 12px; padding-bottom: 26px;
+    overflow: clip;
+  }
+  .emp-stage .empower-head { padding-top: 6px; gap: 32px; }
+  .emp-stage .empower-head .sticker-stack .sticker { font-size: clamp(1.5rem, 2.6vw, 2.4rem); }
+  .emp-stage .empower-note p { font-size: 0.9375rem; }
+  .emp-stage .empower-note p + p { margin-top: 6px; }
+  .emp-stage .emp-flow { position: relative; z-index: 2; margin-top: 8px; }
+  .emp-stage .emp-3d {
+    position: absolute; left: 50%; top: 52%;
+    transform: translate(-50%, -50%);
+    width: min(560px, 44vw); height: min(420px, 52svh);
+    margin-top: 0;
+    z-index: 1;
+    pointer-events: none;
+  }
+  .emp-stage .emp-stats { position: relative; z-index: 2; margin-top: 10px; }
+  .emp-stage .roundup-line { position: relative; z-index: 2; margin-top: 14px; }
+}
 .empower-head {
   display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: start;
   padding-top: 30px;
@@ -1078,6 +1108,7 @@ html.js:not(.hero-ready) .hero-rail { opacity: 0; }
   color: var(--ink-inverse);
   padding: 84px 0 0;
   overflow: hidden;
+  z-index: 31; /* paints over the released Empower pin, R1 recipe */
 }
 .footer-top { display: flex; flex-wrap: wrap; gap: 64px; justify-content: space-between; }
 .newsletter { max-width: 420px; }

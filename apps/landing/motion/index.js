@@ -8,26 +8,31 @@
 import { createContext } from "./context.js";
 import { initSmoothScroll } from "./scroll.js";
 
-const SECTION_INITS = [
-  /* Populated per phase. Each entry: [name, loader]. Loaders are dynamic so a
-     syntax error in one section skips that section instead of killing boot. */
+/* EAGER: everything the fold needs, loaded at boot and counted in the C6
+   first-load budget. */
+const EAGER_INITS = [
   ["header", () => import("./sections/header.js")],
   ["hero", () => import("./sections/hero.js")],
   ["ledEntry", () => import("./sections/ledEntry.js")],
-  /* global systems (P2) */
   ["cursor", () => import("./systems/cursor.js")],
   ["magnetic", () => import("./systems/magnetic.js")],
   ["skew", () => import("./systems/skew.js")],
   ["marquee", () => import("./systems/marquee.js")],
-  /* upper page (P3) */
+];
+
+/* DEFERRED: below-fold section choreography, loaded at post-boot idle so it
+   never blocks first paint. The main.js reveal IO stays live in the gap, so a
+   sprint scroller who outruns the idle load still sees content revealed by
+   the basic system rather than nothing. */
+const DEFERRED_INITS = [
   ["problem", () => import("./sections/problem.js")],
   ["interlude", () => import("./sections/interlude.js")],
   ["steps", () => import("./sections/steps.js")],
   ["features", () => import("./sections/features.js")],
-  /* lower page (P4) */
   ["oldway", () => import("./sections/oldway.js")],
   ["different", () => import("./sections/different.js")],
   ["lower", () => import("./sections/lower.js")],
+  ["empower", () => import("./sections/empower.js")],
 ];
 
 function detectMode() {
@@ -58,15 +63,24 @@ async function boot() {
        (P3/P0 respectively); each phase flips its own switch. */
   }
 
-  for (const [name, load] of SECTION_INITS) {
-    try {
-      const mod = await load();
-      mod.default(ctx);
-    } catch (e) {
-      /* One broken section must not take down the rest of the page. */
-      console.error("[motion] section failed:", name, e);
+  const runInits = async (inits) => {
+    for (const [name, load] of inits) {
+      try {
+        const mod = await load();
+        mod.default(ctx);
+      } catch (e) {
+        /* One broken section must not take down the rest of the page. */
+        console.error("[motion] section failed:", name, e);
+      }
     }
-  }
+  };
+
+  await runInits(EAGER_INITS);
+
+  const idle = window.requestIdleCallback || ((cb) => setTimeout(cb, 800));
+  idle(() => {
+    runInits(DEFERRED_INITS).then(() => ScrollTrigger.refresh());
+  }, { timeout: 2500 });
 
   /* One refresh after fonts settle so SplitText line boxes and pin distances
      are computed against real metrics. */

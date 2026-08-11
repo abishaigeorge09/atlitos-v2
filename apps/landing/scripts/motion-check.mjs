@@ -75,6 +75,15 @@ function checkC2() {
 
 function checkC6() {
   if (skip("C6")) { return; }
+  /* First load = main.js + vendor + the EAGER motion modules (the boot list
+     in motion/index.js). DEFERRED sections load at post-boot idle and three/*
+     loads worker-side at post-load idle; both are off the first-paint path
+     and reported informationally instead of capped. */
+  const DEFERRED = new Set([
+    "sections/problem.js", "sections/interlude.js", "sections/steps.js",
+    "sections/features.js", "sections/oldway.js", "sections/different.js",
+    "sections/lower.js", "sections/empower.js", "systems/wipe.js",
+  ]);
   const files = [
     join(LANDING, "main.js"),
     join(LANDING, "vendor/gsap-3.13.min.js"),
@@ -87,11 +96,23 @@ function checkC6() {
     const p = join(dir, f);
     return statSync(p).isDirectory() ? walk(p) : (p.endsWith(".js") ? [p] : []);
   });
-  if (existsSync(motionDir)) { files.push(...walk(motionDir)); }
+  let deferredTotal = 0;
+  if (existsSync(motionDir)) {
+    for (const p of walk(motionDir)) {
+      const rel = p.slice(motionDir.length + 1);
+      if (DEFERRED.has(rel) || rel.startsWith("three/")) {
+        deferredTotal += gzipSync(readFileSync(p)).length;
+      } else {
+        files.push(p);
+      }
+    }
+  }
   let total = 0;
   for (const f of files) { total += gzipSync(readFileSync(f)).length; }
   const kb = (total / 1024).toFixed(1);
-  report("C6", total <= 80 * 1024, `first-load JS ${kb} KB gz (cap 80 KB)`);
+  const dkb = (deferredTotal / 1024).toFixed(1);
+  report("C6", total <= 80 * 1024,
+    `first-load JS ${kb} KB gz (cap 80 KB); idle-deferred motion ${dkb} KB gz`);
 }
 
 /* ---------- browser checks ---------- */
@@ -193,6 +214,73 @@ async function checkC12() {
     report("C12", r.compact && !r.richFlag && r.someRevealed,
       `floor with motion/ blocked: compact=${r.compact} rich=${r.richFlag} revealed=${r.someRevealed}`);
   }, { blockMotion: true });
+}
+
+async function checkC4() {
+  /* THE pin overlap sweep, R1. Scroll the Empower range in 40px steps and
+     assert the pinned stage never paints past the footer top. Planted red
+     with pinSpacing:false before this went green. */
+  if (skip("C4")) { return; }
+  await withPage(async (page) => {
+    await page.waitForTimeout(2200);
+    const r = await page.evaluate(async () => {
+      const wrap = document.querySelector(".emp-pin-wrap");
+      const stage = document.querySelector(".emp-stage");
+      const footer = document.querySelector(".site-footer");
+      if (!wrap || !stage || !footer) { return { skip: true }; }
+      const startY = wrap.getBoundingClientRect().top + scrollY - innerHeight;
+      const endY = startY + innerHeight * 4;
+      let worst = -Infinity;
+      let pinnedSeen = false;
+      for (let y = Math.max(0, startY); y < endY; y += 40) {
+        scrollTo(0, y);
+        await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
+        const st = stage.getBoundingClientRect();
+        const ft = footer.getBoundingClientRect();
+        const pinned = window.ScrollTrigger && ScrollTrigger.getAll().some((t) => t.pin && t.isActive);
+        if (pinned) {
+          pinnedSeen = true;
+          worst = Math.max(worst, st.bottom - ft.top);
+        }
+      }
+      return { worst: Math.round(worst), pinnedSeen };
+    });
+    if (r.skip) { report("C4", false, "empower pin structure missing"); return; }
+    report("C4", r.pinnedSeen && r.worst <= 0,
+      `pin overlap sweep: pinned seen=${r.pinnedSeen}, worst stage-bottom minus footer-top ${r.worst}px (must be <= 0)`);
+  });
+}
+
+async function checkC7() {
+  if (skip("C7")) { return; }
+  /* three.js loads at post-load idle into a WORKER (parse off main thread).
+     The assertions that matter: it is never on the critical path (requested
+     only after the load event) and never on mobile at all. */
+  const browser = await chromium.launch();
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  await page.goto(baseUrl, { waitUntil: "load" });
+  await page.waitForTimeout(4000);
+  const desktop = await page.evaluate(() => {
+    const nav = performance.getEntriesByType("navigation")[0];
+    const three = performance.getEntriesByType("resource").find((r) => r.name.includes("three.min"));
+    return {
+      requested: !!three,
+      afterLoad: three ? three.startTime > nav.loadEventEnd - 5 : true,
+    };
+  });
+  /* mobile 390px: zero three requests even after a full scroll */
+  const p2 = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const mobileReqs = [];
+  p2.on("request", (req) => { if (req.url().includes("three.min")) { mobileReqs.push(req.url()); } });
+  await p2.goto(baseUrl, { waitUntil: "load" });
+  await p2.evaluate(async () => {
+    const total = document.body.scrollHeight - innerHeight;
+    for (let y = 0; y <= total; y += 500) { scrollTo(0, y); await new Promise((r) => setTimeout(r, 40)); }
+  });
+  await p2.waitForTimeout(3000);
+  await browser.close();
+  report("C7", desktop.afterLoad && mobileReqs.length === 0,
+    `three.js: desktop requested=${desktop.requested} strictly after load=${desktop.afterLoad}, mobile requests after full scroll=${mobileReqs.length} (want 0)`);
 }
 
 async function checkC10C11() {
@@ -330,6 +418,8 @@ await checkC1();
 await checkC3();
 await checkC5();
 await checkC12();
+await checkC4();
+await checkC7();
 await checkC10C11();
 await checkC9();
 await checkC8();
