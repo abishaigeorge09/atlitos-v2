@@ -1,5 +1,6 @@
 import { cn } from '@/lib/utils';
 import { LandPlot, MapPin } from 'lucide-react-native';
+import { useState } from 'react';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/ui/button';
@@ -15,7 +16,15 @@ import { useThemeColors } from '@/theme/use-theme-colors';
  * tile rather than an `<Image>` with an empty `uri`, which would render a
  * blank box), and the list screen sorts/labels by distance from the
  * location store, the same mono numeric convention CoachCard already uses
- * for its own `distanceKm`. D18: the price row rendered the amount as a bare
+ * for its own `distanceKm`. F5 (concurrent native QA, Phase 5): a dead
+ * Unsplash seed URL 404s and, with no `onError` handler, `<Image>` just
+ * renders nothing rather than falling back to the same LandPlot placeholder
+ * tile an absent `imageUri` already gets. Track F root-caused and fixed the
+ * identical gap on two sibling card components; documented here rather than
+ * applied there since this file was this session's contested territory
+ * during that pass. `imageFailed` tracks a load failure the same way
+ * `imageUri` absence already does, so a 404 degrades to the placeholder
+ * tile instead of a blank image. D18: the price row rendered the amount as a bare
  * string sibling nested inside the same className'd `<Text>` as the "/hour"
  * label (`<Text>{formatINR(...)}<Text>/hour</Text></Text>`). On web that
  * left only the "/hour" span in the DOM, the leading amount never rendered,
@@ -50,6 +59,7 @@ function CourtCard({
   className,
 }: CourtCardProps) {
   const colors = useThemeColors();
+  const [imageFailed, setImageFailed] = useState(false);
 
   return (
     // Pressable overlay card, see docs/design/DESIGN-LANGUAGE.md. The card is a
@@ -73,8 +83,13 @@ function CourtCard({
       ) : null}
 
       <View style={{ pointerEvents: 'none' }}>
-        {imageUri ? (
-          <Image source={{ uri: imageUri }} className="h-36 w-full rounded-t-xl" resizeMode="cover" />
+        {imageUri && !imageFailed ? (
+          <Image
+            source={{ uri: imageUri }}
+            className="h-36 w-full rounded-t-xl"
+            resizeMode="cover"
+            onError={() => setImageFailed(true)}
+          />
         ) : (
           <View
             style={{ backgroundColor: colors.surfaceMuted }}
