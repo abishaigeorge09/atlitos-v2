@@ -43,6 +43,30 @@ than a one-off script. The self-teardown changes added to the e2e specs in
 that same branch are the actual root fix - tests that clean up after
 themselves prevent the pollution this incident traces back to.
 
+**Correction, same day, found by the concurrent native QA session:** the
+"referential integrity checked in both directions, resolved clean" verdict
+above was itself incomplete. It checked `auth.users`/`public.users` and
+`payment_intents`/`group_memberships` - the two relations the earlier
+incident had already burned - but not `chat_threads`. The F-31c cascade
+deleted the 36 training_groups, their memberships, and matching
+`chat_messages`, but never touched the `chat_threads` (context_type
+`'group'`) that pointed at those groups. Result: 38 of 39 group chat
+threads in production are orphaned (only "Cric Squad" is real), and real
+users see them in the Chat tab as threads titled just "Group" with no
+messages. Filed as `AT-158`, deliberately not fixed here - the right fix
+is probably not another delete, since `chat_messages` still reference
+these threads, and whether those messages should survive their group is a
+product call, not an agent's to make alone.
+
+The auditing session's own words on this are worth keeping verbatim,
+because the lesson generalizes past this one incident: "Checking only the
+failure modes you already know about is exactly the trap we spent today
+naming, and I walked into it while auditing someone else for it." A
+verification is only as complete as the set of relations it checks, and
+that set should be the schema's real foreign-key graph around the deleted
+rows, not just the ones a prior incident already taught you to worry
+about.
+
 ## 2026-08-11: same class of pollution, one layer up - e2e auth accounts
 
 `apps/e2e/specs/auth.spec.ts`'s AUTH-03/AUTH-04 (register a new player/coach)
