@@ -14,6 +14,7 @@ import { EmptyState } from '@/components/organisms/EmptyState';
 import { LoginGateModal } from '@/components/organisms/LoginGateModal';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
+import { usePendingAuthAction } from '@/hooks/use-pending-auth-action';
 import { DIFFICULTY_LABEL } from '@/lib/learn-display';
 import { SPORT_LABEL } from '@/lib/sport-display';
 import { supabase } from '@/lib/supabase';
@@ -50,6 +51,11 @@ export default function DrillDetailScreen() {
 
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [gateVisible, setGateVisible] = useState(false);
+  // F8 (P5 fix pass, PRD-01 FR-4): opening the mark-complete confirm sheet
+  // used to be dropped when the gate opened. Still requires an explicit tap
+  // on ConfirmSheet to actually complete the drill, so replaying just the
+  // "open the confirm step" is safe.
+  const { requireAuth, clearPendingAction } = usePendingAuthAction(requiresAuthGate);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -73,12 +79,10 @@ export default function DrillDetailScreen() {
   }, [load]);
 
   function onMarkCompletePress() {
-    if (requiresAuthGate) {
-      setGateVisible(true);
-      return;
-    }
-    setSubmitError(null);
-    setConfirmVisible(true);
+    requireAuth(() => {
+      setSubmitError(null);
+      setConfirmVisible(true);
+    }, () => setGateVisible(true));
   }
 
   async function onConfirmComplete() {
@@ -224,7 +228,11 @@ export default function DrillDetailScreen() {
         }}
       />
 
-      <LoginGateModal visible={gateVisible} onClose={() => setGateVisible(false)} />
+      <LoginGateModal
+        visible={gateVisible}
+        onClose={() => setGateVisible(false)}
+        onDismiss={clearPendingAction}
+      />
     </SafeAreaView>
   );
 }

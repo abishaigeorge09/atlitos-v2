@@ -40,6 +40,7 @@ import { ModerationSheet, type ModerationTarget } from '@/components/organisms/m
 import { Avatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
+import { usePendingAuthAction } from '@/hooks/use-pending-auth-action';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
 import { textStyle } from '@/theme/text-style';
@@ -243,13 +244,12 @@ export default function ClutchPostViewerScreen() {
     });
   }, [activeId, clips, playbackUrls, mintPlayback, clearTimer]);
 
-  function requireAuth(action: () => void) {
-    if (requiresAuthGate) {
-      setGateVisible(true);
-      return;
-    }
-    action();
-  }
+  // F8 (P5 fix pass, PRD-01 FR-4): same class of bug as the main Clutch feed
+  // (apps/mobile/src/app/(tabs)/clutch/index.tsx) - `requireAuth` used to
+  // drop the gated action outright once the gate opened. See the hook's
+  // docblock. Like, Save, opening the moderation sheet, and commenting are
+  // all cheap, idempotent, non-money actions, safe to replay.
+  const { requireAuth, clearPendingAction } = usePendingAuthAction(requiresAuthGate);
 
   function handleLike(clip: Clip) {
     requireAuth(() => {
@@ -271,7 +271,7 @@ export default function ClutchPostViewerScreen() {
             prev.map((c) => (c.id === clip.id ? { ...c, likedByMe: clip.likedByMe, likes: clip.likes } : c)),
           ),
         );
-    });
+    }, () => setGateVisible(true));
   }
 
   function handleSave(clip: Clip) {
@@ -286,7 +286,7 @@ export default function ClutchPostViewerScreen() {
         .catch(() =>
           setClips((prev) => prev.map((c) => (c.id === clip.id ? { ...c, savedByMe: clip.savedByMe } : c))),
         );
-    });
+    }, () => setGateVisible(true));
   }
 
   async function handleShare(clip: Clip) {
@@ -307,7 +307,7 @@ export default function ClutchPostViewerScreen() {
     if (!myId || clip.ownerId === myId) return;
     requireAuth(() => {
       setModerationTarget({ type: 'clip', entityId: clip.id, userId: clip.ownerId, userName: clip.channel });
-    });
+    }, () => setGateVisible(true));
   }
 
   // CT-C: report/block a comment's author, from a long-press on the row.
@@ -316,7 +316,7 @@ export default function ClutchPostViewerScreen() {
     if (!myId || comment.userId === myId) return;
     requireAuth(() => {
       setModerationTarget({ type: 'comment', entityId: comment.id, userId: comment.userId, userName: comment.username });
-    });
+    }, () => setGateVisible(true));
   }
 
   async function openComments(clip: Clip) {
@@ -603,7 +603,11 @@ export default function ClutchPostViewerScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      <LoginGateModal visible={gateVisible} onClose={() => setGateVisible(false)} />
+      <LoginGateModal
+        visible={gateVisible}
+        onClose={() => setGateVisible(false)}
+        onDismiss={clearPendingAction}
+      />
 
       <ModerationSheet
         visible={moderationTarget !== null}

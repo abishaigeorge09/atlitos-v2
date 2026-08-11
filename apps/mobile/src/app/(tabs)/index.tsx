@@ -18,6 +18,7 @@ import { AppBar } from '@/components/ui/app-bar';
 import { Button } from '@/components/ui/button';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Text } from '@/components/ui/text';
+import { usePendingAuthAction } from '@/hooks/use-pending-auth-action';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
 import { useThemeColors } from '@/theme/use-theme-colors';
@@ -44,6 +45,9 @@ export default function HomeScreen() {
   const continueAsGuest = useSessionStore((state) => state.continueAsGuest);
 
   const [gateVisible, setGateVisible] = useState(false);
+  // F8 (P5 fix pass, PRD-01 FR-4): the Notifications and Profile taps below
+  // used to be dropped when the gate opened.
+  const { requireAuth, clearPendingAction } = usePendingAuthAction(requiresAuthGate);
   const [hasUnread, setHasUnread] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -120,23 +124,13 @@ export default function HomeScreen() {
         variant="brand"
         hasUnreadNotifications={hasUnread}
         avatarUri={me?.avatarUrl ?? undefined}
-        onPressNotifications={() => {
-          if (requiresAuthGate) {
-            openGate();
-            return;
-          }
-          router.push('/notifications');
-        }}
-        onPressProfile={() => {
-          if (requiresAuthGate) {
-            openGate();
-            return;
-          }
+        onPressNotifications={() => requireAuth(() => router.push('/notifications'), openGate)}
+        onPressProfile={() =>
           // The profile now lives on the You tab (FB-001), so the header
           // avatar switches to that tab instead of pushing a duplicate
           // /profile screen onto the Home stack.
-          router.push('/(tabs)/you');
-        }}
+          requireAuth(() => router.push('/(tabs)/you'), openGate)
+        }
       />
 
       <ScrollView
@@ -203,7 +197,11 @@ export default function HomeScreen() {
         ) : null}
       </ScrollView>
 
-      <LoginGateModal visible={gateVisible} onClose={() => setGateVisible(false)} />
+      <LoginGateModal
+        visible={gateVisible}
+        onClose={() => setGateVisible(false)}
+        onDismiss={clearPendingAction}
+      />
     </SafeAreaView>
   );
 }

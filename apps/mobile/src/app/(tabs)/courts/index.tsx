@@ -13,6 +13,7 @@ import { Chip } from '@/components/ui/chip';
 import { CourtCard } from '@/components/ui/court-card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
+import { usePendingAuthAction } from '@/hooks/use-pending-auth-action';
 import { SPORT_LABEL } from '@/lib/sport-display';
 import { supabase } from '@/lib/supabase';
 import { useLocationStore } from '@/store/location-store';
@@ -56,6 +57,9 @@ export default function CourtsIndexScreen() {
   const requiresAuthGate = useSessionStore((state) => state.status !== 'signed_in');
   const profileCity = useSessionStore((state) => state.me?.city ?? null);
   const [gateVisible, setGateVisible] = useState(false);
+  // F8 (P5 fix pass, PRD-01 FR-4): "My bookings" navigation used to be
+  // dropped when the gate opened.
+  const { requireAuth, clearPendingAction } = usePendingAuthAction(requiresAuthGate);
 
   const locationStatus = useLocationStore((state) => state.status);
   const locationRequested = useLocationStore((state) => state.requested);
@@ -120,13 +124,7 @@ export default function CourtsIndexScreen() {
         <Pressable
           accessibilityRole="button"
           className="min-h-11 flex-row items-center gap-xs rounded-pill px-md active:bg-surface-muted"
-          onPress={() => {
-            if (requiresAuthGate) {
-              setGateVisible(true);
-              return;
-            }
-            router.push('/(tabs)/courts/bookings');
-          }}
+          onPress={() => requireAuth(() => router.push('/(tabs)/courts/bookings'), () => setGateVisible(true))}
         >
           <CalendarClock size={18} strokeWidth={1.75} color={colors.accent} />
           <Text className="font-sans-semibold text-sm text-accent">My bookings</Text>
@@ -242,7 +240,11 @@ export default function CourtsIndexScreen() {
         />
       )}
 
-      <LoginGateModal visible={gateVisible} onClose={() => setGateVisible(false)} />
+      <LoginGateModal
+        visible={gateVisible}
+        onClose={() => setGateVisible(false)}
+        onDismiss={clearPendingAction}
+      />
     </SafeAreaView>
   );
 }
