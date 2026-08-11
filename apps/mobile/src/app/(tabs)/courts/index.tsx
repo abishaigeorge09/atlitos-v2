@@ -25,6 +25,23 @@ const SPORT_FILTERS: Sport[] = ['football', 'cricket', 'badminton', 'tennis'];
 type LoadState = 'loading' | 'empty' | 'populated' | 'error';
 
 /**
+ * F4 (P5 fix pass, P5-IOS-FINDINGS.md finding F-3): a device's resolved
+ * coordinates are real (not faked, see location-store.ts's fallback rules),
+ * but a simulator/emulator's GPS can be nowhere near the seed venues (the
+ * reported repro: real San Francisco simulator coords against real
+ * Hyderabad/Bangalore venues computed a mathematically correct but useless
+ * "13,486.1 km" readout under a header claiming "near San Francisco"). No
+ * server-side signal distinguishes "genuinely far within India" from "this
+ * location has nothing to do with the venue set", so this is a distance
+ * sanity threshold, not a location-source check: past this point a numeric
+ * distance and a "near <city>" claim are actively misleading rather than
+ * merely large, and the honest move is to say so instead of rendering the
+ * number. India's own north-south span is ~3,200 km, so 3,000 km is chosen
+ * to stay well clear of any real in-country search.
+ */
+const IMPLAUSIBLE_DISTANCE_KM = 3000;
+
+/**
  * Courts tab root. PRD-01 3.5 / SPEC.md 6.6: sport chips filter over a
  * CourtCard list, real `venues`/`courts` data (RLS already restricts reads
  * to `venues.status = 'verified'`), sorted by distance from the location
@@ -51,6 +68,14 @@ export default function CourtsIndexScreen() {
   const [items, setItems] = useState<Court[]>([]);
   const [error, setError] = useState<ApiError | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  // F4: coords resolved but implausibly far from every result. Treat as "no
+  // meaningful nearby match" rather than claim proximity or show the number.
+  const nearestDistanceKm = items.reduce<number | null>((min, item) => {
+    if (item.distanceKm === undefined) return min;
+    return min === null ? item.distanceKm : Math.min(min, item.distanceKm);
+  }, null);
+  const locationIsMeaningful = coords === null || nearestDistanceKm === null || nearestDistanceKm <= IMPLAUSIBLE_DISTANCE_KM;
 
   const load = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -111,7 +136,13 @@ export default function CourtsIndexScreen() {
       <View className="flex-row items-center gap-xs">
         <MapPin size={14} strokeWidth={1.75} color={colors.textTertiary} />
         <Text className="font-sans text-sm text-text-secondary">
-          {locationStatus === 'loading' ? 'Finding your location...' : `Showing courts near ${city}`}
+          {locationStatus === 'loading'
+            ? 'Finding your location...'
+            : /* F4: a resolved city with no court within a plausible
+                 distance is not a claim this line should make. */
+              locationIsMeaningful
+              ? `Showing courts near ${city}`
+              : 'Showing all verified courts'}
         </Text>
       </View>
 
@@ -203,7 +234,7 @@ export default function CourtsIndexScreen() {
               name={item.name}
               location={item.location}
               pricePerHour={item.basePricePerHour}
-              distanceKm={item.distanceKm}
+              distanceKm={locationIsMeaningful ? item.distanceKm : undefined}
               onPress={() => router.push({ pathname: '/(tabs)/courts/court/[id]', params: { id: item.id } })}
               onBookPress={() => router.push({ pathname: '/(tabs)/courts/court/[id]', params: { id: item.id } })}
             />
