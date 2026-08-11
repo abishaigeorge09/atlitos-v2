@@ -1,9 +1,9 @@
 import { cn } from '@/lib/utils';
-import { formatINR } from '@atlitos/theme';
 import { LandPlot, MapPin } from 'lucide-react-native';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/ui/button';
+import { PriceText } from '@/components/ui/price-text';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/theme/use-theme-colors';
 
@@ -15,7 +15,18 @@ import { useThemeColors } from '@/theme/use-theme-colors';
  * tile rather than an `<Image>` with an empty `uri`, which would render a
  * blank box), and the list screen sorts/labels by distance from the
  * location store, the same mono numeric convention CoachCard already uses
- * for its own `distanceKm`.
+ * for its own `distanceKm`. D18: the price row rendered the amount as a bare
+ * string sibling nested inside the same className'd `<Text>` as the "/hour"
+ * label (`<Text>{formatINR(...)}<Text>/hour</Text></Text>`). On web that
+ * left only the "/hour" span in the DOM, the leading amount never rendered,
+ * while the court detail screen (PRD-01 3.5), which renders the identical
+ * `basePricePerHour` value through `PriceText` as a sibling next to a plain
+ * "per hour" `Text` rather than nested inside it, has always shown the price
+ * correctly. Fixed by matching that working composition: `PriceText` and
+ * "/hour" as siblings in a row, not one nested in the other. Name color
+ * also sourced from the JS-resolved theme (colors.text) rather than the
+ * `text-text` Tailwind class, matching the FB-002 fix already applied to
+ * this card's surface/border.
  */
 export interface CourtCardProps {
   imageUri?: string;
@@ -76,7 +87,9 @@ function CourtCard({
 
       <View style={{ pointerEvents: 'box-none', zIndex: 1 }} className="gap-sm p-lg">
         <View style={{ pointerEvents: 'none' }} className="gap-sm">
-          <Text className="font-sans-semibold text-lg text-text">{name}</Text>
+          <Text style={{ color: colors.text }} className="font-sans-semibold text-lg">
+            {name}
+          </Text>
 
           <View className="flex-row items-center gap-xs">
           <MapPin size={14} strokeWidth={1.75} color={colors.textTertiary} />
@@ -90,11 +103,9 @@ function CourtCard({
         </View>
 
         <View style={{ pointerEvents: 'box-none' }} className="flex-row items-center justify-between pt-xs">
-          <View style={{ pointerEvents: 'none' }}>
-            <Text className="font-mono-semibold text-base text-text">
-              {formatINR(pricePerHour)}
-              <Text className="font-sans text-sm text-text-secondary">/hour</Text>
-            </Text>
+          <View style={{ pointerEvents: 'none' }} className="flex-row items-baseline gap-xs">
+            <PriceText amount={pricePerHour} size="base" />
+            <Text className="font-sans text-sm text-text-secondary">/hour</Text>
           </View>
 
           <Button variant="primary" size="sm" onPress={onBookPress}>
