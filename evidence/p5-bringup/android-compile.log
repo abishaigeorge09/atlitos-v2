@@ -879,3 +879,4 @@ C/C++:       |     ^
 C/C++: 1 warning generated.
 
 > Task :expo-modules-core:configureCMakeDebug[armeabi-v7a]
+> Task :expo-modules-core:buildCMakeDebug[armeabi-v7a]

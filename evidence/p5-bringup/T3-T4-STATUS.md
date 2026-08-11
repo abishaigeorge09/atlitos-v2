@@ -39,11 +39,23 @@ compile for Android today" but I did not see `:app:assembleDebug` finish and no 
 at `apps/mobile/android/app/build/outputs/apk/debug/` as of this writing. Full running log:
 `evidence/p5-bringup/android-compile.log` (snapshot, the process was still live when copied).
 
-**Disposition: do not report "Android compiles" as a fact yet.** The next agent should check
-`ps -p 89623` (if still alive) and `find apps/mobile/android/app/build/outputs -iname '*.apk'`,
-or simply re-run the same `gradlew assembleDebug` command (Gradle will resume from its cache,
-most of the above work is already done and cached under `apps/mobile/android/.gradle` and
-`~/.gradle`, so a re-run should be much faster than this cold 58+ minute run).
+**Update, end of session: the background build process was killed by the harness** (task
+`bwql15isf`, status `killed`) after roughly 60 minutes, having progressed as far as
+`expo-modules-core:buildCMakeDebug[armeabi-v7a]` (3 of 4 ABIs' native Fabric code compiled,
+zero errors at any point, `:app:assembleDebug` itself never started). No APK was produced.
+
+**Disposition: do not report "Android compiles" as a fact.** Everything observed points toward
+a clean compile (every third-party native module built across all ABIs with zero errors, only
+Kotlin/C++ deprecation warnings), but the run did not reach `:app:assembleDebug` before being
+killed, so this is not proven. The next agent should re-run, ideally on a machine that is not
+under 400+ load average:
+```
+cd apps/mobile/android
+JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-22.jdk/Contents/Home ./gradlew assembleDebug --no-daemon
+```
+Gradle should resume from its build cache (`apps/mobile/android/.gradle`, `~/.gradle`), so a
+re-run should be substantially faster than this cold ~60 minute attempt, most of which was spent
+waiting for CPU time rather than doing new work.
 
 ### google-services.json wiring finding (not fixed, reported per scope)
 
