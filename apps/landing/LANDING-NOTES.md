@@ -10,19 +10,28 @@ Static HTML + CSS + vanilla JS, no framework, no build step. Deploy with
 (`git add apps/landing` fails if your shell is still cd'd into apps/landing).
 
 Page story, top to bottom:
-1. **Cinematic film hero** (`.vhero`): the founder's generated LED scoreboard video
-   (watermark removed via ffmpeg delogo, re encoded with dense keyframes for scrubbing,
-   `img/hero-scoreboard.mp4`, poster at the 7.9s resting frame). Phase 1 autoplays
-   0 to 7.9s then pauses; folder tab nav and scroll hint fade in. Phase 2: 300vh track,
-   scroll scrubs 7.9 to 9.88s with rAF inertia, fully reversible, intro never replays.
-   Past 80 percent an LED dot veil rises and Section 2 emerges from it.
+1. **Cinematic film hero** (`.vhero`): the CLEAN PLATE film (`img/hero-clean.mp4`, a blank
+   powered LED panel, no baked text) re encoded with dense keyframes for scrubbing, poster
+   at the 7.9s resting frame. Phase 1 autoplays 0 to 7.9s then pauses; folder tab nav and
+   scroll hint fade in. Phase 2: 300vh track, scroll scrubs 7.9 to 9.88s with rAF inertia,
+   fully reversible, intro never replays. Past 80 percent an LED dot veil rises and
+   Section 2 emerges from it.
+   **The message is now LIVE HTML**, not baked into the video: `#heroLed` types
+   `HERO_LED_MESSAGE` (a JS constant in main.js, so the copy is editable) onto the blank
+   panel once the board lands, then tracks the push in (scale) and dissolves before the
+   veil. Stays sharp at every resolution. Reduced motion gets the full message statically
+   via `.is-static`; zero JS gets it via the `html:not(.js)` rule.
+   The old `hero-scoreboard.mp4` (text baked in, delogo'd watermark) is kept in `img/` as
+   the previous era's asset.
 2. **led-entry**: "Meet Atlitos." + CTAs on the LED matrix darkness.
 3. **Problem band** (ember, curved seams, word rotator chip, two icon marquees).
 4. **Interlude** typed line + drawn arrows.
 5. **Step files**: each step is ONE sticky unit, a third width colored tab attached to its
    own full width white panel, all at the same offset; DOM order slides the next file over
-   the previous while docked tabs stay visible. Video slots wired by filename with photo
-   posters (`step1-courts.mp4`, `step2-coach.mp4`, `step3-roundup.mp4`).
+   the previous while docked tabs stay visible. The right hand slot is now a REAL HTML
+   `.demo-card` per step (courts grid, coach chat plus XP bar, roundup receipt), built from
+   the same `demo-card`/`d-row`/`d-xp` classes the differentiators section already used,
+   revealed row by row with `data-reveal="pop"` and staggered delays. No video files.
 6. **Features band** (marigold, looping typewriter, notification screen in the card language).
 7. **Old way vs Atlitos way**: espresso court diagram, starts on the old way, paths draw
    themselves, auto advances once to the clean line.
@@ -102,13 +111,38 @@ Page story, top to bottom:
 - **Higgsfield MCP is connected but out of credits**; top up to unlock generation and
   upscale_video from here.
 
+## Asset generation learnings (Higgsfield, Aug 2026 pass)
+
+Credits are no longer the blocker (the old "out of credits" note is stale). What IS the
+blocker is that **generative models hallucinate text onto everything**, and the founder
+rule is that no invented lettering ships. Three findings, all cost a regeneration:
+
+- **Video: a scoreboard case will get a fake brand badge printed on it** even with "no text
+  anywhere in the frame". The fix that worked: enumerate the surfaces ("the handle grip and
+  every plastic and metal surface is completely PLAIN and BLANK, no decals, no stickers, no
+  lettering"). Do not try to ffmpeg delogo it out, the badge grows as the camera pushes in
+  so a fixed delogo box cannot track it.
+- **Photo: a plain shirt comes back with a gibberish sponsor crest**, and one attempt even
+  added a fake watermark. `soul_2` failed twice; `nano_banana_pro` got it first try with
+  "completely plain solid colour cotton t shirt, absolutely no print".
+- **UI DEMO VIDEOS ARE A DEAD END.** Two attempts (courts grid, coach chat) both came back
+  with illegible gibberish lettering in the interface. This is a model limitation, not a
+  prompt problem, and no amount of "legible text" steering fixes it. The step slots are now
+  real HTML demo cards instead, which is strictly better: crisp at any resolution, editable
+  copy, on brand tokens, no fake text risk, and far smaller than three MP4s. **If a future
+  slot needs to show product UI, build it in HTML, do not generate it.**
+
+Also worth knowing: the starter plan allows only **2 concurrent jobs**, so batch submissions
+of 3+ fail with a rate limit; submit in pairs. `cinematic_studio_video_v2` accepts only
+1:1 / 16:9 / 9:16 (not 4:3, despite the generic docs).
+
 ## Open threads (waiting on the founder)
 
-1. `hero-clean.mp4` clean plate (1080p, blank LED panel) to unlock the live HTML LED
-   text overlay. Plan, prompt, and cost ladder in ASSET-PROMPTS.md section 7. $0 path
-   agreed in principle; parked with "we can get back to this later".
-2. Step demo videos, Empower story photo, ambient loop: prompts and exact filenames in
-   ASSET-PROMPTS.md; everything drops in with zero code changes.
+1. Hero scroll scrub frame sequence (`hero-seq-01..30.jpg`, ASSET-PROMPTS.md section 2) is
+   still unbuilt. One generation attempt produced visible AI physics artifacts (a distorted
+   arm on the lunging player), so nothing was shipped. Still a "future upgrade", the film
+   scrub covers this today.
+2. Ambient loop `night-court-loop.mp4` (section 6), optional, never wired.
 3. Real quotes for the Voices wall and real or approved Empower numbers to replace the
    SAMPLE tags.
 4. Newsletter is a mailto stopgap; real capture needs an endpoint decision.

@@ -167,6 +167,8 @@
     });
   }
 
+  var HERO_LED_MESSAGE = "THE WAY YOU PLAY SPORTS IS ABOUT TO CHANGE FOREVER";
+
   if (reduced) {
     /* Reduced motion: no autoplaying film, hold the resting frame. */
     var rv = document.getElementById("heroVideo");
@@ -176,6 +178,12 @@
       var seekRest = function () { try { rv.currentTime = 7.9; } catch (e) {} };
       if (rv.readyState > 0) { seekRest(); }
       else { rv.addEventListener("loadedmetadata", seekRest); }
+    }
+    var ledStatic = document.getElementById("heroLedText");
+    var ledWrap = document.getElementById("heroLed");
+    if (ledStatic && ledWrap) {
+      ledStatic.textContent = HERO_LED_MESSAGE;
+      ledWrap.classList.add("is-static");
     }
     return;
   }
@@ -201,10 +209,23 @@
   var vhero = document.querySelector(".vhero");
   var heroVeil = document.getElementById("heroVeil");
   var heroHint = document.getElementById("heroHint");
+  var heroLed = document.getElementById("heroLed");
+  var heroLedText = document.getElementById("heroLedText");
   if (vid && vhero) {
     var REST = 7.9, END = 9.88;
     var phase = "intro";
     var cur = REST;
+    var typeLed = function () {
+      if (!heroLed || !heroLedText) { return; }
+      heroLed.classList.add("is-lit");
+      var i = 0;
+      var tick = function () {
+        i += 1;
+        heroLedText.textContent = HERO_LED_MESSAGE.slice(0, i);
+        if (i < HERO_LED_MESSAGE.length) { setTimeout(tick, 34); }
+      };
+      setTimeout(tick, 200);
+    };
     var enterRest = function () {
       if (phase !== "intro") { return; }
       phase = "scrub";
@@ -213,6 +234,7 @@
       cur = REST;
       docEl.classList.add("v-rested");
       if (heroHint) { heroHint.style.opacity = "1"; }
+      typeLed();
     };
     vid.addEventListener("timeupdate", function () {
       if (phase === "intro" && vid.currentTime >= REST) { enterRest(); }
@@ -249,6 +271,13 @@
       /* the LED veil rises over the close up so section 2 emerges from it */
       if (heroVeil) {
         heroVeil.style.opacity = String(p < 0.8 ? 0 : (p - 0.8) / 0.2 * 0.92);
+      }
+      /* the typed message tracks the push in, then dissolves into the veil */
+      if (heroLed) {
+        var ledScale = 1 + p * 0.12;
+        heroLed.style.transform = "scale(" + ledScale.toFixed(3) + ")";
+        var ledFade = p < 0.72 ? 1 : Math.max(0, 1 - (p - 0.72) / 0.2);
+        heroLed.style.opacity = String(ledFade);
       }
     };
     heroLoop();

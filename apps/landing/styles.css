@@ -216,6 +216,31 @@ html:not(.js) .vhero-sticky { position: static; }
   opacity: 0;
   pointer-events: none;
 }
+/* live HTML LED text, typed on over the clean plate once the board lands */
+.vhero-led {
+  position: absolute;
+  left: 27.5%; top: 30%;
+  width: 47%; height: 36%;
+  display: flex; align-items: center; justify-content: center;
+  text-align: center;
+  overflow-wrap: break-word;
+}
+.vhero-led #heroLedText {
+  min-width: 0;
+  font-size: clamp(0.7rem, 2.1vw, 1.5rem);
+  font-weight: 600;
+  line-height: 1.32;
+  letter-spacing: 0.04em;
+  color: #F2C158;
+  text-shadow: 0 0 6px rgba(242, 193, 88, 0.85), 0 0 14px rgba(242, 193, 88, 0.4);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+.vhero-led.is-lit { opacity: 1; }
+html:not(.js) .vhero-led,
+.vhero-led.is-static { opacity: 1; }
+.led-caret { animation: blink 1s steps(1) infinite; margin-left: 2px; }
 .vhero-hint {
   position: absolute; left: 50%; bottom: 34px;
   transform: translateX(-50%);
@@ -419,26 +444,11 @@ html:not(.js) .vhero-hint { opacity: 1; }
 .step-lede { font-weight: 600; font-size: 1.0625rem; margin-bottom: 24px; color: var(--ink); }
 .stack-list { font-size: 1.0625rem; font-weight: 500; line-height: 1.85; color: var(--ink); }
 .stack-list + .stack-list { margin-top: 26px; }
-.step-video { position: relative; }
-.step-video video {
-  width: 100%;
-  height: clamp(300px, 48vh, 480px);
-  object-fit: cover;
-  border: 2.5px solid var(--ink);
-  border-radius: 10px;
-  background: var(--surface);
-  display: block;
+.step-demo {
+  display: flex; align-items: center; justify-content: center;
+  min-height: clamp(300px, 48vh, 480px);
 }
-.slot-chip {
-  position: absolute;
-  right: clamp(24px, 3vw, 40px); bottom: clamp(22px, 2.6vw, 36px);
-  background: var(--paper);
-  border: 1.5px dashed var(--ink);
-  border-radius: 999px;
-  padding: 4px 12px;
-  font-size: 0.625rem; font-weight: 700; letter-spacing: 0.08em;
-  color: var(--ink-secondary);
-}
+.step-demo .demo-card { width: 100%; margin-top: 0; }
 
 .demo-card { margin-top: auto; width: min(430px, 100%); }
 
@@ -1064,15 +1074,11 @@ html:not(.js) .vhero-hint { opacity: 1; }
 .emp-arrow .a-path { stroke-width: 5; }
 .photo-slot {
   margin-top: auto;
-  min-height: 96px;
-  border: 2px dashed rgba(251, 247, 241, 0.4);
+  min-height: 180px;
+  border: 2.5px solid var(--ink);
   border-radius: 10px;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-  font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.14em;
-  color: rgba(251, 247, 241, 0.6);
   background: url("img/empower-story.jpg") center / cover;
 }
-.slot-file { opacity: 0.7; letter-spacing: 0.04em; text-transform: none; }
 .emp-stats {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px;
   margin-top: 26px;

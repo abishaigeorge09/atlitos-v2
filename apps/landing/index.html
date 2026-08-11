@@ -49,9 +49,10 @@
        once and the page reads normally below. -->
   <section class="vhero" id="top" aria-label="Atlitos opening film">
     <div class="vhero-sticky">
-      <video id="heroVideo" class="vhero-video" src="img/hero-scoreboard.mp4" poster="img/hero-poster.jpg" autoplay muted playsinline preload="auto"></video>
+      <video id="heroVideo" class="vhero-video" src="img/hero-clean.mp4" poster="img/hero-poster.jpg" autoplay muted playsinline preload="auto"></video>
       <div class="vhero-veil" id="heroVeil" aria-hidden="true"></div>
-      <h1 class="sr-only">The way you play sports is about to change forever. Meet Atlitos.</h1>
+      <h1 class="vhero-led mono" id="heroLed" aria-hidden="true"><span id="heroLedText"></span><span class="led-caret">&#9608;</span></h1>
+      <p class="sr-only">The way you play sports is about to change forever. Meet Atlitos.</p>
       <p class="vhero-hint mono" id="heroHint" aria-hidden="true">SCROLL DOWN<span class="hint-arrow">&darr;</span></p>
     </div>
   </section>
@@ -159,9 +160,14 @@
             <p class="stack-list">Badminton.<br />Basketball.<br />Tennis.<br />Turf.<br />Near you.</p>
             <p class="stack-list">All verified.<br />All live.<br />All bookable.</p>
           </div>
-          <div class="demo-frame frame-marigold step-video">
-            <video src="img/step1-courts.mp4" poster="img/hero-pitch.jpg" autoplay muted loop playsinline></video>
-            <span class="slot-chip mono">VIDEO SLOT, img/step1-courts.mp4</span>
+          <div class="demo-frame frame-marigold step-demo" data-reveal="up">
+            <div class="demo-card">
+              <div class="d-row d-search"><span>Courts near you</span></div>
+              <div class="d-row" data-reveal="pop" data-reveal-delay="1"><span>Badminton Hall, Sector 12</span><span class="mono">&#8377;300</span></div>
+              <div class="d-row" data-reveal="pop" data-reveal-delay="2"><span>Turf Ground, HSR Layout</span><span class="mono">&#8377;500</span></div>
+              <div class="d-row" data-reveal="pop" data-reveal-delay="3"><span>Basketball Court, Indiranagar</span><span class="mono">&#8377;250</span></div>
+              <div class="d-row d-cta" data-reveal="pop" data-reveal-delay="4"><span>Booked, 7 to 8 pm</span><span class="mono">&#8377;300</span></div>
+            </div>
           </div>
         </div>
       </div>
@@ -176,9 +182,13 @@
             <p class="stack-list">Real coaches.<br />One on one sessions.<br />Group training.</p>
             <p class="stack-list">Drills.<br />XP.<br />Milestones.</p>
           </div>
-          <div class="demo-frame frame-ember step-video">
-            <video src="img/step2-coach.mp4" poster="img/step-train.jpg" autoplay muted loop playsinline></video>
-            <span class="slot-chip mono">VIDEO SLOT, img/step2-coach.mp4</span>
+          <div class="demo-frame frame-ember step-demo" data-reveal="up">
+            <div class="demo-card">
+              <div class="d-row d-search"><span>How do I fix my smash?</span></div>
+              <div class="d-row" data-reveal="pop" data-reveal-delay="1"><span>Coach Priya, footwork ladder drill</span></div>
+              <div class="d-row" data-reveal="pop" data-reveal-delay="2"><span>Drill complete</span><span class="mono">&#10003;</span></div>
+              <div class="d-xp" data-reveal="pop" data-reveal-delay="3"><span class="mono">XP</span><span class="xp-bar"><i style="width:65%"></i></span><span class="mono">65%</span></div>
+            </div>
           </div>
         </div>
       </div>
@@ -193,9 +203,12 @@
             <p class="stack-list">Post your best plays.<br />Shop the gear you need.</p>
             <p class="stack-list">Round up the change.<br />Fund another athlete.</p>
           </div>
-          <div class="demo-frame frame-green step-video">
-            <video src="img/step3-roundup.mp4" poster="img/step-give.jpg" autoplay muted loop playsinline></video>
-            <span class="slot-chip mono">VIDEO SLOT, img/step3-roundup.mp4</span>
+          <div class="demo-frame frame-green step-demo" data-reveal="up">
+            <div class="demo-card">
+              <div class="d-row d-search"><span>Grip tape and shuttles</span><span class="mono">&#8377;293</span></div>
+              <div class="d-row" data-reveal="pop" data-reveal-delay="1"><span>Round up</span><span class="mono">+&#8377;7</span></div>
+              <div class="d-row d-cta" data-reveal="pop" data-reveal-delay="2"><span>Routed to a young athlete</span><span class="mono">&#8377;7</span></div>
+            </div>
           </div>
         </div>
       </div>
@@ -526,10 +539,7 @@
           <p class="emp-num mono">03</p>
           <p class="emp-title">An athlete plays</p>
           <p class="emp-line">Court time, coaching, and gear, funded.</p>
-          <div class="photo-slot">
-            <span class="mono">PHOTO SLOT</span>
-            <span class="mono slot-file">img/empower-story.jpg</span>
-          </div>
+          <div class="photo-slot" role="img" aria-label="A young athlete on a neighborhood court, holding a badminton racquet"></div>
         </div>
       </div>
       <div class="emp-stats">
