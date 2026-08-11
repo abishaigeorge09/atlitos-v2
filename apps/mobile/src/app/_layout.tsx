@@ -78,11 +78,14 @@ function RootLayout() {
   }, []);
 
   // Apply the signed-in user's persisted appearance preference (0087) once
-  // their profile resolves. 'system' hands control back to the OS. Guests
-  // (no me row) stay on system default.
+  // their profile resolves, defaulting guests (no me row) to 'system'.
+  // applyTheme() (not a bare nativewind colorScheme.set()) is required here:
+  // see apply-theme.ts for why passing 'system' straight through leaves the
+  // DOM `dark` class stuck on light while useThemeColors() correctly
+  // resolves dark, the root cause of the J/K section contrast bug.
   const themePref = useSessionStore((state) => state.me?.theme);
   useEffect(() => {
-    if (themePref) applyTheme(themePref);
+    applyTheme(themePref ?? 'system');
   }, [themePref]);
 
   // Push registration: requests permission, registers/unregisters the
