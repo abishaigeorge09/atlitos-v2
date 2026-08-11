@@ -280,12 +280,36 @@ export default function ClutchFeedScreen() {
           viewabilityConfig={viewabilityConfig}
           onEndReachedThreshold={0.5}
           onEndReached={() => void loadMore()}
-          renderItem={({ item }) => (
+          // F1 (P5 fix pass): bound how much of the feed React Native keeps
+          // mounted at all. The RN default windowSize (21 "screens") plus a
+          // feed where every card is a real video player is what produced
+          // ~10 to 21 concurrent native players (Android OOM'd first because
+          // Media3 allocates a heavier per-item MediaSession than AVPlayer,
+          // but the same unbounded-mount shape is wrong on iOS too). 5
+          // screens (roughly 2 above/below the active one) plus a small batch
+          // size keeps the feed responsive on fling without holding the
+          // world in memory. removeClippedSubviews frees the native views
+          // for cards scrolled well out of range.
+          initialNumToRender={2}
+          maxToRenderPerBatch={3}
+          windowSize={5}
+          removeClippedSubviews
+          renderItem={({ item, index }) => (
             <View style={{ height: containerH }}>
               <ClutchPostCard
                 clip={item}
                 variant="feed"
                 active={item.id === activeId}
+                // F1: only the active card and its minted neighbors (the
+                // same "keep" window the playback-URL effect above already
+                // computes) get a real ClipVideo/useVideoPlayer instance.
+                // Every other rendered-but-offscreen card shows its poster
+                // image only, so it never allocates a native decoder.
+                mountPlayer={
+                  item.id === activeId ||
+                  playbackUrls[item.id] !== undefined ||
+                  (activeId === null && index === 0)
+                }
                 playbackUrl={playbackUrls[item.id]}
                 posterUrl={posterUrls[item.id]}
                 onOpen={() => openDetail(item.id)}

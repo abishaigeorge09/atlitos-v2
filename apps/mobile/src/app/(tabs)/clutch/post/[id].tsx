@@ -21,6 +21,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -427,11 +428,27 @@ export default function ClutchPostViewerScreen() {
           viewabilityConfig={viewabilityConfig}
           onEndReachedThreshold={0.5}
           onEndReached={() => void loadMore()}
-          renderItem={({ item }) => (
+          // F1 (P5 fix pass): same bounded-window rule as the main Clutch
+          // feed (apps/mobile/src/app/(tabs)/clutch/index.tsx) - this is the
+          // IG-Reels-style single-clip viewer's own vertical pager, and it
+          // has the identical unbounded-mount shape (a FlatList of full-bleed
+          // video pages with no virtualization props).
+          initialNumToRender={2}
+          maxToRenderPerBatch={3}
+          windowSize={5}
+          removeClippedSubviews
+          renderItem={({ item, index }) => (
             <View style={{ height: containerH }}>
               <ClipPage
                 clip={item}
                 active={item.id === activeId}
+                // F1: only the active card and its minted neighbors hold a
+                // real ClipVideo player; see ClutchPostCard's mountPlayer.
+                mountPlayer={
+                  item.id === activeId ||
+                  playbackUrls[item.id] !== undefined ||
+                  (activeId === null && index === initialIndex)
+                }
                 playbackUrl={playbackUrls[item.id]}
                 posterUrl={posterUrls[item.id]}
                 muted={muted}
@@ -608,6 +625,10 @@ export default function ClutchPostViewerScreen() {
 interface ClipPageProps {
   clip: Clip;
   active: boolean;
+  /** F1 (P5 fix pass): see ClutchPostCard's `mountPlayer`. Only true for the
+   * active page and its minted neighbors; every other virtualized page shows
+   * its poster only, never allocating a native video player. */
+  mountPlayer: boolean;
   playbackUrl?: string;
   posterUrl?: string;
   muted: boolean;
@@ -630,6 +651,7 @@ interface ClipPageProps {
 function ClipPage({
   clip,
   active,
+  mountPlayer,
   playbackUrl,
   posterUrl,
   muted,
@@ -646,7 +668,17 @@ function ClipPage({
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.text }}>
-      <ClipVideo url={playbackUrl} thumbUrl={posterUrl ?? clip.thumbUrl} active={active} muted={muted} />
+      {/* F1: only the near-visible window mounts a real player; every other
+          virtualized page renders its poster only. */}
+      {mountPlayer ? (
+        <ClipVideo url={playbackUrl} thumbUrl={posterUrl ?? clip.thumbUrl} active={active} muted={muted} />
+      ) : posterUrl ?? clip.thumbUrl ? (
+        <Image
+          source={{ uri: posterUrl ?? clip.thumbUrl }}
+          style={StyleSheet.absoluteFill}
+          resizeMode="cover"
+        />
+      ) : null}
 
       {/* Top scrim for header legibility. */}
       <View style={[StyleSheet.absoluteFill, { pointerEvents: 'none', bottom: '78%', backgroundColor: colors.overlay }]} />

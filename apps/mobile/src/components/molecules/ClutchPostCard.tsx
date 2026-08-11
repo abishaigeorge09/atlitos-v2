@@ -35,6 +35,17 @@ export interface ClutchPostCardProps {
   posterUrl?: string;
   /** True only for the single on-screen card, drives muted autoplay. */
   active?: boolean;
+  /** F1 (P5 fix pass): whether this card should hold a live `ClipVideo`
+   * player at all. The caller (a FlatList feed) sets this true only for the
+   * active card and its immediate neighbors; every other mounted-but-offscreen
+   * card renders its poster as a plain `<Image>` instead. `useVideoPlayer`
+   * allocates a real native decoder (ExoPlayer + MediaSession on Android) the
+   * instant `ClipVideo` mounts, regardless of `active`, so gating mount is the
+   * only way to bound concurrent players; `active` alone only controls
+   * play/pause on an already-created player. Defaults to `true` so the single-
+   * clip viewer (`clutch/post/[id].tsx` outside its own feed list) and the
+   * thumb-grid callers keep prior behavior. */
+  mountPlayer?: boolean;
   onLike?: () => void;
   onComment?: () => void;
   onShare?: () => void;
@@ -58,6 +69,7 @@ export function ClutchPostCard({
   playbackUrl,
   posterUrl,
   active = false,
+  mountPlayer = true,
   onLike,
   onComment,
   onShare,
@@ -107,8 +119,18 @@ export function ClutchPostCard({
     <View className="h-full w-full overflow-hidden bg-text">
       {/* 1. Playback surface (poster + video), non-interactive. The poster is
           the signed thumb URL from the feed, falling back to any absolute
-          clip.thumbUrl. */}
-      <ClipVideo url={playbackUrl} thumbUrl={posterUrl ?? clip.thumbUrl} active={active} />
+          clip.thumbUrl. F1: only the near-visible window mounts a real
+          player (mountPlayer); every other virtualized card renders its
+          poster as a plain Image so it never allocates a native decoder. */}
+      {mountPlayer ? (
+        <ClipVideo url={playbackUrl} thumbUrl={posterUrl ?? clip.thumbUrl} active={active} />
+      ) : posterUrl ?? clip.thumbUrl ? (
+        <Image
+          source={{ uri: posterUrl ?? clip.thumbUrl }}
+          style={StyleSheet.absoluteFill}
+          resizeMode="cover"
+        />
+      ) : null}
 
       {/* 2. Bottom scrim for caption legibility, never a touch target. */}
       <View
