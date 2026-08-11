@@ -5,6 +5,7 @@ import { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { LoginGateSheet } from '@/components/organisms/LoginGateSheet';
+import { usePortalBackDismiss } from '@/hooks/use-portal-back-dismiss';
 import { useThemeColors } from '@/theme/use-theme-colors';
 
 export interface LoginGateModalProps {
@@ -38,9 +39,14 @@ export interface LoginGateModalProps {
  * problems disappear because there is no second native window involved.
  * `ConfirmSheet` still ships on native `Modal` and carries the same a11y
  * containment risk; migrating it is a recorded follow up, not this change.
+ *
+ * F2 (P5 fix pass): the Portal pattern above gets none of native `Modal`'s
+ * free hardware-BACK-closes-it behavior on Android, so `usePortalBackDismiss`
+ * wires it explicitly.
  */
 export function LoginGateModal({ visible, onClose }: LoginGateModalProps) {
   const colors = useThemeColors();
+  usePortalBackDismiss(visible, onClose);
 
   function handleLogin() {
     onClose();

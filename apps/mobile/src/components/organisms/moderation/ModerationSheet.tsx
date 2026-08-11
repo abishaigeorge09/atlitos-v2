@@ -9,6 +9,7 @@ import { Animated, Pressable, StyleSheet, TextInput, useWindowDimensions, View }
 
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
+import { usePortalBackDismiss } from '@/hooks/use-portal-back-dismiss';
 import { supabase } from '@/lib/supabase';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
@@ -78,6 +79,9 @@ const entityLabel: Record<ModerationTargetType, string> = {
 export function ModerationSheet({ visible, target, onClose, onBlocked, onReported }: ModerationSheetProps) {
   const colors = useThemeColors();
   const moderation = useModeration(supabase);
+  // F2 (P5 fix pass): same Portal pattern as LoginGateModal/GroupMembersSheet,
+  // same missing Android hardware-BACK-closes-it behavior without this hook.
+  usePortalBackDismiss(visible, onClose);
 
   const [step, setStep] = useState<Step>('menu');
   const [reason, setReason] = useState('');

@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
+import { usePortalBackDismiss } from '@/hooks/use-portal-back-dismiss';
 import { useThemeColors } from '@/theme/use-theme-colors';
 
 export interface GroupMembersSheetProps {
@@ -24,11 +25,13 @@ export interface GroupMembersSheetProps {
  * roster of a training group's chat thread, opened from the conversation
  * screen's AppBar. Same in-tree Portal + absolute scrim + slide up pattern
  * as `LoginGateModal`, not a native RN `Modal`, for the same verified a11y
- * and navigation-ordering reasons documented there.
+ * and navigation-ordering reasons documented there. F2 (P5 fix pass): same
+ * `usePortalBackDismiss` wiring so Android hardware BACK closes it.
  */
 export function GroupMembersSheet({ visible, groupName, members, loading, onClose }: GroupMembersSheetProps) {
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
+  usePortalBackDismiss(visible, onClose);
 
   if (!visible) return null;
 
