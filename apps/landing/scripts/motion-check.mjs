@@ -195,6 +195,41 @@ async function checkC12() {
   }, { blockMotion: true });
 }
 
+async function checkC8() {
+  /* SLOW (three throttled loads); opt in with --checks C8. Median of three
+     because single throttled runs over a real network are noisy. */
+  if (!only || !only.includes("C8")) { return; }
+  const lcps = [], clss = [];
+  for (let i = 0; i < 3; i++) {
+    const browser = await chromium.launch();
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const page = await context.newPage();
+    const cdp = await context.newCDPSession(page);
+    await cdp.send("Network.enable");
+    await cdp.send("Network.emulateNetworkConditions",
+      { offline: false, downloadThroughput: 1.6 * 1024 * 1024 / 8, uploadThroughput: 750 * 1024 / 8, latency: 150 });
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
+    await page.goto(baseUrl, { waitUntil: "load" });
+    await page.waitForTimeout(3000);
+    lcps.push(await page.evaluate(() => new Promise((res) => {
+      new PerformanceObserver((l) => { const e = l.getEntries(); res(Math.round(e[e.length - 1].startTime)); })
+        .observe({ type: "largest-contentful-paint", buffered: true });
+      setTimeout(() => res(-1), 2000);
+    })));
+    clss.push(await page.evaluate(() => new Promise((res) => {
+      let v = 0;
+      new PerformanceObserver((l) => l.getEntries().forEach((e) => { if (!e.hadRecentInput) v += e.value; }))
+        .observe({ type: "layout-shift", buffered: true });
+      setTimeout(() => res(v), 1000);
+    })));
+    await browser.close();
+  }
+  const med = (a) => a.slice().sort((x, y) => x - y)[1];
+  const lcp = med(lcps), cls = med(clss);
+  report("C8", lcp > 0 && lcp < 2000 && cls < 0.02,
+    `median LCP ${lcp}ms (target <2000), median CLS ${cls.toFixed(4)} (target <0.02), trials LCP=[${lcps}]`);
+}
+
 /* ---------- run ---------- */
 
 checkC2();
@@ -203,6 +238,7 @@ await checkC1();
 await checkC3();
 await checkC5();
 await checkC12();
+await checkC8();
 
 const failed = results.filter((r) => !r.ok);
 console.log(`\n${results.length - failed.length}/${results.length} checks passed`);
