@@ -34,9 +34,9 @@
   --ember-tint: #FCEBE4;
   --green-tint: #DCF0E5;
 
-  --font-display: "Fraunces", Georgia, serif;
-  --font-body: "Inter", sans-serif;
-  --font-mono: "JetBrains Mono", monospace;
+  --font-display: "Fraunces", "Fraunces-fallback", Georgia, serif;
+  --font-body: "Inter", "Inter-fallback", sans-serif;
+  --font-mono: "JetBrains Mono", "JBMono-fallback", monospace;
 
   --shell: 1100px;
   --radius: 12px;
@@ -47,6 +47,33 @@
   /* halftone grain, the CSS fallback texture for section backdrops */
   --grain-dark: radial-gradient(rgba(28, 23, 18, 0.055) 1px, transparent 1.5px);
   --grain-light: radial-gradient(rgba(251, 247, 241, 0.07) 1px, transparent 1.5px);
+}
+
+/* Metric-tuned local fallbacks so the webfont swap does not reflow the page
+   (CLS guard, C8). size-adjust matched by measurement against the real faces. */
+@font-face {
+  font-family: "Fraunces-fallback";
+  src: local("Georgia"), local("Times New Roman");
+  size-adjust: 104%;
+  ascent-override: 92%;
+  descent-override: 24%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Inter-fallback";
+  src: local("Helvetica Neue"), local("Arial");
+  size-adjust: 100%;
+  ascent-override: 97%;
+  descent-override: 24%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "JBMono-fallback";
+  src: local("Courier New"), local("Menlo");
+  size-adjust: 111%;
+  ascent-override: 102%;
+  descent-override: 26%;
+  line-gap-override: 0%;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
