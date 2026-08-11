@@ -19,9 +19,11 @@
   <title>ATLITOS, the sports superapp for Indian athletes</title>
   <meta name="description" content="Book verified courts, train with coaches, share your best plays, and give back to athletes across India. One app for your whole game." />
   <meta name="theme-color" content="#FBF7F1" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;0,9..144,900;1,9..144,700;1,9..144,900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet" />
+  <!-- fonts are self hosted (fonts/, latin subsets, variable files); the two
+       Google origins were the LCP tail on throttled mobile -->
+  <link rel="preload" as="font" type="font/woff2" href="fonts/Fraunces-var.woff2" crossorigin />
+  <link rel="preload" as="font" type="font/woff2" href="fonts/Fraunces-var-italic.woff2" crossorigin />
+  <link rel="preload" as="font" type="font/woff2" href="fonts/Inter-var.woff2" crossorigin />
   <link rel="stylesheet" href="styles.css" />
   <link rel="preload" as="image" href="img/hero-panel.webp" fetchpriority="high" />
   <link rel="modulepreload" href="motion/index.js" />

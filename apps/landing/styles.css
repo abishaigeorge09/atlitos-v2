@@ -49,6 +49,53 @@
   --grain-light: radial-gradient(rgba(251, 247, 241, 0.07) 1px, transparent 1.5px);
 }
 
+/* Self-hosted variable fonts (latin subsets, one file per family/style).
+   Same-origin kills the two Google Fonts round-trips that were the LCP tail
+   on throttled mobile (C8). Files under fonts/, fetched from Google's CDN
+   once and pinned. */
+@font-face {
+  font-family: "Fraunces";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("fonts/Fraunces-var.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Fraunces";
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("fonts/Fraunces-var-italic.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("fonts/Inter-var.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("fonts/JetBrainsMono-var.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  /* the rupee sign (U+20B9) lives in latin-ext, which every price on the page
+     needs; this is the only latin-ext subset shipped */
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("fonts/JetBrainsMono-var-latinext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
 /* Metric-tuned local fallbacks so the webfont swap does not reflow the page
    (CLS guard, C8). size-adjust matched by measurement against the real faces. */
 @font-face {
@@ -178,7 +225,19 @@ html:not(.scrolled) .nav-card {
 }
 html:not(.scrolled) .site-nav a { color: var(--ink-inverse); }
 html:not(.scrolled) .nav-card .btn-nav { background: var(--paper); color: var(--ink); }
-.nav-card, .site-nav a, .nav-card .btn-nav { transition-property: background, background-color, color, border-color, max-width, padding; transition-duration: 0.35s; }
+/* one transition list, one place: the size morph keeps its 460ms feel, the
+   glass swap rides along at 350ms. A separate transition-property override
+   here once desynced the card width from the link collapse and made the CTA
+   slide over the wordmark mid tuck. */
+.nav-card {
+  transition:
+    max-width 460ms cubic-bezier(0.65, 0, 0.35, 1),
+    padding 460ms ease,
+    background 350ms ease,
+    border-color 350ms ease,
+    box-shadow 350ms ease;
+}
+.site-nav a, .nav-card .btn-nav { transition: background 350ms ease, color 350ms ease; }
 .compact .nav-card { max-width: 340px; padding: 11px 22px 10px; border-radius: 0 0 999px 999px; }
 .wordmark {
   font-family: var(--font-display);
@@ -189,6 +248,10 @@ html:not(.scrolled) .nav-card .btn-nav { background: var(--paper); color: var(--
   text-decoration: none;
   line-height: 1;
   white-space: nowrap;
+  /* optical: Fraunces italic carries its mass below the box centre; without
+     this the wordmark reads as sitting low next to the CTA pill */
+  display: inline-block;
+  transform: translateY(-0.05em);
 }
 .site-nav {
   display: flex; gap: 22px; margin-left: auto;
@@ -201,7 +264,8 @@ html:not(.scrolled) .nav-card .btn-nav { background: var(--paper); color: var(--
   font-size: 0.9375rem; font-weight: 600; white-space: nowrap;
 }
 .site-nav a:hover { color: var(--ember); }
-.compact .nav-card { max-width: 380px; padding: 8px 12px; }
+/* (a second .compact .nav-card rule lived here from the options gallery era;
+   it fought the pill rule above and cramped the tucked state. Removed.) */
 .compact .site-nav { max-width: 0; opacity: 0; margin-left: 0; transition: max-width 460ms cubic-bezier(0.65, 0, 0.35, 1), opacity 200ms ease; }
 .compact .wordmark { margin-right: auto; }
 
@@ -215,6 +279,7 @@ html:not(.scrolled) .nav-card .btn-nav { background: var(--paper); color: var(--
   border-radius: 999px;
   text-decoration: none;
   border: 2px solid var(--ink);
+  white-space: nowrap; /* a pill label never wraps, however tight the flex */
   transition: background-color 140ms ease, color 140ms ease, transform 140ms ease;
 }
 .btn-pill:hover { background: var(--ember); border-color: var(--ember); color: var(--ink-on-accent); }
