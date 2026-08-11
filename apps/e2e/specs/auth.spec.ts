@@ -103,24 +103,31 @@ test.describe("AUTH — auth, onboarding, session, cross-portal role gates", () 
     await page.getByRole("button", { name: "Create account" }).click();
 
     // Two legitimate outcomes depending on whether email confirmation is on
-    // for this project: either straight through to role-select (the
-    // catalog's literal expectation), or a "check your email" confirmation
-    // gate (account still created, just not yet routable to the wizard).
+    // for this project: either straight through to Home (register.tsx's own
+    // docstring: PRD-01 FR-6/FR-7, success lands in Home, never a forced
+    // role select; onboarding is offered later via Home's "Finish setting
+    // up" nudge, not gated at registration), or a "check your email"
+    // confirmation gate (account still created, just not yet signed in).
     // Both are asserted explicitly rather than only accepting one, so a
     // silent regression to neither (e.g. a crash, or a field-validation
     // error some fixture is tripping) still fails the test.
     await expect(
-      page.getByText("Check your email").or(page.getByText("How will you use Atlitos")),
+      page.getByText("Check your email").or(page.getByRole("button", { name: "Finish setting up" })),
     ).toBeVisible({ timeout: 15_000 });
 
     if (await page.getByText("Check your email").isVisible().catch(() => false)) {
       test.info().annotations.push({
         type: "note",
-        description: "Email confirmation is enabled on this project; registration stops short of role-select until confirmed.",
+        description: "Email confirmation is enabled on this project; registration stops short of Home until confirmed.",
       });
       return;
     }
 
+    // Home-first: registration does not force role-select. The "Finish
+    // setting up" nudge (shown because the new profile has no city yet)
+    // is the deferred entry point into the same role-select wizard.
+    await expect(page).toHaveURL(/\/\(tabs\)$|\/$/);
+    await page.getByRole("button", { name: "Finish setting up" }).click();
     await expect(page).toHaveURL(/\/role-select$/);
     await page.getByRole("button", { name: /I am a player/ }).click();
     await expect(page).toHaveURL(/\/player-setup\/0$/);
@@ -138,18 +145,22 @@ test.describe("AUTH — auth, onboarding, session, cross-portal role gates", () 
     await page.getByLabel("Confirm password input").fill("E2eCoachPass123!");
     await page.getByRole("button", { name: "Create account" }).click();
 
+    // See AUTH-03 above: registration lands in Home, not a forced
+    // role-select, by design.
     await expect(
-      page.getByText("Check your email").or(page.getByText("How will you use Atlitos")),
+      page.getByText("Check your email").or(page.getByRole("button", { name: "Finish setting up" })),
     ).toBeVisible({ timeout: 15_000 });
 
     if (await page.getByText("Check your email").isVisible().catch(() => false)) {
       test.info().annotations.push({
         type: "note",
-        description: "Email confirmation is enabled on this project; registration stops short of role-select until confirmed.",
+        description: "Email confirmation is enabled on this project; registration stops short of Home until confirmed.",
       });
       return;
     }
 
+    await expect(page).toHaveURL(/\/\(tabs\)$|\/$/);
+    await page.getByRole("button", { name: "Finish setting up" }).click();
     await expect(page).toHaveURL(/\/role-select$/);
     await page.getByRole("button", { name: /I am a coach/ }).click();
     await expect(page).toHaveURL(/\/coach-setup\/0$/);
