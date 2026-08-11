@@ -200,6 +200,42 @@ html:not(.scrolled) .cur-ring { border-color: rgba(251, 247, 241, 0.7); }
 @media (pointer: coarse) {
   .grain { display: none; } /* blend-mode layers cost real battery on mobile */
 }
+/* chapter rail (elements created by motion/systems/rail.js) */
+.chapter-rail {
+  position: fixed; right: 18px; top: 50%;
+  transform: translateY(-50%);
+  z-index: 85;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.rail-dot {
+  position: relative;
+  width: 22px; height: 22px;
+  display: flex; align-items: center; justify-content: center;
+  background: none; border: none; cursor: pointer; padding: 0;
+}
+.rail-dot i {
+  width: 8px; height: 8px;
+  border-radius: 999px;
+  background: transparent;
+  border: 1.5px solid var(--ink-tertiary);
+  transition: background-color 0.25s ease, border-color 0.25s ease, transform 0.25s ease;
+}
+.rail-dot.is-active i { background: var(--marigold); border-color: var(--marigold); transform: scale(1.25); }
+.rail-label {
+  position: absolute; right: 26px; top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.625rem; font-weight: 700; letter-spacing: 0.16em;
+  color: var(--ink-secondary);
+  background: var(--paper);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 3px 8px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  white-space: nowrap;
+}
+.rail-dot:hover .rail-label, .rail-dot:focus-visible .rail-label { opacity: 1; }
 
 .shell { max-width: var(--shell); margin: 0 auto; padding: 0 24px; }
 

@@ -10,6 +10,9 @@ import { initSmoothScroll } from "./scroll.js";
 
 /* EAGER: everything the fold needs, loaded at boot and counted in the C6
    first-load budget. */
+/* No curtain: measured ~500ms of LCP on throttled mobile against the 250ms
+   budget in MOTION-ARCHITECTURE.md 5.6, so per that section's own rule it was
+   dropped. The hero load choreography is the opening. */
 const EAGER_INITS = [
   ["header", () => import("./sections/header.js")],
   ["hero", () => import("./sections/hero.js")],
@@ -33,6 +36,7 @@ const DEFERRED_INITS = [
   ["different", () => import("./sections/different.js")],
   ["lower", () => import("./sections/lower.js")],
   ["empower", () => import("./sections/empower.js")],
+  ["rail", () => import("./systems/rail.js")],
 ];
 
 function detectMode() {

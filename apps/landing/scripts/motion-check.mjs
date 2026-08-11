@@ -83,6 +83,7 @@ function checkC6() {
     "sections/problem.js", "sections/interlude.js", "sections/steps.js",
     "sections/features.js", "sections/oldway.js", "sections/different.js",
     "sections/lower.js", "sections/empower.js", "systems/wipe.js",
+    "systems/rail.js",
   ]);
   const files = [
     join(LANDING, "main.js"),
