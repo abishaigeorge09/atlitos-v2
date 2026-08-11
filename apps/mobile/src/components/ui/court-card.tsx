@@ -93,11 +93,17 @@ function CourtCard({
 
           <View className="flex-row items-center gap-xs">
           <MapPin size={14} strokeWidth={1.75} color={colors.textTertiary} />
-          <Text className="flex-1 font-sans text-sm text-text-secondary" numberOfLines={1}>
+          <Text
+            style={{ color: colors.textSecondary }}
+            className="flex-1 font-sans text-sm"
+            numberOfLines={1}
+          >
             {location}
           </Text>
           {distanceKm !== undefined ? (
-            <Text className="font-mono text-xs text-text-secondary">{distanceKm.toFixed(1)} km</Text>
+            <Text style={{ color: colors.textSecondary }} className="font-mono text-xs">
+              {distanceKm.toFixed(1)} km
+            </Text>
           ) : null}
           </View>
         </View>
@@ -105,7 +111,9 @@ function CourtCard({
         <View style={{ pointerEvents: 'box-none' }} className="flex-row items-center justify-between pt-xs">
           <View style={{ pointerEvents: 'none' }} className="flex-row items-baseline gap-xs">
             <PriceText amount={pricePerHour} size="base" />
-            <Text className="font-sans text-sm text-text-secondary">/hour</Text>
+            <Text style={{ color: colors.textSecondary }} className="font-sans text-sm">
+              /hour
+            </Text>
           </View>
 
           <Button variant="primary" size="sm" onPress={onBookPress}>
