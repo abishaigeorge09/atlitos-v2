@@ -34,23 +34,18 @@ test.describe("AUTH — auth, onboarding, session, cross-portal role gates", () 
     // IS the cold start this case tests. Setting persona: "player" etc. is
     // what other tests do to authenticate; omitting it entirely is correct
     // here, not an oversight.
-    // Cold start: cleared storage means status resolves to signed_out, and
-    // splash (PRD-01 3.1) offers "Continue as guest" / "Log in" rather than
-    // forcing either — that IS the "no forced login redirect, no modal"
-    // contract. Guest browsing itself is a real anonymous Supabase session
-    // (session-store.ts), reached by completing that one deliberate tap.
+    // Cold start: splash.tsx's own docstring (PRD-01 3.1) documents that
+    // there is no first-run chooser screen any more. `signed_out` silently
+    // starts a guest session and routes straight to `/(tabs)`, same as
+    // `guest`/`signed_in`. Login/Register/onboarding are never forced at
+    // launch, only offered later where relevant (the guest gate on a
+    // gated tap, or Home's "Finish setting up" nudge). This replaced an
+    // older "Continue as guest" / "Log in" splash chooser this test used
+    // to assert against.
     await page.goto("/");
-    await expect(page).toHaveURL(/\/splash$/);
 
     // Not forced to /login, and the LoginGateSheet ("Want to hit the
     // spotlight?", its verbatim SPEC.md copy) never auto-opens.
-    await expect(page.getByText("Want to hit the spotlight?")).toHaveCount(0);
-    const guestButton = page.getByRole("button", { name: "Continue as guest" });
-    await expect(guestButton).toBeVisible();
-
-    await guestButton.click();
-
-    // Lands on Home (tabs root), not redirected back to any login screen.
     await expect.poll(() => new URL(page.url()).pathname, { timeout: 15_000 }).toBe("/");
     await expect(page).not.toHaveURL(/\/login$/);
     await expect(page.getByText("Want to hit the spotlight?")).toHaveCount(0);
@@ -314,7 +309,14 @@ test.describe("AUTH — auth, onboarding, session, cross-portal role gates", () 
       await page.getByLabel("Email").fill(EMAIL.player);
       await page.getByLabel("Password").fill(DEMO_PASSWORD);
       await page.getByRole("button", { name: "Sign in" }).click();
-      await expect(page.getByText("This account does not have admin access.")).toBeVisible({ timeout: 15_000 });
+      // The same copy renders twice on a failed admin login: an inline form
+      // error (LoginPage) and a global toast (refine's notificationProvider
+      // firing on the same onError/onSuccess-with-failure). Both are real,
+      // intentional UI, not a duplication bug - scope to the form so the
+      // assertion is unambiguous rather than picking one arbitrarily.
+      await expect(page.locator("form").getByText("This account does not have admin access.")).toBeVisible({
+        timeout: 15_000,
+      });
       expect(new URL(page.url()).pathname, "must stay on /login, never reach the admin console").toBe("/login");
       await context.close();
     }
