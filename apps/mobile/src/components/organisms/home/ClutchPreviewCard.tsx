@@ -106,6 +106,7 @@ export function ClutchPreviewCard({ reloadKey }: { reloadKey: number }) {
           clip={clip}
           variant="feed"
           active={false}
+          compactActions
           playbackUrl={playbackUrl}
           posterUrl={posterUrl}
           onOpen={openDetail}

@@ -6,6 +6,7 @@ import { Image, Pressable, StyleSheet, View } from 'react-native';
 
 import { ClipVideo } from '@/components/molecules/clip-video';
 import { Text } from '@/components/ui/text';
+import { cn } from '@/lib/utils';
 import { useThemeColors } from '@/theme/use-theme-colors';
 
 /**
@@ -46,6 +47,16 @@ export interface ClutchPostCardProps {
    * clip viewer (`clutch/post/[id].tsx` outside its own feed list) and the
    * thumb-grid callers keep prior behavior. */
   mountPlayer?: boolean;
+  /** F6 (P5 fix pass): the full-feed action rail (icon + count/label stack,
+   * `gap-lg` between items) was reused unmodified inside
+   * `ClutchPreviewCard`'s compressed Home teaser tile (iOS QA finding
+   * Obs-1), sized for a card close to full device height. `compactActions`
+   * drops the text row under each icon and tightens the gap, cutting the
+   * rail's footprint substantially so it fits any shorter/narrower card
+   * without the label crowding the icon above it or the tile's edge.
+   * Defaults to `false`, the full-feed rail, unchanged for the main feed
+   * and the single-clip viewer. */
+  compactActions?: boolean;
   onLike?: () => void;
   onComment?: () => void;
   onShare?: () => void;
@@ -70,6 +81,7 @@ export function ClutchPostCard({
   posterUrl,
   active = false,
   mountPlayer = true,
+  compactActions = false,
   onLike,
   onComment,
   onShare,
@@ -170,13 +182,20 @@ export function ClutchPostCard({
         ) : null}
       </View>
 
-      {/* 5. Action rail. box-none wrapper; each action is its own Pressable. */}
-      <View className="absolute bottom-md right-md items-center gap-lg" style={{ pointerEvents: 'box-none' }}>
+      {/* 5. Action rail. box-none wrapper; each action is its own Pressable.
+          F6: `compactActions` (the Home teaser tile) drops the count/label
+          row under each icon and tightens the gap, so the same four actions
+          fit a much shorter rail footprint without crowding the tile edge
+          or each other. */}
+      <View
+        className={cn('absolute bottom-md right-md items-center', compactActions ? 'gap-sm' : 'gap-lg')}
+        style={{ pointerEvents: 'box-none' }}
+      >
         <Pressable
           onPress={handleLike}
           accessibilityRole="button"
           accessibilityLabel={clip.likedByMe ? 'Unlike' : 'Like'}
-          className="min-h-11 min-w-11 items-center justify-center gap-xs"
+          className={cn('min-h-11 min-w-11 items-center justify-center', compactActions ? '' : 'gap-xs')}
         >
           <Heart
             size={24}
@@ -184,38 +203,38 @@ export function ClutchPostCard({
             color={clip.likedByMe ? colors.danger : colors.textInverse}
             fill={clip.likedByMe ? colors.danger : 'transparent'}
           />
-          <Text className="font-mono text-xs text-text-inverse">{clip.likes}</Text>
+          {compactActions ? null : <Text className="font-mono text-xs text-text-inverse">{clip.likes}</Text>}
         </Pressable>
         <Pressable
           onPress={onComment}
           accessibilityRole="button"
           accessibilityLabel="Comments"
-          className="min-h-11 min-w-11 items-center justify-center gap-xs"
+          className={cn('min-h-11 min-w-11 items-center justify-center', compactActions ? '' : 'gap-xs')}
         >
           <MessageCircle size={24} strokeWidth={1.75} color={colors.textInverse} />
-          <Text className="font-mono text-xs text-text-inverse">{clip.commentCount}</Text>
+          {compactActions ? null : <Text className="font-mono text-xs text-text-inverse">{clip.commentCount}</Text>}
         </Pressable>
         <Pressable
           onPress={handleSave}
           accessibilityRole="button"
           accessibilityLabel={clip.savedByMe ? 'Remove from saved' : 'Save'}
-          className="min-h-11 min-w-11 items-center justify-center gap-xs"
+          className={cn('min-h-11 min-w-11 items-center justify-center', compactActions ? '' : 'gap-xs')}
         >
           {clip.savedByMe ? (
             <BookmarkCheck size={24} strokeWidth={1.75} color={colors.accent} fill={colors.accent} />
           ) : (
             <Bookmark size={24} strokeWidth={1.75} color={colors.textInverse} />
           )}
-          <Text className="text-xs text-text-inverse">Save</Text>
+          {compactActions ? null : <Text className="text-xs text-text-inverse">Save</Text>}
         </Pressable>
         <Pressable
           onPress={onShare}
           accessibilityRole="button"
           accessibilityLabel="Share"
-          className="min-h-11 min-w-11 items-center justify-center gap-xs"
+          className={cn('min-h-11 min-w-11 items-center justify-center', compactActions ? '' : 'gap-xs')}
         >
           <Share2 size={24} strokeWidth={1.75} color={colors.textInverse} />
-          <Text className="text-xs text-text-inverse">Share</Text>
+          {compactActions ? null : <Text className="text-xs text-text-inverse">Share</Text>}
         </Pressable>
       </View>
     </View>
