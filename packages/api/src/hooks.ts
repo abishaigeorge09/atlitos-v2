@@ -41,7 +41,15 @@ export interface RegisterInput {
   name: string;
   email: string;
   phone: string;
-  dob: string; // ISO date, "YYYY-MM-DD"
+  /**
+   * ISO date, "YYYY-MM-DD". Optional since the founder moved date of birth
+   * off signup and into the trainings personalization step: asking for it at
+   * the door costs a field on the very first screen a new athlete sees, and
+   * nothing in the product reads it at signup time. `public.users.dob` is
+   * nullable and no age gate exists anywhere in the app, so omitting it
+   * changes no behaviour. Collected later from the profile instead.
+   */
+  dob?: string;
   password: string;
 }
 
@@ -80,7 +88,15 @@ export function useAuth(client: AtlitosClient) {
       const { data, error } = await client.auth.signUp({
         email: input.email,
         password: input.password,
-        options: { data: { name: input.name, phone: input.phone, dob: input.dob } },
+        options: {
+          data: {
+            name: input.name,
+            phone: input.phone,
+            // Only pass dob when it was actually collected. The 0073 trigger
+            // coalesces a missing key to null, which is what we want.
+            ...(input.dob ? { dob: input.dob } : {}),
+          },
+        },
       });
       if (error) throw mapAuthError(error);
 
@@ -93,7 +109,7 @@ export function useAuth(client: AtlitosClient) {
       // turn a successful signup into an error.
       await client
         .from("users")
-        .update({ phone: input.phone, dob: input.dob })
+        .update({ phone: input.phone, ...(input.dob ? { dob: input.dob } : {}) })
         .eq("id", data.session.user.id);
 
       return { session: data.session, needsEmailConfirmation: false };
@@ -217,6 +233,14 @@ export interface UpdateProfileInput {
   primarySport?: Sport;
   city?: string | null;
   state?: string | null;
+  /**
+   * ISO date, "YYYY-MM-DD", or null to clear. Date of birth was moved off
+   * signup into the trainings personalization surface, so this is where it is
+   * collected now. Optional everywhere: `public.users.dob` is nullable and no
+   * age gate exists in the app, so an athlete who never fills it in is not
+   * blocked from anything.
+   */
+  dob?: string | null;
   theme?: "system" | "light" | "dark";
   notificationPrefs?: { sessions: boolean; messages: boolean; promotions: boolean };
 }
@@ -358,6 +382,7 @@ export function useProfile(client: AtlitosClient) {
         handle?: string;
         city?: string | null;
         state?: string | null;
+        dob?: string | null;
         theme?: string;
         notification_prefs?: { sessions: boolean; messages: boolean; promotions: boolean };
       } = {};
@@ -367,6 +392,7 @@ export function useProfile(client: AtlitosClient) {
       if (input.handle !== undefined) patch.handle = input.handle.trim().toLowerCase();
       if (input.city !== undefined) patch.city = input.city;
       if (input.state !== undefined) patch.state = input.state;
+      if (input.dob !== undefined) patch.dob = input.dob;
       if (input.theme !== undefined) patch.theme = input.theme;
       if (input.notificationPrefs !== undefined) patch.notification_prefs = input.notificationPrefs;
 

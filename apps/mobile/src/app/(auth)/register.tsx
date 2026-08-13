@@ -19,18 +19,8 @@ interface FieldErrors {
   name?: string;
   email?: string;
   phone?: string;
-  dob?: string;
   password?: string;
   confirmPassword?: string;
-}
-
-/** YYYY-MM-DD mask: keep digits only, auto-insert the dashes while typing.
- * Deleting works too: the dash is re-derived from the digits every change. */
-function formatDob(raw: string): string {
-  const digits = raw.replace(/\D/g, '').slice(0, 8);
-  if (digits.length <= 4) return digits;
-  if (digits.length <= 6) return `${digits.slice(0, 4)}-${digits.slice(4)}`;
-  return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6)}`;
 }
 
 /** Accepts an optional +91 prefix plus spaces/dashes and normalizes down to
@@ -38,12 +28,6 @@ function formatDob(raw: string): string {
 function normalizePhone(raw: string): string {
   const stripped = raw.replace(/[\s-]/g, '');
   return stripped.startsWith('+91') ? stripped.slice(3) : stripped;
-}
-
-function isRealDate(iso: string): boolean {
-  const time = Date.parse(`${iso}T00:00:00Z`);
-  if (Number.isNaN(time)) return false;
-  return new Date(time).toISOString().slice(0, 10) === iso;
 }
 
 /**
@@ -67,7 +51,6 @@ export default function RegisterScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [dob, setDob] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -85,10 +68,6 @@ export default function RegisterScreen() {
     if (!/^\d{10}$/.test(normalizePhone(phone.trim()))) {
       errors.phone = 'Enter a 10 digit mobile number, +91 is optional';
     }
-    const dobValue = dob.trim();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dobValue) || !isRealDate(dobValue)) {
-      errors.dob = 'Enter your full date of birth, year first';
-    }
     if (password.length < 8) errors.password = 'Use at least 8 characters';
     if (password !== confirmPassword) errors.confirmPassword = 'Both passwords need to match';
     setFieldErrors(errors);
@@ -105,7 +84,6 @@ export default function RegisterScreen() {
         name: name.trim(),
         email: email.trim(),
         phone: normalizePhone(phone.trim()),
-        dob: dob.trim(),
         password,
       });
 
@@ -214,17 +192,6 @@ export default function RegisterScreen() {
                     value={phone}
                     onChangeText={setPhone}
                     error={fieldErrors.phone}
-                    editable={!submitting}
-                  />
-                  <Input
-                    type="pincode"
-                    label="Date of birth"
-                    required
-                    placeholder="YYYY-MM-DD"
-                    maxLength={10}
-                    value={dob}
-                    onChangeText={(value) => setDob(formatDob(value))}
-                    error={fieldErrors.dob}
                     editable={!submitting}
                   />
                   <Input
