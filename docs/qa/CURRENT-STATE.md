@@ -140,6 +140,26 @@ present because the branch was 171 commits behind. Deleting it "as dead code" wo
 a no-op at best and, had the reasoning been applied to a file launch-p4 had KEPT and started
 using, a live deletion.
 
+**A gate that references a script that never existed.** Sixth disguise, and the most expensive,
+because it invalidates months of assurance rather than one result.
+
+`.git/hooks/pre-push` runs two security checks:
+
+    if [ -x scripts/dod.sh ]; then ...
+    if [ -x scripts/security-invariants.sh ]; then ...
+
+NEITHER SCRIPT HAS EVER EXISTED IN ANY COMMIT. `git log --all` on both paths returns nothing.
+The `[ -x ]` guard means their absence is not an error: the hook prints nothing, exits 0, and
+the push proceeds. There is no `.github/` directory, so no CI catches it either.
+
+So every "the invariants are enforced" statement on this project has been held by reviewer
+attention alone. Same shape as the missing route types, one level up: the absence PASSES, and a
+green from a check that never ran is indistinguishable from a green that proves something.
+
+**Rule: a gate must be watched failing before it is believed.** Plant the violation, watch the
+hook or the check go red, then fix it. See [[feedback_checks_born_red]]. Applies to hooks, CI
+steps, lint rules, assertions and typechecks equally.
+
 **A cached green is evidence about a previous run.** Fifth disguise, and the cheapest to fall
 for. A session regenerated the route types, ran `pnpm turbo typecheck`, and got 12 of 12
 successful, 12 of 12 CACHED. A fully cached result says nothing whatever about the file just
@@ -233,14 +253,21 @@ contents alone; the secret was set directly against the project, which leaves no
 
 ### Product gaps found 2026-08-13, now being built
 - **The coach has NO creation layer.** A coach who completes onboarding has ZERO `session_types`
-  rows and no screen to create one. `sessions.session_type_id` is NOT NULL, so NOTHING IS BOOKABLE
-  FROM THAT COACH. The wizard writes pricing into `verification_requests.payload`, which nothing
+  rows and no screen to create one. the athlete booking screen lists only `session_types` where
+  `active`, so NOTHING IS BOOKABLE FROM THAT COACH. **Correction 2026-08-14:** this
+  previously said `sessions.session_type_id` is NOT NULL. It is NULLABLE, verified against
+  information_schema. SCHEMA.md's column table says NOT NULL and contradicts its own prose
+  forty lines later; I repeated the doc rather than checking the catalog. The conclusion
+  survives, the stated mechanism did not. The wizard writes pricing into `verification_requests.payload`, which nothing
   reads. `0004` promised a backfill that was never written.
 - `create_training_group`, `update_training_group` and `create_group_session` all exist as RPCs
   with API wrappers and have **ZERO call sites**. Attendance and start-session screens are fully
   built and unreachable.
 - **No notification fires on ANY session transition.** Nobody is told a session started.
-- **An active membership never becomes lapsed.** No pg_cron jobs exist anywhere in the repo. The
+- **An active membership never becomes lapsed.** No `cron.schedule` call exists anywhere in the repo. **Correction 2026-08-14:** that is true
+  of the TREE and false of PRODUCTION, which runs `expire-stale-holds` every 5 minutes. I
+  drew a conclusion about the live system from an absence in the repo, which is the exact
+  failure this section exists to warn about. The
   athlete sees "Active until <past date>" forever, the Renew button is dead code, and the coach's
   screen computes lapsed client-side so the two views disagree.
 - **Clip privacy does not exist.** No visibility column, and a user cannot delete their own clip:
