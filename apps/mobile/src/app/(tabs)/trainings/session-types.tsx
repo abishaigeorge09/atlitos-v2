@@ -1,4 +1,4 @@
-import { isOnlineSessionTypeName, useCoachSessionTypes } from '@atlitos/api';
+import { applyOnlineSessionTypeName, isOnlineSessionTypeName, useCoachSessionTypes } from '@atlitos/api';
 import type { ApiError, SessionTypeOption } from '@atlitos/types';
 import { radii, spacing } from '@atlitos/theme';
 import { router } from 'expo-router';
@@ -30,8 +30,14 @@ const EMPTY_DRAFT: FormDraft = { name: '', durationMinutes: '60', price: '', isO
 
 const DURATION_PRESETS = [30, 45, 60, 90];
 
+/** Validates the TRANSFORMED name, not the raw draft. `applyOnlineSessionTypeName`
+ * strips the word "online" on the In person branch, so a draft named "Online"
+ * (or any casing of it) with Online off transforms to an empty string; that must
+ * fail here, before the empty name ever reaches `createType`/`updateType`, because
+ * `session_types.name` is `text not null` with no non-empty check (0018_coaching.sql). */
 function draftIssue(draft: FormDraft): string | null {
-  if (!draft.name.trim()) return 'Give this session type a name.';
+  const finalName = applyOnlineSessionTypeName(draft.name, draft.isOnline);
+  if (!draft.name.trim() || !finalName.trim()) return 'Give this session type a name.';
   const duration = Number(draft.durationMinutes);
   if (!Number.isInteger(duration) || duration <= 0) return 'Duration must be a whole number of minutes above zero.';
   const price = Number(draft.price);
@@ -48,7 +54,7 @@ function draftIssue(draft: FormDraft): string | null {
  * zero rows here cannot receive a single request no matter how complete
  * their profile or availability is. The onboarding wizard collects these at
  * step 4 but only ever wrote them into `verification_requests.payload`,
- * which nothing reads; 0088 backfills the coaches stranded by that, and this
+ * which nothing reads; 0099 backfills the coaches stranded by that, and this
  * screen is how every coach owns them from here on.
  *
  * Writes go straight to the table under `session_types_write_own`
@@ -222,7 +228,29 @@ export default function CoachSessionTypesScreen() {
                 Add a session type with a duration and a price. Until you do, your profile shows no options to book.
               </Text>
             </View>
-          ) : null}
+          ) : (
+            // Onward link once at least one type exists: a session type alone
+            // does not make a coach bookable, availability does too, and this
+            // screen otherwise offered no route there (the dashboard's zero
+            // state CTA only pointed back here, see (shell)/index.tsx).
+            <View
+              style={{
+                borderRadius: radii.xl,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.surfaceMuted,
+                padding: spacing.lg,
+                gap: spacing.sm,
+              }}
+            >
+              <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
+                Next, set your availability. Athletes can only book slots you have opened up.
+              </Text>
+              <Button variant="secondary" onPress={() => router.push('/(tabs)/trainings/availability')}>
+                <Text style={{ color: colors.text }}>Set your availability</Text>
+              </Button>
+            </View>
+          )}
 
           {error ? <Text style={[textStyle('caption'), { color: colors.danger }]}>{error.message}</Text> : null}
 
