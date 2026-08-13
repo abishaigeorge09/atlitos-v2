@@ -306,9 +306,32 @@ fi
 # strings. Scoped to strings that actually render:
 #   - JSX text nodes
 #   - the copy-bearing props (title, label, placeholder, message, ...)
+#   - exported/local `const` string literals (copy is routinely held in a
+#     bare const and imported into a screen, not always inlined as a prop)
+#   - template literals
 # and NOT to docblocks, identifiers, imports or Figma frame names in comments,
 # which have produced false findings here before (VERIFICATION-WAVE-1 section 3
-# ruled out two of exactly that shape).
+# ruled out two of exactly that shape), and NOT to the `// ATLITOS v2 - <path>`
+# file header convention (162 files on the base branch use an em-dash there by
+# established convention; it is a comment, already excluded by the comment
+# filter below, and it is not copy).
+#
+# WIDENED 2026-08-14 (p6 integration audit). The original version only fired
+# inside JSX props, JSX text nodes and object-literal keys, and reported PASS
+# on a file with an em-dash in an exported `const` string, an en-dash in an
+# exported `const` string, and an em-dash in a template literal: all three are
+# a common way this codebase holds copy, and a check that reports clean over
+# an unexamined class is worse than no check (CLAUDE.md > rules learned
+# expensively). Each of the three misses was planted and watched fail before
+# this widening was trusted: see docs/qa/verify/GATES-BORN-RED.md.
+#
+# The two new offender clauses below are deliberately restricted to em-dash and
+# en-dash only, NOT the spaced hyphen `offenders`/`offenders2`/`offenders3` also
+# check for. A bare `const` or template literal is far more likely than a JSX
+# prop to legitimately contain a spaced hyphen inside an identifier-adjacent
+# string (a slug, a regex fragment, a compound token), and — / – are typographic
+# punctuation that essentially never appears in that code, so the false
+# positive risk is asymmetric between the two dash kinds here.
 #
 # KNOWN GAP, recorded rather than quietly dropped: an in-word hyphen such as the
 # date mask placeholder "YYYY-MM-DD" at apps/mobile/src/app/profile/edit.tsx is
@@ -316,6 +339,12 @@ fi
 # 6 and is tracked in docs/DEBT.md. Widening to every hyphen today would fire on
 # that undecided line and on compound words, and a check people learn to ignore
 # protects nothing.
+#
+# KNOWN GAP, template literals: the pattern below only catches a template
+# literal whose opening backtick, dash and closing backtick sit on the SAME
+# line. A dash inside a multi-line template literal is not caught. Recorded
+# here rather than silently accepted; widening further needs a multi-line-aware
+# tool, not another grep -E line.
 # --------------------------------------------------------------------------
 COPY_PROPS='(title|label|placeholder|message|description|subtitle|heading|caption|cta|body|text|accessibilityLabel|accessibilityHint|alt|emptyText|errorText|helperText|confirmLabel|cancelLabel)'
 offenders=$(command grep -rnE "$COPY_PROPS=\"[^\"]*(—|–| - )" $SHIP_DIRS \
@@ -324,7 +353,11 @@ offenders2=$(command grep -rnE "$COPY_PROPS: \"[^\"]*(—|–| - )" $SHIP_DIRS \
               --include='*.ts' --include='*.tsx' 2>/dev/null || true)
 offenders3=$(command grep -rnE '>[A-Za-z0-9,\.\(\) ]*(—|–| - )[A-Za-z0-9,\.\(\) ]*<' $SHIP_DIRS \
               --include='*.tsx' 2>/dev/null || true)
-offenders=$(printf '%s\n%s\n%s\n' "$offenders" "$offenders2" "$offenders3" \
+offenders4=$(command grep -rnE '(export )?const [A-Za-z0-9_]+[^=]*=[ \t]*"[^"]*(—|–)[^"]*"' $SHIP_DIRS \
+              --include='*.ts' --include='*.tsx' 2>/dev/null || true)
+offenders5=$(command grep -rnE '`[^`]*(—|–)[^`]*`' $SHIP_DIRS \
+              --include='*.ts' --include='*.tsx' 2>/dev/null || true)
+offenders=$(printf '%s\n%s\n%s\n%s\n%s\n' "$offenders" "$offenders2" "$offenders3" "$offenders4" "$offenders5" \
             | sed '/^$/d' \
             | command grep -vE ':[0-9]+:[ \t]*(//|\*|/\*)' \
             | command grep -v 'invariant-allow: copy-dashes' | sort -u || true)

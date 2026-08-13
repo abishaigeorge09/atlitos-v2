@@ -125,3 +125,34 @@ codebase.
 - **The GitHub Actions workflow has never executed.** It is committed and unrun. Its first real run
   is its own born-red moment and should be watched.
 - **No UI was touched, so no screenshot or Maestro run applies.** The one source edit is a comment.
+
+## copy-dashes widened, p6 integration audit, 2026-08-14
+
+An adversarial audit of the p6 scale merge found `copy-dashes` PASSING over three real misses,
+because the original pattern only fired inside JSX props, JSX text nodes and object-literal
+keys. Reproduced against a planted file, `apps/mobile/src/__copy_dashes_plant.ts`:
+
+    export const PLANT_EM_DASH_CONST = "This is copy — with an em dash in a bare const.";
+    export const PLANT_EN_DASH_CONST = "This is copy – with an en dash in a bare const.";
+    export function plantTemplateLiteral(name: string) {
+      return `Hello ${name} — welcome to the app.`;
+    }
+
+Run before widening: `PASS copy-dashes no em-dash, en-dash or spaced hyphen in rendered copy`.
+A check reporting clean over an unexamined class is worse than no check (CLAUDE.md, rules
+learned expensively), so the pattern was widened to also cover em-dash/en-dash inside bare
+`const` string literals and single-line template literals (deliberately not the spaced hyphen,
+see the script comment for why that would be false-positive-prone on this shape). Same three
+planted lines, same file, after widening:
+
+    FAIL  copy-dashes              dash punctuation in user-visible copy
+            apps/mobile/src/__copy_dashes_plant.ts:1:export const PLANT_EM_DASH_CONST = "This is copy — with an em dash in a bare const.";
+            apps/mobile/src/__copy_dashes_plant.ts:3:export const PLANT_EN_DASH_CONST = "This is copy – with an en dash in a bare const.";
+            apps/mobile/src/__copy_dashes_plant.ts:6:  return `Hello ${name} — welcome to the app.`;
+            Use a comma or a period. See CLAUDE.md > House style.
+    security-invariants: 1 of 8 checks FAILED.
+
+The plant was then deleted (`git status --porcelain` clean afterwards) and the real merged tree
+re-run: `PASS copy-dashes` with 0 offenders, confirming the wider pattern does not fire on the
+`// ATLITOS v2 - <path>` file header convention (162 files, excluded as a comment line) or on any
+other existing const/template literal in the tree.
