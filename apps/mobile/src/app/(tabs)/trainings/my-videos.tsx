@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
 import { supabase } from '@/lib/supabase';
+import { CLIP_BUFFER_OPTIONS } from '@/lib/video-buffer';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
 
@@ -39,6 +40,9 @@ export default function MyTraineeVideosScreen() {
   const [playbackError, setPlaybackError] = useState<ApiError | null>(null);
   const player = useVideoPlayer(null, (instance) => {
     instance.loop = false;
+    // BUG-042, same class as ClipVideo: expo-video's default maxBufferBytes of
+    // 0 lets media3 reserve 125 MB of Dalvik heap per player.
+    instance.bufferOptions = CLIP_BUFFER_OPTIONS;
   });
 
   const load = useCallback(async () => {
