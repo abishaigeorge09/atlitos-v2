@@ -22,6 +22,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { StatTile } from '@/components/ui/stat-tile';
 import { Text } from '@/components/ui/text';
 import { formatINR } from '@atlitos/theme';
+import { COACH_TRAINEE_VIDEO_REVIEW_ENABLED } from '@/lib/feature-flags';
 import { fetchMyGroupSessions, type MyGroupSessionEntry } from '@/lib/group-sessions';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
@@ -34,8 +35,19 @@ const REQUEST_PREVIEW_COUNT = 3;
 const UPCOMING_PREVIEW_COUNT = 3;
 
 /** Sessions that were actually paid for and not declined or cancelled,
- * mirroring the coaching bookings list's stat definitions (PRD-01 FR-27). */
-const LIVE_STATUSES: Session['status'][] = ['requested', 'accepted', 'completed', 'rescheduled', 'rated'];
+ * mirroring the coaching bookings list's stat definitions (PRD-01 FR-27).
+ * `in_progress` (0077) belongs here for the same reason it belongs in that
+ * list: a session the coach has started is a session the athlete paid for
+ * and is receiving right now, and omitting it made these tiles count down
+ * mid session. */
+const LIVE_STATUSES: Session['status'][] = [
+  'requested',
+  'accepted',
+  'in_progress',
+  'completed',
+  'rescheduled',
+  'rated',
+];
 
 function goToSession(sessionId: string) {
   router.push({ pathname: '/(tabs)/trainings/session/[id]', params: { id: sessionId } });
@@ -341,9 +353,9 @@ export default function TrainingsScreen() {
             <EmptyState
               icon={Dumbbell}
               title="No sessions yet"
-              body="Set your availability so athletes can find open slots and send you a request."
-              ctaLabel="Set your availability"
-              onCtaPress={() => router.push('/(tabs)/trainings/availability')}
+              body="Add a session type with a price, then set your availability. Athletes can only book what you have priced."
+              ctaLabel="Add a session type"
+              onCtaPress={() => router.push('/(tabs)/trainings/session-types')}
             />
           ) : (
             <View style={{ gap: spacing.lg }}>
@@ -365,12 +377,17 @@ export default function TrainingsScreen() {
               ) : null}
 
               {/* PRD-02 3.3 dashboard order: stat grid, Upcoming sessions,
-                  Session Requests. Availability keeps a persistent entry
-                  here; the empty state CTA was its only route in before. */}
+                  Session Requests. Session types and Availability both keep a
+                  persistent entry here; the empty state CTA was the only
+                  route into availability before, and session types had no
+                  screen at all, which is what made a coach unbookable. */}
               <View style={{ gap: spacing.sm }}>
                 <View className="flex-row items-center justify-between">
                   <Text style={[textStyle('h3'), { color: colors.text }]}>Upcoming sessions</Text>
                   <View className="flex-row items-center">
+                    <Button variant="text" size="sm" onPress={() => router.push('/(tabs)/trainings/session-types')}>
+                      <Text style={{ color: colors.accent }}>Session types</Text>
+                    </Button>
                     <Button variant="text" size="sm" onPress={() => router.push('/(tabs)/trainings/availability')}>
                       <Text style={{ color: colors.accent }}>Availability</Text>
                     </Button>
@@ -494,17 +511,23 @@ export default function TrainingsScreen() {
             </View>
             <PlayerSessionRequests sessions={requestedSessions} />
             <MilestonesRail milestones={learnHome ? learnHome.milestones : null} />
-            <Button
-              variant="secondary"
-              onPress={() => router.push('/(tabs)/trainings/my-videos')}
-              style={{ justifyContent: 'space-between' }}
-            >
-              <View className="flex-row items-center gap-sm">
-                <Film size={18} strokeWidth={1.75} color={colors.text} />
-                <Text style={{ color: colors.text }}>My review videos</Text>
-              </View>
-              <ChevronRight size={18} strokeWidth={1.75} color={colors.textTertiary} />
-            </Button>
+            {/* Gated: with no coach upload surface mounted, this row linked
+                to a screen that could never hold a single video. See
+                COACH_TRAINEE_VIDEO_REVIEW_ENABLED for the whole picture and
+                the recommendation. */}
+            {COACH_TRAINEE_VIDEO_REVIEW_ENABLED ? (
+              <Button
+                variant="secondary"
+                onPress={() => router.push('/(tabs)/trainings/my-videos')}
+                style={{ justifyContent: 'space-between' }}
+              >
+                <View className="flex-row items-center gap-sm">
+                  <Film size={18} strokeWidth={1.75} color={colors.text} />
+                  <Text style={{ color: colors.text }}>My review videos</Text>
+                </View>
+                <ChevronRight size={18} strokeWidth={1.75} color={colors.textTertiary} />
+              </Button>
+            ) : null}
             {hasAnySession ? <FindCoachCard /> : null}
           </View>
         )}
