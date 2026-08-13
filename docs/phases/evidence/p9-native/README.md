@@ -84,4 +84,3 @@ flow was driven and no credentials were typed).
   that are not bundled, so those image slots render blank or as a placeholder
   glyph. Fine for this inspection; should point at real Storage URLs for
   screenshots and TestFlight.
-</content>
