@@ -267,3 +267,72 @@ test fixtures, not defects, and should not block the gate; they need `.maestro/*
 reauthored against current seed data (Track N or integrator, not a P5 native-code fix).**
 FB-004, the 9 EXT walks, Razorpay smoke, and Alert.alert tap-through remain undone and are the
 handoff for the next iOS session.
+
+## 2026-08-13 repair pass: classification of the 7 failing flows
+
+Branch `phase-11/p5-maestro`, off `phase-11/launch-p4`. Scope: `auth-register-skip`,
+`courts-header`, `groups-athlete`, `groups-coach`, `groups-join-guard`,
+`trainings-coach-browse`, `trainings-shell`. All classifications below are backed by read only
+SQL against `syzzfgaudpifwvbpycyi` and/or an on-device screenshot; nothing here is asserted
+without one or the other. No write, DDL, seed script, or cleanup was run against production at
+any point.
+
+**Environmental note that shaped this whole pass**: the iOS simulator's installed build
+predated commit `24bb65a` (the date of birth removal) despite a file timestamp suggesting
+otherwise, and `apps/mobile/.env` does not exist in a fresh git worktree (it is gitignored), so
+the first two rebuild attempts crashed at launch with `supabaseUrl is required`. Fixed by
+exporting `EXPO_PUBLIC_SUPABASE_URL`/`EXPO_PUBLIC_SUPABASE_ANON_KEY`/
+`EXPO_PUBLIC_RAZORPAY_KEY_ID` inline for the build command (also needed
+`SENTRY_DISABLE_AUTO_UPLOAD=true`, the Sentry debug symbol upload step fails without an
+`SENTRY_ORG` in this environment). Every flow below was reverified against this fresh, correct
+Release build, not the stale one. A "Could not load your dashboard" transient network flake
+was seen twice across roughly two dozen runs, on both original and already-fixed sections of
+the same flow; resolved on retry, not caused by any edit here.
+
+| Flow | Disposition | Evidence |
+|---|---|---|
+| `courts-header` | Stale test, fixed | "Turf B" court still exists live (id `b0000000-...-002`); it just was not always above the fold, order shifts with location resolution timing. Now scrolls for it. Also reverifies BUG-039 (distance readout) fixed: header now reads "Showing all verified courts" with no distance claim when location has not resolved, instead of "13,486.1 km". |
+| `auth-register-skip` | Bad selector (fixed) + real bug (left failing) | Two issues stacked. (1) Bad selector: the flow's final assertions used bare text `"ATLITOS"`, which matched something off the visible Register screen (the app's own `app.json` name surfacing in the accessibility tree) and reported COMPLETED while genuinely still on Register; proven by screenshot plus a hierarchy dump with no on-screen "ATLITOS" node. Fixed to the Home search bar placeholder, unique to Home. (2) Once the selector could no longer lie, a real navigation bug surfaced and reproduces every run on the fresh build: tapping "Log in" on Register, then "Continue as guest" on Login, lands back on Register instead of Home. Root cause in `apps/mobile/src/app/(auth)/login.tsx`'s `afterAuth()`: `router.canGoBack()` is true because Register is still on the stack beneath Login, so `router.back()` pops to Register. Left failing on purpose, filed as a P2 for Track F. Also removed the now obsolete "Date of birth \*" assertion (commit 24bb65a moved DOB to profile edit). |
+| `groups-join-guard` | Stale test, fixed | "Demo Coach One" does not exist. coach1 (`5b262cf1-8f95-45df-b453-0802013f82a1`) is "Ravi Kumar" now; seed accounts were renamed by launch Phase 1's security lockdown. Retargeted and reran clean. |
+| `trainings-coach-browse` | Stale test, fixed | Same "Demo Coach One" -> "Ravi Kumar" fixture rename. Reran clean. |
+| `trainings-shell` | Stale test (multiple), fixed | Same coach rename, plus three more fixture-drift issues surfaced once the flow could actually reach real screens: (a) chat threads no longer mask the participant name behind "Atlitos user" (removed from the product entirely, no occurrence left in source); asserts the real names ("Ravi Kumar" for the player, "Demo Player" for the coach) instead. (b) both accounts' Analytics tabs were authored against a 3 session empty state threshold and have since organically grown past it (5 sessions each); asserts the "Sessions held" (athlete) / "Hours coached" (coach, different layout branch) stat labels instead of a count dependent empty string. (c) the upcoming session drill in card was pinned to an exact date, 2026-07-30, which has since passed and rolled off the list; matches any upcoming session with the coach instead. One selector robustness fix along the way: the drill in tap landed on the Clutch bottom tab instead of the session card because the card sat right at the tab bar edge after scrolling; `centerElement: true` fixes it. |
+| `groups-athlete` | Real bug reclassified as stale fixture, with evidence, plus a bad selector | The dispatch brief classified the `.*4 members.*` failure as a status-filter defect: chat member count allegedly including a pending, not yet active membership. SQL evidence shows the opposite: `chat_thread_members` for the Cric Squad thread holds exactly 5 rows (coach1 plus the group's 4 currently ACTIVE memberships), and the one pending membership correctly has no `chat_thread_members` row. The count does filter on status; a 4th athlete simply took an active paid membership after this flow was authored against 3. Reasserted "5 members" as the correct current count. Separately, the flow's message-send step had a bad selector (`.*Message.*` could match the "Send message" button as a substring, tapping Send with nothing typed); fixed to `.*Message input.*`, matched against the input's actual accessibility text. Full pass after both fixes. |
+| `groups-coach` | Not executed live | Its own documented design resets a seeded session's status via a raw Postgres `UPDATE` after each run, which the DB write gate for this task forbids outright. Running it without that reset would leave the seeded session permanently `completed`. Left unexecuted; every assertion it makes was instead checked read only via SQL and none of it is stale (Cric Squad, the seeded group session, its 3 unmarked participants, and the attendance policy text all match current data exactly), so the original "stale fixture" bucket this flow was lumped into was very likely wrong for this specific flow. Needs a live run with write permission, or a staging project, from the next agent. |
+
+### Final honest tally (14 of 15 flows executed, one held back for the write gate)
+
+13 pass, 1 fail (real product bug, correctly left red), 1 not executed (`groups-coach`, data
+verified clean, blocked only by the write gate). Zero flows were weakened to manufacture a
+green.
+
+### Real product bugs confirmed this pass
+
+1. **auth-register-skip navigation bug (P2), confirmed and root caused.** Guest exits Login via
+   "Continue as guest" after reaching it through Register's "Log in" link lands back on
+   Register instead of Home. `apps/mobile/src/app/(auth)/login.tsx` `afterAuth()`,
+   `router.canGoBack()` incorrectly prefers `router.back()` over `router.replace('/(tabs)')`
+   when the stack beneath Login is another auth screen rather than a gate's origin screen.
+   Screenshot: `.maestro` run artifacts under `~/.maestro/tests/2026-08-13_130708/` and
+   `2026-08-13_134624` (also captured a related selector-robustness bug on the same run, the
+   drill in mistap into Clutch, see `trainings-shell` above).
+
+### Data pollution swept, not this pass's job to fix
+
+Both `groups-athlete`'s `.*4 members.*` reclassification and `trainings-shell`'s Analytics
+threshold rewrite trace back to the same root the earlier F-2 finding already named: this
+Supabase project is a shared environment where automated load/e2e scripts continuously write
+into the same accounts real QA sessions run against (dozens of `e2e CH-XX`, `E2E CO-XX`
+sessions and chat messages observed on `player@atlitos.dev` and `coach1@atlitos.dev` during
+this pass). This is not a defect in the product; it means any Maestro assertion that hardcodes
+a count, a date, or a specific fixture name on these two accounts will keep going stale on its
+own, independent of any real regression. Recommend the next infra pass either give Maestro its
+own isolated seed accounts, or convert every remaining count/date-sensitive assertion in this
+suite to the same "label present" or "any matching row" pattern used in the fixes above.
+
+### What a flow needed that does not exist in the database (named, not created)
+
+Nothing in the 7 flows required data that is actually missing. Every "stale fixture" here was a
+renamed identity (`Demo Coach One` -> `Ravi Kumar`) or organic data growth past a hardcoded
+threshold, not an absence. The one item still genuinely missing from an earlier finding (not
+part of this 7): FB-004 needs a demo account with at least one `live` (not `Under review` or
+`Cancelled`) clip to exercise the IG-style viewer; still not seeded, not created here either.
