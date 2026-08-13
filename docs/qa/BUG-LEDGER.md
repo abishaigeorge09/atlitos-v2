@@ -215,3 +215,64 @@ Recommended follow-ups, none actioned here:
 - Consider an upload-time sanity check on clip thumbnails, since a near-zero-chroma, poorly-compressible thumbnail is cheaply detectable.
 
 Evidence images are kept outside the repo at `~/Documents/atlitos-evidence/bug-p5-clutch-render/` (`ios-probe.png` isolation, `ios-bytes.png` on-device byte proof, `ios-clean-clip.png` positive control, `ios-home-fresh.png` reproduction, `husband-thumb.jpg` and `vframe_b8c0c76e.png` the stored asset itself). The probe route used to produce them is preserved in history at commit `83c0c5d` and removed again in `8065a11` so no debug surface can ship.
+
+---
+
+# BUG-P6-01: `0027_session_transition_service_role_gate.sql` has tool-call XML committed into it
+
+Found while building account deletion (`phase-11/p6-account-deletion`), by replaying the full
+migration history against a local Postgres. Not found by any existing check, because nothing in
+this repo replays the migrations.
+
+`supabase/migrations/0027_session_transition_service_role_gate.sql` ends with two stray lines:
+
+```
+338: grant execute on function public.session_transition(uuid, text, text, date, time) to authenticated;
+339: </content>
+340: </invoke>
+```
+
+`psql -v ON_ERROR_STOP=1 -f 0027_...sql` fails:
+
+```
+psql:.../0027_session_transition_service_role_gate.sql:340: ERROR:  syntax error at or near "</"
+LINE 1: </content>
+        ^
+```
+
+**Impact.** The migration history is not replayable from a clean checkout. Anyone running
+`supabase start`, `supabase db reset`, a preview branch, or any disaster-recovery rebuild stops at
+0027. Production is unaffected: the DDL from that file is live, so it was applied by some path
+that did not include the trailing lines.
+
+**Severity: HIGH for recoverability, none for the running product.** It converts "restore from
+migrations" from a routine operation into a manual one, and it will bite the first person who
+needs it, at the worst moment.
+
+**Not fixed here.** Existing migrations are outside this track's owned paths, and the rule is to
+add new migrations rather than edit applied history. This one is the exception worth a founder
+decision, because the two lines are not SQL and deleting them changes nothing that was ever
+executed. Recommended: delete lines 339 and 340 in place, then prove it by replaying the whole
+history into a scratch database.
+
+**Class sweep, done.** `grep -rn '^</content>'` across `supabase`, `apps`, `packages`, `scripts`
+and `docs` returns exactly two hits: this migration, and
+`docs/phases/evidence/p9-native/README.md:87`. The second is a documentation file, harmless, and
+also not in this track's paths. No other file in the repo carries this artifact.
+
+**Suggested check to stop it recurring:** a pre-push hook step that replays
+`supabase/migrations/*.sql` into a scratch database. This entire deletion track was built against
+exactly such a replay, so the tooling cost is low and the check is real rather than a grep.
+
+---
+
+# BUG-P6-02: `database.types.ts` does not know about the `0098` RPCs
+
+`packages/types/src/db/database.types.ts` is generated from the live schema, so
+`client.rpc("account_deletion_preview")` fails to typecheck against its RPC name union until
+`0098` is applied and the file is regenerated.
+
+`packages/api/src/use-account-deletion.ts` carries a narrow, commented cast (`UntypedRpc`) rather
+than hand editing a generated file belonging to another package. Regenerate
+`database.types.ts` after applying `0098` and delete the cast. Until then the two new RPC names are
+not type checked, though their response shape is still normalised through `shapePreview`.

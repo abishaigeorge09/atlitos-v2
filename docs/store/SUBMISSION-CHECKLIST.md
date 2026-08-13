@@ -16,7 +16,7 @@ Companion documents: `DATA-INVENTORY.md` (the evidence base), `APPLE-APP-PRIVACY
 Ranked by probability of causing an actual rejection or takedown, highest first. Each one names
 what was checked so the finding can be re verified rather than trusted.
 
-## 1. No in app account deletion. BLOCKER for both stores
+## 1. In app account deletion. RESOLVED in `phase-11/p6-account-deletion`
 
 Apple Guideline 5.1.1(v) requires an app supporting account creation to let the user **initiate
 deletion from inside the app**. Google's account deletion policy expects an in app path alongside
@@ -37,7 +37,43 @@ is missing today. Correct fix: a real in app deletion flow, which pairs with the
 Apple work in Phase 8, since Apple additionally requires an Apple ID sign in to be revocable from
 the app.
 
-Owner: engineer, in `apps/mobile/**`, which this track does not own.
+### Status: built, and here is the reviewer answer
+
+Shipped on `phase-11/p6-account-deletion` (migration `0098_account_deletion.sql`, edge function
+`delete-account`, `packages/api/src/use-account-deletion.ts`, and
+`apps/mobile/src/app/profile/delete-account.tsx`).
+
+**Where the reviewer finds it:** Settings, Account section, **Delete account**. Settings is
+reachable from three entry points (the You bottom tab, the Profile page, and the Trainings tab).
+The row opens a confirmation screen; nothing is deleted until the reviewer types `DELETE` exactly,
+so it cannot be triggered by accident.
+
+**Answer for App Review notes, use verbatim:**
+
+> Account deletion is in the app at Settings, Account, Delete account. The screen lists exactly
+> what is removed and what is kept, then requires the word DELETE to be typed before the
+> destructive button enables. On success the account is deleted, the user is signed out, and the
+> email address is released so it can be used to register again. Payment, order, booking and
+> donation records are retained for Indian tax and accounting obligations, with the user's name
+> removed from them. This retention is disclosed at https://www.atlitos.com/privacy.
+
+**Google Play Data Safety, the deletion URL field:** `https://www.atlitos.com/delete-account`.
+That page stays live and is still the required web accessible route for someone who cannot open
+the app. It is no longer the only route, which is what closed this risk.
+
+**What the reviewer can verify without an account of their own:** the demo reviewer account (risk
+6, F2) can walk to the screen and read the confirmation copy without completing it. Do not have
+the reviewer complete the deletion on the demo account, since re-seeding it costs a cycle.
+
+**Retention answer if Apple asks why anything survives:** `delete_my_account()` retains
+`payment_intents`, `ledger_entries`, `refunds`, `orders`, `donations`, `sessions` and
+`court_bookings`, and anonymises the author on each rather than orphaning the row. Apple's
+guideline permits retaining data a legal obligation requires. The full table by table decision is
+in `docs/architecture/SCHEMA.md`, "Account deletion (migration `0098`)".
+
+**Still open on this risk:** the deletion is available to a signed in user of the mobile app only.
+Sign in with Apple lands in Phase 8; when it does, verify the Apple token revocation requirement
+separately, because releasing the GoTrue email does not by itself revoke an Apple ID grant.
 
 ## 2. The production build ships a Razorpay TEST key. BLOCKER
 
@@ -210,7 +246,7 @@ item names its home so the right builder picks it up.
 | # | Task | Path | Closes risk |
 |---|---|---|---|
 | B1 | Add a Settings Legal section linking to privacy, terms, support and account deletion | `apps/mobile/**` | 1, 7 |
-| B2 | Build a real in app account deletion flow plus the deletion RPC | `apps/mobile/**`, `supabase/**` | 1 |
+| B2 | ~~Build a real in app account deletion flow plus the deletion RPC~~ DONE on `phase-11/p6-account-deletion`: migration `0098`, edge function `delete-account`, Settings row and confirmation screen | `apps/mobile/**`, `supabase/**` | 1 |
 | B3 | Swap the production Razorpay key id in the build profile once the founder supplies the live key | `apps/mobile/eas.json` | 2 |
 | B4 | Remove or relabel the Pro and Elite pricing band and the scrolling tier strip | `apps/landing/index.html:344-401` | 3 |
 | B5 | Add `support.html` with contact email, response expectation and links to privacy, terms and deletion | `apps/landing/**` | 4 |

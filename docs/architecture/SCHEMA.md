@@ -1354,3 +1354,123 @@ table's ownership or money semantics change; every addition is additive.
   private `chat:user:{uid}` topic. Members = `participant_a`/`participant_b`
   (1:1 threads) UNION `chat_thread_members` (group threads). SECURITY DEFINER,
   EXECUTE revoked from all client roles.
+
+## Account deletion (migration `0098`)
+
+Apple App Store Guideline 5.1.1(v) and the Google Play account deletion policy:
+an account created inside the app must be deletable from inside the app. The
+`atlitos.com/delete-account` page is a request-by-email mechanism and does not
+satisfy either policy on its own.
+
+### Why deletion does not delete the row
+
+`public.users.id` references `auth.users` `ON DELETE CASCADE`, and 45 foreign
+keys point back at `public.users`. Replaying the whole migration history on a
+local Postgres and running `delete from auth.users where id = <athlete>` against
+a fixture with three captured payment intents produced:
+
+| Table | Before | After |
+| --- | --- | --- |
+| `payment_intents` | 3 | **0** |
+| `donations` | 1 | **0** |
+| `sessions` | 1 | **0** |
+| `chat_messages` | 2 | **0** |
+| `ledger_entries` | 8 | 8 |
+| `ledger_entries` with a NULL `payment_intent_id` | 0 | **8** |
+| sum(debits) - sum(credits) | 0.00 | 0.00 |
+
+The last two rows are the point: the ledger stayed perfectly balanced through a
+total loss of traceability, so "the ledger balances" is a necessary but wholly
+insufficient check. The `RESTRICT` on `donations -> payment_intents` never
+fired, because `donations.donor_id` `CASCADE` removed the donation first.
+
+So deletion **never** removes the `public.users` row or the FK graph beneath it.
+The user's own row becomes their own tombstone. Because nothing is deleted at
+the top of the graph, no cascade fires at all, and every retained row keeps a
+live, resolvable author reference. That is what "anonymise, do not orphan"
+means here, and it is why the coach's session history, the court partner's
+future booking and the other party's chat thread all still read correctly.
+
+### Table by table
+
+**Deleted** (the user's own data, no second party depends on it): `addresses`,
+`athlete_sports`, `cart_items`, `clip_likes`, `clip_saves`, `clips`,
+`coach_certificates`, `coach_trainee_notes`, `coach_trainee_videos`,
+`donation_drafts`, `drill_completions`, `follows` (both directions),
+`notification_prefs`, `notifications`, `order_drafts`,
+`product_wishlist_items`, `push_tokens`, `user_milestones`, `user_roles`,
+`xp_events`, and `blocked_users` rows where the deleting user is the blocker.
+
+**Anonymised** (a second party still reads the row):
+
+| Table | Treatment |
+| --- | --- |
+| `users` | PII scrubbed in place, `name` becomes `Deleted user` |
+| `coach_profiles` | `bio`, `coaching_style`, `specialization` cleared. The ROW stays: `sessions.coach_id` and `training_groups.coach_id` are `ON DELETE CASCADE` off it |
+| `chat_messages` | `text` kept (it is the other party's conversation too), author resolves to the tombstone |
+| `clip_comments` | Kept, so `clips.comment_count` stays truthful |
+| `donations` | `donor_display_name` scrubbed. No amount, status, intent link or ledger row is touched |
+| `upa_applications` | `status` moved to `deactivated` so the story stops being listed |
+| `blocked_users` | Rows where the deleting user is the blocked party are kept, they belong to the other user's list |
+
+**Retained untouched** (financial, legal, or another party's record):
+`payment_intents`, `ledger_entries`, `refunds`, `transfers`, `payout_accounts`,
+`orders`, `order_items`, `order_timeline`, `order_feedback`,
+`stock_reservations`, `sessions`, `session_participants`, `court_bookings`,
+`group_memberships`, `venues`, `venue_staff`, `courts`, `audit_log`, `reports`,
+`verification_requests`, `support_tickets`, `gratitude_posts`, `upa_evidence`,
+`upa_wishlist_items`. These are retained exactly as `atlitos.com/privacy`
+already discloses.
+
+### Column and table changes
+
+- `users.deleted_at timestamptz` (`0098`). Non-null means the account is
+  deleted. Deliberately a nullable timestamp rather than a new `user_status`
+  enum value: `alter type ... add value` cannot be used in the same transaction
+  that reads it, and `supabase db push` wraps a migration in one transaction.
+  Partial index `idx_users_deleted_at ... where deleted_at is not null`.
+- `account_deletions (user_id uuid PK -> users, requested_at timestamptz, removed jsonb, retained jsonb, auth_released_at timestamptz)`
+  (`0098`). One row per completed deletion: the audit trail AND the idempotency
+  record. Retained after the user row is tombstoned so the deletion itself is
+  auditable. `auth_released_at` is stamped by the `delete-account` edge function
+  once GoTrue has released the email and banned the user.
+
+### Functions
+
+- `account_deletion_preview() returns jsonb` (`0098`). Read only, STABLE,
+  SECURITY DEFINER, no arguments, so it can only report on `auth.uid()`.
+  Returns `already_deleted`, `blocker`, `blocker_count`, and the real `removed`
+  and `retained` counts. This is the ONLY permitted source for the confirmation
+  screen's numbers; the client never invents them. EXECUTE `authenticated` only.
+- `delete_my_account() returns jsonb` (`0098`). SECURITY DEFINER, **no user id
+  argument by design**, so it can only ever delete its own caller. Idempotent:
+  a second call returns the original receipt rather than erroring. Refuses with
+  `DELETION_BLOCKED: <blocker>` for `PAYMENT_IN_FLIGHT`, `LAST_ADMIN`,
+  `COACH_HAS_UPCOMING_SESSIONS` or `PARTNER_HAS_UPCOMING_BOOKINGS`, all four
+  time bounded. Asserts in the same transaction that the `payment_intents`
+  count, the `ledger_entries` count and the ledger to intent linkage count are
+  unchanged and that every entry group still balances, raising
+  `FINANCIAL_INVARIANT` or `LEDGER_UNBALANCED` rather than committing.
+  EXECUTE `authenticated` only.
+- `account_deletion_mark_auth_released(p_user_id uuid)` (`0098`). Stamps
+  `auth_released_at`. EXECUTE `service_role` only.
+- `is_actor_active()` (`0098`, replacing `0096`'s). Now
+  `status = 'active' and deleted_at is null`. This is what makes a deleted
+  user's still-valid access token harmless for the rest of its life: 0096's
+  restrictive `_active_insert/_active_update/_active_delete` policies call it on
+  every mutating table platform wide.
+- `coach_profiles_public` view (`0098`): now joins `users` and adds
+  `u.deleted_at is null`, so a deleted coach stops being discoverable while the
+  `coach_profiles` row survives for the sessions that cascade off it.
+
+### What makes the account actually gone
+
+1. `users.deleted_at` is set and `is_actor_active()` refuses every write.
+2. Every `user_roles` row is revoked, so the next access token carries no roles.
+3. The `delete-account` edge function, under the service role, releases the
+   email and phone on `auth.users` and bans the GoTrue user, so sign in is
+   impossible and the same email can register a fresh account.
+4. Storage objects under `avatars/<uid>`, `clips/<uid>` and
+   `coach-certificates/<uid>` are removed, recursively (avatars nests cover
+   photos under `<uid>/cover/`), along with the
+   `clips/coach-videos/<coach>/<player>/` paths collected before the RPC runs.
