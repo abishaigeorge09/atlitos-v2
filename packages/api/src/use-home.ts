@@ -45,6 +45,10 @@ export function useHome(client: AtlitosClient) {
         .from("promo_banners")
         .select("id, title, body, cta_label, cta_route, image_path, sort")
         .eq("active", true)
+        // Unbounded and safe: `promo_banners` is hand-curated marketing content,
+        // 3 active rows on the live project, and the carousel is a fixed size
+        // surface. It does not grow with users or with time. If it ever
+        // becomes a campaign table with per user targeting, this needs a bound.
         .order("sort", { ascending: true })
         .returns<PromoBannerRow[]>();
       if (error) throw mapPostgrestError(error);

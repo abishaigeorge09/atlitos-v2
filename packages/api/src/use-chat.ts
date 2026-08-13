@@ -1,4 +1,4 @@
-import type { RealtimeChannel } from "@supabase/supabase-js";
+import type { RealtimeChannel, SupabaseClient } from "@supabase/supabase-js";
 import type { ChatMessage, ChatThread, ChatThreadMember } from "@atlitos/types";
 
 import type { AtlitosClient } from "./client";
@@ -274,6 +274,151 @@ function releaseChatUserChannel(client: AtlitosClient, userId: string) {
   }
 }
 
+/** Page sizes for the chat surfaces.
+ *
+ * These exist because PostgREST applies a SILENT server side row cap to every
+ * select on this project (docs/qa/verify/SCALE-CLIENT.md: 0 of 751
+ * `WITH pgrst_source` statements carry `LIMIT ALL`, 670 carry a parameterised
+ * `LIMIT`). An unbounded read is therefore not slow, it is truncated with a
+ * 200 OK and nothing anywhere in the stack says so. Every number below is
+ * deliberately well under any plausible cap so that the code, not an unread
+ * server setting, decides where a list stops. */
+const THREAD_PAGE_SIZE = 100;
+/** Newest messages loaded when a thread screen opens.
+ *
+ * Note the DIRECTION change that goes with this bound. `listMessages` used to
+ * read `created_at ASC` with no limit, so under the server cap it returned
+ * the OLDEST N messages of a long thread and the recent conversation was
+ * unreachable, permanently, with no error (SCALE-CLIENT.md P0-2a). It now
+ * reads newest first, bounds to this page size, and reverses in JavaScript so
+ * callers still receive oldest-first. Older pages need a `created_at` cursor,
+ * which is a screen change and is deliberately NOT done in this pass. */
+const MESSAGE_PAGE_SIZE = 50;
+const THREAD_MEMBERS_PAGE_SIZE = 200;
+/** Candidate messages per thread for the inbox preview fallback path, see
+ * `fetchPreviewCandidates`. Three rather than one because the preview skips
+ * moderator-removed rows and messages from blocked senders. */
+const PREVIEW_CANDIDATES_PER_THREAD = 3;
+const PREVIEW_FALLBACK_MAX_ROWS = 500;
+
+/** The one row per thread the inbox needs to render a preview line.
+ *
+ * Two paths, and which one runs depends on whether `0107` has been applied.
+ *
+ * PREFERRED: the `chat_thread_previews` RPC, which is a single
+ * `distinct on (thread_id) ... order by thread_id, created_at desc` walk of
+ * the existing `idx_chat_messages_thread_id (thread_id, created_at)` index.
+ * It returns exactly one row per thread, which is the correct shape.
+ *
+ * FALLBACK: the original `.in(...)` query, now with an explicit bound. This
+ * runs whenever the RPC is absent, and it IS absent on production today: the
+ * applied migration ceiling on `syzzfgaudpifwvbpycyi` is `0097`, verified
+ * against `supabase_migrations.schema_migrations`, while `0107` is the file
+ * that defines this function. Writing the client to call an unapplied RPC
+ * with no fallback would have broken the Chat tab outright, so it does both.
+ *
+ * Be precise about what the fallback is and is not. It is a BOUND, not a fix.
+ * It orders globally by `created_at desc`, so a thread that has been quiet
+ * longer than the newest `limit` messages across all of the caller's threads
+ * still renders a blank preview, which is the same truncation shape the
+ * unread server cap already produces today. What changes is that the cutoff
+ * is now a number this file owns and a reviewer can see. The row count is
+ * what actually moves: a 55 thread coach at 300 messages per thread went from
+ * 16,500 rows and a measured 4.33 MB (262.3 bytes per row, SCALE-CLIENT.md
+ * P0-1) to at most 165 rows and roughly 43 KB, a 100x cut. The remaining
+ * blank-preview case only disappears when 0107 is applied. */
+/** The NORMALIZED preview candidate both paths return.
+ *
+ * The two paths do not agree on the wire shape and must not be handed to the
+ * caller raw. PostgREST's embedded resource arrives nested as
+ * `sender_profile: { name }`, while a `returns table (...)` RPC can only return
+ * flat columns, so `chat_thread_previews` yields `sender_name`. Returning the
+ * union and letting the consumer read `sender_profile?.name` would have made
+ * every sender name silently undefined on the RPC path, which is the kind of
+ * defect that only appears after the migration is applied and then looks like
+ * a regression in something else. Both paths normalize here instead. */
+type PreviewCandidate = {
+  threadId: string;
+  senderId: string;
+  text: string;
+  removedAt: string | null;
+  senderName: string | undefined;
+};
+
+/** The RPC's flat row shape (`0107`). */
+type PreviewRpcRow = {
+  thread_id: string;
+  sender_id: string;
+  text: string;
+  created_at: string;
+  removed_at: string | null;
+  sender_name: string | null;
+};
+
+/** The fallback's nested PostgREST row shape. */
+type PreviewCandidateRow = {
+  thread_id: string;
+  sender_id: string;
+  text: string;
+  created_at: string;
+  removed_at: string | null;
+  sender_profile: { name: string } | null;
+};
+
+const PREVIEW_SELECT =
+  "thread_id, sender_id, text, created_at, removed_at, sender_profile:public_profiles!sender_id ( name )";
+
+/** True when PostgREST could not find the function in its schema cache, which
+ * is exactly the "migration not applied yet" case and nothing else. `PGRST202`
+ * is the schema-cache miss; `42883` is Postgres's own undefined_function, kept
+ * for the case where the call reaches the database and is refused there. Any
+ * other error is a real failure and must not be swallowed into a fallback. */
+function isMissingFunction(error: { code?: string; message?: string }): boolean {
+  return error.code === "PGRST202" || error.code === "42883";
+}
+
+async function fetchPreviewCandidates(
+  client: AtlitosClient,
+  threadIds: string[],
+): Promise<PreviewCandidate[]> {
+  // Widen the schema generic for this one call. `chat_thread_previews` is
+  // defined by `0107`, which is not applied, so it is not in the generated
+  // `Database` type and the typed `rpc` overload rejects the name. Same escape
+  // hatch `use-empower.ts` documents for the empower relations, and it is
+  // deliberately scoped to this single call rather than the whole file: the
+  // result is immediately re-narrowed to PreviewCandidateRow[], and the
+  // fallback below stays on the typed client.
+  const { data, error } = await (client as unknown as SupabaseClient).rpc("chat_thread_previews", {
+    p_thread_ids: threadIds,
+  });
+  if (!error) {
+    return ((data ?? []) as PreviewRpcRow[]).map((row) => ({
+      threadId: row.thread_id,
+      senderId: row.sender_id,
+      text: row.text,
+      removedAt: row.removed_at,
+      senderName: row.sender_name ?? undefined,
+    }));
+  }
+  if (!isMissingFunction(error)) throw mapPostgrestError(error);
+
+  const { data: rows, error: rowsError } = await client
+    .from("chat_messages")
+    .select(PREVIEW_SELECT)
+    .in("thread_id", threadIds)
+    .order("created_at", { ascending: false })
+    .limit(Math.min(threadIds.length * PREVIEW_CANDIDATES_PER_THREAD, PREVIEW_FALLBACK_MAX_ROWS))
+    .returns<PreviewCandidateRow[]>();
+  if (rowsError) throw mapPostgrestError(rowsError);
+  return (rows ?? []).map((row) => ({
+    threadId: row.thread_id,
+    senderId: row.sender_id,
+    text: row.text,
+    removedAt: row.removed_at,
+    senderName: row.sender_profile?.name,
+  }));
+}
+
 /** Group name + live seat count for every group row in `rows`, batched into
  * two queries regardless of how many group threads are visible. training_
  * groups is a permissive-OR table (public browse of active groups, RLS.md);
@@ -292,12 +437,34 @@ async function fetchGroupInfo(
   const { data: groups, error: groupsError } = await client
     .from("training_groups")
     .select("id, name")
+    // Unbounded and safe: `.in("id", ...)` on a primary key is one row per id,
+    // and groupIds comes from the caller's own THREAD_PAGE_SIZE bounded thread
+    // page.
     .in("id", groupIds)
     .returns<{ id: string; name: string }[]>();
   if (groupsError) throw mapPostgrestError(groupsError);
   const nameByGroupId = new Map((groups ?? []).map((g) => [g.id, g.name]));
 
   const threadIds = groupRows.map((row) => row.id);
+  // LEFT UNBOUNDED, DELIBERATELY, and it is the weakest read in this file.
+  //
+  // This is not input-bounded the way the `training_groups` read above is:
+  // `.in("thread_id", ...)` on a NON unique column returns one row per SEAT,
+  // so the count is (group threads in the page) x (members per group), and
+  // `training_groups.capacity` is a coach-set field with no schema ceiling. A
+  // coach in 15 large academy groups of 200 pulls 3,000 rows to render 15
+  // member counts.
+  //
+  // It is not bounded because a `.limit()` here would silently produce a WRONG
+  // COUNT rather than a short list, and a wrong member count is a defect this
+  // project has already chased once (CURRENT-STATE.md, "There is no
+  // member-count bug", where a miscount cost a full investigation). A number
+  // that is quietly too low is worse than a number that is expensive.
+  //
+  // The correct fix is a server side aggregate, one row per thread with a
+  // count, in the same migration family as `chat_thread_previews`. It is not
+  // in `0107` because that file is already carrying three objects and this one
+  // needs its own plan check. Recorded rather than half-fixed.
   const { data: members, error: membersError } = await client
     .from("chat_thread_members")
     .select("thread_id")
@@ -330,11 +497,19 @@ export function useChat(client: AtlitosClient) {
   return {
     /** Thread list, most recent message first (PRD-02 FR-31).
      * `last_message_at` is trigger-maintained (0022_chat.sql), so ordering
-     * by it needs no client-side re-sort of a bare `created_at`. The latest
-     * message preview per thread is a second, batched query: chat_threads
-     * has no denormalized preview column, and a per-thread round trip does
-     * not scale, so this fetches every candidate message for the visible
-     * threads once and keeps the first (most recent) row per thread_id.
+     * by it needs no client-side re-sort of a bare `created_at`.
+     *
+     * The preview per thread comes from `fetchPreviewCandidates`, which reads
+     * one row per thread through the `chat_thread_previews` RPC and falls
+     * back to a BOUNDED batch read when that function is not applied yet. The
+     * docblock here used to reason, correctly, that a per-thread round trip
+     * does not scale, and then implement the opposite trade: it fetched EVERY
+     * message in EVERY thread the caller belongs to in order to keep one row
+     * per thread. Measured, that was 16,500 rows and 4.33 MB for a 55 thread
+     * coach to render 55 single line previews, a 300x waste factor
+     * (SCALE-CLIENT.md P0-1). Both the round trip count and the payload are
+     * bounded now; see `fetchPreviewCandidates` for exactly which half of that
+     * depends on 0107 being applied.
      *
      * CT-C (0097): a 1:1 thread whose other participant is on the caller's
      * own `blocked_users` list is dropped from the returned list entirely
@@ -352,43 +527,29 @@ export function useChat(client: AtlitosClient) {
         .from("chat_threads")
         .select(THREAD_SELECT)
         .order("last_message_at", { ascending: false, nullsFirst: false })
+        .limit(THREAD_PAGE_SIZE)
         .returns<ChatThreadRow[]>();
       if (error) throw mapPostgrestError(error);
 
       const rows = data ?? [];
       if (rows.length === 0) return [];
 
-      const [{ data: recentMessages, error: msgError }, groupInfoByThread, blocked] = await Promise.all([
-        client
-          .from("chat_messages")
-          .select("thread_id, sender_id, text, created_at, removed_at, sender_profile:public_profiles!sender_id ( name )")
-          .in(
-            "thread_id",
-            rows.map((row) => row.id),
-          )
-          .order("created_at", { ascending: false })
-          .returns<
-            {
-              thread_id: string;
-              sender_id: string;
-              text: string;
-              created_at: string;
-              removed_at: string | null;
-              sender_profile: { name: string } | null;
-            }[]
-          >(),
+      const [recentMessages, groupInfoByThread, blocked] = await Promise.all([
+        fetchPreviewCandidates(
+          client,
+          rows.map((row) => row.id),
+        ),
         fetchGroupInfo(client, rows),
         getBlockedUserIds(client),
       ]);
-      if (msgError) throw mapPostgrestError(msgError);
 
       const previewByThread = new Map<string, MessagePreview>();
-      for (const message of recentMessages ?? []) {
-        if (message.removed_at || blocked.has(message.sender_id)) continue;
-        if (!previewByThread.has(message.thread_id)) {
-          previewByThread.set(message.thread_id, {
+      for (const message of recentMessages) {
+        if (message.removedAt || blocked.has(message.senderId)) continue;
+        if (!previewByThread.has(message.threadId)) {
+          previewByThread.set(message.threadId, {
             text: message.text,
-            senderName: message.sender_profile?.name,
+            senderName: message.senderName,
           });
         }
       }
@@ -428,7 +589,22 @@ export function useChat(client: AtlitosClient) {
       return mapThreadRow(data, meId, { text: "" }, groupInfoByThread.get(data.id));
     },
 
-    /** Full message history for one thread, oldest first. RLS
+    /** The most recent `MESSAGE_PAGE_SIZE` messages for one thread, returned
+     * oldest first so the caller's render order is unchanged.
+     *
+     * This was "full message history for one thread, oldest first" with no
+     * limit, which is worse than it sounds. Under the silent PostgREST row
+     * cap an ascending unbounded read returns the OLDEST N rows, so a long
+     * thread opened to messages from months ago with no way to reach today
+     * and no error to explain it, and the message the user had just sent
+     * vanished on the next open (SCALE-CLIENT.md P0-2a). Reading newest first
+     * and reversing puts the truncation at the end the user does not care
+     * about. Older pages need a `created_at` cursor and a load-older
+     * affordance on the thread screen, which is UI work and is NOT in this
+     * change; today a thread longer than the page size simply starts at the
+     * 50th most recent message.
+     *
+     * RLS
      * (`chat_messages_select_participant`, extended to
      * `chat_messages_select_group_member` for group threads in 0078)
      * already scopes this to threads the caller participates in.
@@ -445,13 +621,18 @@ export function useChat(client: AtlitosClient) {
           .from("chat_messages")
           .select(MESSAGE_SELECT)
           .eq("thread_id", threadId)
-          .order("created_at", { ascending: true })
+          .order("created_at", { ascending: false })
+          .limit(MESSAGE_PAGE_SIZE)
           .returns<ChatMessageRow[]>(),
         getBlockedUserIds(client),
       ]);
       if (error) throw mapPostgrestError(error);
 
-      return (data ?? []).filter((row) => !blocked.has(row.sender_id)).map(mapMessageRow);
+      return (data ?? [])
+        .slice()
+        .reverse()
+        .filter((row) => !blocked.has(row.sender_id))
+        .map(mapMessageRow);
     },
 
     /** A group thread's seated roster (chat_thread_members joined to
@@ -469,6 +650,7 @@ export function useChat(client: AtlitosClient) {
         .from("chat_thread_members")
         .select("user_id, profile:public_profiles!user_id ( id, name, avatar_url )")
         .eq("thread_id", threadId)
+        .limit(THREAD_MEMBERS_PAGE_SIZE)
         .returns<{ user_id: string; profile: { id: string; name: string; avatar_url: string | null } | null }[]>();
       if (error) throw mapPostgrestError(error);
 

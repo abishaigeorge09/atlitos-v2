@@ -41,6 +41,12 @@ interface PrefRow {
   email_enabled: boolean;
 }
 
+/** One page of notification history. Sized under the silent PostgREST row
+ * cap; see docs/qa/verify/SCALE-CLIENT.md for why an unbounded read here is a
+ * truncation with a 200 OK rather than a slow query. */
+const NOTIFICATIONS_PAGE_SIZE = 50;
+const NOTIFICATIONS_MAX_PAGE_SIZE = 100;
+
 const NOTIFICATION_SELECT =
   "id, user_id, type, title, body, deep_link, read_at, created_at";
 
@@ -75,14 +81,34 @@ export function useNotifications(client: AtlitosClient) {
 
   return {
     /** The caller's own notifications, newest first. Owner-scoped by the
-     * explicit `.eq("user_id", me)` on top of RLS. */
-    async list(): Promise<AppNotification[]> {
+     * explicit `.eq("user_id", me)` on top of RLS.
+     *
+     * Bounded to one page, which matters more here than on most reads because
+     * `notifications` has NO RETENTION anywhere. `cron.job` on the live
+     * project holds exactly one active job, `expire-stale-holds`, and none of
+     * it touches this table, so a user's history only ever grows: at the 10k
+     * target and 3 notifications per user per week that is 1,560,000 rows in
+     * year one, one of only two tables that crosses a million
+     * (docs/qa/verify/SCALE-DATABASE.md P1-5).
+     *
+     * Two costs the bound removes. The payload, measured at ~330 bytes of
+     * JSON per row, reached 1.03 MB per open of the screen for a coach with
+     * 3,120 notifications after six months. And the sort: the only index is
+     * `idx_notifications_user_id_read_at (user_id, read_at)`, confirmed
+     * against `pg_indexes`, which serves the filter but does NOT cover
+     * `created_at DESC`, so the whole of the user's history was materialized
+     * and sorted on every open. `0107` adds `(user_id, created_at desc)`;
+     * until it is applied the Sort node remains but now runs over a bounded
+     * result. Older pages need a `created_at` cursor on the screen, which is
+     * UI work and is not in this change. */
+    async list(limit: number = NOTIFICATIONS_PAGE_SIZE): Promise<AppNotification[]> {
       const me = await currentUserId();
       const { data, error } = await client
         .from("notifications")
         .select(NOTIFICATION_SELECT)
         .eq("user_id", me)
         .order("created_at", { ascending: false })
+        .limit(Math.min(Math.max(limit, 1), NOTIFICATIONS_MAX_PAGE_SIZE))
         .returns<NotificationRow[]>();
       if (error) throw mapPostgrestError(error);
       return (data ?? []).map(mapNotificationRow);
@@ -131,7 +157,13 @@ export function useNotifications(client: AtlitosClient) {
     /** The caller's notification preferences, one row per type they have
      * customized. A type with no row is push+email enabled by default
      * (0002 column defaults), so the prefs screen treats an absent row as
-     * both-on rather than inventing a persisted value. */
+     * both-on rather than inventing a persisted value.
+     *
+     * Deliberately left unbounded, and safe. The row count is capped by the
+     * `unique (user_id, notification_type)` constraint, so it can never exceed
+     * the cardinality of the `notification_type` enum, a schema constant that
+     * does not grow with users or with time. Bounding it would only be able to
+     * hide a preference. */
     async listPrefs(): Promise<NotificationPref[]> {
       const me = await currentUserId();
       const { data, error } = await client

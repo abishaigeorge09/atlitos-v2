@@ -58,6 +58,32 @@ interface SessionQueryRow {
   session_types: { name: string } | null;
 }
 
+/** Page sizes for the coach surfaces.
+ *
+ * Every read below used to be unbounded. That is not a "slow query" on this
+ * project, it is a silent truncation: PostgREST applies a server side row cap
+ * to every select (0 of 751 `WITH pgrst_source` statements carry `LIMIT ALL`,
+ * 670 carry a parameterised `LIMIT`, docs/qa/verify/SCALE-CLIENT.md), so an
+ * unbounded read returns the first N rows with a 200 OK and no signal
+ * anywhere. These numbers are chosen below any plausible cap so the cutoff is
+ * one this file owns and a reviewer can see.
+ *
+ * A coach's session history is the one that actually grows without limit: at
+ * 5 sessions a day for a year it is 1,250 rows, and `getAnalytics` was reading
+ * all of them with a `session_types` embed to compute a monthly chart. */
+const COACH_SESSION_PAGE_SIZE = 100;
+/** The analytics aggregate reads more rows than a list because it is summing
+ * them, not rendering them. Still bounded: the honest fix is a server side
+ * aggregate RPC so no session rows cross the wire at all, recorded in
+ * SCALE-CLIENT.md P2 and deliberately not attempted here. */
+const COACH_ANALYTICS_PAGE_SIZE = 500;
+const COACH_TRAINEE_VIDEO_PAGE_SIZE = 50;
+/** A coach's own catalog rows. Small in practice and coach-authored, but
+ * nothing in the schema stops a coach creating thousands, so they are bounded
+ * rather than trusted. */
+const SESSION_TYPE_PAGE_SIZE = 100;
+const AVAILABILITY_WINDOW_PAGE_SIZE = 100;
+
 const SESSION_SELECT =
   "id, coach_id, player_id, session_type_id, frequency, date, slot_start, slot_end, " +
   "focus_area, location, status, price, platform_fee, total, payment_intent_id, rating, remarks, " +
@@ -229,6 +255,7 @@ export function useCoachSessions(client: AtlitosClient) {
         .eq("status", "requested")
         .order("date", { ascending: true })
         .order("slot_start", { ascending: true })
+        .limit(COACH_SESSION_PAGE_SIZE)
         .returns<SessionQueryRow[]>();
       if (error) throw mapPostgrestError(error);
       return (data ?? []).map(mapSessionRow);
@@ -256,6 +283,7 @@ export function useCoachSessions(client: AtlitosClient) {
         .in("status", ["accepted", "in_progress", "rescheduled"])
         .order("date", { ascending: true })
         .order("slot_start", { ascending: true })
+        .limit(COACH_SESSION_PAGE_SIZE)
         .returns<SessionQueryRow[]>();
       if (error) throw mapPostgrestError(error);
       return (data ?? []).map(mapSessionRow);
@@ -280,7 +308,8 @@ export function useCoachSessions(client: AtlitosClient) {
             .from("sessions")
             .select("player_id, date, status")
             .eq("coach_id", userId)
-            .not("status", "in", "(declined,cancelled)"),
+            .not("status", "in", "(declined,cancelled)")
+            .limit(COACH_ANALYTICS_PAGE_SIZE),
           client.rpc("get_coach_wallet_balance"),
         ]);
 
@@ -455,7 +484,8 @@ export function useCoachSessions(client: AtlitosClient) {
             .from("coach_availability_windows")
             .select("start_time, end_time")
             .eq("coach_id", coachId)
-            .eq("day_of_week", dayOfWeek),
+            .eq("day_of_week", dayOfWeek)
+            .limit(AVAILABILITY_WINDOW_PAGE_SIZE),
           client.from("session_types").select("duration_minutes").eq("id", sessionTypeId).maybeSingle(),
           client.rpc("get_coach_busy_slots", { p_coach_id: coachId, p_from: date, p_to: date }),
         ]);
@@ -564,7 +594,8 @@ export function useCoachTrainees(client: AtlitosClient) {
         .select("player_id, date, status, users!sessions_player_id_fkey ( name, avatar_url ), session_types ( name )")
         .eq("coach_id", userId)
         .not("player_id", "is", null)
-        .order("date", { ascending: false });
+        .order("date", { ascending: false })
+        .limit(COACH_ANALYTICS_PAGE_SIZE);
       if (error) throw mapPostgrestError(error);
 
       const rows = (data ?? []) as {
@@ -615,6 +646,7 @@ export function useCoachTrainees(client: AtlitosClient) {
         .eq("player_id", playerId)
         .order("date", { ascending: false })
         .order("slot_start", { ascending: false })
+        .limit(COACH_SESSION_PAGE_SIZE)
         .returns<SessionQueryRow[]>();
       if (error) throw mapPostgrestError(error);
       return (data ?? []).map(mapSessionRow);
@@ -690,6 +722,7 @@ export function useCoachTraineeVideos(client: AtlitosClient) {
         .eq("coach_id", userId)
         .eq("player_id", playerId)
         .order("created_at", { ascending: false })
+        .limit(COACH_TRAINEE_VIDEO_PAGE_SIZE)
         .returns<CoachTraineeVideoRow[]>();
       if (error) throw mapPostgrestError(error);
       return (data ?? []).map(mapCoachTraineeVideoRow);
@@ -746,6 +779,7 @@ export function useMyTraineeVideos(client: AtlitosClient) {
         .select(COACH_TRAINEE_VIDEO_SELECT)
         .eq("player_id", userId)
         .order("created_at", { ascending: false })
+        .limit(COACH_TRAINEE_VIDEO_PAGE_SIZE)
         .returns<CoachTraineeVideoRow[]>();
       if (error) throw mapPostgrestError(error);
       return (data ?? []).map(mapCoachTraineeVideoRow);
@@ -823,6 +857,7 @@ export function useCoachSessionTypes(client: AtlitosClient) {
         .eq("coach_id", userId)
         .order("active", { ascending: false })
         .order("name", { ascending: true })
+        .limit(SESSION_TYPE_PAGE_SIZE)
         .returns<SessionTypeRow[]>();
       if (error) throw mapPostgrestError(error);
       return (data ?? []).map(mapSessionTypeRow);
@@ -948,6 +983,7 @@ export function useCoachAvailability(client: AtlitosClient) {
         .eq("coach_id", userId)
         .order("day_of_week", { ascending: true })
         .order("start_time", { ascending: true })
+        .limit(AVAILABILITY_WINDOW_PAGE_SIZE)
         .returns<AvailabilityWindowRow[]>();
       if (error) throw mapPostgrestError(error);
       return (data ?? []).map(mapAvailabilityRow);
@@ -1168,7 +1204,8 @@ export function useCoachAnalytics(client: AtlitosClient) {
           .from("sessions")
           .select("date, rating, session_types ( duration_minutes )")
           .eq("coach_id", userId)
-          .in("status", ["completed", "rated"]),
+          .in("status", ["completed", "rated"])
+          .limit(COACH_ANALYTICS_PAGE_SIZE),
         client.rpc("get_my_transactions", { p_kind: "earning", p_limit: 200, p_offset: 0 }),
       ]);
 
