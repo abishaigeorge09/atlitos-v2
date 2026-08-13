@@ -299,7 +299,21 @@ const THREAD_MEMBERS_PAGE_SIZE = 200;
  * `fetchPreviewCandidates`. Three rather than one because the preview skips
  * moderator-removed rows and messages from blocked senders. */
 const PREVIEW_CANDIDATES_PER_THREAD = 3;
-const PREVIEW_FALLBACK_MAX_ROWS = 500;
+/** Ceiling on the fallback preview candidate read, see `fetchPreviewCandidates`.
+ *
+ * p6 audit correction: the previous value here was a bare 500, justified as
+ * "comfortably under any plausible cap", an unmeasurable quantity on this
+ * project (see BLOCK_LIST_MAX). The call site already computes
+ * `Math.min(threadIds.length * PREVIEW_CANDIDATES_PER_THREAD, PREVIEW_FALLBACK_MAX_ROWS)`,
+ * and `threadIds` is itself bounded by `THREAD_PAGE_SIZE`, so the true worst
+ * case row count this fallback can ever ask for is exactly
+ * `THREAD_PAGE_SIZE * PREVIEW_CANDIDATES_PER_THREAD`. Deriving it from those
+ * two constants instead of a separate literal means this ceiling can never
+ * silently drift out of sync with either of them, and it structurally can
+ * never bind (the `Math.min` above is then always the first argument), which
+ * is the correct behaviour: this constant exists as a documented worst case,
+ * not as an active truncation point. */
+const PREVIEW_FALLBACK_MAX_ROWS = THREAD_PAGE_SIZE * PREVIEW_CANDIDATES_PER_THREAD;
 
 /** The one row per thread the inbox needs to render a preview line.
  *

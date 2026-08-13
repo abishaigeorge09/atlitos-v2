@@ -75,8 +75,17 @@ const COACH_SESSION_PAGE_SIZE = 100;
 /** The analytics aggregate reads more rows than a list because it is summing
  * them, not rendering them. Still bounded: the honest fix is a server side
  * aggregate RPC so no session rows cross the wire at all, recorded in
- * SCALE-CLIENT.md P2 and deliberately not attempted here. */
-const COACH_ANALYTICS_PAGE_SIZE = 500;
+ * SCALE-CLIENT.md P2 and deliberately not attempted here.
+ *
+ * p6 audit correction: the previous value here was 500, which is BELOW the
+ * 1,250 rows/year this same file's own docblock cites for a coach running 5
+ * sessions a day, meaning the analytics sum was already silently wrong (an
+ * undercount, not an error) for any coach past about eight months at that
+ * rate. There is no measurable `db-max-rows` to size this against (see
+ * BLOCK_LIST_MAX). Sized instead from the platform's own cited volume: 5
+ * sessions/day x 365 days x 2 years of tenure plus 20% headroom for a busier
+ * coach is 3,000. */
+const COACH_ANALYTICS_PAGE_SIZE = 3000;
 const COACH_TRAINEE_VIDEO_PAGE_SIZE = 50;
 /** A coach's own catalog rows. Small in practice and coach-authored, but
  * nothing in the schema stops a coach creating thousands, so they are bounded

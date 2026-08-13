@@ -289,6 +289,19 @@ contents alone; the secret was set directly against the project, which leaves no
   the app using a native RN `Modal`, which the house rule forbids.
 - **Video analysis is not being built** but six surfaces still reference it, including "My review
   videos" on the athlete dashboard which links to a screen that can never have content.
+- **Clutch grid pagination is half wired, p6 integration audit 2026-08-14.** Track 1's media scale
+  fix bounded `getCreatorClips`/`getMyClips` to `CLUTCH_GRID_PAGE_SIZE` (24) and gave both an
+  optional `cursor` parameter (`packages/api/src/hooks.ts`), closing the API side of the
+  undisclosed regression the audit found: a creator with more than 24 published clips now shows
+  only 24. Neither call site passes a cursor or wires `onEndReached`
+  (`apps/mobile/src/app/(tabs)/clutch/creator/[id].tsx`, `apps/mobile/src/app/(tabs)/clutch/profile.tsx`),
+  so the grid still hard-stops at 24 with no way to reach older clips. NOT wired by the
+  integrator: this is a screen-level UI change (FlatList state, loading-more affordance) and
+  CLAUDE.md's "no UI ships unproven" rule requires a screenshot from a Release build plus a
+  Maestro run before any screen change ships, both of which the integration pass was explicitly
+  told not to do (no device or simulator work). Flagging for the founder/next phase rather than
+  landing an unproven screen change. Founder should also decide whether 24 is right permanently,
+  now that it doubles as `PLAYBACK_BATCH_MAX`.
 
 ### Known real bugs
 - Auth navigation: Register to Log in to Continue as guest returned the user to Register. FIXED at

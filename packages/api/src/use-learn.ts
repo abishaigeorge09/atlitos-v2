@@ -154,10 +154,22 @@ interface DrillRow {
  * it silently either way (docs/qa/verify/SCALE-CLIENT.md). */
 const DRILL_PAGE_SIZE = 100;
 /** Ceiling on the caller's own completion set. Bounded rather than trusted:
- * it is one row per drill the user has ever finished and it only ever grows.
- * A truncation here shows a completed drill as not completed, which is why the
- * number is set above the catalog bound rather than at it. */
-const DRILL_COMPLETION_MAX = 1000;
+ * it is one row per drill the user has ever finished, it can never exceed the
+ * total drill catalog, and it only ever grows. A truncation here shows a
+ * completed drill as not completed.
+ *
+ * p6 audit correction: "above the catalog bound" previously meant above
+ * DRILL_PAGE_SIZE (100), which is a PAGE size, not the catalog's total size,
+ * and the schema places no ceiling on the catalog either, so that comparison
+ * did not actually bound anything. There is no measurable `db-max-rows` to
+ * reason from here (unmeasurable on this project, see BLOCK_LIST_MAX). The
+ * real, product-grounded bound: DRILL_PAGE_SIZE * 10, ten browse pages of
+ * admin-authored instructional content. A catalog past that size has no
+ * working way to reach its own tail today (the browse screen has no "load
+ * more" past what it currently paginates), so a completion set larger than
+ * that implies the catalog itself needs a redesign first, not a bigger
+ * constant here. */
+const DRILL_COMPLETION_MAX = DRILL_PAGE_SIZE * 10;
 
 const DRILL_SELECT = "id, title, description, sport, skill_category, difficulty, xp_value, media_url";
 

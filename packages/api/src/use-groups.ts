@@ -6,18 +6,30 @@ import { mapEdgeFunctionError, mapPostgrestError } from "./errors";
  *
  * Bounded because PostgREST silently caps every select on this project, so an
  * unbounded read is a truncation with a 200 OK rather than a slow query. See
- * docs/qa/verify/SCALE-CLIENT.md. Each number is well under any plausible
- * server cap so the cutoff belongs to this file.
+ * docs/qa/verify/SCALE-CLIENT.md.
  *
- * The roster and session numbers matter most: `training_groups.capacity` is a
- * coach-set column with NO schema ceiling, and a group's session history grows
- * for as long as the group runs. */
+ * p6 audit correction: this used to say every number here is "well under any
+ * plausible server cap", an unmeasurable quantity on this project (see
+ * BLOCK_LIST_MAX in hooks.ts), and that `training_groups.capacity` has NO
+ * schema ceiling. Both were true when written and the second is no longer
+ * true: `0112_training_group_capacity_ceiling.sql`, merged in the same p6
+ * integration pass, adds `check (capacity <= 100)`. That is now a real,
+ * citable number, and TRAINING_GROUP_CAPACITY_CEILING below is derived from
+ * it rather than guessed. */
+const TRAINING_GROUP_CAPACITY_CEILING = 100;
 const GROUP_LIST_PAGE_SIZE = 100;
 const GROUP_ROSTER_PAGE_SIZE = 200;
 const GROUP_SESSION_PAGE_SIZE = 100;
-/** Attendance is read as (sessions in the page) x (participants each), so it
- * is bounded against the roster size rather than given a flat number. */
-const SESSION_PARTICIPANT_PAGE_SIZE = 500;
+/** Attendance is read as (sessions in the page) x (participants each): the
+ * `.in("session_id", sessionIds)` read below is one row per attendee per
+ * session, so the true worst case is not a flat number, it is
+ * GROUP_SESSION_PAGE_SIZE x TRAINING_GROUP_CAPACITY_CEILING. A `.limit()`
+ * below that product can silently under count attendance for a page of full
+ * groups, which is the same "silently wrong count, not a short list" failure
+ * SCHEMA.md already flags for the unrelated chat member count; a real
+ * schema-derived ceiling here closes exactly that, rather than a guess under
+ * an unknown PostgREST cap. */
+const SESSION_PARTICIPANT_PAGE_SIZE = GROUP_SESSION_PAGE_SIZE * TRAINING_GROUP_CAPACITY_CEILING;
 const TRAINEE_NOTE_PAGE_SIZE = 100;
 const TRAINEE_SESSION_PAGE_SIZE = 100;
 

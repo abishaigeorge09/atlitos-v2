@@ -1160,10 +1160,19 @@ const CLUTCH_PAGE_SIZE = 10;
  * of this set has their content reappear in the feed, the comments and the
  * inbox. It is bounded anyway, and deliberately high, because the read is
  * ALREADY truncated today by the silent PostgREST cap at a number nobody in
- * this repo has read. Choosing 1000 moves the cutoff to somewhere this file
- * controls and that is comfortably under any plausible `db-max-rows`. If a
- * real user ever approaches it, the honest fix is to stop shipping the list to
- * the device and filter server side. */
+ * this repo has read.
+ *
+ * p6 audit correction: the number below must NOT be justified as "comfortably
+ * under any plausible db-max-rows", because that cap is unmeasurable here
+ * (not in pg_roles rolconfig, and no table on this project exceeds 1000 rows
+ * to measure it empirically either) and a bound reasoned from an unknown
+ * quantity is not a real bound, it is a second guess stacked on the first.
+ * 1000 is kept as a PRODUCT ceiling instead, independent of whatever the
+ * PostgREST cap turns out to be: no verified block list on this project comes
+ * close to three figures, and a moderation-shaped list a real person builds by
+ * hand, one block at a time, in the thousands is itself the signal that the
+ * honest fix (stop shipping the list to the device, filter server side) is
+ * overdue, not a reason to raise the number further. */
 const BLOCK_LIST_MAX = 1000;
 
 // SCALE-MEDIA M-4. One page of a profile clip GRID. Deliberately equal to
