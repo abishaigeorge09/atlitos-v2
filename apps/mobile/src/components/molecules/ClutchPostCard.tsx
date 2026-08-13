@@ -1,7 +1,7 @@
 import { spacing } from '@atlitos/theme';
 import type { Clip } from '@atlitos/types';
 import * as Haptics from 'expo-haptics';
-import { Bookmark, BookmarkCheck, Heart, MessageCircle, Share2 } from 'lucide-react-native';
+import { Bookmark, BookmarkCheck, Heart, MessageCircle, Share2, WifiOff } from 'lucide-react-native';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 
 import { ClipVideo } from '@/components/molecules/clip-video';
@@ -57,6 +57,14 @@ export interface ClutchPostCardProps {
    * Defaults to `false`, the full-feed rail, unchanged for the main feed
    * and the single-clip viewer. */
   compactActions?: boolean;
+  /** SCALE-MEDIA M-1 (feed variant). True while this card's signed playback
+   * mint is failing. The same call mints the poster, so a failure leaves the
+   * card with neither a video nor a poster: without this it rendered as a bare
+   * black rectangle with no error and nothing to tap. Non blocking by design,
+   * the caption, the action rail and the open tap all keep working. */
+  playbackFailed?: boolean;
+  /** Manual retry for `playbackFailed`, after the bounded automatic backoff. */
+  onRetryPlayback?: () => void;
   onLike?: () => void;
   onComment?: () => void;
   onShare?: () => void;
@@ -82,6 +90,8 @@ export function ClutchPostCard({
   active = false,
   mountPlayer = true,
   compactActions = false,
+  playbackFailed = false,
+  onRetryPlayback,
   onLike,
   onComment,
   onShare,
@@ -142,6 +152,36 @@ export function ClutchPostCard({
           style={StyleSheet.absoluteFill}
           resizeMode="cover"
         />
+      ) : null}
+
+      {/* 1b. M-1 playback failure. Sits above the (empty) playback surface and
+          BELOW the caption and action rail, so the card stays usable: this is
+          a state, not a blocking error screen. Rendered only when there is no
+          poster either, because a card still showing its poster is not the
+          black rectangle this exists to replace. */}
+      {playbackFailed && !posterUrl && !clip.thumbUrl ? (
+        <View
+          style={StyleSheet.absoluteFill}
+          className="items-center justify-center gap-sm px-lg"
+          pointerEvents="box-none"
+        >
+          <WifiOff size={28} strokeWidth={1.75} color={colors.textInverse} />
+          <Text className="text-center text-sm text-text-inverse opacity-90">
+            This clip could not load right now.
+          </Text>
+          {onRetryPlayback ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Retry loading this clip"
+              hitSlop={8}
+              onPress={onRetryPlayback}
+              className="min-h-11 items-center justify-center rounded-pill px-lg"
+              style={{ backgroundColor: colors.overlay }}
+            >
+              <Text className="font-sans-semibold text-sm text-text-inverse">Retry</Text>
+            </Pressable>
+          ) : null}
+        </View>
       ) : null}
 
       {/* 2. Bottom scrim for caption legibility, never a touch target. */}

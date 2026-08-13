@@ -3,9 +3,10 @@ import { spacing } from '@atlitos/theme';
 import type { ApiError, Sport } from '@atlitos/types';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import * as VideoThumbnails from 'expo-video-thumbnails';
 import { CheckCircle2, Film, TriangleAlert, Upload } from 'lucide-react-native';
 import { useState } from 'react';
-import { ActivityIndicator, Image, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { LoginGateModal } from '@/components/organisms/LoginGateModal';
@@ -85,6 +86,49 @@ export default function ClutchUploadScreen() {
 
   const canPost = asset != null && caption.trim().length > 0 && sport != null && state !== 'uploading';
 
+  /**
+   * SCALE-MEDIA M-3. Extract a poster frame from the picked video and put it in
+   * the signed thumb slot the upload ticket carries.
+   *
+   * Until this existed the app called `finalizeUpload(clipId)` with one
+   * argument against a two argument signature, so `thumb_path` went over as
+   * undefined and EVERY clip posted through the app had thumb_path NULL. That
+   * is not cosmetic at scale: with no 284 KB poster, the only way for the feed
+   * or a profile grid to show anything is to pull the 2.65 MB video, and the
+   * batch thumb mint lands every id in `failed` because there is no object to
+   * sign.
+   *
+   * A poster is strictly an optimisation, so every failure path here returns
+   * null and the clip posts without one. It never blocks or fails the post.
+   * `expo-video-thumbnails` is native only, so web returns null too and the
+   * feed falls back to its existing poster-less rendering.
+   */
+  async function captureThumbnail(ticket: {
+    bucket: string;
+    thumbUploadUrl: string | null;
+    thumbToken: string | null;
+    thumbPath: string | null;
+  }, videoUri: string): Promise<string | null> {
+    if (Platform.OS === 'web') return null;
+    if (!ticket.thumbToken || !ticket.thumbPath) return null;
+    try {
+      // Frame at 0.5s rather than 0: the very first frame of a phone recording
+      // is routinely black or still exposing.
+      const { uri } = await VideoThumbnails.getThumbnailAsync(videoUri, { time: 500, quality: 0.7 });
+      const thumbResponse = await fetch(uri);
+      const thumbBody = await thumbResponse.blob();
+      const { error: thumbUploadError } = await supabase.storage
+        .from(ticket.bucket)
+        .uploadToSignedUrl(ticket.thumbPath, ticket.thumbToken, thumbBody, {
+          contentType: 'image/jpeg',
+        });
+      if (thumbUploadError) return null;
+      return ticket.thumbPath;
+    } catch {
+      return null;
+    }
+  }
+
   async function handlePost() {
     if (!asset || !sport || !caption.trim()) return;
     setState('uploading');
@@ -94,8 +138,7 @@ export default function ClutchUploadScreen() {
 
       // Read the picked file and PUT it to the one-time signed Storage URL.
       // NATIVE PASS: swap this whole-file fetch for a resumable/streamed
-      // upload with progress, and capture a client-side thumbnail to pass as
-      // thumb_path to finalizeUpload (VIDEO.md).
+      // upload with progress (VIDEO.md).
       const fileResponse = await fetch(asset.uri);
       const fileBody = await fileResponse.blob();
       const { error: uploadError } = await supabase.storage
@@ -105,7 +148,10 @@ export default function ClutchUploadScreen() {
         });
       if (uploadError) throw uploadError;
 
-      await clutch.finalizeUpload(ticket.clipId);
+      // M-3: the poster frame, then the finalize that records its path. The
+      // second argument was the whole bug; it is now supplied.
+      const thumbPath = await captureThumbnail(ticket, asset.uri);
+      await clutch.finalizeUpload(ticket.clipId, thumbPath ?? undefined);
       setState('done');
     } catch (err) {
       setError(err as ApiError);

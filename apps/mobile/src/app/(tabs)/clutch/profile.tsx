@@ -11,6 +11,7 @@ import { ClutchProfileView } from '@/components/organisms/ClutchProfileView';
 import { ConfirmSheet } from '@/components/organisms/ConfirmSheet';
 import { EmptyState } from '@/components/organisms/EmptyState';
 import { AppBar } from '@/components/ui/app-bar';
+import { useClipPosters } from '@/hooks/use-clip-posters';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
 import { useThemeColors } from '@/theme/use-theme-colors';
@@ -45,6 +46,8 @@ export default function ClutchOwnProfileScreen() {
   // on whichever sheet the action was attempted from, and is separate from
   // `error`, which stays reserved for the initial load failing.
   const [actionError, setActionError] = useState<string | null>(null);
+  // M-4: this grid passed no poster at all, so every tile rendered blank.
+  const { posterUrls } = useClipPosters(clips);
 
   const load = useCallback(async () => {
     if (!myId) return;
@@ -139,6 +142,7 @@ export default function ClutchOwnProfileScreen() {
         state={state}
         errorMessage={error?.message}
         isOwn
+        posterUrls={posterUrls}
         onRetry={() => void load()}
         onUpload={() => router.push('/(tabs)/clutch/upload')}
         onOpenClip={(clipId) => router.push({ pathname: '/(tabs)/clutch/post/[id]', params: { id: clipId } })}

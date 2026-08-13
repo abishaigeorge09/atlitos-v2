@@ -132,4 +132,8 @@ export interface ApiError {
   message: string;
   field?: string;
   status: number;
+  /** Present only on `RATE_LIMITED`: the throttle's own window, so a caller
+   * backs off for at least as long as the server said rather than guessing.
+   * See `rateLimitedResponse` in `supabase/functions/_shared/rate-limit.ts`. */
+  retryAfterSeconds?: number;
 }

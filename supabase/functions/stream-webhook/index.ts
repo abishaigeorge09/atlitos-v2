@@ -150,8 +150,25 @@ Deno.serve((req) =>
     }
 
     // Optional client-captured thumbnail path (v1 does client-side thumbs).
+    //
+    // SCALE-MEDIA M-3 hardening. The path is NOT taken on trust: it must be
+    // exactly the owner-scoped slot stream-upload-url minted for THIS clip,
+    // `${owner_id}/${clip_id}.jpg`. Before this guard any string was written
+    // straight onto the row, so an owner could have pointed thumb_path at
+    // another object in the private `clips` bucket and had the playback mint
+    // hand them a signed URL for it. Accepting only the one derivable path
+    // closes that without needing a storage.objects policy.
     if (body.thumb_path) {
-      await supabase.from("clips").update({ thumb_path: body.thumb_path }).eq("id", clip.id);
+      const expectedThumbPath = `${clip.owner_id}/${clip.id}.jpg`;
+      if (body.thumb_path !== expectedThumbPath) {
+        throw new AppError("VALIDATION", "thumb_path does not belong to this clip.", 400);
+      }
+      if (await objectExists(supabase, expectedThumbPath)) {
+        await supabase.from("clips").update({ thumb_path: expectedThumbPath }).eq("id", clip.id);
+      }
+      // A thumb the client failed to upload leaves thumb_path NULL rather than
+      // pointing the feed at an object that is not there (which is what makes
+      // a batch thumb mint land every id in `failed`).
     }
 
     // uploading -> processing (only if still uploading; a concurrent call that

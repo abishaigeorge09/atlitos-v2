@@ -4,6 +4,7 @@
 
 export * from "./client";
 export * from "./errors";
+export * from "./image-url";
 export * from "./hooks";
 export * from "./refunds";
 export * from "./use-coaching";

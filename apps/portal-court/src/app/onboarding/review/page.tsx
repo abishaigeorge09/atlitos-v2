@@ -157,7 +157,13 @@ export default function ReviewStep() {
                 <div key={photo.id} className="size-20 overflow-hidden rounded-lg border border-border bg-secondary">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={supabase.storage.from("venue-media").getPublicUrl(photo.storage_path).data.publicUrl}
+                    // SCALE-MEDIA M-6: an 80 px square, so ask for 240 px
+                    // rather than the origin upload.
+                    src={
+                      supabase.storage.from("venue-media").getPublicUrl(photo.storage_path, {
+                        transform: { width: 240, height: 240, resize: "cover", quality: 70 },
+                      }).data.publicUrl
+                    }
                     alt="Venue"
                     className="size-full object-cover"
                   />

@@ -128,7 +128,27 @@ export function mapPostgrestError(error: { message: string; code?: string }): Ap
 export async function mapEdgeFunctionError(error: unknown): Promise<ApiError> {
   if (error instanceof FunctionsHttpError) {
     try {
-      const body = (await error.context.json()) as { error?: { code?: string; message?: string } };
+      const body = (await error.context.json()) as {
+        error?: string | { code?: string; message?: string };
+        retry_after_seconds?: number;
+      };
+
+      // The throttle's 429 is the ONE function response that is not the
+      // AppError envelope: `rateLimitedResponse` returns a flat
+      // `{ error: "RATE_LIMITED", retry_after_seconds }` because CT-1 named
+      // that exact body. Read before the envelope branch below, otherwise
+      // `body.error?.code` is undefined on a string and every 429 arrives at
+      // the caller as an indistinguishable INTERNAL 500, which is why the
+      // Clutch feed could not tell "throttled, back off" from "broken".
+      if (typeof body.error === "string") {
+        return {
+          code: (body.error as ApiErrorCode) ?? "INTERNAL",
+          message: "Too many requests. Please wait a moment.",
+          status: error.context.status || 429,
+          retryAfterSeconds: body.retry_after_seconds,
+        };
+      }
+
       const code = body.error?.code as ApiErrorCode | undefined;
       if (code) {
         return {

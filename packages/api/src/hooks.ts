@@ -20,6 +20,7 @@ import type {
 
 import type { AtlitosClient } from "./client";
 import { mapAuthError, mapEdgeFunctionError, mapPostgrestError } from "./errors";
+import { IMAGE_SIZE, sizedImageUrl } from "./image-url";
 
 /**
  * Domain hooks. Each domain below wraps the v1 `services/api.ts` function of
@@ -630,7 +631,16 @@ interface CourtQueryRow {
 function resolveVenuePhotoUrls(client: AtlitosClient, photos: { storage_path: string; position: number }[] | null): string[] {
   return [...(photos ?? [])]
     .sort((a, b) => a.position - b.position)
-    .map((photo) => client.storage.from("venue-media").getPublicUrl(photo.storage_path).data.publicUrl);
+    // M-6: venue photos paint as court card tiles and a phone width detail
+    // header, so they are requested at that size instead of at origin.
+    .map(
+      (photo) =>
+        sizedImageUrl(
+          client.storage.from("venue-media").getPublicUrl(photo.storage_path).data.publicUrl,
+          { width: IMAGE_SIZE.hero, height: Math.round(IMAGE_SIZE.hero / 2) },
+        ) ?? "",
+    )
+    .filter((url) => url !== "");
 }
 
 function mapCourtRow(client: AtlitosClient, row: CourtQueryRow, near?: { lat: number; lng: number } | null): Court {
@@ -1024,6 +1034,14 @@ export interface ClipUploadTicket {
   path: string;
   bucket: string;
   status: ClipStatus;
+  /** SCALE-MEDIA M-3. The second signed slot, for the poster frame the client
+   * extracts from the picked video. Null when the mint failed server side, in
+   * which case the clip simply posts without a thumbnail. The `clips` bucket
+   * is private and grants clients no storage write, so this ticket is the only
+   * way a thumbnail can reach storage at all. */
+  thumbUploadUrl: string | null;
+  thumbToken: string | null;
+  thumbPath: string | null;
 }
 
 /** `stream-webhook` (on-upload finalizer) response. */
@@ -1087,6 +1105,13 @@ export interface UploadClipInput {
 }
 
 const CLUTCH_PAGE_SIZE = 10;
+
+// SCALE-MEDIA M-4. One page of a profile clip GRID. Deliberately equal to
+// PLAYBACK_BATCH_MAX below so a full grid page resolves its posters in exactly
+// ONE batch call: before this, `getCreatorClips` and `getMyClips` were
+// unbounded, and a 61 clip creator profile was enough to trip the playback
+// throttle on a single screen open.
+export const CLUTCH_GRID_PAGE_SIZE = 24;
 
 // CT-1 (Phase 3 LAUNCH, P1-1). The endpoint rejects a batch over 24 ids
 // (BATCH_TOO_LARGE); getPlaybackUrls chunks any longer list itself so a call
@@ -1341,7 +1366,7 @@ function makeClutchApi(client: AtlitosClient) {
     });
     if (error) throw await mapEdgeFunctionError(error);
 
-    const body = data as {
+    const body = data as Partial<ClipUploadTicket> & {
       clipId: string;
       uploadUrl: string;
       token: string;
@@ -1349,7 +1374,15 @@ function makeClutchApi(client: AtlitosClient) {
       bucket: string;
       status: ClipStatus;
     };
-    return body;
+    // The thumb slot is defaulted rather than required so a client running
+    // against an edge deployment that predates M-3 still posts, without a
+    // poster, instead of reading undefined off the response.
+    return {
+      ...body,
+      thumbUploadUrl: body.thumbUploadUrl ?? null,
+      thumbToken: body.thumbToken ?? null,
+      thumbPath: body.thumbPath ?? null,
+    };
   }
 
   /** CT-1 (Phase 3 LAUNCH, P1-1). Resolves signed thumb/video URLs for a
@@ -1771,15 +1804,25 @@ function makeClutchApi(client: AtlitosClient) {
 
     /** A creator's public grid: their `published` clips, newest first. The
      * explicit `status='published'` filter is the same RLS-is-not-scoping
-     * guard as the feed (a visitor must not see a creator's pending clips). */
-    async getCreatorClips(creatorId: string): Promise<Clip[]> {
-      const { data, error } = await db
+     * guard as the feed (a visitor must not see a creator's pending clips).
+     *
+     * BOUNDED (SCALE-MEDIA M-4). This had no `.limit()` and no pagination, so
+     * a 500 clip creator returned 500 rows and, once the grid mints posters,
+     * ceil(500/24) = 21 batch calls on one screen open. One page of
+     * CLUTCH_GRID_PAGE_SIZE keeps the grid inside a SINGLE batch call, which
+     * is the whole point of the batch endpoint; pass the last row's
+     * `createdAt` as `cursor` for the next page. */
+    async getCreatorClips(creatorId: string, cursor?: string): Promise<Clip[]> {
+      let query = db
         .from("clips")
         .select(CLIP_FEED_SELECT)
         .eq("owner_id", creatorId)
         .eq("status", "published")
         .order("created_at", { ascending: false })
-        .returns<ClipFeedRow[]>();
+        .limit(CLUTCH_GRID_PAGE_SIZE);
+      if (cursor) query = query.lt("created_at", cursor);
+
+      const { data, error } = await query.returns<ClipFeedRow[]>();
       if (error) throw mapPostgrestError(error);
       return (data ?? []).map((r) => mapClipRow(r, false));
     },
@@ -1801,17 +1844,20 @@ function makeClutchApi(client: AtlitosClient) {
      * column that does not exist yet 400s the whole query. This is not a
      * security boundary being moved client side, it is an own-scoped read of
      * the caller's own rows hiding rows the caller themselves deleted. */
-    async getMyClips(): Promise<Clip[]> {
+    async getMyClips(cursor?: string): Promise<Clip[]> {
       const { data: authData, error: authError } = await client.auth.getUser();
       if (authError) throw mapAuthError(authError);
       if (!authData.user) return [];
 
-      const { data, error } = await db
+      let query = db
         .from("clips")
         .select(CLIP_OWNER_SELECT)
         .eq("owner_id", authData.user.id)
         .order("created_at", { ascending: false })
-        .returns<ClipFeedRow[]>();
+        .limit(CLUTCH_GRID_PAGE_SIZE);
+      if (cursor) query = query.lt("created_at", cursor);
+
+      const { data, error } = await query.returns<ClipFeedRow[]>();
       if (error) throw mapPostgrestError(error);
       return (data ?? []).filter((r) => r.deleted_at == null).map((r) => mapClipRow(r, false));
     },

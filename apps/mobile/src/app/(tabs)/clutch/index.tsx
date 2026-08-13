@@ -24,6 +24,16 @@ type LoadState = 'loading' | 'empty' | 'populated' | 'error';
  * on-screen clip never stalls on an expired URL mid-watch. */
 const PLAYBACK_REFRESH_LEAD_S = 15;
 
+/** SCALE-MEDIA M-1. Bounded retry for a failed playback mint. Four attempts
+ * from a 2s base doubles to 2, 4, 8, 16 seconds, capped at 30, each with up to
+ * 50 percent added jitter so devices sharing one throttle key do not retry in
+ * lockstep and re-exhaust the window together. A RATE_LIMITED refusal waits
+ * out the server's own `retry_after_seconds` instead of the base. */
+const MINT_MAX_ATTEMPTS = 4;
+const MINT_RETRY_BASE_MS = 2000;
+const MINT_RETRY_MAX_MS = 30000;
+const MINT_RETRY_JITTER = 0.5;
+
 /** Deep link into a single clip in the viewer. `atlitos://` is the app scheme
  * (app.json); the share sheet carries it so a tap reopens the exact clip. */
 function clipDeepLink(clipId: string): string {
@@ -62,9 +72,15 @@ export default function ClutchFeedScreen() {
   // as an <Image> source), so the poster the card shows is the SIGNED thumb URL
   // get-clip-playback-url mints alongside the video, never clip.thumbUrl.
   const [posterUrls, setPosterUrls] = useState<Record<string, string>>({});
+  // Cards whose playback mint is currently failing (M-1). Drives the card's
+  // visible, non-blocking "could not load" state instead of a black rectangle.
+  const [mintFailed, setMintFailed] = useState<Record<string, true>>({});
 
   const activeIdRef = useRef<string | null>(null);
   const refreshTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  // Consecutive failed mint attempts per clip, so the backoff is bounded and a
+  // card that keeps failing stops asking rather than retrying forever.
+  const mintAttempts = useRef<Record<string, number>>({});
 
   const clearTimer = useCallback((id: string) => {
     const timer = refreshTimers.current[id];
@@ -82,6 +98,15 @@ export default function ClutchFeedScreen() {
         if (playback.thumbUrl) {
           setPosterUrls((prev) => ({ ...prev, [clipId]: playback.thumbUrl as string }));
         }
+        // A success clears the card's failure state and its attempt count, so
+        // a card that recovers is not still counting toward the retry cap.
+        mintAttempts.current[clipId] = 0;
+        setMintFailed((prev) => {
+          if (!prev[clipId]) return prev;
+          const next = { ...prev };
+          delete next[clipId];
+          return next;
+        });
         clearTimer(clipId);
         const refreshMs = Math.max(PLAYBACK_REFRESH_LEAD_S, playback.expiresIn - PLAYBACK_REFRESH_LEAD_S) * 1000;
         refreshTimers.current[clipId] = setTimeout(() => {
@@ -89,12 +114,65 @@ export default function ClutchFeedScreen() {
           if (activeIdRef.current === clipId) void mintPlayback(clipId);
           else clearTimer(clipId);
         }, refreshMs);
-      } catch {
-        // Leave the poster in place; a card without a playback URL still
-        // renders its thumbnail. Expected for placeholder fixture bytes.
+      } catch (err) {
+        // SCALE-MEDIA M-1. This catch used to be empty, with a comment saying
+        // the poster stayed in place. It does not: the SAME call mints the
+        // poster, so a failure leaves no video URL AND no poster URL, and the
+        // card renders as a bare black rectangle. Worse, the refresh timer was
+        // armed only inside the try after a success, so a card that failed
+        // once never retried while it was on screen. The feed silently stopped
+        // working and looked exactly like a broken app.
+        //
+        // Now: a bounded retry with exponential backoff and jitter, and a
+        // visible non-blocking state on the card once the retries are spent.
+        // Jitter matters specifically because the throttle is shared: without
+        // it, every device behind one carrier NAT that got a 429 in the same
+        // second would retry in the same second and re-exhaust the window.
+        const apiError = err as ApiError;
+        const attempt = (mintAttempts.current[clipId] ?? 0) + 1;
+        mintAttempts.current[clipId] = attempt;
+
+        if (attempt > MINT_MAX_ATTEMPTS) {
+          setMintFailed((prev) => ({ ...prev, [clipId]: true }));
+          clearTimer(clipId);
+          return;
+        }
+
+        // A throttle refusal waits out the window the server named rather than
+        // hammering it further; anything else backs off from a short base.
+        const baseMs =
+          apiError?.code === 'RATE_LIMITED'
+            ? Math.max(MINT_RETRY_BASE_MS, (apiError.retryAfterSeconds ?? 60) * 1000)
+            : MINT_RETRY_BASE_MS;
+        const backoffMs = Math.min(MINT_RETRY_MAX_MS, baseMs * 2 ** (attempt - 1));
+        const jitterMs = Math.random() * backoffMs * MINT_RETRY_JITTER;
+
+        // Shown while the retry is pending too, so the card says something
+        // rather than sitting black in silence.
+        setMintFailed((prev) => ({ ...prev, [clipId]: true }));
+        clearTimer(clipId);
+        refreshTimers.current[clipId] = setTimeout(() => {
+          if (activeIdRef.current === clipId) void mintPlayback(clipId);
+          else clearTimer(clipId);
+        }, backoffMs + jitterMs);
       }
     },
     [clutch, clearTimer],
+  );
+
+  /** Manual retry from the card's own affordance: resets the attempt budget so
+   * a user who waited out a throttle gets a full set of tries again. */
+  const retryMint = useCallback(
+    (clipId: string) => {
+      mintAttempts.current[clipId] = 0;
+      setMintFailed((prev) => {
+        const next = { ...prev };
+        delete next[clipId];
+        return next;
+      });
+      void mintPlayback(clipId);
+    },
+    [mintPlayback],
   );
 
   const load = useCallback(async () => {
@@ -176,6 +254,21 @@ export default function ClutchFeedScreen() {
         else changed = true;
       }
       return changed ? nextUrls : prev;
+    });
+    // M-1: a scrolled-away card drops its failure state and its attempt count
+    // too, so returning to it starts clean rather than showing a stale error
+    // or arriving with the retry budget already spent.
+    setMintFailed((prev) => {
+      let changed = false;
+      const next: Record<string, true> = {};
+      for (const id of Object.keys(prev)) {
+        if (keep.has(id)) next[id] = true;
+        else {
+          changed = true;
+          mintAttempts.current[id] = 0;
+        }
+      }
+      return changed ? next : prev;
     });
   }, [activeId, clips, playbackUrls, mintPlayback, clearTimer]);
 
@@ -318,6 +411,11 @@ export default function ClutchFeedScreen() {
                 }
                 playbackUrl={playbackUrls[item.id]}
                 posterUrl={posterUrls[item.id]}
+                // M-1: a failed mint now says so on the card and offers a
+                // retry, instead of leaving a black rectangle with no poster,
+                // no error and no way forward.
+                playbackFailed={mintFailed[item.id] === true}
+                onRetryPlayback={() => retryMint(item.id)}
                 onOpen={() => openDetail(item.id)}
                 onComment={() => openDetail(item.id)}
                 onLike={() => void handleLike(item)}

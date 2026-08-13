@@ -1,8 +1,9 @@
+import { sizedImageUrl } from '@atlitos/api';
 import { Text } from '@/components/ui/text';
 import { cn } from '@/lib/utils';
 import { useThemeColors } from '@/theme/use-theme-colors';
 import { BadgeCheck } from 'lucide-react-native';
-import { Image, View } from 'react-native';
+import { Image, PixelRatio, View } from 'react-native';
 
 export type AvatarSize = 32 | 40 | 56 | 80;
 
@@ -36,15 +37,37 @@ function initialsOf(name?: string): string {
  * `uri` is given. `verifiedBadge` renders a lucide BadgeCheck at the bottom
  * right corner in accent on a bg-colored halo, the v1 pattern for verified
  * coaches/UPAs.
+ *
+ * SIZED SOURCE (SCALE-MEDIA M-6). Avatars are stored at whatever resolution
+ * the camera produced: the one real uploaded avatar in production is 298,490
+ * bytes and was being painted, in full, into a circle at most 80 points wide.
+ * That is a 37x over fetch on every single render site (chat threads, group
+ * members, follows, trainees, search results, both profile headers, clip
+ * comments), and a twenty row list cost roughly 6 MB to paint twenty circles.
+ * Sizing happens HERE rather than at each of those call sites because every
+ * one of them already routes through this component, so one change covers all
+ * of them and cannot be forgotten by the next one added.
  */
 function Avatar({ uri, name, size = 40, verifiedBadge }: AvatarProps) {
   const colors = useThemeColors();
   const dimension = { width: size, height: size, borderRadius: size / 2 };
+  // Ask for exactly the pixels this device will paint, capped at 3x so a
+  // high ratio device cannot request an absurd render, and rounded to the
+  // size bucket so all four sizes share few enough origin transforms to stay
+  // cheap. A non Supabase or already sized URL passes through untouched.
+  const sizedUri = sizedImageUrl(uri, {
+    width: size * Math.min(3, PixelRatio.get()),
+    quality: 70,
+  });
 
   return (
     <View style={{ width: size, height: size }}>
-      {uri ? (
-        <Image source={{ uri }} style={dimension} accessibilityLabel={name ? `${name}'s avatar` : 'Avatar'} />
+      {sizedUri ? (
+        <Image
+          source={{ uri: sizedUri }}
+          style={dimension}
+          accessibilityLabel={name ? `${name}'s avatar` : 'Avatar'}
+        />
       ) : (
         <View
           style={[dimension, { backgroundColor: colors.accentTint }]}

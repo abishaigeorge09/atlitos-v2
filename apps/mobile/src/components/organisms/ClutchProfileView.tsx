@@ -30,6 +30,13 @@ export interface ClutchProfileViewProps {
   /** Own profile hides the follow button, shows every clip status, and can
    * offer an upload CTA. A visitor sees the follow button and published only. */
   isOwn: boolean;
+  /** SCALE-MEDIA M-4. Signed poster URL per clip id, from the BATCH playback
+   * endpoint (`useClipPosters`). Without it every tile fell back to
+   * `clip.thumbUrl`, which `mapClipRow` sets to undefined for a raw private
+   * bucket path, so both profile surfaces this component backs rendered grids
+   * of blank tiles. Optional so a caller that has not wired the batch yet
+   * degrades to the old blank tile rather than crashing. */
+  posterUrls?: Record<string, string>;
   followBusy?: boolean;
   onRetry: () => void;
   onToggleFollow?: () => void;
@@ -63,6 +70,7 @@ export function ClutchProfileView({
   state,
   errorMessage,
   isOwn,
+  posterUrls,
   followBusy,
   onRetry,
   onToggleFollow,
@@ -159,7 +167,12 @@ export function ClutchProfileView({
           // maxWidth caps a lone last-row tile at one third instead of the
           // full-width stretch numColumns+flex-1 would otherwise give it.
           <View className="flex-1" style={{ maxWidth: '33%' }}>
-            <ClutchPostCard clip={item} variant="thumb" onOpen={() => onOpenClip(item.id)} />
+            <ClutchPostCard
+              clip={item}
+              variant="thumb"
+              posterUrl={posterUrls?.[item.id]}
+              onOpen={() => onOpenClip(item.id)}
+            />
             {pill ? (
               <View className="absolute left-xs top-xs" style={{ pointerEvents: 'none' }}>
                 <StatusPill status={pill} />

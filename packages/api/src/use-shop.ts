@@ -2,6 +2,7 @@ import type { ApiError, ApiErrorCode, OrderStatus, Sport } from "@atlitos/types"
 
 import type { AtlitosClient } from "./client";
 import { mapEdgeFunctionError, mapPostgrestError } from "./errors";
+import { IMAGE_SIZE, sizedImageUrl } from "./image-url";
 import { readRefundSummary, type RefundSummary } from "./refunds";
 
 /**
@@ -422,7 +423,17 @@ function resolveMediaUrls(
       if (a.is_primary !== b.is_primary) return a.is_primary ? -1 : 1;
       return a.position - b.position;
     })
-    .map((row) => client.storage.from(PRODUCT_MEDIA_BUCKET).getPublicUrl(row.storage_path).data.publicUrl);
+    // M-6: product media renders in grid tiles and a phone width hero, never
+    // at origin resolution, so it is asked for at the hero width once and
+    // reused rather than fetched full size per card.
+    .map(
+      (row) =>
+        sizedImageUrl(
+          client.storage.from(PRODUCT_MEDIA_BUCKET).getPublicUrl(row.storage_path).data.publicUrl,
+          { width: IMAGE_SIZE.hero, height: IMAGE_SIZE.hero },
+        ) ?? "",
+    )
+    .filter((url) => url !== "");
 }
 
 function mapVariantRow(row: AvailabilityQueryRow): ShopVariant {
