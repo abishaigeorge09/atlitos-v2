@@ -1717,6 +1717,7 @@ export type Database = {
       group_memberships: {
         Row: {
           created_at: string
+          expiry_notified_at: string | null
           group_id: string
           id: string
           payment_intent_id: string | null
@@ -1725,12 +1726,14 @@ export type Database = {
           platform_fee: number
           player_id: string
           price: number
+          renewal_reminder_sent_at: string | null
           status: string
           total: number
           updated_at: string
         }
         Insert: {
           created_at?: string
+          expiry_notified_at?: string | null
           group_id: string
           id?: string
           payment_intent_id?: string | null
@@ -1739,12 +1742,14 @@ export type Database = {
           platform_fee: number
           player_id: string
           price: number
+          renewal_reminder_sent_at?: string | null
           status?: string
           total: number
           updated_at?: string
         }
         Update: {
           created_at?: string
+          expiry_notified_at?: string | null
           group_id?: string
           id?: string
           payment_intent_id?: string | null
@@ -1753,6 +1758,7 @@ export type Database = {
           platform_fee?: number
           player_id?: string
           price?: number
+          renewal_reminder_sent_at?: string | null
           status?: string
           total?: number
           updated_at?: string
@@ -5706,6 +5712,8 @@ export type Database = {
         | "verification"
         | "transfer"
         | "support"
+        | "session"
+        | "membership"
       order_status:
         | "placed"
         | "shipped"
@@ -5943,6 +5951,8 @@ export const Constants = {
         "verification",
         "transfer",
         "support",
+        "session",
+        "membership",
       ],
       order_status: [
         "placed",

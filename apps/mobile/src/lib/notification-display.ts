@@ -4,12 +4,14 @@ import {
   BadgeCheck,
   Bell,
   CalendarCheck,
+  CalendarClock,
   Clapperboard,
   HeartHandshake,
   type LucideIcon,
   MessageCircle,
   Package,
   LifeBuoy,
+  Users,
 } from 'lucide-react-native';
 
 /**
@@ -32,6 +34,11 @@ const DISPLAY: Record<NotificationType, NotificationTypeDisplay> = {
   verification: { icon: BadgeCheck, label: 'Verification' },
   transfer: { icon: ArrowLeftRight, label: 'Payouts' },
   support: { icon: LifeBuoy, label: 'Support' },
+  // 0088 coaching pair. `session` covers accept, decline, start and complete
+  // (0089); `membership` covers the renewal reminder, expiry and lapse from
+  // the daily sweep (0090).
+  session: { icon: CalendarClock, label: 'Sessions' },
+  membership: { icon: Users, label: 'Groups' },
 };
 
 export function notificationDisplay(type: NotificationType): NotificationTypeDisplay {

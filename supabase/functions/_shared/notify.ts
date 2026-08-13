@@ -45,6 +45,12 @@ export const NOTIFICATION_TYPES = [
   "verification",
   "transfer",
   "support",
+  // 0088: the coaching pair. 'session' is emitted in-database by
+  // session_transition_internal (0089) on accept, decline, start and complete;
+  // 'membership' by sweep_group_memberships (0090). Both are listed here so a
+  // future edge-function caller of notify-dispatch can carry them too.
+  "session",
+  "membership",
 ] as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
