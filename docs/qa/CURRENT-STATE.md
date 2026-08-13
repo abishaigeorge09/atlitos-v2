@@ -125,8 +125,27 @@ Two concrete defects followed:
    39 block references. The reasoning was sound; the tree was ten migrations stale.
 
 **Rule: merge the integration branch INTO a stale branch before reviewing or merging it, then
-re-read every claim of the form "X does not exist".** An absence is evidence about the tree you
-looked at, never about the tree you are merging into.
+re-read every conclusion drawn from what the tree CONTAINS.** An absence is evidence about the
+tree you looked at, never about the tree you are merging into.
+
+"X does not exist" is the obvious form, but the dangerous set is broader and includes
+**"X is unused", "nothing calls this", "there is only one instance", and "this is dead code"**.
+All of those are absences dressed as facts.
+
+Worked example, same day. A track reported a third instance of the sheet bug in a "dead code"
+`components/organisms/CommentsSheet.tsx` and proposed leaving it. Checked against the target:
+the file existed at the merge base, still exists on the branch, and **`launch-p4` had already
+deleted it**. It was never dead code awaiting a decision; it was already gone, and only still
+present because the branch was 171 commits behind. Deleting it "as dead code" would have been
+a no-op at best and, had the reasoning been applied to a file launch-p4 had KEPT and started
+using, a live deletion.
+
+A third instance, `apps/mobile/src/app/(tabs)/clutch/post/[id].tsx`, is the mirror image: the
+branch's rewrite removed imports that only made sense against the old file, while launch-p4 had
+rewritten the same file by 554 insertions and added 9 report/block references. Taking the
+branch's side wholesale would have silently deleted the report and block feature, with a green
+typecheck. That merge was ABORTED rather than hand-resolved, and handed back to its author to
+re-apply on the current file.
 
 ### A forked session cannot tell inherited work from its own
 A fork inherits the transcript INCLUDING tool results, so it can hold a perfectly accurate
