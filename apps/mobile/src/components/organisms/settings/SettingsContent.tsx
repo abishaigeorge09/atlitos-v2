@@ -12,6 +12,7 @@ import {
   Palette,
   Star,
   Sun,
+  Trash2,
   UserRoundPlus,
   UserRoundPen,
   Volleyball,
@@ -399,6 +400,18 @@ export function SettingsContent() {
             ) : null}
             <View style={{ borderTopWidth: 1, borderTopColor: colors.border }}>
               <ActionRow icon={LogOut} label="Sign out" tone="danger" onPress={() => void handleSignOut()} />
+            </View>
+            {/* Apple Guideline 5.1.1(v) and the Google Play account deletion
+                policy: an account created in the app must be deletable from
+                inside the app. This row only opens the confirmation screen;
+                nothing is deleted until the word DELETE is typed there. */}
+            <View style={{ borderTopWidth: 1, borderTopColor: colors.border }}>
+              <ActionRow
+                icon={Trash2}
+                label="Delete account"
+                tone="danger"
+                onPress={() => router.push('/profile/delete-account')}
+              />
             </View>
           </Section>
         </>
