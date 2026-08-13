@@ -1,4 +1,4 @@
--- ATLITOS v2 — 0091_membership_sweep_schedule.sql
+-- ATLITOS v2 — 0105_membership_sweep_schedule.sql
 -- Domain: scheduling. Declares the product's cron jobs in SQL.
 --
 -- STATE OF PLAY, verified read only against production (syzzfgaudpifwvbpycyi)
@@ -56,7 +56,7 @@ begin
 end
 $$;
 
--- The membership expiry and reminder sweep (0090).
+-- The membership expiry and reminder sweep (0104).
 do $$
 begin
   if exists (select 1 from cron.job where jobname = 'membership-sweep') then

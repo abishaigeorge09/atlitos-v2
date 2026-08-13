@@ -140,7 +140,7 @@ export const FEE_VALUE_TYPES = ['percentage', 'flat'] as const;
 export type FeeValueType = (typeof FEE_VALUE_TYPES)[number];
 
 // Mirrors public.notification_type (0002_notifications.sql, extended by
-// 0088_notification_types_coaching.sql). 'session' and 'membership' are the
+// 0102_notification_types_coaching.sql). 'session' and 'membership' are the
 // coaching pair: a session changing state (accept, decline, start, complete)
 // and a group membership approaching or passing its period_end. Neither reuses
 // 'booking', which means a court booking everywhere else in the product, and

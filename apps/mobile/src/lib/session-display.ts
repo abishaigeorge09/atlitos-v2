@@ -18,7 +18,7 @@ export const SESSION_STATUS_PILL: Record<SessionStatus, StatusPillStatus> = {
   rated: 'rated',
 };
 
-/** `group_memberships.status` (0076, extended by 0090) -> `StatusPill`.
+/** `group_memberships.status` (0076, extended by 0104) -> `StatusPill`.
  * `pending` reuses the shared warning pill (payment not captured yet, same
  * "awaiting" meaning as every other domain's `pending`).
  *

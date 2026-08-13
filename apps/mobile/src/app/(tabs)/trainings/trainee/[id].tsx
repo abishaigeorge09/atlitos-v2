@@ -52,7 +52,7 @@ const TABS: Array<{ key: ProfileTab; label: string }> = [
 const MEMBERSHIP_STATUS_PILL: Record<string, StatusPillStatus> = {
   pending: 'pending',
   active: 'confirmed',
-  // `expired` and `lapsed` both read as the same pill here (0090 adds
+  // `expired` and `lapsed` both read as the same pill here (0104 adds
   // `expired` as the grace window state between the two): a coach reading
   // a trainee's payment history should see the same "not current" signal
   // for either, not one falling back to a misleading `pending` tone.

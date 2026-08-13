@@ -1,11 +1,11 @@
--- ATLITOS v2 — 0088_notification_types_coaching.sql
+-- ATLITOS v2 — 0102_notification_types_coaching.sql
 -- Domain: notifications. Adds the two notification_type values coaching has
 -- been missing since 0002.
 --
 -- WHY THIS IS ITS OWN MIGRATION, and why it contains nothing else: Postgres
 -- refuses to USE an enum value in the same transaction that added it. The
 -- Supabase CLI runs each migration file in one transaction, so the ADD VALUE
--- must commit before 0089 and 0090 can write a notifications row carrying it.
+-- must commit before 0103 and 0104 can write a notifications row carrying it.
 -- 0076 header note 6 made the same split for payment_domain 'membership'.
 --
 -- The gap being closed: notification_type (0002_notifications.sql) is
@@ -19,9 +19,9 @@
 -- muting court receipts also silently muted their coach accepting a session.
 --
 --   'session'    a coaching session changed state: accepted, declined,
---                started or completed (emitted in 0089).
+--                started or completed (emitted in 0103).
 --   'membership' a group membership is about to end, has ended, or has
---                lapsed (emitted by the sweep in 0090).
+--                lapsed (emitted by the sweep in 0104).
 --
 -- Mirrors updated in the same change: packages/types/src/enums.ts
 -- NOTIFICATION_TYPES, supabase/functions/_shared/notify.ts NOTIFICATION_TYPES,

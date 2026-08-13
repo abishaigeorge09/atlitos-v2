@@ -30,7 +30,7 @@ import { mapEdgeFunctionError, mapPostgrestError } from "./errors";
 
 /**
  * public.group_memberships.status (0076, extended by
- * 0090_membership_expiry_sweep.sql).
+ * 0104_membership_expiry_sweep.sql).
  *
  * 'expired' is the state between a month ending and the seat being released:
  * sweep_group_memberships moves active -> expired on the day after period_end
@@ -46,7 +46,7 @@ export type GroupMembershipStatus = "pending" | "active" | "expired" | "lapsed";
 
 /**
  * Whether this membership can be renewed on its existing row, which is
- * exactly the set renew_group_membership (0090) accepts. The server is the
+ * exactly the set renew_group_membership (0104) accepts. The server is the
  * authority; this mirrors it so a screen never offers a Renew button that the
  * RPC will refuse with INVALID_TRANSITION. Deliberately NOT a date
  * calculation: period_end is display, status is the truth.

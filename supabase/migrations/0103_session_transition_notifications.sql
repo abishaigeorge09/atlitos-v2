@@ -1,4 +1,4 @@
--- ATLITOS v2 — 0089_session_transition_notifications.sql
+-- ATLITOS v2 — 0103_session_transition_notifications.sql
 -- Domain: coaching + notifications. Closes gap B1: no notification has ever
 -- fired on any coaching session transition.
 --

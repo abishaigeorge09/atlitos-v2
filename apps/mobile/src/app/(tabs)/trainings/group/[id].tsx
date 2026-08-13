@@ -34,7 +34,7 @@ function titleCase(value: string): string {
 
 /** Membership display state for the Team Members chips. `lapsed` rows are
  * excluded from `getGroup` entirely. Reads `membership.status` directly
- * (0090 membership_expiry_sweep is the sole writer of `expired`), never a
+ * (0104 membership_expiry_sweep is the sole writer of `expired`), never a
  * client side date comparison: the sweep job and this screen used to
  * disagree about the exact same row when this compared `periodEnd` to
  * `todayISO()` locally instead of trusting the server's state machine.

@@ -1,4 +1,4 @@
--- ATLITOS v2 — 0090_membership_expiry_sweep.sql
+-- ATLITOS v2 — 0104_membership_expiry_sweep.sql
 -- Domain: coaching groups, fares. Closes gap B2: an active membership never
 -- becomes anything else, so time does not exist in the fares model.
 --
@@ -70,7 +70,7 @@
 --     minutes, running select public.expire_stale_holds(). That job was
 --     created out of band and appears in no migration in this repo, which is
 --     its own defect: a rebuild from migrations silently loses the courts and
---     sessions hold sweep. 0091 fixes that by declaring both jobs in SQL.
+--     sessions hold sweep. 0105 fixes that by declaring both jobs in SQL.
 --
 -- The sweep is written to expire_stale_holds's shape deliberately: one
 -- SECURITY DEFINER function, service_role only, row by row with the failure of
@@ -443,4 +443,4 @@ revoke execute on function public.sweep_group_memberships() from anon, authentic
 grant execute on function public.sweep_group_memberships() to service_role;
 
 comment on function public.sweep_group_memberships() is
-  'B2: daily membership sweep. Reminds before period_end, expires an ended month keeping the seat, lapses after the grace window releasing the seat. Idempotent per stage, per row failure counted not raised. Scheduled in 0091.';
+  'B2: daily membership sweep. Reminds before period_end, expires an ended month keeping the seat, lapses after the grace window releasing the seat. Idempotent per stage, per row failure counted not raised. Scheduled in 0105.';

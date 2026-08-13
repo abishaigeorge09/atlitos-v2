@@ -1,4 +1,4 @@
--- ATLITOS v2 — 0092_realtime_notifications.sql
+-- ATLITOS v2 — 0106_realtime_notifications.sql
 -- Domain: notifications, Realtime. The answer to B1's realtime question, and
 -- it is not the table B1 asked about.
 --
@@ -15,7 +15,7 @@
 --
 -- DECISION: do NOT wire a sessions subscription. Reasons, in order of weight:
 --
---   1. IT WOULD BE A SECOND EVENT BUS FOR THE SAME EVENT. After 0089 every
+--   1. IT WOULD BE A SECOND EVENT BUS FOR THE SAME EVENT. After 0103 every
 --      accept, decline, start and complete already writes a notifications row
 --      in the same transaction as the status change. A sessions subscription
 --      would deliver the identical four events on a different socket, so every
@@ -52,7 +52,7 @@
 -- SUBSCRIBED, the code looks live, and no event is ever delivered because
 -- there is no publish side. It is why the bell badge only ever updates on a
 -- manual refresh, and it would have silently swallowed every notification
--- 0089 and 0090 now emit.
+-- 0103 and 0104 now emit.
 --
 -- ============================================================================
 -- RLS REVIEW BEFORE PUBLISHING. Realtime evaluates the table's SELECT policy

@@ -14,8 +14,11 @@
 -- WHAT IS REAL HERE AND WHAT IS A STAND IN, stated plainly so nobody reads
 -- more into a green run than it earned:
 --
---   REAL: migrations 0088, 0089 and 0090 are executed VERBATIM from
+--   REAL: migrations 0102, 0103 and 0104 are executed VERBATIM from
 --   supabase/migrations. Every function under test is the shipped text.
+--   Renumbered from the original 0088/0089/0090 to clear a collision with
+--   phase-11/launch-p4, which already holds those numbers for unrelated
+--   migrations; see 0102_notification_types_coaching.sql's header.
 --
 --   STAND IN: the ~87 migrations before them are not replayed (they need the
 --   Supabase auth/storage schemas, the supabase roles, and extensions this
@@ -148,12 +151,12 @@ insert into public.fee_config (domain, key, value) values ('sessions', 'platform
 -- 1. The migrations under test, verbatim.
 -- ============================================================================
 
-\echo '--- applying supabase/migrations/0088_notification_types_coaching.sql'
-\i supabase/migrations/0088_notification_types_coaching.sql
-\echo '--- applying supabase/migrations/0089_session_transition_notifications.sql'
-\i supabase/migrations/0089_session_transition_notifications.sql
-\echo '--- applying supabase/migrations/0090_membership_expiry_sweep.sql'
-\i supabase/migrations/0090_membership_expiry_sweep.sql
+\echo '--- applying supabase/migrations/0102_notification_types_coaching.sql'
+\i supabase/migrations/0102_notification_types_coaching.sql
+\echo '--- applying supabase/migrations/0103_session_transition_notifications.sql'
+\i supabase/migrations/0103_session_transition_notifications.sql
+\echo '--- applying supabase/migrations/0104_membership_expiry_sweep.sql'
+\i supabase/migrations/0104_membership_expiry_sweep.sql
 
 -- ============================================================================
 -- 2. Fixtures. Two athletes and one coach, so every assertion can check that

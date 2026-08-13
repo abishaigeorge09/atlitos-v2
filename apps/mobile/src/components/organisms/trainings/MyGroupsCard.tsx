@@ -28,7 +28,7 @@ function formatMembershipDate(iso: string): string {
  * financial invariant).
  *
  * THREE STATES, and the Renew button now actually reaches one of them. Before
- * 0090 nothing ever moved a membership by time, so `lapsed` was unreachable
+ * 0104 nothing ever moved a membership by time, so `lapsed` was unreachable
  * for a paid row and this button was dead code:
  *
  *   active   "Active until <period_end>", no CTA.

@@ -1,13 +1,13 @@
 // ATLITOS v2 — scripts/verify-renew-button.ts
 //
 // Proves the Renew button in MyGroupsCard.tsx renders for exactly the
-// membership states renew_group_membership (0090) accepts, and for no others.
+// membership states renew_group_membership (0104) accepts, and for no others.
 // It exercises the SAME two predicates the component calls, imported from
 // @atlitos/api, rather than restating the rule, so it cannot drift from the
 // component without failing.
 //
-// Why this matters: before 0090 the button rendered only for 'lapsed', a state
-// a paid membership could never reach, so it was dead code. After 0090 the
+// Why this matters: before 0104 the button rendered only for 'lapsed', a state
+// a paid membership could never reach, so it was dead code. After 0104 the
 // sweep produces 'expired', which is renewable, and 'lapsed', which is not
 // (the seat was released, the athlete re joins under the capacity guard).
 // A button that appears in order to error is worse than no button.
