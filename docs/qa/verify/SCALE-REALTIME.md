@@ -641,8 +641,11 @@ command output or a read-only catalog query, both quoted.
 `notifications`, a partial index on the backlog, `claim_notification_push_batch` (a single
 `update ... where id in (select ... for update skip locked limit n) returning`), and a
 `notifications_lock_push_state` BEFORE UPDATE trigger so the owner UPDATE policy 0002 grants the
-bell cannot be used to forge delivery state. `0111` schedules `notification-push-sweep` every 30
-seconds over pg_net. `supabase/functions/notify-push-sweep/index.ts` is the worker.
+bell cannot be used to forge delivery state. `notification-push-sweep` runs every 30 seconds over
+pg_net, scheduled by `supabase/deploy/notification_push_sweep_schedule.sql` (moved out of
+`supabase/migrations/0111_*` on 2026-08-14, since a migration cannot carry the two
+environment-specific vault secrets this job needs; see that file's header and
+`supabase/deploy/README.md`). `supabase/functions/notify-push-sweep/index.ts` is the worker.
 
 The webhook alternative was rejected because it is per row (a group of 50 becomes 50
 single-recipient HTTP calls, R-6 reintroduced one layer up), fire and forget (a pg_net failure
@@ -661,11 +664,19 @@ this document originally proposed:
     select name from vault.secrets;   -> zero rows.
 
 R-7's "cheapest fix" said "a second pg_cron job ... over pg_net" as though pg_net were present.
-It is not, and neither are the secrets such a job needs. `0111` therefore opens with four hard
-guards and RAISES rather than skipping: a job installed without a working key would run every 30
-seconds, take a 403 from `assertServiceRoleRequest`, record it only in `net._http_response`, and
-show as a healthy active row in `cron.job` while delivering nothing. That is the "gate that
-cannot run" shape CURRENT-STATE names, so it is a failure, not a skip.
+It is not, and neither are the secrets such a job needs. The scheduling script therefore opens
+with four hard guards and RAISES rather than skipping: a job installed without a working key
+would run every 30 seconds, take a 403 from `assertServiceRoleRequest`, record it only in
+`net._http_response`, and show as a healthy active row in `cron.job` while delivering nothing.
+That is the "gate that cannot run" shape CURRENT-STATE names, so it is a failure, not a skip.
+
+**2026-08-14 correction: this scheduling step was originally written as migration
+`0111_notification_push_sweep_schedule.sql`.** It has been moved to
+`supabase/deploy/notification_push_sweep_schedule.sql`, a post-deploy script rather than a
+migration, because a migration must be replayable unattended on a clean database in any
+environment, and this one cannot be: it depends on two Supabase Vault secrets (`project_url`,
+`service_role_key`) that are real per-environment values and do not belong in a file committed
+to git. The guard logic is byte-for-byte unchanged. See `supabase/deploy/README.md`.
 
 ### R-6 CLOSED in code
 

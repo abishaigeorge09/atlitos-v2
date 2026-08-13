@@ -24,8 +24,11 @@
 // re-creates R-6's one-request-per-recipient shape at the top of the funnel.
 //
 // SERVICE-ROLE ONLY, same boundary as notify-dispatch: this reads and pushes
-// arbitrary users' notifications. The pg_cron job in 0111 calls it with the
-// service-role key from the vault.
+// arbitrary users' notifications. The pg_cron job scheduled by
+// supabase/deploy/notification_push_sweep_schedule.sql (formerly migration
+// 0111, moved 2026-08-14 because it depends on environment-specific vault
+// secrets a migration cannot carry) calls it with the service-role key from
+// the vault.
 
 import { handleCorsPreflight } from "../_shared/cors.ts";
 import { jsonResponse, withErrorHandling } from "../_shared/http.ts";

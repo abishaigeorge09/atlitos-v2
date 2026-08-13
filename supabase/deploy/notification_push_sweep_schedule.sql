@@ -1,9 +1,15 @@
--- ATLITOS v2 — 0111_notification_push_sweep_schedule.sql
+-- ATLITOS v2 — supabase/deploy/notification_push_sweep_schedule.sql
 -- Domain: scheduling. Runs the R-7 push relay.
 --
--- NOT APPLIED. Written, not run. And note the hard precondition below: this
--- migration REFUSES to install a job it cannot authenticate, rather than
--- installing one that would 403 silently every 30 seconds.
+-- POST-DEPLOY SCRIPT, NOT A MIGRATION. Formerly
+-- supabase/migrations/0111_notification_push_sweep_schedule.sql, moved 2026-08-14 because a
+-- migration must be replayable on a clean database in ANY environment, and this one depends on
+-- environment-specific secrets (a project URL, a service-role key) that cannot live in a
+-- migration file in git. See supabase/deploy/README.md for how and when to run this.
+--
+-- NOT APPLIED TO PRODUCTION as of 2026-08-14. Written, not run. And note the hard precondition
+-- below: this script REFUSES to install a job it cannot authenticate, rather than installing
+-- one that would 403 silently every 30 seconds.
 --
 -- ============================================================================
 -- WHAT RUNS, AND WHY IT IS pg_net.
@@ -28,12 +34,12 @@
 -- `create extension if not exists`.
 --
 -- ============================================================================
--- SECRETS. Two rows a human must add BEFORE this migration can be applied.
+-- SECRETS. Two rows a human must add BEFORE this script can be run.
 -- ============================================================================
 --
 -- The job posts to an edge function as the service role, so the schedule needs
--- the project URL and the service-role key. Neither belongs in a migration
--- file in git. They go in Supabase Vault, and this migration only reads them:
+-- the project URL and the service-role key. Neither belongs in a file in git.
+-- They go in Supabase Vault, and this script only reads them:
 --
 --   select vault.create_secret('https://<ref>.supabase.co', 'project_url',
 --     'Base URL for in-database calls to edge functions');
@@ -41,7 +47,8 @@
 --     'Service role key used by pg_cron jobs that call edge functions');
 --
 -- Run those two statements once, as a human, against the project. They are
--- writes, so this track did not run them.
+-- writes, so this script does not run them, and no automated track has run
+-- them against production.
 --
 -- Why fail rather than skip: a job installed without a usable key would run
 -- every 30 seconds, receive 403 from assertServiceRoleRequest, and record that
@@ -58,17 +65,17 @@ begin
 
   if not exists (select 1 from pg_extension where extname = 'pg_net') then
     raise exception
-      'pg_net is not installed; enable it (Database, Extensions, pg_net) before applying 0111. Without it nothing can call notify-push-sweep from the database.';
+      'pg_net is not installed; enable it (Database, Extensions, pg_net) before running this script. Without it nothing can call notify-push-sweep from the database.';
   end if;
 
   if not exists (select 1 from vault.secrets where name = 'project_url') then
     raise exception
-      'vault secret project_url is missing; see the header of 0111 for the two vault.create_secret calls this job needs';
+      'vault secret project_url is missing; see supabase/deploy/README.md for the two vault.create_secret calls this job needs';
   end if;
 
   if not exists (select 1 from vault.secrets where name = 'service_role_key') then
     raise exception
-      'vault secret service_role_key is missing; see the header of 0111 for the two vault.create_secret calls this job needs';
+      'vault secret service_role_key is missing; see supabase/deploy/README.md for the two vault.create_secret calls this job needs';
   end if;
 end;
 $$;
@@ -90,6 +97,12 @@ $$;
 -- keep `pushed_at is null` and the next tick 30 seconds later takes them.
 -- That is the resumability the sweeper was chosen for, and it holds even when
 -- the transport itself fails.
+--
+-- IDEMPOTENT: unschedule-then-schedule keyed on jobname. This script owns
+-- this job end to end (it is not a job that pre-existed on any cluster, the
+-- way expire-stale-holds does for 0105), so dropping and recreating it on a
+-- re-run is safe and keeps the command text in sync with whatever this file
+-- says today.
 
 do $$
 declare

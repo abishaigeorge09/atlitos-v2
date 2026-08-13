@@ -1,5 +1,23 @@
 # Debt and incident log
 
+## 2026-08-14: the notification push sweep is not scheduled in production
+
+**Owner: whoever next has write access to production Supabase Vault. Closes when the two
+`vault.create_secret` calls in `supabase/deploy/README.md` have been run against
+`syzzfgaudpifwvbpycyi` and `supabase/deploy/notification_push_sweep_schedule.sql` has been run
+after them.**
+
+The scheduling step for `notification-push-sweep` (SCALE-REALTIME R-7) was written as migration
+`0111_notification_push_sweep_schedule.sql` and moved to
+`supabase/deploy/notification_push_sweep_schedule.sql` on 2026-08-14, a structural fix: it
+depends on two Supabase Vault secrets (`project_url`, `service_role_key`) that are real
+per-environment values and cannot live in a migration file replayed on a clean database in any
+environment. Moving it did not schedule the job. Production has zero rows in `vault.secrets`
+(verified read only, 2026-08-14), so `notifications.pushed_at is null` will keep accumulating
+in production until a human runs the two `vault.create_secret` statements and then the script.
+This was true before the move too; the move only makes the gap honest instead of blocked behind
+a migration that would have failed a from-scratch local apply.
+
 ## 2026-08-14: a private repo on the free plan cannot require a status check
 
 **Owner: the founder (Abishai). Closes when the repo is on GitHub Pro or Team,
