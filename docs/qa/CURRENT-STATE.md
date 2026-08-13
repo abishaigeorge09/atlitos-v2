@@ -140,6 +140,20 @@ present because the branch was 171 commits behind. Deleting it "as dead code" wo
 a no-op at best and, had the reasoning been applied to a file launch-p4 had KEPT and started
 using, a live deletion.
 
+**A cached green is evidence about a previous run.** Fifth disguise, and the cheapest to fall
+for. A session regenerated the route types, ran `pnpm turbo typecheck`, and got 12 of 12
+successful, 12 of 12 CACHED. A fully cached result says nothing whatever about the file just
+regenerated; it replays a verdict reached before the change existed. Forced uncached it was
+4 of 4 and genuinely enforced, which was the first real route check in the whole effort.
+
+Turbo hashes tracked source, so a change to a route FILE does invalidate correctly. Verified by
+planting a bad route against a warm cache: 11 of 12 cached, mobile re-ran, TS2820 raised. What
+does NOT invalidate is a change to a gitignored generated artifact alone, because it is not in
+the hash. So regenerating `.expo/types/router.d.ts` with no source change can still replay a
+stale green.
+
+**Rule: when the thing you changed is not tracked, a cached green proves nothing. Force the run.**
+
 **A generated file is evidence about when it was generated, not about the tree.** Fourth
 disguise, and it bites in BOTH directions.
 
