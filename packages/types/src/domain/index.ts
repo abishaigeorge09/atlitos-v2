@@ -307,6 +307,13 @@ export interface Clip {
   likedByMe?: boolean;
   savedByMe?: boolean; // true when the caller has this clip in their saves
   topComment?: Comment; // hydrated for feed cards
+  /** clips.comments_enabled (0101). False closes the thread to NEW comments;
+   * existing ones still read. The composer is hidden rather than allowed to
+   * fail on submit. */
+  commentsEnabled?: boolean;
+  /** clips.deleted_at (0100). Non null only when the OWNER withdrew the clip
+   * themselves; a moderator takedown lands on status removed with this null. */
+  deletedAt?: string | null;
 }
 
 export interface Comment {
