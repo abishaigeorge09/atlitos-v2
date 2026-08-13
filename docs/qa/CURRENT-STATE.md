@@ -535,8 +535,57 @@ It is flagged, not deleted: "unused" is exactly the absence-dressed-as-fact this
   the cause (the cross-links now `replace` instead of pushing), not yet device-verified.
 - `bookings.tsx:29` omits `in_progress` from `LIVE_STATUSES`, so a started session vanishes from
   the athlete's stats.
-- Comment count mismatch: the header uses `clips.comment_count` while the list subtracts blocked
-  authors client-side, so a viewer who blocked someone sees "12 comments" over a list of 9.
+- ~~Comment count mismatch~~ **ALREADY FIXED on `integration/p6-audit-fixes`, this entry was
+  stale.** `apps/mobile/src/app/(tabs)/clutch/post/[id].tsx:590` passes
+  `commentCursor === null ? comments.length : commentsClip.commentCount`, so once the thread has
+  fully loaded the header counts the filtered list. Landed in `a919c7d`, found by
+  `git log -S`, not by reading the ledger. The count and the list are only ever on screen
+  together in that sheet; the feed card's "View all N comments" and the right rail badge still
+  show the raw server total DELIBERATELY, because they render before any comment is fetched and
+  the viewer's own block list is not knowable server side.
+- **The Clutch clip count disagreed with the OWN grid, fixed 2026-08-14.** The header read
+  `creator_stats.published_clips_count` while `getMyClips` returns EVERY status (PRD-01 FR-44),
+  so "8 Clips" sat over twelve tiles including Under review and Cancelled. A VISITOR's profile
+  was always consistent (`getCreatorClips` is published only). Fixed by relabelling the owner's
+  stat to "Published" rather than by changing either number: counting the grid would report
+  `clips.length`, capped at `CLUTCH_GRID_PAGE_SIZE`, so a forty clip creator would read "24",
+  and filtering the owner's grid to published deletes FR-44. The number was right, the word was
+  wrong. `apps/mobile/src/components/organisms/ClutchProfileView.tsx`.
+- **Third member of that class, latent not live.** `use-chat.ts` counts thread members with an
+  unbounded exact count, while `listThreadMembers` both caps at `THREAD_MEMBERS_PAGE_SIZE` (200)
+  and drops any row whose `public_profiles` join is null. Neither half is reachable today,
+  verified by SELECT rather than assumed: the largest group in production has 5 members, and 0
+  of 97 `chat_thread_members` rows lack a `public_profiles` row. Left alone because making the
+  count match needs a product decision (render a placeholder name, or exclude from the count)
+  and either answer is a UI change this pass could not prove on a device.
+
+### Image sizing (SCALE-MEDIA M-6): the sweep the first pass did not do
+Fixed 2026-08-14. The first M-6 pass wired `sizedImageUrl` into `avatar.tsx`, `hooks.ts`,
+`use-home.ts` and `use-shop.ts` and stopped there. Nine more sites were still fetching origin
+resolution. The full enumeration and the verdict for each is in the track return; the two
+findings worth carrying forward:
+
+1. **`use-empower.ts`'s `resolvePhoto` sized the WRONG BRANCH.** It returned any full URL
+   untouched and only sized a bare bucket path. Production `upa_applications.photo_url` holds
+   BOTH shapes, verified by SELECT: one bare path, one full
+   `/storage/v1/object/public/upa-photos/...` URL written verbatim by portal-life's apply
+   wizard, and seven absolute fixture URLs on another host. So the real user upload was in the
+   untouched branch. Sizing only the path branch would have read as fixed while leaving the one
+   photo that costs egress at origin. The sizing now happens after the two branches rejoin.
+   Measured on that real object with curl: **2,795,648 bytes at origin, 113,532 bytes
+   transformed to 1080x540 webp. 24.6x.**
+2. **`Avatar`'s docblock claims sizing "cannot be forgotten by the next one added" because every
+   render site routes through it. Three never did**: `app-bar.tsx` (36 pt), `coach-card.tsx`
+   (56 pt) and `CoachProfileSheet.tsx` (80 pt) each hand a raw `<Image>` an origin avatar. Sized
+   in place rather than swapped for `Avatar`, because `AvatarSize` has no 36 and the fallback
+   circle differs, both of which are visual changes this pass could not prove on a device.
+   Covers were missed the same way and are now sized via `apps/mobile/src/lib/image-sizes.ts`.
+
+Must STAY untransformed, deliberately: clip posters and playback, which are short lived SIGNED
+URLs from the private `clips` bucket (`getPlaybackUrls`), and the transform endpoint does not
+serve `/object/sign/` the same way; affiliate offer images, which are on merchant hosts; and the
+two portal-life UPLOAD sites, whose `getPublicUrl` output is STORED in `photo_url`, where a
+render URL would freeze the photo at one size for every future reader.
 
 ### Infrastructure
 - **Migration `0027` has tool-call XML committed into it.** The history will NOT replay from a

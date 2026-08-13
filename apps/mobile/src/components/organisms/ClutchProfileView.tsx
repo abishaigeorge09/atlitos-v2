@@ -176,7 +176,26 @@ export function ClutchProfileView({
           <View className="flex-row items-center gap-lg">
             <Avatar uri={profile.avatarUrl ?? undefined} name={profile.name} size={80} />
             <View className="flex-1 flex-row items-center justify-around">
-              <StatItem value={profile.clipCount} label="Clips" />
+              {/* `clipCount` is `creator_stats.published_clips_count`,
+                  published only. On a VISITOR's profile the grid is
+                  `getCreatorClips`, also published only, so "Clips" describes
+                  the tiles beneath it. On the OWNER's own profile the grid is
+                  `getMyClips`, which returns EVERY status on purpose (PRD-01
+                  FR-44 requires the owner to see their own uploading, under
+                  review and rejected clips), so the same word read as a count
+                  of the tiles and disagreed with them: "8 Clips" over twelve
+                  tiles including Under review and Cancelled.
+
+                  Resolved by fixing the LABEL, not the number. Counting the
+                  grid instead would report `clips.length`, which is capped at
+                  CLUTCH_GRID_PAGE_SIZE, so a creator with forty clips would
+                  read "24" and the header would start lying about a total it
+                  is the only source of. Filtering the owner's grid to
+                  published would match, but deletes the FR-44 requirement.
+                  The number is server computed, unpaginated and identical to
+                  the one visitors see; only the word claiming it describes
+                  the grid was wrong. */}
+              <StatItem value={profile.clipCount} label={isOwn ? 'Published' : 'Clips'} />
               <StatItem value={profile.followerCount} label="Followers" />
               <StatItem value={profile.followingCount} label="Following" />
             </View>

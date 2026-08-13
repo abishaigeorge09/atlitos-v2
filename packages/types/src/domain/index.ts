@@ -293,6 +293,13 @@ export interface Clip {
   id: string;
   ownerId: string;
   channel: string; // users.channel_name, e.g. "Cric World"
+  /** public_profiles.avatar_url for the clip's owner, the picture beside
+   * `channel`. `CLIP_FEED_SELECT` has always fetched this column, but
+   * `mapClipRow` dropped it, so the post detail header rendered an Avatar with
+   * a name and no uri and could never show a picture no matter what was
+   * stored. Optional because the OWNER surfaces use a `*` projection with no
+   * join, where it is genuinely absent rather than null. */
+  channelAvatarUrl?: string | null;
   videoUrl?: string; // signed playback URL, minted on demand, never stored raw
   thumbUrl?: string;
   caption: string;

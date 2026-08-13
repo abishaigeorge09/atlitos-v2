@@ -1,4 +1,5 @@
-import { toApiError, useClutch, type CreatorProfile } from '@atlitos/api';
+import { sizedImageUrl, toApiError, useClutch, type CreatorProfile } from '@atlitos/api';
+import { COVER_IMAGE_SIZE } from '@/lib/image-sizes';
 import { spacing } from '@atlitos/theme';
 import type { ApiError, Clip, ClipStatus } from '@atlitos/types';
 import { router } from 'expo-router';
@@ -257,7 +258,16 @@ export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {
           gradient placeholder (token stops), never a flat empty band. */}
       <View style={{ height: COVER_HEIGHT, width: '100%' }}>
         {profile.coverUrl ? (
-          <Image source={{ uri: profile.coverUrl }} style={{ height: COVER_HEIGHT, width: '100%' }} resizeMode="cover" />
+          <Image
+            // SCALE-MEDIA M-6. Covers go up at camera resolution into the same
+            // public `avatars` bucket as avatars, and `Avatar` sizing never
+            // touched them. A phone width banner, so hero width at the banner
+            // ratio. `profile/edit.tsx` asks for the SAME size on purpose, so
+            // the two screens share one transformed object.
+            source={{ uri: sizedImageUrl(profile.coverUrl, COVER_IMAGE_SIZE) }}
+            style={{ height: COVER_HEIGHT, width: '100%' }}
+            resizeMode="cover"
+          />
         ) : (
           <Svg width="100%" height="100%">
             <Defs>

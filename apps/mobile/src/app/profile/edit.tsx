@@ -1,4 +1,5 @@
-import { toApiError, useProfile } from '@atlitos/api';
+import { sizedImageUrl, toApiError, useProfile } from '@atlitos/api';
+import { COVER_IMAGE_SIZE } from '@/lib/image-sizes';
 import { spacing, radii } from '@atlitos/theme';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -228,7 +229,13 @@ export default function EditProfileScreen() {
             }}
           >
             {coverUrl ? (
-              <Image source={{ uri: coverUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+              <Image
+                // SCALE-MEDIA M-6. Same stored object and same width as the
+                // profile header, so the same requested size on purpose.
+                source={{ uri: sizedImageUrl(coverUrl, COVER_IMAGE_SIZE) }}
+                style={{ width: '100%', height: '100%' }}
+                resizeMode="cover"
+              />
             ) : null}
             {coverUploading ? (
               <View

@@ -785,7 +785,7 @@ function ClipPage({
             paddingTop: spacing.sm,
           }}
         >
-          <Avatar name={clip.channel} size={40} />
+          <Avatar uri={clip.channelAvatarUrl ?? undefined} name={clip.channel} size={40} />
           <View style={{ flex: 1 }}>
             <Text style={[textStyle('label'), { color: colors.textInverse }]} numberOfLines={1}>
               {clip.channel}

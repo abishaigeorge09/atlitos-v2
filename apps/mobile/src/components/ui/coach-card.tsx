@@ -1,7 +1,8 @@
 import { cn } from '@/lib/utils';
 import { formatINR } from '@atlitos/theme';
 import { MapPin, Star } from 'lucide-react-native';
-import { Image, Pressable, View } from 'react-native';
+import { Image, PixelRatio, Pressable, View } from 'react-native';
+import { sizedImageUrl } from '@atlitos/api';
 
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/theme/use-theme-colors';
@@ -54,7 +55,15 @@ function CoachCard({
       )}
     >
       {avatarUri ? (
-        <Image source={{ uri: avatarUri }} className="h-14 w-14 rounded-pill" />
+        // SCALE-MEDIA M-6. A 56 point circle that does not route through
+        // `Avatar`, so it was still fetching the origin upload. Sized in
+        // place; swapping in `Avatar` would also change the no-photo fallback
+        // from this initial-on-surface circle to accentTint initials, which is
+        // a visual change this pass cannot prove on a device.
+        <Image
+          source={{ uri: sizedImageUrl(avatarUri, { width: 56 * Math.min(3, PixelRatio.get()) }) }}
+          className="h-14 w-14 rounded-pill"
+        />
       ) : (
         <View className="h-14 w-14 items-center justify-center rounded-pill bg-surface-muted">
           <Text className="font-sans-semibold text-lg text-text-secondary">{name.charAt(0)}</Text>

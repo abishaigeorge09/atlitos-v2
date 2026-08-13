@@ -6,6 +6,8 @@ import type { ApiError, Sport } from "@atlitos/types";
 
 import type { AtlitosClient } from "./client";
 import { mapEdgeFunctionError, mapPostgrestError } from "./errors";
+import type { SizedImageOptions } from "./image-url";
+import { IMAGE_SIZE, sizedImageUrl } from "./image-url";
 
 /**
  * `@atlitos/api`'s Empower lane (AT-123, P6 Track D), per
@@ -268,12 +270,51 @@ async function fetchUpaBalances(
   return balanceByRef;
 }
 
-/** `photo_url` may be a full URL (fixtures) or a storage path in the public
- * `upa-photos` bucket. Pass a full URL through untouched, resolve a bare path. */
-function resolvePhoto(client: AtlitosClient, bucket: string, value: string | null | undefined): string | undefined {
+/** One size for every UPA photo, deliberately. The photo paints in three
+ * places: the home rail card (288 pt wide, 160 pt tall), the Empower list card
+ * (full phone width, same 160 pt), and the profile hero (full width, 220 pt).
+ * The widest of those is a full width phone card, so it is asked for at the
+ * hero width once and the same transformed object is reused by all three,
+ * which keeps the CDN cache hot instead of minting a second render per surface. */
+const UPA_PHOTO_SIZE = { width: IMAGE_SIZE.hero, height: Math.round(IMAGE_SIZE.hero / 2) } as const;
+
+/** Gratitude photos are read by `listGratitude` but no mobile surface paints
+ * one yet (`account/impact.tsx` renders the body and attribution only). Sized
+ * at tile so the first screen to render one cannot ship an origin fetch. */
+const GRATITUDE_PHOTO_SIZE = { width: IMAGE_SIZE.tile, height: IMAGE_SIZE.tile } as const;
+
+/** `photo_url` may be a full URL or a storage path in the public `upa-photos`
+ * bucket. Resolve a bare path against the bucket, take a full URL as it stands,
+ * then size WHATEVER came out.
+ *
+ * M-6, missed by the original media scale pass and found in the running app's
+ * HTTP cache as the one remaining untransformed Supabase object fetch. The
+ * sizing has to happen AFTER the two branches rejoin, not inside the bare path
+ * branch only, and that distinction is the whole bug rather than a detail.
+ * Production carries both shapes in this one column (verified by SELECT, not
+ * assumed): one bare path, one full
+ * `.../storage/v1/object/public/upa-photos/...` URL written by portal-life's
+ * apply wizard, which stores `getPublicUrl(...).data.publicUrl` verbatim into
+ * `photo_url`, and seven absolute fixture URLs on another host. So the full URL
+ * branch is exactly where the real user upload lives, and sizing only the bare
+ * path branch would have left the one photo that actually costs egress at
+ * origin resolution while reading as fixed.
+ *
+ * `sizedImageUrl` is safe on all three shapes: it rewrites a Supabase public
+ * object URL, and returns anything else, the fixture URLs included, unchanged.
+ * `size` is required rather than defaulted so a new call site has to state what
+ * it paints instead of silently inheriting the wrong number. */
+function resolvePhoto(
+  client: AtlitosClient,
+  bucket: string,
+  value: string | null | undefined,
+  size: SizedImageOptions,
+): string | undefined {
   if (!value) return undefined;
-  if (/^https?:\/\//.test(value)) return value;
-  return client.storage.from(bucket).getPublicUrl(value).data.publicUrl;
+  const resolved = /^https?:\/\//.test(value)
+    ? value
+    : client.storage.from(bucket).getPublicUrl(value).data.publicUrl;
+  return sizedImageUrl(resolved, size);
 }
 
 interface HubUpaQueryRow {
@@ -423,7 +464,7 @@ function makeEmpowerApi(client: AtlitosClient) {
         sport: row.sport,
         region: row.region,
         state: row.state,
-        photoUrl: resolvePhoto(client, UPA_PHOTOS_BUCKET, row.photo_url),
+        photoUrl: resolvePhoto(client, UPA_PHOTOS_BUCKET, row.photo_url, UPA_PHOTO_SIZE),
         raised: balanceByRef.get(row.id) ?? 0,
         goal: (row.upa_wishlist_items ?? []).reduce((sum, item) => sum + item.cost, 0),
       }));
@@ -446,7 +487,7 @@ function makeEmpowerApi(client: AtlitosClient) {
         sport: json.sport,
         region: json.region,
         state: json.state,
-        photoUrl: resolvePhoto(client, UPA_PHOTOS_BUCKET, json.photo_url),
+        photoUrl: resolvePhoto(client, UPA_PHOTOS_BUCKET, json.photo_url, UPA_PHOTO_SIZE),
         totalRaised: json.total_raised,
         donorCount: json.donor_count ?? 0,
         items: (json.items ?? []).map((item) => ({
@@ -604,7 +645,7 @@ async function loadGratitude(
   return (data ?? []).map((row) => ({
     id: row.id,
     body: row.body,
-    photoUrl: resolvePhoto(client, GRATITUDE_PHOTOS_BUCKET, row.photo_url),
+    photoUrl: resolvePhoto(client, GRATITUDE_PHOTOS_BUCKET, row.photo_url, GRATITUDE_PHOTO_SIZE),
     itemTitle: row.upa_wishlist_items?.title ?? null,
     upaName: row.upa_applications?.story_headline ?? null,
     createdAt: row.created_at,

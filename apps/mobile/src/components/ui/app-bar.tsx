@@ -2,7 +2,8 @@ import { cn } from '@/lib/utils';
 import * as Haptics from 'expo-haptics';
 import { Bell, ChevronLeft, ShoppingCart } from 'lucide-react-native';
 import type { ReactNode } from 'react';
-import { Image, Pressable, View } from 'react-native';
+import { Image, PixelRatio, Pressable, View } from 'react-native';
+import { sizedImageUrl } from '@atlitos/api';
 
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/theme/use-theme-colors';
@@ -154,7 +155,17 @@ function AppBar({
             className="h-11 w-11 items-center justify-center rounded-pill active:opacity-80"
           >
             {avatarUri ? (
-              <Image source={{ uri: avatarUri }} className="h-9 w-9 rounded-pill" />
+              // SCALE-MEDIA M-6. This circle is 36 points and does NOT route
+              // through `Avatar`, whose docblock claims sizing "cannot be
+              // forgotten by the next one added" because every site goes
+              // through it. Three sites never did: this one, `coach-card` and
+              // `CoachProfileSheet`. Sized in place rather than swapped for
+              // `Avatar`, because `AvatarSize` has no 36 and changing it to 32
+              // or 40 is a layout change this pass cannot prove on a device.
+              <Image
+                source={{ uri: sizedImageUrl(avatarUri, { width: 36 * Math.min(3, PixelRatio.get()) }) }}
+                className="h-9 w-9 rounded-pill"
+              />
             ) : (
               <View className="h-9 w-9 items-center justify-center rounded-pill bg-surface-muted">
                 <Text className="font-sans-semibold text-sm text-text-secondary">

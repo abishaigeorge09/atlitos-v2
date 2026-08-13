@@ -1412,6 +1412,11 @@ function mapClipRow(row: ClipFeedRow, likedByMe: boolean, savedByMe = false): Cl
     id: row.id,
     ownerId: row.owner_id,
     channel: channelOf(row.users),
+    // `CLIP_FEED_SELECT` already asks for `avatar_url` and always has. It was
+    // simply never mapped onto the domain type, which is why the post detail
+    // header could not show a picture. Absent (the owner surfaces' `*`
+    // projection, which carries no join) resolves to null through the `??`.
+    channelAvatarUrl: row.users?.avatar_url ?? null,
     // videoUrl is deliberately absent here: playback is a fresh signed URL
     // minted per visible card via getPlaybackUrl, never carried on the row.
     // thumb_path is a private-`clips`-bucket storage path, not a loadable URL:

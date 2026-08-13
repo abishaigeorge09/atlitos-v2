@@ -8,6 +8,7 @@ import { FundingBar } from "@/components/funding-bar";
 import { Money } from "@/components/money";
 import { StatusPill, derivedItemPill } from "@/components/status-pill";
 import { sportLabel, formatDate, type Sport } from "@/lib/format";
+import { sizedImageUrl } from "@/lib/image-url";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -81,7 +82,12 @@ export default async function ProfilePreviewPage() {
             {profile.photo_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={profile.photo_url}
+                // SCALE-MEDIA M-6: an 80 px square, so ask for 240 px rather
+                // than the origin upload. `photo_url` is stored as a full
+                // public object URL by the apply wizard, so this rewrites the
+                // URL rather than passing a transform to getPublicUrl the way
+                // portal-court's path-holding call sites do.
+                src={sizedImageUrl(profile.photo_url, { width: 240, height: 240 })}
                 alt={profile.story_headline}
                 className="size-20 shrink-0 rounded-xl object-cover"
               />

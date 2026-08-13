@@ -18,6 +18,7 @@ import type { Json } from "@atlitos/types";
 import { createClient } from "@/lib/supabase/client";
 import type { UpaApplication } from "@/lib/empower";
 import { sportLabel, type Sport } from "@/lib/format";
+import { sizedImageUrl } from "@/lib/image-url";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -338,7 +339,11 @@ export function ApplyWizard({
                   {draft.photoUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={draft.photoUrl}
+                      // SCALE-MEDIA M-6: a 56 px thumbnail. `draft.photoUrl`
+                      // stays the untransformed origin URL, because that is
+                      // the value submitted into `upa_applications.photo_url`
+                      // and every mobile reader sizes it for itself.
+                      src={sizedImageUrl(draft.photoUrl, { width: 168, height: 168 })}
                       alt="Your profile"
                       className="size-14 rounded-lg object-cover"
                     />
