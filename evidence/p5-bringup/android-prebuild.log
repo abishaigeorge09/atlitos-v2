@@ -1,0 +1,9 @@
+[90menv: load .env[39m
+[90menv: export EXPO_PUBLIC_RAZORPAY_KEY_ID EXPO_PUBLIC_SUPABASE_ANON_KEY EXPO_PUBLIC_SUPABASE_URL[39m
+[33m› [1m[@sentry/react-native/expo][22m Missing config for [1morganization, project[22m. Environment variables will be used as a fallback during the build. https://docs.sentry.io/platforms/react-native/manual-setup/[0m
+- [1mCreating native directory (./android)[22m
+[32m✔[39m Created native directory
+- [1mUpdating package.json[22m
+[32m✔[39m Updated package.json[2m | no changes[22m
+- [1mRunning prebuild[22m
+[32m✔[39m Finished prebuild
