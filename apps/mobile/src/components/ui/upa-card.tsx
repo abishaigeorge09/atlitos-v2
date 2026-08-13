@@ -1,6 +1,7 @@
 import { cn } from '@/lib/utils';
 import { formatINR } from '@atlitos/theme';
 import { HeartHandshake } from 'lucide-react-native';
+import { useEffect, useState } from 'react';
 import { Image, View } from 'react-native';
 
 import { Button } from '@/components/ui/button';
@@ -41,15 +42,32 @@ function UPACard({
 }: UPACardProps) {
   const clampedProgress = Math.min(1, Math.max(0, raisedAmount / Math.max(1, goalAmount)));
   const colors = useThemeColors();
+  // F5 (P5 fix pass): `photoUri` being present only means the row HAD a
+  // photo_url; it says nothing about whether that URL still resolves (a
+  // public storage path with a deleted object, or a dead external hotlink
+  // in fixture data, both 404). Without this, a failed load rendered as a
+  // blank hole instead of falling into the existing "no photo" placeholder
+  // below, even though both cases mean the same thing to the viewer: there
+  // is no usable photo to show. Reset the failure whenever the URL itself
+  // changes (e.g. this card gets reused for a different UPA).
+  const [loadFailed, setLoadFailed] = useState(false);
+  useEffect(() => setLoadFailed(false), [photoUri]);
+  const showPlaceholder = !photoUri || loadFailed;
 
   return (
     <View className={cn('overflow-hidden rounded-xl border border-border bg-card', className)}>
-      {photoUri ? (
-        <Image source={{ uri: photoUri }} className="h-40 w-full rounded-t-xl" resizeMode="cover" />
-      ) : (
+      {showPlaceholder ? (
         <View className="h-40 w-full items-center justify-center rounded-t-xl bg-surface-muted">
           <HeartHandshake size={32} color={colors.textTertiary} strokeWidth={1.75} />
         </View>
+      ) : (
+        <Image
+          key={photoUri}
+          source={{ uri: photoUri }}
+          className="h-40 w-full rounded-t-xl"
+          resizeMode="cover"
+          onError={() => setLoadFailed(true)}
+        />
       )}
 
       <View className="gap-md p-lg">

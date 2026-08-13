@@ -10,6 +10,7 @@ import { ClutchPostCard } from '@/components/molecules/ClutchPostCard';
 import { LoginGateModal } from '@/components/organisms/LoginGateModal';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
+import { usePendingAuthAction } from '@/hooks/use-pending-auth-action';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
 import { textStyle } from '@/theme/text-style';
@@ -34,6 +35,9 @@ export function ClutchPreviewCard({ reloadKey }: { reloadKey: number }) {
   const [playbackUrl, setPlaybackUrl] = useState<string | undefined>(undefined);
   const [posterUrl, setPosterUrl] = useState<string | undefined>(undefined);
   const [gateVisible, setGateVisible] = useState(false);
+  // F8 (P5 fix pass, PRD-01 FR-4): Like and the Share-gates-then-open-detail
+  // tap used to be dropped when the gate opened.
+  const { requireAuth, clearPendingAction } = usePendingAuthAction(requiresAuthGate);
 
   const load = useCallback(async () => {
     setState('loading');
@@ -62,14 +66,6 @@ export function ClutchPreviewCard({ reloadKey }: { reloadKey: number }) {
     void load();
   }, [load, reloadKey]);
 
-  function requireAuth(action: () => void) {
-    if (requiresAuthGate) {
-      setGateVisible(true);
-      return;
-    }
-    action();
-  }
-
   async function handleLike() {
     if (!clip) return;
     requireAuth(async () => {
@@ -82,7 +78,7 @@ export function ClutchPreviewCard({ reloadKey }: { reloadKey: number }) {
       } catch {
         setClip((prev) => (prev ? { ...prev, likedByMe: clip.likedByMe, likes: clip.likes } : prev));
       }
-    });
+    }, () => setGateVisible(true));
   }
 
   function openClutch() {
@@ -110,12 +106,13 @@ export function ClutchPreviewCard({ reloadKey }: { reloadKey: number }) {
           clip={clip}
           variant="feed"
           active={false}
+          compactActions
           playbackUrl={playbackUrl}
           posterUrl={posterUrl}
           onOpen={openDetail}
           onComment={openDetail}
           onLike={() => void handleLike()}
-          onShare={() => requireAuth(openDetail)}
+          onShare={() => requireAuth(openDetail, () => setGateVisible(true))}
         />
       </View>
 
@@ -129,7 +126,11 @@ export function ClutchPreviewCard({ reloadKey }: { reloadKey: number }) {
         <ChevronRight size={16} color={colors.accent} strokeWidth={1.75} />
       </Pressable>
 
-      <LoginGateModal visible={gateVisible} onClose={() => setGateVisible(false)} />
+      <LoginGateModal
+        visible={gateVisible}
+        onClose={() => setGateVisible(false)}
+        onDismiss={clearPendingAction}
+      />
     </View>
   );
 }

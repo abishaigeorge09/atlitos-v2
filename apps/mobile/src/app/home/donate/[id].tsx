@@ -14,6 +14,7 @@ import { DonationSheet } from '@/components/organisms/DonationSheet';
 import { LoginGateModal } from '@/components/organisms/LoginGateModal';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
+import { usePendingAuthAction } from '@/hooks/use-pending-auth-action';
 import { openRazorpayCheckout } from '@/lib/razorpay-checkout';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
@@ -60,6 +61,13 @@ export default function DonateScreen() {
   const [pendingAmount, setPendingAmount] = useState<number | null>(null);
   const [gateVisible, setGateVisible] = useState(false);
   const [itemFundedBlock, setItemFundedBlock] = useState(false);
+  // F8 (P5 fix pass, PRD-01 FR-4, CLAUDE.md financial invariant): a gated
+  // donate tap used to be dropped when the gate opened. MONEY SCREEN: this
+  // must only ever replay "open the ConfirmSheet at the requested amount",
+  // never `confirmDonate` itself. The guest still has to tap Donate on
+  // ConfirmSheet to actually charge; nothing here completes a payment
+  // without that explicit re-confirmation.
+  const { requireAuth, clearPendingAction } = usePendingAuthAction(!isSignedIn);
 
   const load = useCallback(async () => {
     if (!upaId) return;
@@ -89,12 +97,9 @@ export default function DonateScreen() {
   const itemAlreadyFunded = item ? item.status === 'funded' || item.status === 'delivered' : false;
 
   function requestDonate(amount: number) {
-    if (!isSignedIn) {
-      // FR-15: preserve context (already in the route) and gate.
-      setGateVisible(true);
-      return;
-    }
-    setPendingAmount(amount);
+    // FR-15: preserve context (already in the route) and gate. F8: replay
+    // only opens the ConfirmSheet at this amount, never charges (see above).
+    requireAuth(() => setPendingAmount(amount), () => setGateVisible(true));
   }
 
   async function confirmDonate() {
@@ -300,7 +305,11 @@ export default function DonateScreen() {
         onCancel={() => setPendingAmount(null)}
       />
 
-      <LoginGateModal visible={gateVisible} onClose={() => setGateVisible(false)} />
+      <LoginGateModal
+        visible={gateVisible}
+        onClose={() => setGateVisible(false)}
+        onDismiss={clearPendingAction}
+      />
     </SafeAreaView>
   );
 }

@@ -38,6 +38,9 @@ export default function UpaProfileScreen() {
   const [state, setState] = useState<LoadState>('loading');
   const [profile, setProfile] = useState<UpaProfile | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
+  // F5 (P5 fix pass): same class as UPACard.tsx (Home's "Donate to Empower"
+  // rail) - `photoUrl` being present doesn't mean the URL still resolves.
+  const [photoLoadFailed, setPhotoLoadFailed] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -50,6 +53,7 @@ export default function UpaProfileScreen() {
         return;
       }
       setProfile(row);
+      setPhotoLoadFailed(false);
       setState('ready');
     } catch (err) {
       setError(toApiError(err));
@@ -125,8 +129,14 @@ export default function UpaProfileScreen() {
   const header = (
     <View style={{ gap: spacing.lg, marginBottom: spacing.md }}>
       <View style={{ borderRadius: radii.xl, overflow: 'hidden', backgroundColor: colors.surfaceMuted }}>
-        {profile.photoUrl ? (
-          <Image source={{ uri: profile.photoUrl }} style={{ width: '100%', height: 220 }} resizeMode="cover" />
+        {profile.photoUrl && !photoLoadFailed ? (
+          <Image
+            key={profile.photoUrl}
+            source={{ uri: profile.photoUrl }}
+            style={{ width: '100%', height: 220 }}
+            resizeMode="cover"
+            onError={() => setPhotoLoadFailed(true)}
+          />
         ) : (
           <View style={{ width: '100%', height: 220, alignItems: 'center', justifyContent: 'center' }}>
             <HeartHandshake size={48} color={colors.textTertiary} strokeWidth={1.5} />

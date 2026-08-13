@@ -11,6 +11,7 @@ import { ClutchProfileView } from '@/components/organisms/ClutchProfileView';
 import { LoginGateModal } from '@/components/organisms/LoginGateModal';
 import { ModerationSheet, type ModerationTarget } from '@/components/organisms/moderation/ModerationSheet';
 import { AppBar } from '@/components/ui/app-bar';
+import { usePendingAuthAction } from '@/hooks/use-pending-auth-action';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
 import { useThemeColors } from '@/theme/use-theme-colors';
@@ -35,6 +36,9 @@ export default function ClutchCreatorScreen() {
   const [followBusy, setFollowBusy] = useState(false);
   const [gateVisible, setGateVisible] = useState(false);
   const [moderationTarget, setModerationTarget] = useState<ModerationTarget | null>(null);
+  // F8 (P5 fix pass, PRD-01 FR-4): both Follow and opening the report/block
+  // sheet used to be dropped when the gate opened; see the hook's docblock.
+  const { requireAuth, clearPendingAction } = usePendingAuthAction(requiresAuthGate);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -55,29 +59,27 @@ export default function ClutchCreatorScreen() {
     void load();
   }, [load]);
 
-  async function toggleFollow() {
+  function toggleFollow() {
     if (!profile) return;
-    if (requiresAuthGate) {
-      setGateVisible(true);
-      return;
-    }
-    setFollowBusy(true);
-    const prev = profile;
-    setProfile({
-      ...profile,
-      followedByMe: !profile.followedByMe,
-      followerCount: profile.followerCount + (profile.followedByMe ? -1 : 1),
-    });
-    try {
-      const result = await clutch.toggleFollow(profile.id);
-      setProfile((p) =>
-        p ? { ...p, followedByMe: result.following, followerCount: result.followerCount } : p,
-      );
-    } catch {
-      setProfile(prev);
-    } finally {
-      setFollowBusy(false);
-    }
+    requireAuth(async () => {
+      setFollowBusy(true);
+      const prev = profile;
+      setProfile({
+        ...profile,
+        followedByMe: !profile.followedByMe,
+        followerCount: profile.followerCount + (profile.followedByMe ? -1 : 1),
+      });
+      try {
+        const result = await clutch.toggleFollow(profile.id);
+        setProfile((p) =>
+          p ? { ...p, followedByMe: result.following, followerCount: result.followerCount } : p,
+        );
+      } catch {
+        setProfile(prev);
+      } finally {
+        setFollowBusy(false);
+      }
+    }, () => setGateVisible(true));
   }
 
   const isOwnProfile = myId != null && myId === id;
@@ -91,13 +93,18 @@ export default function ClutchCreatorScreen() {
             accessibilityRole="button"
             accessibilityLabel={`Report or block ${profile.channel}`}
             hitSlop={8}
-            onPress={() => {
-              if (requiresAuthGate) {
-                setGateVisible(true);
-                return;
-              }
-              setModerationTarget({ type: 'user', entityId: profile.id, userId: profile.id, userName: profile.channel });
-            }}
+            onPress={() =>
+              requireAuth(
+                () =>
+                  setModerationTarget({
+                    type: 'user',
+                    entityId: profile.id,
+                    userId: profile.id,
+                    userName: profile.channel,
+                  }),
+                () => setGateVisible(true),
+              )
+            }
             className="min-h-11 flex-row items-center gap-xs px-sm py-xs"
           >
             <Flag size={16} strokeWidth={1.75} color={colors.textSecondary} />
@@ -115,7 +122,11 @@ export default function ClutchCreatorScreen() {
         onToggleFollow={() => void toggleFollow()}
         onOpenClip={(clipId) => router.push({ pathname: '/(tabs)/clutch/post/[id]', params: { id: clipId } })}
       />
-      <LoginGateModal visible={gateVisible} onClose={() => setGateVisible(false)} />
+      <LoginGateModal
+        visible={gateVisible}
+        onClose={() => setGateVisible(false)}
+        onDismiss={clearPendingAction}
+      />
 
       <ModerationSheet
         visible={moderationTarget !== null}

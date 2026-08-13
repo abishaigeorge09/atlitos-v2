@@ -12,6 +12,7 @@ import { EmptyState } from '@/components/organisms/EmptyState';
 import { LoginGateModal } from '@/components/organisms/LoginGateModal';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
+import { usePendingAuthAction } from '@/hooks/use-pending-auth-action';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
 import { textStyle } from '@/theme/text-style';
@@ -178,12 +179,17 @@ export default function ClutchFeedScreen() {
     });
   }, [activeId, clips, playbackUrls, mintPlayback, clearTimer]);
 
-  function requireAuth(action: () => void) {
-    if (requiresAuthGate) {
-      setGateVisible(true);
-      return;
-    }
-    action();
+  // F8 (P5 fix pass, PRD-01 FR-4): `requireAuth` used to gate an action by
+  // opening LoginGateModal and dropping the closure outright: a guest tapped
+  // Like, the gate opened, they logged in, and the like never applied.
+  // `usePendingAuthAction` queues and replays it instead; see its own
+  // docblock. Like, Save, and the upload-tab navigation are the only gated
+  // actions in this file, all cheap and idempotent to replay, never a charge
+  // or a state-machine transition.
+  const { requireAuth, clearPendingAction } = usePendingAuthAction(requiresAuthGate);
+
+  function closeGate() {
+    setGateVisible(false);
   }
 
   async function handleLike(clip: Clip) {
@@ -207,7 +213,7 @@ export default function ClutchFeedScreen() {
           ),
         );
       }
-    });
+    }, () => setGateVisible(true));
   }
 
   async function handleSave(clip: Clip) {
@@ -221,7 +227,7 @@ export default function ClutchFeedScreen() {
         // Roll back on failure.
         setClips((prev) => prev.map((c) => (c.id === clip.id ? { ...c, savedByMe: clip.savedByMe } : c)));
       }
-    });
+    }, () => setGateVisible(true));
   }
 
   async function handleShare(clip: Clip) {
@@ -266,7 +272,7 @@ export default function ClutchFeedScreen() {
             title="No clips yet"
             body="Match and training highlights show up here. Be the first to post one."
             ctaLabel="Upload a clip"
-            onCtaPress={() => requireAuth(() => router.push('/(tabs)/clutch/upload'))}
+            onCtaPress={() => requireAuth(() => router.push('/(tabs)/clutch/upload'), () => setGateVisible(true))}
           />
         </View>
       ) : containerH > 0 ? (
@@ -280,12 +286,36 @@ export default function ClutchFeedScreen() {
           viewabilityConfig={viewabilityConfig}
           onEndReachedThreshold={0.5}
           onEndReached={() => void loadMore()}
-          renderItem={({ item }) => (
+          // F1 (P5 fix pass): bound how much of the feed React Native keeps
+          // mounted at all. The RN default windowSize (21 "screens") plus a
+          // feed where every card is a real video player is what produced
+          // ~10 to 21 concurrent native players (Android OOM'd first because
+          // Media3 allocates a heavier per-item MediaSession than AVPlayer,
+          // but the same unbounded-mount shape is wrong on iOS too). 5
+          // screens (roughly 2 above/below the active one) plus a small batch
+          // size keeps the feed responsive on fling without holding the
+          // world in memory. removeClippedSubviews frees the native views
+          // for cards scrolled well out of range.
+          initialNumToRender={2}
+          maxToRenderPerBatch={3}
+          windowSize={5}
+          removeClippedSubviews
+          renderItem={({ item, index }) => (
             <View style={{ height: containerH }}>
               <ClutchPostCard
                 clip={item}
                 variant="feed"
                 active={item.id === activeId}
+                // F1: only the active card and its minted neighbors (the
+                // same "keep" window the playback-URL effect above already
+                // computes) get a real ClipVideo/useVideoPlayer instance.
+                // Every other rendered-but-offscreen card shows its poster
+                // image only, so it never allocates a native decoder.
+                mountPlayer={
+                  item.id === activeId ||
+                  playbackUrls[item.id] !== undefined ||
+                  (activeId === null && index === 0)
+                }
                 playbackUrl={playbackUrls[item.id]}
                 posterUrl={posterUrls[item.id]}
                 onOpen={() => openDetail(item.id)}
@@ -309,7 +339,7 @@ export default function ClutchFeedScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Upload a clip"
-          onPress={() => requireAuth(() => router.push('/(tabs)/clutch/upload'))}
+          onPress={() => requireAuth(() => router.push('/(tabs)/clutch/upload'), () => setGateVisible(true))}
           className="min-h-11 min-w-11 flex-row items-center justify-center gap-xs rounded-pill bg-accent px-md"
         >
           <Plus size={20} strokeWidth={2} color={colors.inkOnAccent} />
@@ -319,7 +349,7 @@ export default function ClutchFeedScreen() {
         </Pressable>
       </View>
 
-      <LoginGateModal visible={gateVisible} onClose={() => setGateVisible(false)} />
+      <LoginGateModal visible={gateVisible} onClose={closeGate} onDismiss={clearPendingAction} />
     </View>
   );
 }

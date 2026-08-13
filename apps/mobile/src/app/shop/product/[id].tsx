@@ -12,6 +12,7 @@ import { AppBar } from '@/components/ui/app-bar';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
+import { usePendingAuthAction } from '@/hooks/use-pending-auth-action';
 import { recordProductView } from '@/lib/recently-viewed';
 import { supabase } from '@/lib/supabase';
 import { useGuestWishlist } from '@/store/guest-wishlist';
@@ -64,6 +65,11 @@ export default function ProductDetailScreen() {
   const [adding, setAdding] = useState(false);
   const [addNotice, setAddNotice] = useState<string | null>(null);
   const [addError, setAddError] = useState<ApiError | null>(null);
+  // F8 (P5 fix pass, PRD-01 FR-4): wishlist toggle and Add to Cart used to
+  // be dropped when the gate opened. Neither is a charge (cart contents are
+  // mutable, pre-checkout state; checkout itself is a separate screen that
+  // re-verifies price server side), so replaying either is safe.
+  const { requireAuth, clearPendingAction } = usePendingAuthAction(!isSignedIn);
 
   const load = useCallback(async () => {
     setState('loading');
@@ -119,48 +125,44 @@ export default function ProductDetailScreen() {
       await guestWishlist.toggle(params.id);
       return;
     }
-    if (!isSignedIn) {
-      setGateVisible(true);
-      return;
-    }
-    const wasSaved = saved;
-    setSaved(!wasSaved);
-    try {
-      setSaved(await wishlist.toggle(params.id));
-    } catch {
-      setSaved(wasSaved);
-    }
+    requireAuth(async () => {
+      const wasSaved = saved;
+      setSaved(!wasSaved);
+      try {
+        setSaved(await wishlist.toggle(params.id));
+      } catch {
+        setSaved(wasSaved);
+      }
+    }, () => setGateVisible(true));
   }
 
   async function handleAddToCart() {
     // FR-7's guest gate. Add to Cart requires authentication; browsing and the
-    // local wishlist do not.
-    if (!isSignedIn) {
-      setGateVisible(true);
-      return;
-    }
-    if (!selectedVariant || outOfStock) return;
-
-    setAdding(true);
-    setAddError(null);
-    setAddNotice(null);
-    try {
-      const result = await shop.addToCart(selectedVariant.id, 1);
-      // FR-9: the RPC caps rather than silently rounding up, and the shopper
-      // has to be told when it did.
-      setAddNotice(
-        result.capped
-          ? `Only ${result.availableStock} left, so your cart has ${result.qty}.`
-          : 'Added to your cart.',
-      );
-      // Availability moved, so re-read it rather than trusting what this
-      // screen loaded a moment ago.
-      void load();
-    } catch (err) {
-      setAddError(toApiError(err));
-    } finally {
-      setAdding(false);
-    }
+    // local wishlist do not. Re-checked inside the (possibly replayed)
+    // action too, since availability can move during a login round trip.
+    requireAuth(async () => {
+      if (!selectedVariant || outOfStock) return;
+      setAdding(true);
+      setAddError(null);
+      setAddNotice(null);
+      try {
+        const result = await shop.addToCart(selectedVariant.id, 1);
+        // FR-9: the RPC caps rather than silently rounding up, and the shopper
+        // has to be told when it did.
+        setAddNotice(
+          result.capped
+            ? `Only ${result.availableStock} left, so your cart has ${result.qty}.`
+            : 'Added to your cart.',
+        );
+        // Availability moved, so re-read it rather than trusting what this
+        // screen loaded a moment ago.
+        void load();
+      } catch (err) {
+        setAddError(toApiError(err));
+      } finally {
+        setAdding(false);
+      }
+    }, () => setGateVisible(true));
   }
 
   if (state === 'loading') {
@@ -327,7 +329,11 @@ export default function ProductDetailScreen() {
         </Button>
       </View>
 
-      <LoginGateModal visible={gateVisible} onClose={() => setGateVisible(false)} />
+      <LoginGateModal
+        visible={gateVisible}
+        onClose={() => setGateVisible(false)}
+        onDismiss={clearPendingAction}
+      />
     </SafeAreaView>
   );
 }
