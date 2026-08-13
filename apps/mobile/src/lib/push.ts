@@ -1,6 +1,11 @@
 import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
-import type { EventSubscription } from 'expo-modules-core';
+// Derived from the listener rather than imported from `expo-modules-core`.
+// That package is a transitive dependency of `expo`, never declared by this
+// workspace, so pnpm's strict linking leaves it unresolvable here and
+// `tsc` fails on the import. Taking the return type of the very function
+// this wraps is both accurate and dependency free.
+type EventSubscription = ReturnType<typeof Notifications.addNotificationResponseReceivedListener>;
 import { Platform } from 'react-native';
 
 import type { PushPlatform } from '@atlitos/api';
