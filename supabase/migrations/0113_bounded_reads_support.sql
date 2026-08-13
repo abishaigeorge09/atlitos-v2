@@ -1,4 +1,4 @@
--- ATLITOS v2 — 0107_bounded_reads_support.sql
+-- ATLITOS v2 — 0113_bounded_reads_support.sql
 -- Domain: scale. The server side half of bounding the unbounded reads in
 -- packages/api, per docs/qa/verify/SCALE-CLIENT.md and
 -- docs/qa/verify/SCALE-DATABASE.md.
@@ -10,7 +10,7 @@
 --
 -- Numbering. The applied ceiling on syzzfgaudpifwvbpycyi is 0097, verified in
 -- supabase_migrations.schema_migrations, while the repo carries files up to
--- 0106. 0107 is above both, so it cannot collide with an already-taken number
+-- 0106. 0113 is above every number this integration branch assigned, so it cannot collide with an already-taken number
 -- and silently never run, which is the failure CURRENT-STATE.md records
 -- against the 0088 family.
 --

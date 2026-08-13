@@ -15,7 +15,7 @@
 //
 // WHY A SWEEPER AND NOT A DATABASE WEBHOOK. Both were considered; the full
 // argument, including what a webhook would cost, is in the header of
-// 0107_notification_push_delivery.sql. In one line: the sweeper is idempotent
+// 0110_notification_push_delivery.sql. In one line: the sweeper is idempotent
 // because `pushed_at` is a checkpoint, it survives a failed dispatch because
 // an unmarked row is simply claimed again, and it batches across recipients
 // for free because a group session's whole roster shares one title and body
@@ -24,7 +24,7 @@
 // re-creates R-6's one-request-per-recipient shape at the top of the funnel.
 //
 // SERVICE-ROLE ONLY, same boundary as notify-dispatch: this reads and pushes
-// arbitrary users' notifications. The pg_cron job in 0108 calls it with the
+// arbitrary users' notifications. The pg_cron job in 0111 calls it with the
 // service-role key from the vault.
 
 import { handleCorsPreflight } from "../_shared/cors.ts";

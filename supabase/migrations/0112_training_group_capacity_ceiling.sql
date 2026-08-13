@@ -1,4 +1,4 @@
--- ATLITOS v2 — 0109_training_group_capacity_ceiling.sql
+-- ATLITOS v2 — 0112_training_group_capacity_ceiling.sql
 -- Domain: coaching groups. Closes SCALE-REALTIME R-8's root cause: four
 -- separate fan-outs are bounded only by a number a coach types into a form.
 --
@@ -19,7 +19,7 @@
 --      member;
 --   2. notify_session_parties (0103) writes one notifications row per
 --      participant;
---   3. the push relay (0107) sends one Expo message per device;
+--   3. the push relay (0110) sends one Expo message per device;
 --   4. broadcast_chat_message (0092) is an after insert PER ROW trigger that
 --      calls realtime.send once per thread member, so ONE chat message is M
 --      inserts into realtime.messages, M WAL records and M websocket events,

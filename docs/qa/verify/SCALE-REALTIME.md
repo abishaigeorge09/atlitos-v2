@@ -637,11 +637,11 @@ command output or a read-only catalog query, both quoted.
 
 ### R-7 CLOSED in code. Sweeper, not webhook, and the choice was made on four points
 
-`0107_notification_push_delivery.sql` adds `pushed_at`, `push_claimed_at` and `push_attempts` to
+`0110_notification_push_delivery.sql` adds `pushed_at`, `push_claimed_at` and `push_attempts` to
 `notifications`, a partial index on the backlog, `claim_notification_push_batch` (a single
 `update ... where id in (select ... for update skip locked limit n) returning`), and a
 `notifications_lock_push_state` BEFORE UPDATE trigger so the owner UPDATE policy 0002 grants the
-bell cannot be used to forge delivery state. `0108` schedules `notification-push-sweep` every 30
+bell cannot be used to forge delivery state. `0111` schedules `notification-push-sweep` every 30
 seconds over pg_net. `supabase/functions/notify-push-sweep/index.ts` is the worker.
 
 The webhook alternative was rejected because it is per row (a group of 50 becomes 50
@@ -661,7 +661,7 @@ this document originally proposed:
     select name from vault.secrets;   -> zero rows.
 
 R-7's "cheapest fix" said "a second pg_cron job ... over pg_net" as though pg_net were present.
-It is not, and neither are the secrets such a job needs. `0108` therefore opens with four hard
+It is not, and neither are the secrets such a job needs. `0111` therefore opens with four hard
 guards and RAISES rather than skipping: a job installed without a working key would run every 30
 seconds, take a 403 from `assertServiceRoleRequest`, record it only in `net._http_response`, and
 show as a healthy active row in `cron.job` while delivering nothing. That is the "gate that
@@ -681,7 +681,7 @@ fan-out, so `finalize-court-booking-payment.ts` is untouched.
 
 ### R-8: capacity ceiling SHIPPED, moving the fan-out off the transaction DELIBERATELY NOT DONE
 
-`0109_training_group_capacity_ceiling.sql` adds `check (capacity <= 100)` (added `not valid` then
+`0112_training_group_capacity_ceiling.sql` adds `check (capacity <= 100)` (added `not valid` then
 validated, so the ALTER does not hold a strong lock through a scan) and recreates 0080's two RPCs
 verbatim plus one guard each so a coach gets a sentence rather than a constraint violation. The
 mobile create/edit screen enforces the same number with honest copy. 100 is not arbitrary: it is
@@ -721,13 +721,14 @@ Precisely what was found, so the next agent does not re-derive it:
    That is a track, not a fix, and it is not needed at 10,000: steady-state chat is 0.17 events
    per second average and 1.7 at a 10x peak against a 500 ceiling.
 
-**Recommended next step, in order:** apply 0109 first, since one line of DDL removes the
+**Recommended next step, in order:** apply 0112 first, since one line of DDL removes the
 unbounded case entirely; then, if the set-based rewrite is still wanted, do it behind a real
 socket test on a preview branch, not on production.
 
 ### What this track did NOT do
 
-- Did not apply anything. `schema_migrations` is untouched; 0102 to 0109 are all unapplied.
+- Did not apply anything. `schema_migrations` is untouched; 0102 to 0113 are all unapplied
+  (renumbered during the p6 integration merge, see docs/architecture/MIGRATION-RENUMBERING.md).
 - Did not deploy `notify-push-sweep`, and did not create the two vault secrets, both writes.
 - Did not take a device screenshot or run Maestro for the one-line capacity caption. The UI change
   is a validation string and a caption on an existing screen, and the device gate is a founder

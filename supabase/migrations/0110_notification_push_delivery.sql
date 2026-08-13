@@ -1,4 +1,4 @@
--- ATLITOS v2 — 0107_notification_push_delivery.sql
+-- ATLITOS v2 — 0110_notification_push_delivery.sql
 -- Domain: notifications, push delivery. Closes SCALE-REALTIME R-7: no
 -- session, membership or group notification has ever produced a device push.
 --

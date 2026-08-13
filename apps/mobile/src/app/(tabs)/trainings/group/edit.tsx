@@ -43,7 +43,7 @@ const EMPTY_DRAFT: FormDraft = {
 };
 
 /**
- * The group size ceiling, mirroring `training_groups_capacity_max` (0109).
+ * The group size ceiling, mirroring `training_groups_capacity_max` (0112).
  * Every member of a group costs one session notification, one device push and
  * one realtime broadcast event per chat message, so an unbounded capacity is
  * an unbounded fan-out. The constraint is the real enforcement; this constant

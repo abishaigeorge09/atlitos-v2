@@ -1,4 +1,4 @@
--- ATLITOS v2 — 0108_notification_push_sweep_schedule.sql
+-- ATLITOS v2 — 0111_notification_push_sweep_schedule.sql
 -- Domain: scheduling. Runs the R-7 push relay.
 --
 -- NOT APPLIED. Written, not run. And note the hard precondition below: this
@@ -9,7 +9,7 @@
 -- WHAT RUNS, AND WHY IT IS pg_net.
 -- ============================================================================
 --
--- 0107 leaves unpushed notifications on the table. Something has to hand them
+-- 0110 leaves unpushed notifications on the table. Something has to hand them
 -- to notify-push-sweep, and pg_cron cannot make an HTTP call by itself. On
 -- Supabase the only in-database HTTP transport is pg_net, which is also what
 -- Database Webhooks are built on (supabase_functions.http_request wraps it).
@@ -58,17 +58,17 @@ begin
 
   if not exists (select 1 from pg_extension where extname = 'pg_net') then
     raise exception
-      'pg_net is not installed; enable it (Database, Extensions, pg_net) before applying 0108. Without it nothing can call notify-push-sweep from the database.';
+      'pg_net is not installed; enable it (Database, Extensions, pg_net) before applying 0111. Without it nothing can call notify-push-sweep from the database.';
   end if;
 
   if not exists (select 1 from vault.secrets where name = 'project_url') then
     raise exception
-      'vault secret project_url is missing; see the header of 0108 for the two vault.create_secret calls this job needs';
+      'vault secret project_url is missing; see the header of 0111 for the two vault.create_secret calls this job needs';
   end if;
 
   if not exists (select 1 from vault.secrets where name = 'service_role_key') then
     raise exception
-      'vault secret service_role_key is missing; see the header of 0108 for the two vault.create_secret calls this job needs';
+      'vault secret service_role_key is missing; see the header of 0111 for the two vault.create_secret calls this job needs';
   end if;
 end;
 $$;
