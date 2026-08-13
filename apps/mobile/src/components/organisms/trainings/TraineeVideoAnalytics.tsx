@@ -28,6 +28,24 @@ type UploadState = 'idle' | 'picking' | 'uploading' | 'error';
  * PUT to the signed URL). Exported as a standalone organism so the trainee
  * profile tab shell (Track C) mounts it directly as the tab's content, no
  * AppBar or screen chrome of its own.
+ *
+ * MOUNTED NOWHERE, deliberately, and this is the single reason the whole
+ * video loop is inert: without this component on screen no coach can upload
+ * anything, so the athlete's my-videos screen can never hold a row. The
+ * component itself is complete and its backend is real (0082 plus the two
+ * signing edge functions). It is kept rather than deleted because turning
+ * the feature on is exactly one mount plus one flag, and deleting it would
+ * throw away working code to solve a labelling problem.
+ *
+ * To turn it on: set COACH_TRAINEE_VIDEO_REVIEW_ENABLED true in
+ * apps/mobile/src/lib/feature-flags.ts, then render
+ * `<TraineeVideoAnalytics playerId={id} />` as the video tab's content in
+ * trainings/trainee/[id].tsx, replacing the coming soon block there. Read
+ * that flag's comment first; it carries the founder decision.
+ *
+ * Nothing here is video ANALYSIS. There is no annotation, no breakdown, no
+ * automatic anything. It is a coach posting a clip and an athlete watching
+ * it, which is why the surfaces it feeds are worded as review videos.
  */
 export interface TraineeVideoAnalyticsProps {
   playerId: string;

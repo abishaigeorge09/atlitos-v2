@@ -70,8 +70,16 @@ export default function PlayerPaymentsScreen() {
 
   const totals = useMemo(() => {
     const held = sessions.filter((session) => session.status === 'completed' || session.status === 'rated');
+    // `in_progress` (0077) counts as booked ahead, not delivered: the money
+    // is already paid but the earnings accrual only happens at complete.
+    // Before this it fell out of BOTH totals, so a started session silently
+    // vanished from the athlete's paid figures until it completed.
     const booked = sessions.filter(
-      (session) => session.status === 'requested' || session.status === 'accepted' || session.status === 'rescheduled',
+      (session) =>
+        session.status === 'requested' ||
+        session.status === 'accepted' ||
+        session.status === 'in_progress' ||
+        session.status === 'rescheduled',
     );
     return {
       paidForDelivered: held.reduce((sum, session) => sum + session.total, 0),

@@ -162,7 +162,10 @@ function groupByCoach(sessions: Session[]): MyCoachRow[] {
   for (const session of sessions) {
     if (session.status === 'declined') continue;
     const existing = byCoach.get(session.coachId);
-    const isUpcoming = session.status === 'accepted' && session.date >= today;
+    // `in_progress` counts too (0077): without it, the row's next-session
+    // date drops the moment the coach taps Start, even though the session
+    // is happening right now, not in the past.
+    const isUpcoming = (session.status === 'accepted' || session.status === 'in_progress') && session.date >= today;
     if (!existing) {
       byCoach.set(session.coachId, {
         coachId: session.coachId,

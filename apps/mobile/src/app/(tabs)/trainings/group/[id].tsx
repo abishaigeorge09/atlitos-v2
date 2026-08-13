@@ -1,9 +1,17 @@
 import { useGroups, type GroupDetail, type GroupMember, type GroupSession } from '@atlitos/api';
 import type { ApiError } from '@atlitos/types';
 import { radii, spacing } from '@atlitos/theme';
-import { router, useLocalSearchParams } from 'expo-router';
-import { CalendarCheck2, CalendarX2, ClipboardList, Percent, TriangleAlert } from 'lucide-react-native';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import {
+  CalendarCheck2,
+  CalendarPlus,
+  CalendarX2,
+  ClipboardList,
+  Percent,
+  Pencil,
+  TriangleAlert,
+} from 'lucide-react-native';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -110,6 +118,20 @@ export default function GroupProfileScreen() {
     void load();
   }, [load]);
 
+  // Edit and Schedule are pushed screens that mutate this group. Coming back
+  // must not show the values this screen loaded before they ran, so refetch
+  // silently on focus rather than trusting the first load.
+  const isFirstFocus = useRef(true);
+  useFocusEffect(
+    useCallback(() => {
+      if (isFirstFocus.current) {
+        isFirstFocus.current = false;
+        return;
+      }
+      void load({ silent: true });
+    }, [load]),
+  );
+
   async function handleRefresh() {
     setRefreshing(true);
     await load({ silent: true });
@@ -162,6 +184,14 @@ export default function GroupProfileScreen() {
 
   function goToSession(sessionId: string) {
     router.push({ pathname: '/(tabs)/trainings/group-session/[id]', params: { id: sessionId } });
+  }
+
+  function goToEdit() {
+    router.push({ pathname: '/(tabs)/trainings/group/edit', params: { id: group.id } });
+  }
+
+  function goToSchedule() {
+    router.push({ pathname: '/(tabs)/trainings/group/schedule', params: { groupId: group.id } });
   }
 
   function SessionRow({ session }: { session: GroupSession }) {
@@ -263,6 +293,21 @@ export default function GroupProfileScreen() {
             </View>
 
             <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+              <View style={{ flex: 1 }}>
+                <Button variant="secondary" onPress={goToEdit}>
+                  <Pencil size={16} strokeWidth={1.75} color={colors.text} />
+                  <Text style={{ color: colors.text }}>Edit group</Text>
+                </Button>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Button onPress={goToSchedule}>
+                  <CalendarPlus size={16} strokeWidth={1.75} color={colors.inkOnAccent} />
+                  <Text style={{ color: colors.inkOnAccent }}>Schedule</Text>
+                </Button>
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: spacing.sm }}>
               <StatTile label="Total sessions" value={liveSessions.length} icon={CalendarCheck2} />
               <StatTile
                 label="Attendance rate"
@@ -344,6 +389,11 @@ export default function GroupProfileScreen() {
           </View>
         ) : (
           <View style={{ gap: spacing.lg }}>
+            <Button onPress={goToSchedule}>
+              <CalendarPlus size={18} strokeWidth={1.75} color={colors.inkOnAccent} />
+              <Text style={{ color: colors.inkOnAccent }}>Schedule a session</Text>
+            </Button>
+
             <View style={{ gap: spacing.sm }}>
               <Text style={[textStyle('h3'), { color: colors.text }]}>Upcoming sessions</Text>
               {upcoming.length === 0 ? (
@@ -359,7 +409,7 @@ export default function GroupProfileScreen() {
                 <View style={{ alignItems: 'center', gap: spacing.md, padding: spacing.lg }}>
                   <CalendarX2 size={40} color={colors.textTertiary} strokeWidth={1.75} />
                   <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
-                    No sessions scheduled for this group yet.
+                    No sessions scheduled for this group yet. Schedule one and every active member is added to it.
                   </Text>
                 </View>
               ) : (

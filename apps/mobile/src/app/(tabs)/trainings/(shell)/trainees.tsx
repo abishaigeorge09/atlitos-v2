@@ -8,7 +8,7 @@ import {
 import type { ApiError } from '@atlitos/types';
 import { radii, spacing } from '@atlitos/theme';
 import { router } from 'expo-router';
-import { TriangleAlert, Users } from 'lucide-react-native';
+import { Plus, TriangleAlert, Users } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, View } from 'react-native';
 
@@ -99,6 +99,10 @@ export default function CoachTraineesScreen() {
     setRefreshing(false);
   }
 
+  function goToNewGroup() {
+    router.push('/(tabs)/trainings/group/edit');
+  }
+
   const visibleGroups = filter === 'all' || filter === 'group' ? groupItems : [];
   const visibleTrainees =
     filter === 'group'
@@ -150,26 +154,52 @@ export default function CoachTraineesScreen() {
           </View>
           <Text style={[textStyle('h3'), { color: colors.text, textAlign: 'center' }]}>No trainees yet</Text>
           <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
-            Athletes you have trained will show up here once they book a session with you.
+            Athletes you have trained will show up here once they book a session with you. You can start a training
+            group now and invite them from your profile.
           </Text>
+          <Button onPress={goToNewGroup}>
+            <Plus size={18} strokeWidth={1.75} color={colors.inkOnAccent} />
+            <Text style={{ color: colors.inkOnAccent }}>New training group</Text>
+          </Button>
         </View>
       ) : (
         <>
           <SessionFilterChips active={filter} onChange={setFilter} />
+          <View
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'flex-end',
+              paddingHorizontal: spacing.lg,
+              paddingTop: spacing.sm,
+            }}
+          >
+            <Button variant="text" size="sm" onPress={goToNewGroup}>
+              <Plus size={16} strokeWidth={1.75} color={colors.accent} />
+              <Text style={{ color: colors.accent }}>New group</Text>
+            </Button>
+          </View>
           <FlatList
             data={items}
             keyExtractor={(item) => item.key}
             contentContainerStyle={{ padding: spacing.lg, gap: spacing.md, flexGrow: 1 }}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} />}
             ListEmptyComponent={
-              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing.lg }}>
+              <View
+                style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing.lg, gap: spacing.md }}
+              >
                 <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
                   {filter === 'group'
-                    ? 'No training groups yet.'
+                    ? 'No training groups yet. Create one to train several athletes together on a monthly fee.'
                     : filter === 'online'
                       ? 'No online trainees yet.'
                       : 'No trainees match this filter.'}
                 </Text>
+                {filter === 'group' ? (
+                  <Button onPress={goToNewGroup}>
+                    <Plus size={18} strokeWidth={1.75} color={colors.inkOnAccent} />
+                    <Text style={{ color: colors.inkOnAccent }}>New training group</Text>
+                  </Button>
+                ) : null}
               </View>
             }
             renderItem={({ item }) =>

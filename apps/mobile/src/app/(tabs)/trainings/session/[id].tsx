@@ -3,7 +3,7 @@ import { canTransition, SESSION_TRANSITIONS } from '@atlitos/types';
 import type { ApiError, Session } from '@atlitos/types';
 import { radii, spacing } from '@atlitos/theme';
 import { router, useLocalSearchParams } from 'expo-router';
-import { CalendarClock, CheckCircle2, TriangleAlert, XCircle } from 'lucide-react-native';
+import { CalendarClock, CheckCircle2, Play, TriangleAlert, XCircle } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -59,6 +59,7 @@ export default function CoachSessionDetailScreen() {
   const [actionError, setActionError] = useState<string | null>(null);
 
   const [completing, setCompleting] = useState(false);
+  const [starting, setStarting] = useState(false);
 
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
@@ -117,6 +118,20 @@ export default function CoachSessionDetailScreen() {
       .catch(() => setReschedSlots([]))
       .finally(() => setReschedSlotsLoading(false));
   }, [reschedOpen, reschedDate, session?.coachId, session?.sessionTypeId]);
+
+  async function handleStart() {
+    if (!session) return;
+    setStarting(true);
+    setActionError(null);
+    try {
+      const updated = await coachSessions.startSession(session.id);
+      setSession(updated);
+    } catch (err) {
+      setActionError((err as ApiError).message);
+    } finally {
+      setStarting(false);
+    }
+  }
 
   async function handleComplete() {
     if (!session) return;
@@ -202,6 +217,11 @@ export default function CoachSessionDetailScreen() {
     );
   }
 
+  // 0077 added accepted -> in_progress and its client mirror in
+  // SESSION_TRANSITIONS, but this screen never grew the affordance, so the
+  // only path a coach had was Complete, which for a 1:1 session is
+  // TOO_EARLY gated. Start has no time gate by design (0077 decision 1).
+  const canStart = canTransition(SESSION_TRANSITIONS, session.status, 'in_progress');
   const canComplete = canTransition(SESSION_TRANSITIONS, session.status, 'completed');
   const canCancel = canTransition(SESSION_TRANSITIONS, session.status, 'cancelled');
   const canReschedule = canTransition(SESSION_TRANSITIONS, session.status, 'rescheduled');
@@ -265,12 +285,22 @@ export default function CoachSessionDetailScreen() {
 
         {actionError ? <Text style={[textStyle('caption'), { color: colors.danger }]}>{actionError}</Text> : null}
 
-        {canComplete || canCancel || canReschedule ? (
+        {canStart || canComplete || canCancel || canReschedule ? (
           <View style={{ gap: spacing.sm }}>
+            {canStart ? (
+              <Button loading={starting} onPress={() => void handleStart()}>
+                <Play size={16} strokeWidth={1.75} color={colors.inkOnAccent} />
+                <Text style={{ color: colors.inkOnAccent }}>Start session</Text>
+              </Button>
+            ) : null}
             {canComplete ? (
-              <Button loading={completing} onPress={() => void handleComplete()}>
-                <CheckCircle2 size={16} strokeWidth={1.75} color={colors.inkOnAccent} />
-                <Text style={{ color: colors.inkOnAccent }}>Mark complete</Text>
+              <Button
+                variant={canStart ? 'secondary' : 'primary'}
+                loading={completing}
+                onPress={() => void handleComplete()}
+              >
+                <CheckCircle2 size={16} strokeWidth={1.75} color={canStart ? colors.text : colors.inkOnAccent} />
+                <Text style={{ color: canStart ? colors.text : colors.inkOnAccent }}>Mark complete</Text>
               </Button>
             ) : null}
             {canReschedule ? (
