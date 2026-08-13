@@ -629,6 +629,113 @@ OPEN. Nothing in this lane changes that until 0102 to 0106 merge and apply.
 
 ---
 
+## Track outcome: push notification delivery, 2026-08-14
+
+Branch `track/push-delivery-scale` off `integration/p6-audit-fixes` at `32f96e9`. Nothing was
+applied to production; every migration below is a FILE. Everything asserted here is either a
+command output or a read-only catalog query, both quoted.
+
+### R-7 CLOSED in code. Sweeper, not webhook, and the choice was made on four points
+
+`0107_notification_push_delivery.sql` adds `pushed_at`, `push_claimed_at` and `push_attempts` to
+`notifications`, a partial index on the backlog, `claim_notification_push_batch` (a single
+`update ... where id in (select ... for update skip locked limit n) returning`), and a
+`notifications_lock_push_state` BEFORE UPDATE trigger so the owner UPDATE policy 0002 grants the
+bell cannot be used to forge delivery state. `0108` schedules `notification-push-sweep` every 30
+seconds over pg_net. `supabase/functions/notify-push-sweep/index.ts` is the worker.
+
+The webhook alternative was rejected because it is per row (a group of 50 becomes 50
+single-recipient HTTP calls, R-6 reintroduced one layer up), fire and forget (a pg_net failure
+lands in `net._http_response` and leaves no mark on the row, so nothing can retry), it would put
+an outbound call inside the transaction that moves a session's status, and it can never drain a
+backlog written while it was down. The sweeper inverts all four: `pushed_at` is a checkpoint, so
+a failed dispatch simply comes back; `skip locked` plus the claim window means two overlapping
+runs cannot send the same push twice; and rows sharing a title and body collapse into one Expo
+request, which is the batching R-6 wanted, for free.
+
+Two facts that shaped it, both read from the live project, and both of which contradict the fix
+this document originally proposed:
+
+    select extname from pg_extension where extname in ('pg_net','pg_cron','supabase_vault');
+      -> pg_cron 1.6.4, supabase_vault 0.3.1.  pg_net IS NOT INSTALLED.
+    select name from vault.secrets;   -> zero rows.
+
+R-7's "cheapest fix" said "a second pg_cron job ... over pg_net" as though pg_net were present.
+It is not, and neither are the secrets such a job needs. `0108` therefore opens with four hard
+guards and RAISES rather than skipping: a job installed without a working key would run every 30
+seconds, take a 403 from `assertServiceRoleRequest`, record it only in `net._http_response`, and
+show as a healthy active row in `cron.job` while delivering nothing. That is the "gate that
+cannot run" shape CURRENT-STATE names, so it is a failure, not a skip.
+
+### R-6 CLOSED in code
+
+`_shared/notify.ts` gains `pushContentToUsers` and `dispatchNotificationFanout`. Prefs and
+`push_tokens` are read in bulk (chunked at 200 users per `IN` list, because PostgREST puts the
+list in the query string), Expo requests carry up to 100 tokens **belonging to different users**,
+requests run at most 6 in flight, and a pacer reserves `messages / 600` seconds per batch so the
+fan-out runs at the provider's own allowance and no faster. `notify-dispatch` groups identical
+content instead of looping recipients; its request and response shapes are unchanged.
+
+The old per-user path still exists as `dispatchNotification`, now implemented on top of the
+fan-out, so `finalize-court-booking-payment.ts` is untouched.
+
+### R-8: capacity ceiling SHIPPED, moving the fan-out off the transaction DELIBERATELY NOT DONE
+
+`0109_training_group_capacity_ceiling.sql` adds `check (capacity <= 100)` (added `not valid` then
+validated, so the ALTER does not hold a strong lock through a scan) and recreates 0080's two RPCs
+verbatim plus one guard each so a coach gets a sentence rather than a constraint violation. The
+mobile create/edit screen enforces the same number with honest copy. 100 is not arbitrary: it is
+exactly one Expo request, 20% of the 500/s Pro realtime ceiling at one message per second, about
+15 ms of synchronous trigger cost at 0.15 ms per member, and an order of magnitude above the
+largest real group today (live maximum capacity is 8).
+
+**Moving `broadcast_chat_message` off the sender transaction was assessed and NOT attempted.**
+Precisely what was found, so the next agent does not re-derive it:
+
+1. **`realtime.send` opens a SUBTRANSACTION per call.** Read from `pg_proc.prosrc` on the live
+   project, its body is `BEGIN BEGIN ... INSERT INTO realtime.messages ... EXCEPTION WHEN OTHERS
+   THEN RAISE WARNING ... END; END;`. Every plpgsql `begin ... exception` block allocates a
+   subtransaction, so a group chat message does not merely perform M inserts, it opens **M
+   subtransactions inside the sender's transaction**. That is the same PGPROC 64-subxid overflow
+   mechanism as R-9, on the interactive chat path rather than the 03:30 sweep. This is new: it is
+   not in R-8 above, and it is a second, independent reason the capacity ceiling matters, because
+   the ceiling of 100 sits just past the 64-entry cache.
+2. **A set-based rewrite is small but not verifiable here.** Replacing the loop with one
+   `insert into realtime.messages (id, payload, event, topic, private, extension) select ...` over
+   the member union would turn M statements and M subtransactions into one statement writing M
+   rows. It cannot remove the M WAL records or the M websocket events: those are inherent to
+   per-user topics, and the alternative (one topic per thread) forces the inbox to subscribe every
+   thread and runs into the 100-channels-per-connection limit, exactly as R-8 says.
+3. **Why it was not shipped anyway.** It reimplements a Supabase-owned function's internals,
+   including its `SET LOCAL realtime.topic TO <topic>` before the insert. `realtime.messages`
+   carries no triggers (`pg_trigger` on `realtime.messages`, zero non-internal rows), which
+   suggests that GUC is read on the subscriber side by `realtime.topic()` and is vestigial for the
+   insert. **Suggests is not proves.** Confirming it needs either a live socket test, which the
+   device gate refuses and which no read-only query substitutes for, or the Realtime server
+   source. Getting it wrong silently breaks every chat message in the product with a green
+   typecheck. Shipping an unverifiable rewrite of the live chat path to save a subtransaction is
+   the wrong trade while the capacity ceiling already bounds the blast radius.
+4. **A genuine move off the transaction is a different, larger change.** It means an outbox: the
+   trigger writes one row, and a worker fans out. That trades the current strict ordering and
+   sub-millisecond delivery for a queue, and it needs its own claim, retry and ordering design.
+   That is a track, not a fix, and it is not needed at 10,000: steady-state chat is 0.17 events
+   per second average and 1.7 at a 10x peak against a 500 ceiling.
+
+**Recommended next step, in order:** apply 0109 first, since one line of DDL removes the
+unbounded case entirely; then, if the set-based rewrite is still wanted, do it behind a real
+socket test on a preview branch, not on production.
+
+### What this track did NOT do
+
+- Did not apply anything. `schema_migrations` is untouched; 0102 to 0109 are all unapplied.
+- Did not deploy `notify-push-sweep`, and did not create the two vault secrets, both writes.
+- Did not take a device screenshot or run Maestro for the one-line capacity caption. The UI change
+  is a validation string and a caption on an existing screen, and the device gate is a founder
+  rule, so this is recorded as owed rather than claimed.
+- Did not touch R-1 through R-5, R-9 or R-10; other tracks own those.
+
+---
+
 ## UNRESOLVED
 
 1. **Whether the Pro spend cap is on.** The docs distinguish Pro (500 concurrent, 500 messages/s) from

@@ -17,10 +17,22 @@
 // callers are other edge functions invoking this over `functions.invoke`
 // under their own service-role client.
 //
-// Each dispatch writes the notifications row (in-app delivery, fully
-// implemented) and attempts the device-push leg, which is STUBBED behind
-// `deliverToDevice()` in _shared/notify.ts and carried to P9. See that file's
-// header for the two-leg model and the TODO(P9) transport seam.
+// Each dispatch writes the notifications row (in-app delivery) and attempts
+// the device-push leg over the Expo Push API. See _shared/notify.ts for the
+// two-leg model.
+//
+// SCALE-REALTIME R-6. This used to be
+//
+//     for (const input of inputs) {
+//       dispatched.push(await dispatchNotification(service, input));
+//     }
+//
+// one full dispatch per recipient, each with its own Expo round trip, which
+// capped the whole batch endpoint at about 4 pushes per second. Identical
+// content is now GROUPED (a group session's roster shares one title and body,
+// so it is one fan-out), and each group goes out as one bulk insert plus
+// ceil(tokens / 100) paced Expo requests. The response shape is unchanged:
+// one DispatchResult per input, in input order.
 
 import { handleCorsPreflight } from "../_shared/cors.ts";
 import { jsonResponse, withErrorHandling } from "../_shared/http.ts";
@@ -28,8 +40,12 @@ import { AppError } from "../_shared/app-error.ts";
 import { serviceRoleClient } from "../_shared/supabase.ts";
 import {
   assertServiceRoleRequest,
-  dispatchNotification,
+  contentKey,
+  dispatchNotificationFanout,
   parseNotificationInput,
+  type DispatchResult,
+  type NotificationContent,
+  type NotificationInput,
 } from "../_shared/notify.ts";
 
 function parseBatch(raw: unknown): unknown[] {
@@ -70,10 +86,59 @@ Deno.serve((req) =>
     const inputs = parseBatch(body).map(parseNotificationInput);
     const service = serviceRoleClient();
 
-    const dispatched = [];
+    // Group by identical content, preserving first-seen order so the response
+    // stays deterministic.
+    const groups = new Map<string, { content: NotificationContent; userIds: string[] }>();
     for (const input of inputs) {
-      dispatched.push(await dispatchNotification(service, input));
+      const content: NotificationContent = {
+        type: input.type,
+        title: input.title,
+        body: input.body,
+        deepLink: input.deepLink,
+      };
+      const key = contentKey(content);
+      const group = groups.get(key);
+      if (group) group.userIds.push(input.userId);
+      else groups.set(key, { content, userIds: [input.userId] });
     }
+
+    const resultByKey = new Map<
+      string,
+      { ids: Map<string, string>; suppressed: Set<string>; deliveries: DispatchResult["deviceDeliveries"] }
+    >();
+    for (const [key, group] of groups) {
+      const { notificationIdByUser, push } = await dispatchNotificationFanout(
+        service,
+        group.content,
+        group.userIds,
+      );
+      resultByKey.set(key, {
+        ids: notificationIdByUser,
+        suppressed: new Set(push.suppressed),
+        deliveries: push.deviceDeliveries,
+      });
+    }
+
+    const dispatched: DispatchResult[] = inputs.map((input: NotificationInput) => {
+      const key = contentKey(input);
+      const result = resultByKey.get(key);
+      const notificationId = result?.ids.get(input.userId);
+      if (!result || !notificationId) {
+        throw new AppError(
+          "INTERNAL",
+          `Failed to write notification for user ${input.userId}.`,
+          500,
+        );
+      }
+      return {
+        notificationId,
+        userId: input.userId,
+        pushSuppressed: result.suppressed.has(input.userId),
+        // Only this user's devices, so the per-input shape is unchanged even
+        // though the Expo request it rode in carried other users' tokens.
+        deviceDeliveries: result.deliveries.filter((d) => d.userId === input.userId),
+      };
+    });
 
     return jsonResponse({ dispatched }, 200);
   })
