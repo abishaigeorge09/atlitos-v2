@@ -107,6 +107,25 @@ The Register screen renders, all fields work, and both cross-links navigate. The
 was a Maestro selector that false-passed on the wrong screen. There IS a real bug underneath, but
 it is navigation, not registration: see below.
 
+### A forked session cannot tell inherited work from its own
+A fork inherits the transcript INCLUDING tool results, so it can hold a perfectly accurate
+description of the world alongside a wrong belief about who produced it. It is dangerous
+EXACTLY BECAUSE the description is accurate: nothing looks wrong until the fork re-does
+completed work, or "restores" something that was never broken.
+
+"I remember receiving that output" cannot distinguish having run a command from having
+inherited its result. Neither side can settle it from the inside; the source session has
+evidence the fork does not (it observed the fork being created), and the fork has a divergence
+marker whose meaning is ambiguous.
+
+**Rule: after a fork, verify authorship with the still-running source before acting on
+anything in the inherited transcript. Do not infer it from remembering the tool output.**
+
+This is the same failure as every other entry in this section, applied to a session's own
+history rather than to a bug: reasoning off a symptom instead of checking the artifact.
+Observed 2026-08-13 between this session and `atlitos-mobile-audit-fixes`. It changed no
+world state, because both readings agreed on what was done and on what must not be repeated.
+
 ### The webhook was never unconfigured
 An investigation concluded the production Razorpay webhook had never been set up and called it a
 launch-blocking P0. `supabase secrets list` shows `RAZORPAY_WEBHOOK_SECRET` is set, and
