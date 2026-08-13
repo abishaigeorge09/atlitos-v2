@@ -1,5 +1,48 @@
 # Debt and incident log
 
+## 2026-08-14: Maestro regression is not wired into CI, and schema drift against
+## production has not been re-verified with a live query in this pass
+
+**Owner: whoever next has a GitHub Actions macOS runner budget (Maestro needs a real
+simulator/emulator, which ubuntu-latest cannot provide) and whoever next holds Supabase
+credentials for `syzzfgaudpifwvbpycyi` outside this session.**
+
+Two gaps carried forward honestly rather than closed under pressure:
+
+1. **Maestro is not in CI.** `db-migrations` (this file, `dod.yml`) proves the database side on
+   ubuntu-latest; the 13+ Maestro flows need a booted iOS Simulator or Android emulator, which
+   GitHub's free-tier ubuntu runners cannot provide and macOS runners are expensive and slow to
+   provision from a from-scratch build. This pass ran `scripts/dod.sh`, `security-invariants.sh`
+   and the new `db-migrations` job's steps locally and did not build the mobile app for a
+   simulator or drive any Maestro flow against the local stack, for the same reason: pointing the
+   app at `http://127.0.0.1:54321` requires a config change to `apps/mobile/.env` (never read
+   directly this pass, permission denied by design) and a full Release build, which is a
+   multi-hour undertaking distinct from database validation. The 13 flows most recently proven
+   (`docs/qa/CURRENT-STATE.md`) were run against production, read only; none has been re-run
+   against the local stack's seeded data, including the two write flows
+   (`groups-athlete`, `groups-coach`) the local stack was specifically built to finally unblock.
+
+2. **Schema drift against production was not re-verified with a new live query in this pass.**
+   The founder brief asked for a fresh read-only comparison of production's applied migration set
+   against the 114 files in this repo. This session's environment carried no Supabase MCP tool
+   and no production credential (by design: `.env.local` and `apps/mobile/.env` are permission
+   denied, and no other credential was supplied), so no new SQL was run against
+   `syzzfgaudpifwvbpycyi`. What is reported instead, in the validation section of this pass's
+   handoff, is a compilation of what earlier sessions already verified read only and recorded
+   with a query and its output: the applied ceiling was `0097` as of 2026-08-13
+   (`0113_bounded_reads_support.sql`'s own header), 104 rows total, timestamp-versioned by
+   filename rather than by this repo's `NNNN` numbering. Files `0099` through `0114` (16 files;
+   `0098` does not exist on this branch, it lives unmerged on `phase-11/p6-account-deletion`) are
+   therefore the best current estimate of what is unapplied, not a number obtained by a new
+   catalog query. **This is inference from prior evidence, not a new proof, and CURRENT-STATE.md
+   is explicit that an absence in the repo is not evidence about production.** Closes when
+   someone with `syzzfgaudpifwvbpycyi` read access runs, at minimum,
+   `select name from supabase_migrations.schema_migrations order by name` and diffs the result
+   against `ls supabase/migrations`, plus a live `information_schema`/`pg_policy` structural
+   comparison for any file among the 16 that could have reached production outside a tracked
+   migration (the management API path CURRENT-STATE already documents as how migrations have
+   actually reached this project).
+
 ## 2026-08-14: the notification push sweep is not scheduled in production
 
 **Owner: whoever next has write access to production Supabase Vault. Closes when the two
