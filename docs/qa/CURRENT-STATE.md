@@ -1,0 +1,216 @@
+# Atlitos: current state, what is proven, what is not
+
+Last updated 2026-08-13.
+
+## How to use this document
+
+Read this BEFORE investigating anything. It exists because five separate agents independently
+investigated the same Clutch bug and four of them reached wrong conclusions, each starting cold
+without the previous findings. Rediscovery is the single largest waste on this project.
+
+Three rules for anyone editing it:
+
+1. **A finding without evidence is not a finding.** Cite a file and line, a command output, or a
+   query result. "It should work" is not a result.
+2. **Record what was DISPROVEN, not just what is true.** The disproven section below is the most
+   valuable part of this file. It is what stops the next agent repeating a dead end.
+3. **Environmental failures have masqueraded as product bugs EIGHT times here.** Before filing any
+   failure, open the screenshot and rule out a stale build, a wrong device, a redbox, and a system
+   dialog holding accessibility focus.
+
+---
+
+## Founder decisions
+
+| Date | Decision |
+|---|---|
+| 2026-08-13 | Coach scope: build the FULL creation layer, including 1:1 session start and membership reminders. |
+| 2026-08-13 | Clip controls: delete your own clip, plus comments off per clip. NOT a full audience model. |
+| 2026-08-13 | No money-UI test automation. The founder is satisfied the payment path works. |
+| 2026-08-13 | Date of birth off signup, collected on the profile instead. SHIPPED. |
+| 2026-08-13 | Landing subscription tiers removed. Restore only when a real purchasable plan exists. |
+| 2026-08-12 | Google and Apple sign-in stay in Phase 8, AFTER store submission. |
+| 2026-08-12 | Razorpay account migration happens BEFORE store submission. |
+
+---
+
+## PROVEN, with evidence
+
+### Native builds and the Android crash
+- **Android builds.** Release APK, 250.9 MB, all four ABIs, with Sentry, reanimated, worklets and
+  expo-modules-core native libs present.
+- **iOS builds.** Release with `main.jsbundle` embedded, 9.65 MB, verified by inspecting the .app
+  rather than by "no Metro running", which is NOT valid proof because `expo run:ios` starts its own.
+- **The Clutch OOM crash is FIXED and independently re-verified on device.** Home Dalvik went from
+  163 MB to 30 MB. Tapping Clutch previously killed the process; it now survives, plus 15 rapid
+  swipes and 10 tab cycles, with ZERO OutOfMemory from the app.
+  Cause: `expo-video`'s Android `maxBufferBytes` defaults to 0, which media3 reads as unset and
+  answers with a 125 MB buffer taken from the JAVA heap. Home mounted one such player because
+  `ClutchPreviewCard` passes `active={false}` but left `mountPlayer` at its true default.
+  Fix in `apps/mobile/src/lib/video-buffer.ts`, applied at all three `useVideoPlayer` call sites.
+  `android:largeHeap` was deliberately NOT used.
+- **Android hardware BACK works.** Both the portal-overlay dismiss and the tab-back behaviour
+  verified on device with Maestro, not just typechecked.
+
+### Test suite
+- Maestro: **13 pass, 1 fail, 1 not executed.** The single failure is a real bug left correctly red.
+  The not-executed flow (`groups-coach`) requires a Postgres reset between runs, which the DB write
+  gate forbids; its data was verified clean by read-only SQL instead.
+- `pnpm turbo typecheck` 12/12, `build` 7/7, `lint` 8/8.
+
+### Chat
+- Chat renders and works on native. Verified by re-running `groups-athlete.yaml` after the data
+  pollution was cleared: login, trainings, My groups, Cric Squad found without scrolling, thread
+  rows, sender names, previews, member counts.
+
+### Landing and legal
+- `/`, `/privacy`, `/terms`, `/support`, `/delete-account` all return 200 on www.atlitos.com.
+  `/support` and `/terms` were 404 before 2026-08-13 and both stores require them.
+- The privacy policy now discloses phone number and Sentry, which it previously omitted. A privacy
+  policy that does not match the Data Safety form is a known Play takedown shape.
+
+---
+
+## DISPROVEN. Read this before theorising.
+
+### The Clutch "static" is NOT a rendering bug
+Five explanations were proposed. **All five were wrong**, including two of mine.
+
+| Claim | Why it is wrong |
+|---|---|
+| iOS Simulator expo-video decode limitation | Reproduces on Android too |
+| Android only, Media3 heavier than AVPlayer | Reproduces on iOS too |
+| Memory pressure | Persists with `mountPlayer={false}`, no player mounted, zero OOM |
+| The seed thumbnails are raw random bytes | They are valid JPEGs, 49 KB to 649 KB |
+| The fixture JPEGs are valid but their CONTENT is noise | Partly right, but I sampled the WRONG CLIP |
+
+**The actual answer.** I fetched the assets for clip `6d0a88b3` ("Hi"), found clean ffmpeg colour
+bars, and concluded the app must be mangling good data. The clip actually failing on screen was
+`b8c0c76e` ("Husband s"), whose thumbnail IS genuinely 541,379 bytes of noise with the caption and
+a cyan rectangle PAINTED INTO the source image. The "diagnostic clue" I built a chroma/stride
+theory on was literally drawn into the file.
+
+Refuted three ways by the verifying agent: the clean JPEG bundled INTO the app renders perfect
+colour bars under the exact geometry the poster uses; per-column mean luma across the failing card
+is FLAT at 44 to 53, and six bars spanning Y 29 to 226 cannot lose all luma to a chroma-only fault;
+and a positive control clip renders correctly through the identical code path.
+
+**Lesson: sample the exact failing artifact, not a sibling.**
+
+### There is no member-count bug
+I reported "5 members" against 4 active memberships as an off-by-one. It is correct: 4 active
+players PLUS the coach is 5, and `chat_thread_members` is exactly 5. The pending membership is
+correctly excluded. I compared player memberships against a total that includes the coach.
+
+### Registration is not broken
+The Register screen renders, all fields work, and both cross-links navigate. The apparent failure
+was a Maestro selector that false-passed on the wrong screen. There IS a real bug underneath, but
+it is navigation, not registration: see below.
+
+### The webhook was never unconfigured
+An investigation concluded the production Razorpay webhook had never been set up and called it a
+launch-blocking P0. `supabase secrets list` shows `RAZORPAY_WEBHOOK_SECRET` is set, and
+`webhook_events` holds 9 signature-verified rows from 18 to 26 July. The inference came from repo
+contents alone; the secret was set directly against the project, which leaves no trace in the repo.
+**Absence of config in the tree is not evidence of absence in production.**
+
+---
+
+## OPEN
+
+### Product gaps found 2026-08-13, now being built
+- **The coach has NO creation layer.** A coach who completes onboarding has ZERO `session_types`
+  rows and no screen to create one. `sessions.session_type_id` is NOT NULL, so NOTHING IS BOOKABLE
+  FROM THAT COACH. The wizard writes pricing into `verification_requests.payload`, which nothing
+  reads. `0004` promised a backfill that was never written.
+- `create_training_group`, `update_training_group` and `create_group_session` all exist as RPCs
+  with API wrappers and have **ZERO call sites**. Attendance and start-session screens are fully
+  built and unreachable.
+- **No notification fires on ANY session transition.** Nobody is told a session started.
+- **An active membership never becomes lapsed.** No pg_cron jobs exist anywhere in the repo. The
+  athlete sees "Active until <past date>" forever, the Renew button is dead code, and the coach's
+  screen computes lapsed client-side so the two views disagree.
+- **Clip privacy does not exist.** No visibility column, and a user cannot delete their own clip:
+  `revoke update, delete on public.clips from authenticated`.
+- **The comments sheet cannot open.** `maxHeight: '75%'` is inert because its parent
+  `KeyboardAvoidingView` has no style, so the percentage cannot resolve. It is the only place in
+  the app using a native RN `Modal`, which the house rule forbids.
+- **Video analysis is not being built** but six surfaces still reference it, including "My review
+  videos" on the athlete dashboard which links to a screen that can never have content.
+
+### Known real bugs
+- Auth navigation: Register to Log in to Continue as guest returned the user to Register. FIXED at
+  the cause (the cross-links now `replace` instead of pushing), not yet device-verified.
+- `bookings.tsx:29` omits `in_progress` from `LIVE_STATUSES`, so a started session vanishes from
+  the athlete's stats.
+- Comment count mismatch: the header uses `clips.comment_count` while the list subtracts blocked
+  authors client-side, so a viewer who blocked someone sees "12 comments" over a list of 9.
+
+### Infrastructure
+- **Migration `0027` has tool-call XML committed into it.** The history will NOT replay from a
+  clean checkout: no `db reset`, no preview branch, no disaster recovery. Production is unaffected.
+  Being repaired.
+- Migration `0098` (account deletion) is written and NOT applied. The `delete-account` edge
+  function is not deployed.
+
+### Production data pollution, five tables
+One shared Supabase project serves dev, e2e and production with no isolation and no teardown.
+- `training_groups`: 36 of 37 were e2e fixtures. CLEANED (by another session, without the agreed gate).
+- Leaked auth accounts: 44 since 27 July. CLEANED.
+- `clips`: **16 of 22 in the live feed are e2e fixtures.** NOT cleaned.
+- `venues`: **6 of 10 are test rows.** NOT cleaned.
+- `chat_threads`: **38 of 39 orphaned** by the training_groups cascade, rendering as "Group" in the
+  UI. NOT cleaned.
+- **The generator is still unfixed.** Cleaning without fixing it ships the same mess again.
+
+### Store submission
+Blocked on the founder: live Razorpay key (production currently ships `rzp_test_`), a demo reviewer
+account (seed accounts were rotated in the Phase 1 lockdown), screenshots, content ratings, and
+both privacy questionnaires. Answers with file-and-line citations are in `docs/store/`.
+
+### Test coverage, honestly
+The backend is well defended. **No automated test opens any athlete checkout UI.** Every money test
+starts at the edge function. The Razorpay sheet has been driven once, by a human, on 20 July. Real
+refunds cannot be tested because payment ids are synthetic. There are NO unit or integration tests
+anywhere in the monorepo. Five Maestro flows wrap taps in retry loops that hide a documented
+"tap does nothing" navigation defect.
+
+---
+
+## Environment traps, each of which cost hours
+
+- **JDK 17 is installed** at `/opt/homebrew/opt/openjdk@17` but is NOT registered with `java_home`,
+  so `/usr/libexec/java_home -V` wrongly reports it missing.
+- **Metro must start from `apps/mobile`**, never the repo root. From the root it cannot resolve the
+  entry and serves a redbox that looks exactly like a product bug.
+- **`maestro test .maestro/` in DIRECTORY form runs flows concurrently** and will grab the wrong
+  device, including a live Android emulator. Run per flow with `--udid`.
+- **`gradlew assembleRelease` silently ships a STALE JS bundle.** Force with
+  `:app:createBundleReleaseJsAndAssets --rerun-tasks`.
+- **The Android emulator needs `-gpu swiftshader_indirect -no-window`** or it binds IPv6 ports and
+  sits permanently offline.
+- **`pnpm install` can exit 0 having done nothing** when it wants a from-scratch reinstall and the
+  terminal is non-interactive. Use `CI=1`.
+- **`fatal: Unable to write index` usually means the disk is full**, not repo corruption. Check
+  `df` first, then look for a stale zero-byte `.git/index.lock`.
+- **Agent worktrees are the number one disk consumer.** Atlitos reached 88 GB, of which 82 GB was
+  39 worktrees. `~/bin/worktree-gc` now reclaims them daily at 04:10, and never removes anything
+  dirty or unmerged.
+
+---
+
+## Where things live
+
+| What | Where |
+|---|---|
+| Approved plan | `~/.claude/plans/snappy-foraging-meadow.md` |
+| Bug ledger | `docs/qa/BUG-LEDGER.md` |
+| iOS QA findings | `docs/qa/P5-IOS-FINDINGS.md` |
+| Android QA findings | `docs/qa/P5-ANDROID-FINDINGS.md` |
+| Store submission pack | `docs/store/` |
+| OAuth spec (Phase 8) | `docs/phases/OAUTH-GOOGLE-APPLE-SPEC.md` |
+| Phase 5 status | `docs/phases/LAUNCH-PHASE-5-STATUS.md` |
+| Account deletion design | `docs/architecture/SCHEMA.md`, account deletion section |
+
+Note the launch program re-uses phase numbers 0 to 7 from `docs/PLAN.md`. Launch-program docs are
+prefixed `LAUNCH-`. `docs/phases/PHASE-5-STATUS.md` is the Clutch phase, NOT native QA.
