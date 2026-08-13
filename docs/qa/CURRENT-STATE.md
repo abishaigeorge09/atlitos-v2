@@ -140,6 +140,27 @@ present because the branch was 171 commits behind. Deleting it "as dead code" wo
 a no-op at best and, had the reasoning been applied to a file launch-p4 had KEPT and started
 using, a live deletion.
 
+**A generated file is evidence about when it was generated, not about the tree.** Fourth
+disguise, and it bites in BOTH directions.
+
+`apps/mobile/.expo/types/router.d.ts` is expo-router's typed-route union, derived from the
+filesystem, and `.expo/` is gitignored. On the integrated tree it produced four TS2345/TS2820
+errors on `/(tabs)/trainings/session-types`, `group/edit` and `group/schedule`, while BOTH
+contributing branches typechecked green in isolation. All three screens existed. The generated
+file was dated 11 August, before any of the work, so real routes read as typos and TypeScript
+helpfully suggested the wrong one ("Did you mean group/[id]").
+
+Negative-tested, and the result is the part worth knowing:
+
+    file STALE    typecheck FAILS with false errors
+    file MISSING  typecheck PASSES with 0 errors
+    file FRESH    typecheck PASSES correctly
+
+So a fresh checkout or CI does not fail, it passes **because the safety net is not running at
+all**. Typed routes are only enforced for someone who has generated the file, and are silently
+unenforced everywhere else. Regenerate with `npx expo customize tsconfig.json` (non
+interactive, idempotent) before trusting a red OR a green on route types.
+
 **Absence of the literal string is not absence of the thing.** Third disguise, same day. An
 agent found `0101`'s docblock citing policies `clip_comments_active_insert` and
 `clip_comments_active_delete`, greped every migration, found nothing, and DECLINED to edit the
