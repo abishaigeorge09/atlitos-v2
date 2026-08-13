@@ -278,7 +278,15 @@ export default function GroupEditScreen() {
           }))}
           value={draft.skillLevel}
           onChange={(skillLevel) =>
-            setDraft((prev) => ({ ...prev, skillLevel: prev.skillLevel === skillLevel ? '' : skillLevel }))
+            setDraft((prev) => ({
+              ...prev,
+              // Deselect is create only. `update_training_group` coalesces a
+              // null or blank argument to "leave unchanged", so it cannot
+              // clear skill_level or attendance_policy back to null. Letting
+              // the chip deselect in edit mode would show the coach a change
+              // that silently does not happen.
+              skillLevel: prev.skillLevel === skillLevel && !isEdit ? '' : skillLevel,
+            }))
           }
         />
 
@@ -305,6 +313,12 @@ export default function GroupEditScreen() {
           value={draft.attendancePolicy}
           onChangeText={(attendancePolicy) => setDraft((prev) => ({ ...prev, attendancePolicy }))}
         />
+
+        {isEdit ? (
+          <Text style={[textStyle('caption'), { color: colors.textTertiary }]}>
+            Skill level and attendance policy can be changed but not emptied once set.
+          </Text>
+        ) : null}
 
         {isEdit ? (
           <ChipRow
