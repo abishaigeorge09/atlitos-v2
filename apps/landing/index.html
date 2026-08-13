@@ -376,31 +376,31 @@
   <!-- STRIP. The subscription itself scrolls past on the way into pricing. -->
   <div class="strip" aria-hidden="true">
     <div class="strip-track">
-      <span class="strip-word">Starter <span class="mono">&#8377;0</span></span><span class="strip-star">&#10033;</span>
-      <span class="strip-word">Pro <span class="mono">&#8377;199</span> per month</span><span class="strip-star">&#10033;</span>
-      <span class="strip-word">Elite <span class="mono">&#8377;499</span> per month</span><span class="strip-star">&#10033;</span>
-      <span class="strip-word">Every plan is the full Atlitos</span><span class="strip-star">&#10033;</span>
-      <span class="strip-word">Starter <span class="mono">&#8377;0</span></span><span class="strip-star">&#10033;</span>
-      <span class="strip-word">Pro <span class="mono">&#8377;199</span> per month</span><span class="strip-star">&#10033;</span>
-      <span class="strip-word">Elite <span class="mono">&#8377;499</span> per month</span><span class="strip-star">&#10033;</span>
-      <span class="strip-word">Every plan is the full Atlitos</span><span class="strip-star">&#10033;</span>
+      <span class="strip-word">Free to join</span><span class="strip-star">&#10033;</span>
+      <span class="strip-word">No monthly fee</span><span class="strip-star">&#10033;</span>
+      <span class="strip-word">Pay for what you book</span><span class="strip-star">&#10033;</span>
+      <span class="strip-word">Full breakdown before you confirm</span><span class="strip-star">&#10033;</span>
+      <span class="strip-word">Free to join</span><span class="strip-star">&#10033;</span>
+      <span class="strip-word">No monthly fee</span><span class="strip-star">&#10033;</span>
+      <span class="strip-word">Pay for what you book</span><span class="strip-star">&#10033;</span>
+      <span class="strip-word">Full breakdown before you confirm</span><span class="strip-star">&#10033;</span>
     </div>
   </div>
 
   <!-- PRICING. Deep green band, included card left, tier cards right. -->
   <section class="pricing" id="pricing" aria-labelledby="pricing-title">
     <div class="shell">
-      <p class="sec-eyebrow eyebrow-onDark mono" data-reveal="up">MEMBERSHIP</p>
+      <p class="sec-eyebrow eyebrow-onDark mono" data-reveal="up">PRICING</p>
       <div class="pricing-head">
         <h2 id="pricing-title" class="sticker-stack">
-          <span class="sticker" data-reveal="tilt">Plans built for</span>
+          <span class="sticker" data-reveal="tilt">Free for</span>
           <span class="sticker" data-reveal="tilt" data-reveal-delay="1"><em class="accent">athletes.</em></span>
         </h2>
-        <p class="pricing-note" data-reveal="up" data-reveal-delay="2">Every plan includes the full Atlitos experience. Pick the tier that matches your game.</p>
+        <p class="pricing-note" data-reveal="up" data-reveal-delay="2">The app is free. You pay only when you book something, at the price the venue or coach sets.</p>
       </div>
       <div class="pricing-grid">
         <div class="incl-card" data-reveal="up">
-          <h3>What's included in every plan</h3>
+          <h3>What you get, at no charge</h3>
           <ul role="list">
             <li data-reveal="side"><svg class="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Verified court booking</li>
             <li data-reveal="side" data-reveal-delay="1"><svg class="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Coach discovery and session booking</li>
@@ -412,42 +412,37 @@
           </ul>
           <p class="incl-foot mono" aria-hidden="true">NO ADS. NO SPAM. JUST GAME.</p>
         </div>
+        <!-- The Pro (199/mo) and Elite (499/mo) tiers were removed 2026-08-13.
+             They could not be bought: no subscription, plan or tier table exists
+             in the database, and the app has no purchase path for them. They also
+             listed features that do not exist in the product (AI drill plans, AI
+             coach chat, automatic highlight cuts, AI match analysis, video form
+             checks, monthly progress reports), and carried a "MOST PICKED" badge
+             on a plan nobody has ever picked. House rule: if the evidence does
+             not exist, the claim does not go on the page. Restore only when a
+             real, purchasable plan ships. -->
         <div class="plan-col">
           <div class="plan plan-starter" data-reveal="up">
-            <h3>Starter</h3>
-            <p class="price"><span class="mono">&#8377;0</span><span class="per">forever</span></p>
-            <p class="plan-line">Everything an athlete needs to play.</p>
-            <a class="plan-cta cta-ink" href="https://atlitos-app.vercel.app">Start free</a>
+            <h3>Free to use</h3>
+            <p class="price"><span class="mono">&#8377;0</span><span class="per">to join</span></p>
+            <p class="plan-line">Browse courts, coaches, drills and Clutch without an account. Make one when you want to book.</p>
+            <a class="plan-cta cta-ink" href="https://atlitos-app.vercel.app">Open Atlitos</a>
           </div>
           <div class="plan plan-pro" data-reveal="up" data-reveal-delay="1">
-            <p class="plan-flag mono" aria-hidden="true">MOST PICKED</p>
-            <h3>Pro</h3>
-            <p class="price"><span class="mono">&#8377;199</span><span class="per">per month</span></p>
-            <p class="plan-line">For athletes who train every week.</p>
+            <h3>Pay for what you book</h3>
+            <p class="plan-line">No membership, no monthly fee. You pay the venue, the coach or the seller at the price they set, and you see the full breakdown before you confirm.</p>
             <ul class="plan-feats" role="list">
-              <li>AI drill plans that adapt to your XP</li>
-              <li>AI coach chat, ask anything about your game</li>
-              <li>Automatic highlight cuts from your clips</li>
-              <li>Priority alerts when your court opens up</li>
+              <li>Court bookings at the venue's own rate</li>
+              <li>Coaching sessions priced by the coach</li>
+              <li>Training groups billed per month by the coach who runs them</li>
+              <li>Gear from the shop, delivered</li>
             </ul>
-            <a class="plan-cta cta-marigold" href="https://atlitos-app.vercel.app">Go Pro</a>
+            <a class="plan-cta cta-marigold" href="https://atlitos-app.vercel.app">Find a court</a>
           </div>
-          <div class="plan plan-elite" data-reveal="up" data-reveal-delay="2">
-            <h3>Elite</h3>
-            <p class="price"><span class="mono">&#8377;499</span><span class="per">per month</span></p>
-            <p class="plan-line">For athletes chasing the next level.</p>
-            <ul class="plan-feats" role="list">
-              <li>Everything in Pro</li>
-              <li>AI match analysis on your Clutch clips</li>
-              <li>Video form checks with fix suggestions</li>
-              <li>Monthly progress report on your whole game</li>
-            </ul>
-            <a class="plan-cta cta-ember" href="https://atlitos-app.vercel.app">Go Elite</a>
-          </div>
-          <div class="plan-enterprise" data-reveal="up" data-reveal-delay="3">
+          <div class="plan-enterprise" data-reveal="up" data-reveal-delay="2">
             <p class="ent-title">An academy or a club?</p>
             <p class="ent-line">We will set your whole team up, courts, coaches, and rosters.</p>
-            <a class="plan-cta cta-paper" href="mailto:founder@synthsports.co?subject=Atlitos%20for%20our%20academy">Talk to us</a>
+            <a class="plan-cta cta-paper" href="mailto:support@elsheph.com?subject=Atlitos%20for%20our%20academy">Talk to us</a>
           </div>
         </div>
       </div>
