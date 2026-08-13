@@ -215,7 +215,11 @@ export default function LoginScreen() {
               <View style={{ gap: spacing.sm }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.xs }}>
                   <Text style={[textStyle('body'), { color: colors.textSecondary }]}>New to Atlitos.</Text>
-                  <Link href="/(auth)/register" style={[textStyle('body'), { color: colors.accent }]}>
+                  {/* `replace` for the same reason as register's Log in link:
+                      these two screens swap places rather than stacking, so
+                      whatever the user was doing stays directly beneath and
+                      afterAuth()'s router.back() resumes it. */}
+                  <Link href="/(auth)/register" replace style={[textStyle('body'), { color: colors.accent }]}>
                     Create account
                   </Link>
                 </View>

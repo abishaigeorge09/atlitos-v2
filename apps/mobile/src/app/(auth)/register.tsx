@@ -225,7 +225,16 @@ export default function RegisterScreen() {
             <AuthReveal index={2}>
               <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.xs }}>
                 <Text style={[textStyle('body'), { color: colors.textSecondary }]}>Already have an account.</Text>
-                <Link href="/(auth)/login" style={[textStyle('body'), { color: colors.accent }]}>
+                {/* `replace`, not a push. login.tsx's afterAuth() returns the
+                    user with router.back() when there is something beneath,
+                    which is right when a gate pushed login on top of the
+                    screen they were using (PRD-01 FR-4). Pushing login on top
+                    of register made back() land them on the signup form they
+                    were escaping: "Continue as guest" returned to Register
+                    instead of Home. Replacing keeps the origin screen directly
+                    beneath login, so back() resumes it and the gate path is
+                    unaffected. */}
+                <Link href="/(auth)/login" replace style={[textStyle('body'), { color: colors.accent }]}>
                   Log in
                 </Link>
               </View>
