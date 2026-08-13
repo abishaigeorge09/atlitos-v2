@@ -496,6 +496,77 @@ Set the connection string, or pass --offline and accept the recorded gap."
 fi
 
 # --------------------------------------------------------------------------
+# CHECK suspend-enforcement  (SQL)
+#
+# 0096 GENERATES its restrictive suspension policies by looping over whatever
+# permissive authenticated write policies exist at the moment it runs, so the
+# guard set is a function of migration ORDER rather than of the schema. A table
+# whose write policies land after 0096 gets no guard, and the failure mode is an
+# ABSENT policy, which every check that inspects what IS there will pass.
+#
+# That already happened. Measured 2026-08-14: production had 0 unguarded tables
+# and a database built from these files had 1 (blocked_users, INSERT and
+# DELETE), because production applied 0097 BEFORE 0096 while file order is the
+# reverse. 0115 reconciles the past; this check is what stops the next one.
+#
+# Read-only: one SELECT. Uses the same connection as the drift check above.
+# --------------------------------------------------------------------------
+SUSPEND_SQL="with writable as (
+  select tablename,
+         bool_or(cmd in ('INSERT','ALL')) as has_insert,
+         bool_or(cmd in ('UPDATE','ALL')) as has_update,
+         bool_or(cmd in ('DELETE','ALL')) as has_delete
+  from pg_policies
+  where schemaname = 'public' and permissive = 'PERMISSIVE'
+    and 'authenticated' = any (roles::text[])
+    and cmd in ('INSERT','UPDATE','DELETE','ALL')
+  group by tablename
+)
+select w.tablename || ' missing:' ||
+  case when w.has_insert and not exists (select 1 from pg_policies p where p.schemaname='public'
+        and p.tablename=w.tablename and p.policyname=w.tablename||'_active_insert') then ' INSERT' else '' end ||
+  case when w.has_update and not exists (select 1 from pg_policies p where p.schemaname='public'
+        and p.tablename=w.tablename and p.policyname=w.tablename||'_active_update') then ' UPDATE' else '' end ||
+  case when w.has_delete and not exists (select 1 from pg_policies p where p.schemaname='public'
+        and p.tablename=w.tablename and p.policyname=w.tablename||'_active_delete') then ' DELETE' else '' end
+from writable w
+where (w.has_insert and not exists (select 1 from pg_policies p where p.schemaname='public'
+        and p.tablename=w.tablename and p.policyname=w.tablename||'_active_insert'))
+   or (w.has_update and not exists (select 1 from pg_policies p where p.schemaname='public'
+        and p.tablename=w.tablename and p.policyname=w.tablename||'_active_update'))
+   or (w.has_delete and not exists (select 1 from pg_policies p where p.schemaname='public'
+        and p.tablename=w.tablename and p.policyname=w.tablename||'_active_delete'))
+order by 1;"
+
+if [ -n "$DB_URL" ] && command -v psql >/dev/null 2>&1; then
+  if unguarded=$(psql "$DB_URL" -At -c "$SUSPEND_SQL" 2>"$TMP/suspend.err"); then
+    if [ -n "$unguarded" ]; then
+      fail suspend-enforcement "writable table(s) have no is_actor_active() guard" "$unguarded
+
+A suspended user can still write to the table(s) above. 0096 generates these
+guards by scanning the catalog at apply time, so a table added after it is
+silently uncovered. Run supabase/migrations/0115_suspend_enforcement_reconcile.sql,
+or add the guard alongside the new table's write policy."
+    else
+      pass suspend-enforcement "every writable table carries its is_actor_active() companion"
+    fi
+  else
+    fail suspend-enforcement "could not query the live catalog" "$(cat "$TMP/suspend.err")"
+  fi
+elif [ "$OFFLINE" = 1 ]; then
+  echo "NOT RUN  suspend-enforcement"
+  echo "         No ATLITOS_DB_URL/SUPABASE_DB_URL or no psql, and --offline was passed."
+  echo "         This check has no static equivalent: it compares what policies"
+  echo "         EXIST against what should exist, and an absent policy leaves no"
+  echo "         trace in the tree to grep for. Recorded in docs/DEBT.md."
+  echo
+else
+  fail suspend-enforcement "the suspend enforcement check could not run" "No ATLITOS_DB_URL or SUPABASE_DB_URL is set, or psql is not on PATH.
+A check that should apply but cannot run is a failure, not a skip.
+Set the connection string, or pass --offline and accept the recorded gap."
+fi
+
+# --------------------------------------------------------------------------
 echo "--------------------------------------------------------------"
 if [ "$FAILED" -gt 0 ]; then
   echo "security-invariants: $FAILED of $CHECKS_RUN checks FAILED."
