@@ -284,7 +284,14 @@ export default function TrainingsScreen() {
   );
   const hoursTrained = Math.round((heldMinutes / 60) * 10) / 10;
   const paymentsDone = heldSessions.reduce((sum, session) => sum + session.total, 0);
-  const upcomingSessions = mySessions.filter((session) => session.status === 'accepted' && session.date >= today).sort(bySoonest);
+  // `in_progress` counts here too (0077): this is the athlete's own Upcoming
+  // list and feeds `totalUpcomingCount` below, and a session the coach has
+  // already started is a session the athlete is receiving right now, not one
+  // that vanished from their dashboard the moment it began. Mirrors the
+  // group session filter four lines down, which already had this right.
+  const upcomingSessions = mySessions
+    .filter((session) => (session.status === 'accepted' || session.status === 'in_progress') && session.date >= today)
+    .sort(bySoonest);
   const requestedSessions = mySessions.filter((session) => session.status === 'requested').sort(bySoonest);
   const hasAnySession = mySessions.length > 0;
 
@@ -350,13 +357,29 @@ export default function TrainingsScreen() {
               onCtaPress={() => void loadDashboard()}
             />
           ) : stats && requests.length === 0 && upcoming.length === 0 && stats.sessionsThisMonth === 0 ? (
-            <EmptyState
-              icon={Dumbbell}
-              title="No sessions yet"
-              body="Add a session type with a price, then set your availability. Athletes can only book what you have priced."
-              ctaLabel="Add a session type"
-              onCtaPress={() => router.push('/(tabs)/trainings/session-types')}
-            />
+            // This state persists until the coach's first booking lands, which
+            // can be long after session types and availability are both done.
+            // `EmptyState` only takes one CTA (ctaLabel/onCtaPress), so a
+            // single button here stranded a coach who already added a type:
+            // they landed back on the identical screen with the identical
+            // "Add a session type" button and nothing tappable toward
+            // availability. Both persistent links are shown directly so a
+            // coach can reach either regardless of what they have already done.
+            <View style={{ gap: spacing.lg }}>
+              <EmptyState
+                icon={Dumbbell}
+                title="No sessions yet"
+                body="Add a session type with a price, then set your availability. Athletes can only book what you have priced."
+              />
+              <View style={{ flexDirection: 'row', gap: spacing.sm, justifyContent: 'center' }}>
+                <Button variant="secondary" onPress={() => router.push('/(tabs)/trainings/session-types')}>
+                  <Text style={{ color: colors.text }}>Session types</Text>
+                </Button>
+                <Button variant="secondary" onPress={() => router.push('/(tabs)/trainings/availability')}>
+                  <Text style={{ color: colors.text }}>Availability</Text>
+                </Button>
+              </View>
+            </View>
           ) : (
             <View style={{ gap: spacing.lg }}>
               {stats ? (
@@ -380,11 +403,18 @@ export default function TrainingsScreen() {
                   Session Requests. Session types and Availability both keep a
                   persistent entry here; the empty state CTA was the only
                   route into availability before, and session types had no
-                  screen at all, which is what made a coach unbookable. */}
+                  screen at all, which is what made a coach unbookable.
+                  The heading and all three links previously shared one
+                  `flex-row justify-between` with no wrap and no flexShrink on
+                  the heading, which overflows a 390pt device: "Upcoming
+                  sessions" plus three sm text buttons ("Session types",
+                  "Availability", "View all") does not fit one row. Split into
+                  two rows and let the link row wrap instead of truncating or
+                  clipping off screen. */}
               <View style={{ gap: spacing.sm }}>
-                <View className="flex-row items-center justify-between">
+                <View style={{ gap: spacing.xs }}>
                   <Text style={[textStyle('h3'), { color: colors.text }]}>Upcoming sessions</Text>
-                  <View className="flex-row items-center">
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', marginLeft: -spacing.md }}>
                     <Button variant="text" size="sm" onPress={() => router.push('/(tabs)/trainings/session-types')}>
                       <Text style={{ color: colors.accent }}>Session types</Text>
                     </Button>
