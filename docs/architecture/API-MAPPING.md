@@ -205,6 +205,10 @@ Error codes: `VALIDATION` 400, `UNAUTHENTICATED` 401, `NOT_FOUND` 404 (session t
 
 `verify-payment` responds `{ domain, entity_id, booking_id, session_id, status, outcome }`, where `booking_id` and `session_id` are domain-named aliases of `entity_id` (the other is null) so a court-only or session-only caller need not switch on `domain`. `outcome` is `captured` or `already_processed`.
 
+**Correction, 2026-08-14.** The sentence above about the gate owning `update payment_intents ... where status = 'created'` is now wrong in its mechanism and was always wrong in its consequence. The gate calls `claim_payment_intent_for_finalization()` (`0109`), which matches `created` OR a `captured` intent whose `finalized_at` is still null and whose claim has gone stale, so a run that died mid-handler can be re-entered. The old form gave once-only rather than at-most-once and made three documented repair paths unreachable. See `PAYMENTS.md`, "The shared capture gate is re-enterable".
+
+**New error on the session branch: `SESSION_CANCELLED` (409).** `_shared/finalize-session-payment.ts` read the session's status and never looked at it, so a capture landing on an already cancelled or declined session returned `outcome: "captured"` and the athlete was told their booking succeeded. It now raises `SESSION_CANCELLED` with a message stating plainly that the booking was not created and a refund is owed. The client must render that message and must not collapse it to a generic payment failure: the athlete HAS been charged. The intent deliberately stays `captured` with `finalized_at` null so the debt is queryable in `unfinalized_captures`. There is still no code path that pays it back; see `PAYMENTS.md`, "Captured against a dead entity".
+
 ## courts
 
 Identical pattern to sessions, per PLAN.md's "Courts lifecycle = Sessions lifecycle verbatim" rule. State machine: `confirmed` to (`completed` or `cancelled` or `rescheduled` or `no_show`); rating is a column write, not a further status.

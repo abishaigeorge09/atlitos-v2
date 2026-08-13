@@ -102,6 +102,16 @@ export type ApiErrorCode =
   // Track C (AT-50) for the coach payout setup and transfer screens
   | 'ROUTE_UNAVAILABLE'
   | 'PAYMENT_NOT_CAPTURED'
+  // 0109, _shared/finalize-session-payment.ts. The capture landed on a session
+  // that was already cancelled or declined, which the 15 minute unpaid hold
+  // TTL makes an ordinary sequence rather than a rare race: the athlete backs
+  // out, or a UPI collect takes longer than the hold, and the charge arrives
+  // after cancel-session-refund has already run and correctly found nothing to
+  // refund. The athlete HAS been charged and has no session, so this is the
+  // one payment code that must never be rendered as a generic failure and must
+  // never be rendered as success. Show the message verbatim: it says the
+  // booking was not created and a refund is owed, which is the true state.
+  | 'SESSION_CANCELLED'
   // groups (0079_group_rpcs.sql, join-group/renew-group-membership edge
   // functions, _shared/app-error.ts): this file's vocabulary was not
   // extended when that migration landed, backfilled here by the athlete
