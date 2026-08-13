@@ -42,10 +42,22 @@ const EMPTY_DRAFT: FormDraft = {
   active: true,
 };
 
+/**
+ * The group size ceiling, mirroring `training_groups_capacity_max` (0109).
+ * Every member of a group costs one session notification, one device push and
+ * one realtime broadcast event per chat message, so an unbounded capacity is
+ * an unbounded fan-out. The constraint is the real enforcement; this constant
+ * exists so the coach is told before they submit rather than after.
+ */
+const MAX_GROUP_CAPACITY = 100;
+
 function draftIssue(draft: FormDraft): string | null {
   if (!draft.name.trim()) return 'Give this group a name.';
   const capacity = Number(draft.capacity);
   if (!Number.isInteger(capacity) || capacity <= 0) return 'Capacity must be a whole number above zero.';
+  if (capacity > MAX_GROUP_CAPACITY) {
+    return `A group can hold up to ${MAX_GROUP_CAPACITY} members. Split a larger squad into two groups.`;
+  }
   const fee = Number(draft.monthlyFee);
   if (!Number.isFinite(fee) || fee < 0) return 'Monthly fee cannot be negative.';
   return null;
@@ -297,6 +309,10 @@ export default function GroupEditScreen() {
           value={draft.capacity}
           onChangeText={(capacity) => setDraft((prev) => ({ ...prev, capacity }))}
         />
+        <Text style={[textStyle('caption'), { color: colors.textTertiary }]}>
+          Up to {MAX_GROUP_CAPACITY} members per group, so everyone gets their session alerts at
+          once.
+        </Text>
 
         <TextField
           label="Monthly fee in rupees"
