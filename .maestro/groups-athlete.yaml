@@ -8,6 +8,11 @@
 # Writes one chat message ("Test from athlete flow") to the seeded Cric
 # Squad thread; that is additive content, not a state transition, so
 # there is nothing to reset afterward.
+#
+# Coach1's display name is "Ravi Kumar" (confirmed live via read only SQL
+# against syzzfgaudpifwvbpycyi on 2026-08-13, user 5b262cf1-8f95-45df-b453-
+# 0802013f82a1), not "Demo Coach One": launch Phase 1's security lockdown
+# renamed/rotated the seed accounts.
 appId: com.atlitos.app
 ---
 # Fresh app state every run, see groups-coach.yaml for why.
@@ -70,24 +75,46 @@ appId: com.atlitos.app
 # Chat tab: the group thread row (name + member count differentiator).
 # The row is one grouped accessibility element (name + timestamp +
 # preview + member count collapse to a single accessibilityText), so
-# match as a substring regex. Member count is 4 (coach1 plus the 3
-# active players), not the 3 active player rows shown on the group
-# roster.
+# match as a substring regex.
+#
+# CORRECTED 2026-08-13, this was NOT a status-filtering bug. This
+# assertion previously hardcoded "4 members" (coach1 plus 3 active
+# players, true when the flow was authored). A 4th athlete
+# (afc9b95e-72ad-4ccd-89df-3d394795da0e) has since taken an active, paid
+# membership (group_memberships row, status=active, real payment_intent_id,
+# created 2026-07-26), so the group now legitimately has 4 active players.
+# Verified via read only SQL against syzzfgaudpifwvbpycyi that the member
+# count DOES correctly filter on status: chat_thread_members for this
+# thread (95b9e6f6-379a-43c4-8541-f6d0829d64a3) holds exactly 5 rows,
+# coach1 plus the 4 active players, and the group's one pending membership
+# (player 8f1bbcdf, status=pending, no chat_thread_members row) is
+# correctly absent. "5 members" is the correct, current count, not a
+# status-filter defect. Stale fixture, not a product bug.
 - tapOn: "Chat"
 - extendedWaitUntil:
     visible: ".*Cric Squad.*"
     timeout: 10000
-- assertVisible: ".*4 members.*"
+- assertVisible: ".*5 members.*"
 - takeScreenshot: /tmp/groups-verify/athlete-chat-thread-row
 
 # Open the group thread: sender names above bubbles, then send a message.
+# The message input field's own selector must be specific: ".*Message.*"
+# (or the bare unanchored string "Message") also matches the "Send
+# message" button's accessibility label as a substring, so it could tap
+# Send instead of the text field, leaving nothing typed and the assert
+# below failing (confirmed reproduced: input showed the placeholder still
+# empty). The input's actual accessibilityText is "Message input Message"
+# (label plus placeholder concatenated), confirmed via the screen
+# hierarchy JSON, so match on "Message input" specifically. Maestro text
+# selectors are full-match regexes (see every other flow's ".*...*"
+# wrapping), a bare "Message input" with no wildcards does not match.
 - tapOn: ".*Cric Squad.*"
 - extendedWaitUntil:
     visible: "Send message"
     timeout: 10000
-- assertVisible: ".*4 members.*"
+- assertVisible: ".*5 members.*"
 - takeScreenshot: /tmp/groups-verify/athlete-chat-thread-open
-- tapOn: ".*Message.*"
+- tapOn: ".*Message input.*"
 - inputText: "Test from athlete flow"
 - tapOn: "Send message"
 - extendedWaitUntil:
@@ -110,11 +137,11 @@ appId: com.atlitos.app
     timeout: 4000
 - scrollUntilVisible:
     element:
-      text: ".*Demo Coach One.*"
+      text: ".*Ravi Kumar.*"
     direction: DOWN
     timeout: 25000
 - tapOn:
-    text: ".*Demo Coach One.*"
+    text: ".*Ravi Kumar.*"
     index: 0
 - extendedWaitUntil:
     visible: "Session type"

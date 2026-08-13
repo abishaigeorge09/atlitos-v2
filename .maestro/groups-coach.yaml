@@ -18,6 +18,30 @@
 #
 # verified after each run with a SELECT before the flow is considered
 # re-runnable.
+#
+# NOT RE-EXECUTED LIVE during the 2026-08-13 P5 Maestro repair pass. This
+# flow's own reset step is exactly the kind of write the repair task's DB
+# write gate forbids (no INSERT/UPDATE/DELETE against production, no
+# exceptions, after a prior incident where a raw delete cascade wiped
+# training_groups/group_memberships/chat_messages on this same project).
+# Running the flow without the reset would leave the seeded session
+# permanently `completed` with no way back, so it was left unexecuted.
+#
+# Everything the flow asserts was instead verified read only via SQL
+# against syzzfgaudpifwvbpycyi on 2026-08-13, and none of it is stale:
+# Cric Squad (16c2e636-687c-4dad-81e5-46f45d261e14) is still live and
+# still owned by coach1; the seeded group session
+# (967f197c-b4ea-48f8-9596-666f760b6117) is still `accepted`, focus_area
+# "Batting drills and fielding", exactly as asserted; its 3
+# session_participants rows are still unmarked; and the group's
+# attendance_policy text still starts "Be on the ground 10 minutes before
+# the session starts.", matching the flow's regex. This flow does not
+# reference "Demo Coach One" or any other retired fixture name anywhere,
+# so it was very likely never actually a stale-fixture failure; the
+# original classification lumping it in with the other 6 was probably
+# wrong, or it failed for an unrelated transient reason. Disposition:
+# unchanged, needs a live run in an environment where the reset write is
+# permitted (or a staging project) to confirm pass/fail for real.
 appId: com.atlitos.app
 ---
 # Fresh app state every run: a leftover logged-in session from a prior

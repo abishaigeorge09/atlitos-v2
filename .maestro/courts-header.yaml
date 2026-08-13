@@ -1,10 +1,21 @@
 appId: com.atlitos.app
 ---
 # Courts tab (apps/mobile/src/app/(tabs)/courts/index.tsx). Asserts the
-# "Courts" title and one seeded, currently verified court name
-# ("Turf B" on the Gachibowli Box Cricket Turf venue, confirmed live against
-# the syzzfgaudpifwvbpycyi project) so the header-overlap area has a real
-# reference point in the screenshot.
+# "Courts" title and one seeded, currently verified court name ("Turf B",
+# a court row on the Gachibowli Box Cricket Turf venue, confirmed live via
+# read only SQL against the syzzfgaudpifwvbpycyi project on 2026-08-13,
+# court id b0000000-0000-0000-0000-000000000002) so the header-overlap area
+# has a real reference point in the screenshot. Not a stale fixture: this
+# court still exists, it just was not always on screen without scrolling
+# (the list's order shifts depending on how far location resolution has
+# gotten when the screen renders), so this now scrolls for it instead of
+# assuming it is above the fold.
+#
+# BUG-039 (distance readout) reverified fixed on 2026-08-13: the header no
+# longer shows an impossible "13,486.1 km" distance for a guest with no
+# resolved location; it now reads "Showing all verified courts" with no
+# distance claim. See docs/qa/P5-IOS-FINDINGS.md classification section for
+# the before/after screenshots.
 #
 # APP BUG (recorded in the suite report): tapping the "Courts" bottom tab
 # from Home intermittently does nothing (confirmed by repeated manual runs;
@@ -47,8 +58,12 @@ appId: com.atlitos.app
       - waitForAnimationToEnd:
           timeout: 1500
 - assertVisible: "Courts"
-- extendedWaitUntil:
-    visible: "Turf B"
-    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 4000
+- scrollUntilVisible:
+    element:
+      text: "Turf B"
+    direction: DOWN
+    timeout: 15000
 - assertVisible: "Turf B"
 - takeScreenshot: /tmp/maestro-suite/courts-header

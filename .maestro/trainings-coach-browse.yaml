@@ -14,6 +14,11 @@
 #    shell (sub nav hidden).
 # 3. Backing out returns to the Coaches tab with the shell (module title +
 #    sub nav) intact.
+#
+# Coach1's display name is "Ravi Kumar" (confirmed live via read only SQL
+# against syzzfgaudpifwvbpycyi on 2026-08-13, user 5b262cf1-8f95-45df-b453-
+# 0802013f82a1), not "Demo Coach One": launch Phase 1's security lockdown
+# renamed/rotated the seed accounts.
 appId: com.atlitos.app
 ---
 - launchApp
@@ -74,7 +79,7 @@ appId: com.atlitos.app
     timeout: 4000
 - scrollUntilVisible:
     element:
-      text: ".*Demo Coach One.*"
+      text: ".*Ravi Kumar.*"
     direction: DOWN
     timeout: 25000
 - assertVisible: "Trainings"
@@ -85,7 +90,7 @@ appId: com.atlitos.app
 # shell (sub nav hidden, module title gone since AppBar owns the header
 # there instead).
 - tapOn:
-    text: ".*Demo Coach One.*"
+    text: ".*Ravi Kumar.*"
     index: 0
 - extendedWaitUntil:
     visible: "Session type"
