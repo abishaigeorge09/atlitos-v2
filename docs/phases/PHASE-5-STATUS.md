@@ -2,6 +2,8 @@
 
 **Status: APPROVED cycle 1 (2026-07-22).** Biased approver APPROVE, no escalation (verdict at commit 17b40f5, recorded below). Stories AT-89 through AT-107 (Jira epic AT-7, Clutch Video) delivered and checked off below. Phase closed by the phase-close agent 2026-07-22. This doc is the P5 phase memory and the handoff to the P6 (Empower / Atlitos Life) planner.
 
+> Disambiguation, added 2026-08-11. This is `docs/PLAN.md`'s P5 (Clutch). The separate **launch program** (`~/.claude/plans/snappy-foraging-meadow.md`) re-uses the numbers 0 to 7; its Phase 5 is native both-platform QA and lives in `docs/phases/LAUNCH-PHASE-5-STATUS.md`. Launch-program docs are prefixed `LAUNCH-`.
+
 Gate (docs/PLAN.md P5): "Cloudflare pipeline, vertical feed, upload, creator profiles, moderation queue. GATE: founder uploads clip from device to approved to in feed."
 
 Scope ceiling: `docs/prd/PRD-01-athlete.md` section 3.4 and FR-42 through FR-47 (Clutch: feed, upload, creator profile, own profile, like, comment, follow), plus `docs/prd/PRD-04-admin.md` FR-27 through FR-33 (Moderation Queue and Reports Queue) which PRD-01 section 8 delegates to admin. Nothing else. No Learn, no Empower, no Chat scope creeps in because the feed happens to touch profiles or notifications.

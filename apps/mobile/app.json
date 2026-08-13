@@ -17,6 +17,7 @@
     },
     "android": {
       "package": "com.atlitos.app",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#FBF7F1",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

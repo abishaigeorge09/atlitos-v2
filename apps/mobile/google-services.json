@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "294980071121",
+    "project_id": "atlitos-6aa21",
+    "storage_bucket": "atlitos-6aa21.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:294980071121:android:be8f796d41442adbb61ff0",
+        "android_client_info": {
+          "package_name": "com.atlitos.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD0jLNOrtU_jBpEu29r2Y5zWqY0BV1U0m4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
