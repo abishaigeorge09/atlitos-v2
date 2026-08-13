@@ -114,12 +114,18 @@ EXACTLY BECAUSE the description is accurate: nothing looks wrong until the fork 
 completed work, or "restores" something that was never broken.
 
 "I remember receiving that output" cannot distinguish having run a command from having
-inherited its result. Neither side can settle it from the inside; the source session has
-evidence the fork does not (it observed the fork being created), and the fork has a divergence
-marker whose meaning is ambiguous.
+inherited its result.
 
-**Rule: after a fork, verify authorship with the still-running source before acting on
-anything in the inherited transcript. Do not infer it from remembering the tool output.**
+**The transcript cannot settle it. The environment can.** A session's own identity is not
+inheritable: its job directory (`~/.claude/jobs/<id>/tmp`) and the task output paths its
+agents write to (`/private/tmp/claude-501/.../<id>/tasks/`) belong to the running session, not
+to the copied history. Compare that id against the one the source observed `/fork` emit and
+the question is answered from both sides independently, with neither party taking the other's
+word. In the 2026-08-13 case the source was `8ea01d2a` and the fork was `965f7dfa`.
+
+**Rule: check identity, not recall.** A fork cannot distinguish inherited work from its own by
+reading the transcript, because tool results are inherited too. It CAN distinguish it by
+reading its own session identity, which is environment rather than memory.
 
 This is the same failure as every other entry in this section, applied to a session's own
 history rather than to a bug: reasoning off a symptom instead of checking the artifact.
