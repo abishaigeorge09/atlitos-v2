@@ -1,5 +1,26 @@
 # Debt and incident log
 
+## 2026-08-14: a plain `CI=1 pnpm install` left `@atlitos/admin` unbuildable
+## on this machine; `--force` fixed it, cause not fully root-caused
+
+Found running `scripts/dod.sh` for the first time this pass. `CI=1 pnpm install` (no `--force`)
+completed with exit 0 and reported everything up to date, but `node_modules/.pnpm` had no
+`@rolldown+binding-*` package at all despite `@rolldown/binding-darwin-arm64` being pinned in
+`apps/admin/package.json` and present in `pnpm-lock.yaml`. `pnpm turbo build` then failed on
+`@atlitos/admin` with rolldown's own error message pointing at exactly this class of bug: "npm
+has a bug related to optional dependencies." `CI=1 pnpm install --force` pulled 174 more packages,
+including every `@rolldown/binding-*` platform variant, and the build went green.
+
+Not fully root-caused: this pass could not tell whether the cause was a stale local pnpm content
+store on this machine (most likely, since GitHub's runners start from an empty store on every
+job and would resolve fresh) or a real lockfile/resolution bug that would reproduce in CI too.
+**If the `workspace` job in `.github/workflows/dod.yml` ever fails on `@atlitos/admin#build`
+with this exact "Cannot find native binding" error, this is the known cause and `--force` on the
+install step is the known fix**; not applied preemptively to CI because a forced install on every
+CI run defeats the lockfile pinning `--frozen-lockfile` exists for, and this pass produced no
+evidence the plain form fails in a genuinely clean environment. Owner: whoever next sees this
+error in an actual CI run.
+
 ## 2026-08-14: Maestro regression is not wired into CI, and schema drift against
 ## production has not been re-verified with a live query in this pass
 
