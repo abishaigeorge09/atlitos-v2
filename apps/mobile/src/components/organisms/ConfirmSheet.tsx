@@ -43,6 +43,13 @@ export interface ConfirmSheetProps {
   /** Keeps the confirm button in its spinner state while the action runs, so
    * a slow delete cannot be double fired. */
   loading?: boolean;
+  /** B2. Set when a previous confirm attempt failed (a FORBIDDEN from the
+   * RPC, or a network failure). Rendered above the buttons in the danger
+   * token rather than closing the sheet on failure, so the confirm and the
+   * reason it did not go through stay on screen together and the caller can
+   * retry without re-opening the flow. Copy carries no hyphens, no em dashes,
+   * per the house style. */
+  errorMessage?: string | null;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -56,6 +63,7 @@ export function ConfirmSheet({
   cancelLabel = 'Cancel',
   destructive = false,
   loading = false,
+  errorMessage,
   onConfirm,
   onCancel,
 }: ConfirmSheetProps) {
@@ -106,6 +114,12 @@ export function ConfirmSheet({
                 {body}
               </Text>
             </View>
+
+            {errorMessage ? (
+              <Text style={[textStyle('caption'), { color: colors.danger, textAlign: 'center' }]}>
+                {errorMessage}
+              </Text>
+            ) : null}
 
             <View style={{ gap: spacing.sm }}>
               <Button variant={destructive ? 'destructive' : 'primary'} loading={loading} onPress={onConfirm}>
