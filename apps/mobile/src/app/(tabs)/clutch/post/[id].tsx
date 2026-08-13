@@ -7,34 +7,33 @@ import {
   Bookmark,
   BookmarkCheck,
   ChevronLeft,
+  EllipsisVertical,
   Flag,
   Heart,
   MessageCircle,
-  Send,
   Share2,
+  Trash2,
   TriangleAlert,
   Volume2,
   VolumeX,
-  X,
 } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
   Image,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
   Pressable,
   Share,
   StyleSheet,
-  TextInput,
   View,
   type ViewToken,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ClipVideo } from '@/components/molecules/clip-video';
+import { ClipActionsSheet } from '@/components/organisms/clutch/ClipActionsSheet';
+import { ClutchCommentsSheet } from '@/components/organisms/clutch/ClutchCommentsSheet';
+import { ConfirmSheet } from '@/components/organisms/ConfirmSheet';
 import { LoginGateModal } from '@/components/organisms/LoginGateModal';
 import { ModerationSheet, type ModerationTarget } from '@/components/organisms/moderation/ModerationSheet';
 import { Avatar } from '@/components/ui/avatar';
@@ -78,6 +77,15 @@ function timeAgo(iso: string): string {
  * for the next, refreshed just before its 300s TTL, and dropped offscreen. Like,
  * save and comment state are keyed per card in the `clips` list, never a single
  * clip. The Instagram Reels overlay (FB-004) is preserved as the per-item chrome.
+ *
+ * B1. Owner controls. A creator who opens their OWN clip here (from their own
+ * grid, from search, from the feed, or from a notification deep link) gets the
+ * same `ClipActionsSheet` (comments toggle, delete) that `clutch/profile.tsx`'s
+ * own grid offers (C1/C2), reached from the same rail slot the report/block
+ * flag uses for everyone else's clips, since a caller can never report their
+ * own. Deleting the clip currently on screen removes it from this pager's
+ * `clips` list; if that was the only clip left, the viewer goes back rather
+ * than being stranded on an empty pager.
  */
 export default function ClutchPostViewerScreen() {
   const colors = useThemeColors();
@@ -109,6 +117,22 @@ export default function ClutchPostViewerScreen() {
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [moderationTarget, setModerationTarget] = useState<ModerationTarget | null>(null);
+
+  // C3. The comment the viewer has asked to delete, held until they confirm.
+  // Own comments only; the sheet only offers the affordance on rows the
+  // viewer wrote, and the delete is own-row scoped again in the API and once
+  // more in the clip_comments_delete_own policy.
+  const [pendingCommentDelete, setPendingCommentDelete] = useState<Comment | null>(null);
+  const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
+
+  // B1. Owner clip controls: which clip the ellipsis menu targets, and the
+  // pending-delete confirm for that same clip.
+  const [ownerMenuClip, setOwnerMenuClip] = useState<Clip | null>(null);
+  const [pendingDeleteClip, setPendingDeleteClip] = useState<Clip | null>(null);
+  const [ownerBusy, setOwnerBusy] = useState(false);
+  // B2. Inline failure surface for the two owner actions: a FORBIDDEN or a
+  // network failure used to be silently swallowed with no on screen message.
+  const [ownerActionError, setOwnerActionError] = useState<string | null>(null);
 
   const activeIdRef = useRef<string | null>(null);
   const refreshTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -302,7 +326,8 @@ export default function ClutchPostViewerScreen() {
   // CT-C: report/block the clip's own owner, offered from the rail. Never
   // shown for the caller's own clip (requireAuth is not enough here: the
   // action targets an AUTHOR, so an own-clip tap is simply a no-op rather
-  // than opening a sheet with no useful action in it).
+  // than opening a sheet with no useful action in it). The rail shows the
+  // owner's ClipActionsSheet in this same slot instead, see openOwnerMenu.
   function openClipModeration(clip: Clip) {
     if (!myId || clip.ownerId === myId) return;
     requireAuth(() => {
@@ -317,6 +342,59 @@ export default function ClutchPostViewerScreen() {
     requireAuth(() => {
       setModerationTarget({ type: 'comment', entityId: comment.id, userId: comment.userId, userName: comment.username });
     }, () => setGateVisible(true));
+  }
+
+  // B1. Owner clip options: comments toggle + delete, same ClipActionsSheet
+  // clutch/profile.tsx's own grid uses (C1/C2).
+  function openOwnerMenu(clip: Clip) {
+    setOwnerActionError(null);
+    setOwnerMenuClip(clip);
+  }
+
+  async function handleToggleComments() {
+    if (!ownerMenuClip) return;
+    const target = ownerMenuClip;
+    const next = target.commentsEnabled === false;
+    setOwnerBusy(true);
+    setOwnerActionError(null);
+    try {
+      const enabled = await clutch.setCommentsEnabled(target.id, next);
+      setClips((prev) => prev.map((c) => (c.id === target.id ? { ...c, commentsEnabled: enabled } : c)));
+      setOwnerMenuClip((c) => (c && c.id === target.id ? { ...c, commentsEnabled: enabled } : c));
+      setCommentsClip((c) => (c && c.id === target.id ? { ...c, commentsEnabled: enabled } : c));
+      setOwnerMenuClip(null);
+    } catch (err) {
+      setOwnerActionError((err as ApiError).message || 'Could not update comments for this clip. Try again.');
+    } finally {
+      setOwnerBusy(false);
+    }
+  }
+
+  async function handleConfirmDeleteClip() {
+    if (!pendingDeleteClip) return;
+    const target = pendingDeleteClip;
+    setOwnerBusy(true);
+    setOwnerActionError(null);
+    try {
+      await clutch.deleteMyClip(target.id);
+      setPendingDeleteClip(null);
+      setClips((prev) => {
+        const next = prev.filter((c) => c.id !== target.id);
+        // A pager left with nothing to swipe to cannot stay on screen; go
+        // back rather than render an empty viewer.
+        if (next.length === 0) router.back();
+        return next;
+      });
+      if (commentsClip?.id === target.id) setCommentsClip(null);
+      if (activeIdRef.current === target.id) {
+        activeIdRef.current = null;
+        setActiveId(null);
+      }
+    } catch (err) {
+      setOwnerActionError((err as ApiError).message || 'Could not delete this clip. Try again.');
+    } finally {
+      setOwnerBusy(false);
+    }
   }
 
   async function openComments(clip: Clip) {
@@ -362,6 +440,34 @@ export default function ClutchPostViewerScreen() {
       // Keep the draft so the athlete can retry without retyping.
     } finally {
       setSending(false);
+    }
+  }
+
+  /** C3. Deletes the viewer's OWN comment. The optimistic drop and the header
+   * decrement are applied together, because the `clip_comments_count_delete`
+   * trigger decrements `clips.comment_count` server side in the same
+   * transaction; leaving the header alone would show a count one higher than
+   * the server's until the next load. On failure both are rolled back by
+   * reloading the thread. */
+  async function handleConfirmCommentDelete() {
+    const target = pendingCommentDelete;
+    if (!target) return;
+    setDeletingCommentId(target.id);
+    try {
+      await clutch.deleteComment(target.id);
+      setComments((prev) => prev.filter((c) => c.id !== target.id));
+      setClips((prev) =>
+        prev.map((c) => (c.id === target.clipId ? { ...c, commentCount: Math.max(0, c.commentCount - 1) } : c)),
+      );
+      setCommentsClip((c) =>
+        c && c.id === target.clipId ? { ...c, commentCount: Math.max(0, c.commentCount - 1) } : c,
+      );
+      setPendingCommentDelete(null);
+    } catch {
+      // Leave the comment in place and let the next load reconcile.
+      setPendingCommentDelete(null);
+    } finally {
+      setDeletingCommentId(null);
     }
   }
 
@@ -462,146 +568,87 @@ export default function ClutchPostViewerScreen() {
                 onShare={() => void handleShare(item)}
                 onSave={() => handleSave(item)}
                 onReport={item.ownerId === myId ? undefined : () => openClipModeration(item)}
+                onOwnerMenu={item.ownerId === myId ? () => openOwnerMenu(item) : undefined}
               />
             </View>
           )}
         />
       ) : null}
 
-      {/* Comments sheet for the tapped clip. Single modal at the screen level so
-          the thread never pushes a video up; the composer gates a guest (FR-3). */}
-      <Modal
+      {/* Comments sheet for the tapped clip. Extracted to ClutchCommentsSheet,
+          which owns the Portal + pixel cap + flexShrink layout that makes it
+          open correctly at any thread length; see that file's docblock for
+          the defects it fixes and the header/list count reconciliation. */}
+      <ClutchCommentsSheet
         visible={commentsClip !== null}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setCommentsClip(null)}
-      >
-        <Pressable style={{ flex: 1, backgroundColor: colors.overlay }} onPress={() => setCommentsClip(null)} />
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View
-            style={{
-              backgroundColor: colors.bg,
-              borderTopLeftRadius: radii['2xl'],
-              borderTopRightRadius: radii['2xl'],
-              maxHeight: '75%',
-            }}
-          >
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                paddingHorizontal: spacing.lg,
-                paddingVertical: spacing.md,
-                borderBottomWidth: 1,
-                borderBottomColor: colors.border,
-              }}
-            >
-              <Text style={[textStyle('h3'), { color: colors.text }]}>
-                {commentsClip?.commentCount === 1 ? '1 comment' : `${commentsClip?.commentCount ?? 0} comments`}
-              </Text>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Close"
-                hitSlop={8}
-                onPress={() => setCommentsClip(null)}
-                style={{ height: 44, width: 44, alignItems: 'center', justifyContent: 'center' }}
-              >
-                <X size={24} color={colors.textSecondary} strokeWidth={1.75} />
-              </Pressable>
-            </View>
+        comments={comments}
+        // Once the thread has fully loaded (no more pages), the list IS the
+        // exact set the viewer can see, blocked authors already subtracted
+        // by getComments; showing its length instead of the raw server total
+        // is what keeps the header from disagreeing with the rows under it.
+        // See ClutchCommentsSheet's docblock.
+        commentCount={commentCursor === null ? comments.length : (commentsClip?.commentCount ?? 0)}
+        currentUserId={myId}
+        commentsEnabled={commentsClip?.commentsEnabled !== false}
+        requiresAuthGate={requiresAuthGate}
+        draft={draft}
+        sending={sending}
+        deletingId={deletingCommentId}
+        onDraftChange={setDraft}
+        onSend={() => void handleSend()}
+        onDeleteComment={setPendingCommentDelete}
+        onReportComment={openCommentModeration}
+        onEndReached={() => void loadMoreComments()}
+        onRequestSignIn={() => setGateVisible(true)}
+        onClose={() => setCommentsClip(null)}
+      />
 
-            <FlatList
-              data={comments}
-              keyExtractor={(item) => item.id}
-              onEndReachedThreshold={0.5}
-              onEndReached={() => void loadMoreComments()}
-              contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }}
-              ListEmptyComponent={
-                <View style={{ paddingVertical: spacing.xl, alignItems: 'center' }}>
-                  <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
-                    No comments yet. Start the conversation.
-                  </Text>
-                </View>
-              }
-              renderItem={({ item }) => (
-                <Pressable
-                  onLongPress={item.userId === myId ? undefined : () => openCommentModeration(item)}
-                  accessibilityRole={item.userId === myId ? undefined : 'button'}
-                  accessibilityLabel={item.userId === myId ? undefined : `Report or block ${item.username}`}
-                  style={{ gap: spacing.xs }}
-                >
-                  <View className="flex-row items-center gap-sm">
-                    <Text style={[textStyle('label'), { color: colors.text }]}>{item.username}</Text>
-                    <Text className="font-mono text-xs" style={{ color: colors.textSecondary }}>
-                      {timeAgo(item.createdAt)}
-                    </Text>
-                  </View>
-                  <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>{item.text}</Text>
-                </Pressable>
-              )}
-            />
+      <ConfirmSheet
+        visible={pendingCommentDelete != null}
+        icon={Trash2}
+        destructive
+        loading={deletingCommentId != null}
+        title="Delete this comment"
+        body="It will be removed for everyone. This cannot be undone."
+        confirmLabel="Delete comment"
+        onConfirm={() => void handleConfirmCommentDelete()}
+        onCancel={() => setPendingCommentDelete(null)}
+      />
 
-            {requiresAuthGate ? (
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => setGateVisible(true)}
-                style={{ padding: spacing.lg, borderTopWidth: 1, borderTopColor: colors.border }}
-              >
-                <Text style={[textStyle('callout'), { color: colors.accent, textAlign: 'center' }]}>
-                  Sign in to join the conversation
-                </Text>
-              </Pressable>
-            ) : (
-              <View
-                style={{
-                  flexDirection: 'row',
-                  gap: spacing.sm,
-                  padding: spacing.lg,
-                  borderTopWidth: 1,
-                  borderTopColor: colors.border,
-                }}
-              >
-                <TextInput
-                  value={draft}
-                  onChangeText={setDraft}
-                  placeholder="Add a comment"
-                  placeholderTextColor={colors.textTertiary}
-                  editable={!sending}
-                  style={[
-                    textStyle('body'),
-                    {
-                      flex: 1,
-                      color: colors.text,
-                      backgroundColor: colors.surfaceMuted,
-                      borderRadius: radii.sm,
-                      paddingHorizontal: spacing.md,
-                      height: 44,
-                    },
-                  ]}
-                />
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Send comment"
-                  disabled={sending || !draft.trim()}
-                  onPress={() => void handleSend()}
-                  style={{
-                    height: 44,
-                    width: 44,
-                    borderRadius: radii.sm,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: colors.accent,
-                    opacity: sending || !draft.trim() ? 0.5 : 1,
-                  }}
-                >
-                  <Send size={20} color={colors.inkOnAccent} strokeWidth={1.75} />
-                </Pressable>
-              </View>
-            )}
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      {/* B1. Owner controls, reachable from this screen directly, not only
+          from the own grid (clutch/profile.tsx). */}
+      <ClipActionsSheet
+        visible={ownerMenuClip != null}
+        commentsEnabled={ownerMenuClip?.commentsEnabled !== false}
+        busy={ownerBusy}
+        errorMessage={ownerActionError}
+        onToggleComments={() => void handleToggleComments()}
+        onDelete={() => {
+          setOwnerActionError(null);
+          setPendingDeleteClip(ownerMenuClip);
+          setOwnerMenuClip(null);
+        }}
+        onClose={() => {
+          setOwnerActionError(null);
+          setOwnerMenuClip(null);
+        }}
+      />
+
+      <ConfirmSheet
+        visible={pendingDeleteClip != null}
+        icon={Trash2}
+        destructive
+        loading={ownerBusy}
+        title="Delete this clip"
+        body="It comes off your profile and out of the feed. This cannot be undone."
+        confirmLabel="Delete clip"
+        errorMessage={ownerActionError}
+        onConfirm={() => void handleConfirmDeleteClip()}
+        onCancel={() => {
+          setOwnerActionError(null);
+          setPendingDeleteClip(null);
+        }}
+      />
 
       <LoginGateModal
         visible={gateVisible}
@@ -643,14 +690,20 @@ interface ClipPageProps {
   onComment: () => void;
   onShare: () => void;
   onSave: () => void;
-  /** CT-C: report/block the clip's owner. Omitted for the caller's own clip. */
+  /** CT-C: report/block the clip's owner. Omitted for the caller's own clip;
+   * `onOwnerMenu` takes this rail slot instead for that case. */
   onReport?: () => void;
+  /** B1. Opens ClipActionsSheet (comments toggle, delete) for this clip.
+   * Present only when the caller owns the clip, mutually exclusive with
+   * `onReport`. */
+  onOwnerMenu?: () => void;
 }
 
 /**
  * One full-bleed page of the viewer: the 9:16 video behind the Instagram Reels
  * chrome (FB-004) preserved from the single-clip viewer. Header (back, avatar,
- * sport line), right rail (like, comment, share, save), caption, and mute.
+ * sport line), right rail (like, comment, share, save, report/block or owner
+ * options), caption, and mute.
  */
 function ClipPage({
   clip,
@@ -667,6 +720,7 @@ function ClipPage({
   onShare,
   onSave,
   onReport,
+  onOwnerMenu,
 }: ClipPageProps) {
   const colors = useThemeColors();
 
@@ -735,7 +789,8 @@ function ClipPage({
         </Pressable>
       </SafeAreaView>
 
-      {/* Right action rail: like, comment, share, save. */}
+      {/* Right action rail: like, comment, share, save, report/block or
+          owner options. */}
       <SafeAreaView style={{ position: 'absolute', bottom: 0, right: 0 }} edges={['bottom']} pointerEvents="box-none">
         <View style={{ alignItems: 'center', gap: spacing.lg, paddingHorizontal: spacing.md, paddingBottom: spacing.lg }}>
           <Pressable
@@ -793,6 +848,15 @@ function ClipPage({
               className="min-h-11 min-w-11 items-center justify-center gap-xs"
             >
               <Flag size={26} strokeWidth={1.75} color={colors.textInverse} />
+            </Pressable>
+          ) : onOwnerMenu ? (
+            <Pressable
+              onPress={onOwnerMenu}
+              accessibilityRole="button"
+              accessibilityLabel="Clip options"
+              className="min-h-11 min-w-11 items-center justify-center gap-xs"
+            >
+              <EllipsisVertical size={26} strokeWidth={1.75} color={colors.textInverse} />
             </Pressable>
           ) : null}
         </View>
