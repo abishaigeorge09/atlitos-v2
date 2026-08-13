@@ -140,34 +140,16 @@ grant execute on function public.upa_fund_balances(uuid[]) to authenticated;
 -- 3. notifications: an index that covers the sort.
 -- ============================================================================
 --
--- use-notifications.ts list() reads `user_id = me order by created_at desc`.
--- pg_indexes shows exactly two indexes on the table, notifications_pkey and
--- idx_notifications_user_id_read_at (user_id, read_at). The second serves the
--- filter and the unread badge correctly, but it does not cover created_at, so
--- the ordering is always a separate Sort node over the whole of that user's
--- history. Proven rather than assumed: with enable_seqscan = off the plan is
--- Index Scan using idx_notifications_user_id_read_at, and the Sort node is
--- still above it (SCALE-DATABASE.md P1-5).
---
--- With the .limit(50) that now exists client side, this turns the read into a
--- bounded index walk with no sort at all. Without the limit the index alone
--- buys little, which is why the two halves shipped together.
---
--- CONCURRENTLY, so it cannot take a write lock on a table that takes an insert
--- on every notification-producing event. That means this statement cannot run
--- inside a transaction block; if the migration runner wraps statements, split
--- this into its own file before applying.
---
--- Keep idx_notifications_user_id_read_at. It is the covering index for the
--- unread badge count (user_id + read_at is null) and that half is already
--- correct.
-
-create index concurrently if not exists idx_notifications_user_created
-  on public.notifications (user_id, created_at desc);
-
-comment on index public.idx_notifications_user_created is
-  'Serves use-notifications.ts list(): user_id = me order by created_at desc. '
-  'Removes the Sort node the (user_id, read_at) index leaves behind.';
+-- Moved to 0114_notifications_covering_index.sql, 2026-08-14. This section's
+-- own comment predicted the exact failure: "if the migration runner wraps
+-- statements, split this into its own file before applying." Confirmed on
+-- the first real `supabase start` this repo has ever run:
+--   ERROR: CREATE INDEX CONCURRENTLY cannot be executed within a pipeline
+--   (SQLSTATE 25001)
+-- supabase's migration runner sends every statement in a file through one
+-- pipelined batch, which CONCURRENTLY refuses regardless of an explicit
+-- transaction block. See 0114 for the index itself and the same reasoning,
+-- carried over unchanged.
 
 -- ============================================================================
 -- DELIBERATELY NOT IN THIS FILE
