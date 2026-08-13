@@ -6,7 +6,8 @@ This file is read by every agent working in this repo. It is not optional contex
 
 Before touching anything, read in this order:
 
-1. `docs/PLAN.md` — the approved build plan. This is the contract. Do not deviate from it without a founder decision recorded in a phase status doc.
+1. `docs/qa/CURRENT-STATE.md` — what is already proven, what has been DISPROVEN, and what is open. Read this first and read it fully. It exists because five separate agents independently investigated the same bug and four reached wrong conclusions, each starting cold. Its DISPROVEN section is the most valuable part: it is the list of dead ends that have already been walked, so you do not walk them again. It also carries the environment traps that have each cost hours here, and the rule that has been earned eight times over: an environmental failure looks exactly like a product bug, so open the screenshot before you file anything.
+2. `docs/PLAN.md` — the approved build plan. This is the contract. Do not deviate from it without a founder decision recorded in a phase status doc.
 2. The relevant PRD(s) in `docs/prd/` for whatever surface you are touching (PRD-01 athlete, PRD-02 coach, PRD-03 court partner, PRD-04 admin, PRD-05 UPA life, PRD-06 sponsor, PRD-07 shopper). The PRD is the ceiling on scope, not a suggestion. If a feature is not traceable to a `PRD-0X FR-y`, it does not belong in this phase.
 3. The current `docs/phases/PHASE-N-STATUS.md` for whatever phase is active. It tells you what is already done, what is in flight, and what handoff notes the previous phase left.
 4. `docs/design/TASTE.md` and `docs/design/DESIGN-LANGUAGE.md` for anything touching UI.
