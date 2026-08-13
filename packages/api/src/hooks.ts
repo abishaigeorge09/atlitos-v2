@@ -1098,6 +1098,22 @@ const PLAYBACK_BATCH_CONCURRENCY = 4;
 const CLIP_FEED_SELECT =
   "id, owner_id, caption, sport, status, likes_count, comment_count, created_at, thumb_path, failure_reason, users:public_profiles!owner_id ( name, channel_name, avatar_url )";
 
+// The OWNER surfaces (own grid, post detail) additionally need `comments_enabled`
+// (0101) and `deleted_at` (0100), and they use a `*` projection ON PURPOSE.
+//
+// PostgREST fails the WHOLE select when a NAMED column does not exist, and the
+// two migrations that add these columns are written but NOT applied (the DB
+// write gate). Naming them explicitly would mean this build 400s on every clip
+// read until someone applies the migrations, the same failure shape as the
+// `thumb_url` column that did not exist (see the note above). A `*` projection
+// returns whatever the table actually has: the fields are simply absent before
+// the migration and present after, and `mapClipRow` defaults `comments_enabled`
+// to open, so the code is correct on both sides of the deploy. The feed keeps
+// its narrow explicit select above, unchanged, because it never needs either
+// column and the narrow select is cheaper at feed scale.
+const CLIP_OWNER_SELECT =
+  "*, users:public_profiles!owner_id ( name, channel_name, avatar_url )";
+
 const CLIP_COMMENT_SELECT =
   "id, clip_id, user_id, text, created_at, users:public_profiles!user_id ( name, channel_name )";
 
@@ -1118,6 +1134,11 @@ interface ClipFeedRow {
   created_at: string;
   thumb_path: string | null;
   failure_reason: string | null;
+  // Present only on the owner surfaces (CLIP_OWNER_SELECT), and only once
+  // 0100/0101 are applied. See CLIP_OWNER_SELECT's docblock for why these are
+  // optional rather than required.
+  comments_enabled?: boolean | null;
+  deleted_at?: string | null;
   users: ClipUserJoin | null;
 }
 
@@ -1184,6 +1205,12 @@ function mapClipRow(row: ClipFeedRow, likedByMe: boolean, savedByMe = false): Cl
     createdAt: row.created_at,
     likedByMe,
     savedByMe,
+    // A null here means the column came back null, not that the switch is
+    // off. Default to open so a row written before 0101 never reads as
+    // closed. Absent entirely (narrow CLIP_FEED_SELECT, or 0101 unapplied)
+    // resolves the same way through the same `??`.
+    commentsEnabled: row.comments_enabled ?? true,
+    deletedAt: row.deleted_at ?? null,
   };
 }
 
@@ -1406,11 +1433,14 @@ function makeClutchApi(client: AtlitosClient) {
 
     /** v1 `clutch.get`. A single clip for the post detail screen. RLS lets a
      * guest/other athlete read it only when `published`; the owner can read
-     * their own in any status (own-profile deep link into a pending clip). */
+     * their own in any status (own-profile deep link into a pending clip).
+     * Uses CLIP_OWNER_SELECT because the detail screen needs
+     * `comments_enabled` to decide whether to show the composer, and the
+     * owner's own menu needs both it and `deleted_at`. */
     async getClip(clipId: string): Promise<Clip | null> {
       const { data, error } = await db
         .from("clips")
-        .select(CLIP_FEED_SELECT)
+        .select(CLIP_OWNER_SELECT)
         .eq("id", clipId)
         .maybeSingle<ClipFeedRow>();
       if (error) throw mapPostgrestError(error);
@@ -1463,6 +1493,64 @@ function makeClutchApi(client: AtlitosClient) {
       if (error) throw mapPostgrestError(error);
 
       return mapCommentRow(data);
+    },
+
+    /** Delete one of the caller's OWN comments. The policy this rides on,
+     * `clip_comments_delete_own` (0042_clutch_rls.sql:131), has existed since
+     * the clutch RLS migration shipped and had no API method and no UI, so a
+     * user who posted something they regretted had no way to take it back.
+     *
+     * Own-row scoping is EXPLICIT here (`.eq("user_id", ...)`) and not left to
+     * the policy, per CLAUDE.md's "RLS is not scoping" rule: clip_comments
+     * carries a public read policy for published clips alongside the own-row
+     * delete policy, and a delete written without the filter would depend
+     * entirely on RLS being right. With the filter, a delete aimed at
+     * someone else's comment id matches zero rows instead of relying on a
+     * policy to refuse it.
+     *
+     * The `clip_comments_count_delete` trigger (0041) decrements
+     * `clips.comment_count` in the same transaction, so the header count and
+     * the thread stay in step without a client-side adjustment. */
+    async deleteComment(commentId: string): Promise<void> {
+      const { data: authData, error: authError } = await client.auth.getUser();
+      if (authError) throw mapAuthError(authError);
+      if (!authData.user) throw mapAuthError({ message: "Sign in to manage comments.", status: 401 });
+
+      const { error } = await db
+        .from("clip_comments")
+        .delete()
+        .eq("id", commentId)
+        .eq("user_id", authData.user.id);
+      if (error) throw mapPostgrestError(error);
+    },
+
+    /** Owner soft delete of their own clip -> `delete_my_clip` RPC (0100).
+     * Moves the clip to `removed` and stamps `deleted_at`, so the likes, the
+     * comment thread, any report against it and the audit trail all survive.
+     * The client never writes `clips.status`; 0042 grants it no UPDATE at all.
+     * `FORBIDDEN` if the caller is not the owner. UNAPPLIED: 0100 has not been
+     * run against production, so this call 404/undefined-function's until it
+     * is; the UI surfaces that failure inline (B2) rather than silently. */
+    async deleteMyClip(clipId: string): Promise<void> {
+      const { error } = await db.rpc("delete_my_clip", { p_clip_id: clipId });
+      if (error) throw mapPostgrestError(error);
+    },
+
+    /** Owner toggle for a clip's comment thread -> `set_clip_comments_enabled`
+     * RPC (0101). Closing a thread refuses NEW comments (enforced in the
+     * `clip_comments_insert_own` policy, not only in the UI) and leaves every
+     * existing comment readable. `FORBIDDEN` if the caller is not the owner.
+     * UNAPPLIED: same caveat as deleteMyClip above. */
+    async setCommentsEnabled(clipId: string, enabled: boolean): Promise<boolean> {
+      const { data, error } = await db.rpc("set_clip_comments_enabled", {
+        p_clip_id: clipId,
+        p_enabled: enabled,
+      });
+      if (error) throw mapPostgrestError(error);
+      const row = ((Array.isArray(data) ? data[0] : data) ?? null) as
+        | { comments_enabled?: boolean }
+        | null;
+      return row?.comments_enabled ?? enabled;
     },
 
     /** v1 `clutch.like` -> `toggle_clip_like` RPC. Atomic toggle that also
@@ -1677,7 +1765,20 @@ function makeClutchApi(client: AtlitosClient) {
     /** The signed-in athlete's own clips for their own Clutch profile, in
      * ANY status (an `uploading`/`processing`/`rejected` clip must show on
      * the owner's own grid per PRD-01 FR-44), so this deliberately does NOT
-     * filter by status. RLS scopes the read to the caller's own rows. */
+     * filter by status. RLS scopes the read to the caller's own rows.
+     *
+     * It DOES drop `deleted_at` rows (0100): a clip the creator deleted
+     * themselves leaves their grid, while a MODERATOR takedown (also status
+     * `removed`, but with `deleted_at` null) stays visible with its status
+     * pill, which is how the creator learns the clip was taken down.
+     * Filtering on status alone would collapse those two very different
+     * cases.
+     *
+     * The drop is applied AFTER the read rather than as `.is("deleted_at",
+     * null)` for the same reason CLIP_OWNER_SELECT exists: a filter on a
+     * column that does not exist yet 400s the whole query. This is not a
+     * security boundary being moved client side, it is an own-scoped read of
+     * the caller's own rows hiding rows the caller themselves deleted. */
     async getMyClips(): Promise<Clip[]> {
       const { data: authData, error: authError } = await client.auth.getUser();
       if (authError) throw mapAuthError(authError);
@@ -1685,12 +1786,12 @@ function makeClutchApi(client: AtlitosClient) {
 
       const { data, error } = await db
         .from("clips")
-        .select(CLIP_FEED_SELECT)
+        .select(CLIP_OWNER_SELECT)
         .eq("owner_id", authData.user.id)
         .order("created_at", { ascending: false })
         .returns<ClipFeedRow[]>();
       if (error) throw mapPostgrestError(error);
-      return (data ?? []).map((r) => mapClipRow(r, false));
+      return (data ?? []).filter((r) => r.deleted_at == null).map((r) => mapClipRow(r, false));
     },
 
     /** v1 `clutch.upload` step 1 -> `stream-upload-url` edge function. Mints

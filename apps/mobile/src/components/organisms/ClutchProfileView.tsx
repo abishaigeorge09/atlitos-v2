@@ -1,8 +1,8 @@
 import type { CreatorProfile } from '@atlitos/api';
-import { spacing } from '@atlitos/theme';
+import { radii, spacing } from '@atlitos/theme';
 import type { Clip, ClipStatus } from '@atlitos/types';
-import { Film, TriangleAlert, UserPlus, Users } from 'lucide-react-native';
-import { ActivityIndicator, FlatList, View } from 'react-native';
+import { EllipsisVertical, Film, TriangleAlert, UserPlus, Users } from 'lucide-react-native';
+import { ActivityIndicator, FlatList, Pressable, View } from 'react-native';
 
 import { ClutchPostCard } from '@/components/molecules/ClutchPostCard';
 import { Button } from '@/components/ui/button';
@@ -35,6 +35,10 @@ export interface ClutchProfileViewProps {
   onToggleFollow?: () => void;
   onOpenClip: (clipId: string) => void;
   onUpload?: () => void;
+  /** Own profile only. Opens the per clip owner menu (delete the clip, turn
+   * its comments off). Before this the own grid had no per clip affordance at
+   * all, so the founder decision of 2026-08-13 had nowhere to surface. */
+  onOpenClipMenu?: (clip: Clip) => void;
 }
 
 function StatItem({ value, label }: { value: number; label: string }) {
@@ -64,6 +68,7 @@ export function ClutchProfileView({
   onToggleFollow,
   onOpenClip,
   onUpload,
+  onOpenClipMenu,
 }: ClutchProfileViewProps) {
   const colors = useThemeColors();
 
@@ -159,6 +164,51 @@ export function ClutchProfileView({
               <View className="absolute left-xs top-xs" style={{ pointerEvents: 'none' }}>
                 <StatusPill status={pill} />
               </View>
+            ) : null}
+            {isOwn && onOpenClipMenu ? (
+              // Overlaid on the tile rather than added as a row below it, so
+              // the three column grid keeps its geometry. The 44 point target
+              // sits inside the tile's top right corner.
+              //
+              // B5 FIX. `colors.textInverse` is #14100B (near black) in dark
+              // mode, painted directly on an arbitrary video thumbnail with no
+              // scrim it read as a near invisible glyph on a dark photo. The
+              // fix used elsewhere in the app for exactly this shape (an icon
+              // over arbitrary media, both themes): a small `colors.overlay`
+              // pill BEHIND the icon, same as the wishlist remove heart
+              // (WishlistGrid.tsx) and the cover photo "Change" chip
+              // (app/profile/edit.tsx). The 44pt Pressable stays the touch
+              // target; the pill is a smaller, non-interactive visual chip
+              // centered inside it.
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Clip options"
+                hitSlop={4}
+                onPress={() => onOpenClipMenu(item)}
+                style={{
+                  position: 'absolute',
+                  right: 0,
+                  top: 0,
+                  height: 44,
+                  width: 44,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <View
+                  style={{
+                    pointerEvents: 'none',
+                    height: 28,
+                    width: 28,
+                    borderRadius: radii.pill,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: colors.overlay,
+                  }}
+                >
+                  <EllipsisVertical size={18} strokeWidth={2} color={colors.textInverse} />
+                </View>
+              </Pressable>
             ) : null}
           </View>
         );
