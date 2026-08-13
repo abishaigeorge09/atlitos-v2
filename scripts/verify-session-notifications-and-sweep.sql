@@ -194,23 +194,54 @@ values ('bbbbbbbb-0000-0000-0000-000000000001',
 \echo '=== B1 BEFORE: notifications for any coaching session transition ==='
 select count(*) as session_notifications_before from public.notifications where type = 'session';
 
-select public.session_transition_internal(
-  '11111111-1111-1111-1111-111111111111',
-  'bbbbbbbb-0000-0000-0000-000000000001',
-  'accept'
-) is not null as accepted;
+-- NOTE ON THE PATTERN BELOW. `session_transition_internal(...) is not null`
+-- was tried first and deleted: it displayed as `f` on every successful call,
+-- always, because `public.sessions` is a composite type and row `IS NOT
+-- NULL` for a composite means EVERY column is non null, not that the row
+-- itself exists. `sessions.group_id` is null on a 1:1 session, so a
+-- perfectly successful transition still failed that test, and nothing
+-- raised because the script never looked at the printed `f`. A check that
+-- cannot fail for a real regression is worse than no check: this asserts
+-- `.id is not null` instead, which the row constructor can only fail if the
+-- function genuinely returned nothing, and raises loudly if it does.
+do $$
+declare v_id uuid;
+begin
+  select (public.session_transition_internal(
+    '11111111-1111-1111-1111-111111111111',
+    'bbbbbbbb-0000-0000-0000-000000000001',
+    'accept'
+  )).id into v_id;
+  if v_id is null then
+    raise exception 'B1 FAILED: session_transition_internal(accept) returned no row';
+  end if;
+end $$;
 
-select public.session_transition_internal(
-  '11111111-1111-1111-1111-111111111111',
-  'bbbbbbbb-0000-0000-0000-000000000001',
-  'start'
-) is not null as started;
+do $$
+declare v_id uuid;
+begin
+  select (public.session_transition_internal(
+    '11111111-1111-1111-1111-111111111111',
+    'bbbbbbbb-0000-0000-0000-000000000001',
+    'start'
+  )).id into v_id;
+  if v_id is null then
+    raise exception 'B1 FAILED: session_transition_internal(start) returned no row';
+  end if;
+end $$;
 
-select public.session_transition_internal(
-  '11111111-1111-1111-1111-111111111111',
-  'bbbbbbbb-0000-0000-0000-000000000001',
-  'complete'
-) is not null as completed;
+do $$
+declare v_id uuid;
+begin
+  select (public.session_transition_internal(
+    '11111111-1111-1111-1111-111111111111',
+    'bbbbbbbb-0000-0000-0000-000000000001',
+    'complete'
+  )).id into v_id;
+  if v_id is null then
+    raise exception 'B1 FAILED: session_transition_internal(complete) returned no row';
+  end if;
+end $$;
 
 -- A second session, to prove decline carries its reason.
 insert into public.sessions (id, coach_id, player_id, date, slot_start, slot_end, status, price, platform_fee, total)
@@ -219,12 +250,19 @@ values ('bbbbbbbb-0000-0000-0000-000000000002',
         '22222222-2222-2222-2222-222222222222',
         current_date + 2, '18:00', '19:00', 'requested', 1000, 100, 1000);
 
-select public.session_transition_internal(
-  '11111111-1111-1111-1111-111111111111',
-  'bbbbbbbb-0000-0000-0000-000000000002',
-  'decline',
-  'Away at a tournament'
-) is not null as declined;
+do $$
+declare v_id uuid;
+begin
+  select (public.session_transition_internal(
+    '11111111-1111-1111-1111-111111111111',
+    'bbbbbbbb-0000-0000-0000-000000000002',
+    'decline',
+    'Away at a tournament'
+  )).id into v_id;
+  if v_id is null then
+    raise exception 'B1 FAILED: session_transition_internal(decline) returned no row';
+  end if;
+end $$;
 
 \echo ''
 \echo '=== B1 AFTER: one notification per transition, all to the athlete ==='
@@ -260,11 +298,18 @@ insert into public.session_participants (session_id, player_id) values
   ('bbbbbbbb-0000-0000-0000-000000000003', '22222222-2222-2222-2222-222222222222'),
   ('bbbbbbbb-0000-0000-0000-000000000003', '33333333-3333-3333-3333-333333333333');
 
-select public.session_transition_internal(
-  '11111111-1111-1111-1111-111111111111',
-  'bbbbbbbb-0000-0000-0000-000000000003',
-  'start'
-) is not null as group_session_started;
+do $$
+declare v_id uuid;
+begin
+  select (public.session_transition_internal(
+    '11111111-1111-1111-1111-111111111111',
+    'bbbbbbbb-0000-0000-0000-000000000003',
+    'start'
+  )).id into v_id;
+  if v_id is null then
+    raise exception 'B1 FAILED: session_transition_internal(group start) returned no row';
+  end if;
+end $$;
 
 do $$
 declare v_recipients int; v_link text;
@@ -374,10 +419,27 @@ end $$;
 
 \echo ''
 \echo '=== B2 Renew: the expired member renews on the SAME row ==='
-select public.renew_group_membership(
-  '33333333-3333-3333-3333-333333333333',
-  'cccccccc-0000-0000-0000-000000000002'
-) is not null as renew_accepted_for_expired;
+-- `renew_group_membership(...) is not null` was tried first and deleted for
+-- the same reason as the session_transition_internal calls above:
+-- public.group_memberships is a composite type, `payment_intent_id` is
+-- nullable on it, and row IS NOT NULL over a composite requires every
+-- column to be non null. It printed `f` on a genuinely successful renewal
+-- and nothing downstream ever looked at that printed value, so a future
+-- regression that made this function return NULL outright would have
+-- printed the SAME `f` and the run would still have gone green. Asserting
+-- `.id is not null` instead can only fail when the function truly returned
+-- nothing.
+do $$
+declare v_id uuid;
+begin
+  select (public.renew_group_membership(
+    '33333333-3333-3333-3333-333333333333',
+    'cccccccc-0000-0000-0000-000000000002'
+  )).id into v_id;
+  if v_id is null then
+    raise exception 'B2 FAILED: renew_group_membership(expired) returned no row';
+  end if;
+end $$;
 
 do $$
 declare v_ok boolean := false;
@@ -395,12 +457,20 @@ begin
   raise notice 'B2 PASS: expired renews, lapsed is refused with INVALID_TRANSITION.';
 end $$;
 
--- Capture then extends the period and re arms next month's reminder.
-select public.activate_group_membership_paid('cccccccc-0000-0000-0000-000000000002') is not null as activated;
-
+-- Capture then extends the period and re arms next month's reminder. The
+-- `activate_group_membership_paid(...) is not null` display line was tried
+-- first and deleted for the same composite-type reason documented above the
+-- renew assertion; the id check below folds into the same do block that
+-- already verifies the resulting row's state, rather than adding a second
+-- inert display line.
 do $$
-declare v_status text; v_end date; v_reminded timestamptz;
+declare v_id uuid; v_status text; v_end date; v_reminded timestamptz;
 begin
+  select (public.activate_group_membership_paid('cccccccc-0000-0000-0000-000000000002')).id into v_id;
+  if v_id is null then
+    raise exception 'B2 FAILED: activate_group_membership_paid returned no row';
+  end if;
+
   select status, period_end, renewal_reminder_sent_at into v_status, v_end, v_reminded
     from public.group_memberships where id = 'cccccccc-0000-0000-0000-000000000002';
   if v_status <> 'active' then
