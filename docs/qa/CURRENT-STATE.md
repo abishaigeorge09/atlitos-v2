@@ -107,6 +107,27 @@ The Register screen renders, all fields work, and both cross-links navigate. The
 was a Maestro selector that false-passed on the wrong screen. There IS a real bug underneath, but
 it is navigation, not registration: see below.
 
+### "X does not exist" is only as current as the tree it was checked against
+A long-lived branch drifts, and the danger is not the code conflict, which git surfaces. It is
+the CONCLUSION drawn from an absence, which git cannot surface at all.
+
+Observed 2026-08-13. Three feature branches sat 169 to 170 commits behind `phase-11/launch-p4`.
+Two concrete defects followed:
+
+1. **Silent migration collisions.** One branch numbered its five migrations 0088 to 0092 against
+   a tree that appeared to stop at 0087. On the target every one of those numbers was already
+   taken by a different file, including three separate `0088_*` files. Merged as authored, some
+   would SILENTLY NEVER RUN. Always number above the APPLIED ceiling on the integration branch,
+   not above what your branch can see.
+2. **A wrong conclusion written into a docblock.** A track challenged the comment-count mismatch
+   finding on the grounds that no blocking feature and no client-side filtering existed. True on
+   its branch, FALSE on the target, where `0097_report_block.sql` exists and `hooks.ts` carries
+   39 block references. The reasoning was sound; the tree was ten migrations stale.
+
+**Rule: merge the integration branch INTO a stale branch before reviewing or merging it, then
+re-read every claim of the form "X does not exist".** An absence is evidence about the tree you
+looked at, never about the tree you are merging into.
+
 ### A forked session cannot tell inherited work from its own
 A fork inherits the transcript INCLUDING tool results, so it can hold a perfectly accurate
 description of the world alongside a wrong belief about who produced it. It is dangerous
