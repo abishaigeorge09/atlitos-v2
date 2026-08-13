@@ -140,7 +140,20 @@ present because the branch was 171 commits behind. Deleting it "as dead code" wo
 a no-op at best and, had the reasoning been applied to a file launch-p4 had KEPT and started
 using, a live deletion.
 
-A third instance, `apps/mobile/src/app/(tabs)/clutch/post/[id].tsx`, is the mirror image: the
+**Absence of the literal string is not absence of the thing.** Third disguise, same day. An
+agent found `0101`'s docblock citing policies `clip_comments_active_insert` and
+`clip_comments_active_delete`, greped every migration, found nothing, and DECLINED to edit the
+comment. That refusal was correct. Both policies exist on the live project and are restrictive,
+created by `0096_suspend_enforcement_and_kpis.sql` inside a loop that builds the name at
+runtime: `v_policy_name := r.tablename || '_active_insert';`. The literal never appears in the
+repo because it is constructed, not written. Had the agent treated grep-absence as absence it
+would have removed a TRUE statement on false grounds.
+Anything built by string concatenation is invisible to the check we keep telling each other to
+run: dynamic SQL, generated identifiers, computed policy and constraint names, `format(%I)`,
+and table-driven DDL loops. When a grep comes back empty against a name that ought to exist,
+query the live catalog (`pg_policy`, `pg_proc`, `information_schema`) before concluding.
+
+A further instance, `apps/mobile/src/app/(tabs)/clutch/post/[id].tsx`, is the mirror image: the
 branch's rewrite removed imports that only made sense against the old file, while launch-p4 had
 rewritten the same file by 554 insertions and added 9 report/block references. Taking the
 branch's side wholesale would have silently deleted the report and block feature, with a green
