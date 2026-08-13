@@ -11,6 +11,7 @@ import { ClutchProfileView } from '@/components/organisms/ClutchProfileView';
 import { LoginGateModal } from '@/components/organisms/LoginGateModal';
 import { ModerationSheet, type ModerationTarget } from '@/components/organisms/moderation/ModerationSheet';
 import { AppBar } from '@/components/ui/app-bar';
+import { useClipPosters } from '@/hooks/use-clip-posters';
 import { usePendingAuthAction } from '@/hooks/use-pending-auth-action';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
@@ -39,6 +40,10 @@ export default function ClutchCreatorScreen() {
   // F8 (P5 fix pass, PRD-01 FR-4): both Follow and opening the report/block
   // sheet used to be dropped when the gate opened; see the hook's docblock.
   const { requireAuth, clearPendingAction } = usePendingAuthAction(requiresAuthGate);
+  // M-4: the grid's posters, in ONE batch call. getCreatorClips is bounded to
+  // CLUTCH_GRID_PAGE_SIZE, which is the batch's own chunk size, so a creator
+  // profile is exactly one request no matter how many clips they have.
+  const { posterUrls } = useClipPosters(clips);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -117,6 +122,7 @@ export default function ClutchCreatorScreen() {
         state={state}
         errorMessage={error?.message}
         isOwn={myId != null && myId === id}
+        posterUrls={posterUrls}
         followBusy={followBusy}
         onRetry={() => void load()}
         onToggleFollow={() => void toggleFollow()}

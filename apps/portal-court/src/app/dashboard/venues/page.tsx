@@ -346,7 +346,13 @@ function VenueCard({ venue }: { venue: VenueRow }) {
                   <div key={photo.id} className="group relative size-24 overflow-hidden rounded-lg border border-border bg-secondary">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={supabase.storage.from("venue-media").getPublicUrl(photo.storage_path).data.publicUrl}
+                      // SCALE-MEDIA M-6: a 96 px square, so ask for 288 px
+                      // rather than the origin upload.
+                      src={
+                        supabase.storage.from("venue-media").getPublicUrl(photo.storage_path, {
+                          transform: { width: 288, height: 288, resize: "cover", quality: 70 },
+                        }).data.publicUrl
+                      }
                       alt="Venue"
                       className="size-full object-cover"
                     />
