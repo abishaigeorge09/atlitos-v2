@@ -61,6 +61,12 @@ const STATUS_BY_CODE: Record<string, number> = {
   NOT_COACH: 403,
   // AT-41: a session reached completion with no captured payment behind it.
   PAYMENT_NOT_CAPTURED: 409,
+  // 0109: the mirror image of PAYMENT_NOT_CAPTURED. A capture landed on a
+  // session that was already cancelled or declined, which the 15 minute hold
+  // TTL makes an ordinary sequence rather than a race. 409 because the request
+  // was well formed and the session's state refused it. The intent stays
+  // captured and unfinalized so the debt is queryable in unfinalized_captures.
+  SESSION_CANCELLED: 409,
   // Commerce (AT-71, AT-72). OUT_OF_STOCK is raised by both
   // reserve_stock_for_checkout (before Razorpay, the ordinary refusal) and
   // consume_reservation (the late capture), and 409 is right for both: the
