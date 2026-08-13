@@ -4,7 +4,7 @@ import { radii, spacing } from '@atlitos/theme';
 import { RefreshCw, TriangleAlert, Users } from 'lucide-react-native';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { FlatList, RefreshControl, View } from 'react-native';
+import { FlatList, RefreshControl, ScrollView, View } from 'react-native';
 
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
@@ -20,6 +20,14 @@ import { useThemeColors } from '@/theme/use-theme-colors';
 
 const SPORT_FILTERS: Sport[] = ['football', 'cricket', 'badminton', 'tennis'];
 
+/** Shared padding for the loading, error and empty containers, so all four
+ * states line up with the populated list's own content padding. */
+const STATE_CONTENT_STYLE = {
+  padding: spacing.lg,
+  gap: spacing.lg,
+  paddingBottom: spacing['4xl'],
+} as const;
+
 type LoadState = 'loading' | 'empty' | 'populated' | 'error';
 
 export interface CoachBrowseListProps {
@@ -34,13 +42,40 @@ export interface CoachBrowseListProps {
    * "My coaches" section here so the whole tab renders as one scroll
    * region instead of a browse list nested inside another scroller. */
   header?: ReactNode;
-  /** False when embedded inside a caller-owned ScrollView (the Trainings
-   * Coaches tab, which scrolls "My coaches" and this list together as one
-   * region so there is only ever one scroller on screen); the standalone
-   * /coaching surface leaves this at its default of true, since there the
-   * list is the screen's only scroller and needs to fill it. */
-  scrollEnabled?: boolean;
+  /** Extra work to run on pull to refresh, alongside this list's own reload.
+   * The Trainings Coaches tab passes its "My coaches" reload here, because
+   * that section renders inside this list's `header` and so has no
+   * RefreshControl of its own. */
+  onRefresh?: () => Promise<void> | void;
 }
+
+// SCALE-CLIENT.md P0-3. There used to be a `scrollEnabled` prop here, and the
+// Trainings Coaches tab passed `false` so it could wrap this list in its own
+// ScrollView. That combination did not merely disable scrolling, it turned
+// virtualization OFF and made pagination run away, and it did so silently.
+//
+// Read from the React Native VirtualizedList source rather than inferred:
+// `_maybeCallOnEdgeReached` fires `onEndReached` when the last rendered cell is
+// the last item AND `distanceFromEnd <= threshold * visibleLength`. `_onLayout`
+// sets `visibleLength` from the list's own layout height and skips the nesting
+// correction unless `_isNestedWithSameOrientation()` is true, which reads
+// `VirtualizedListContext`. A plain RN ScrollView does not provide that
+// context. So with no `flex: 1` style inside a column content container, the
+// list laid out at its FULL CONTENT HEIGHT: `visibleLength === contentLength`,
+// offset 0, `distanceFromEnd` permanently 0. Consequences, all three at once:
+// the render window covered the entire dataset so every row was mounted, the
+// end threshold was always satisfied, and each appended page changed
+// `contentLength`, which re-armed the check and fired the next page
+// immediately. Nothing stopped it except running out of table.
+//
+// At 10,000 users with 300 verified coaches that is 15 pages, 45 serial round
+// trips (~6.8 s of loading with zero user input) and 300 CoachCards mounted at
+// once, each with an avatar image. It is visible at 40 coaches.
+//
+// The escape hatch is deleted rather than fixed, because a prop that quietly
+// disables virtualization is one whose next use is also a bug. This list is
+// always its own scroller now; a caller with content to put above it passes
+// `header`, which is what the prop was always for.
 
 /**
  * Coach discovery list, extracted from the /coaching route (AT-52,
@@ -54,7 +89,7 @@ export interface CoachBrowseListProps {
  * instead. States: loading (skeleton cards), empty, populated, error
  * (retry).
  */
-export function CoachBrowseList({ onOpenCoach, header, scrollEnabled = true }: CoachBrowseListProps) {
+export function CoachBrowseList({ onOpenCoach, header, onRefresh }: CoachBrowseListProps) {
   const colors = useThemeColors();
   const coaching = useCoaching(supabase);
 
@@ -132,9 +167,13 @@ export function CoachBrowseList({ onOpenCoach, header, scrollEnabled = true }: C
 
   async function handleRefresh() {
     setRefreshing(true);
-    await load({ silent: true });
+    // Both halves of the pull, in parallel: this list's own reload and any
+    // caller-owned section rendered inside `header`.
+    await Promise.all([load({ silent: true }), onRefresh?.()]);
     setRefreshing(false);
   }
+
+  const refreshControl = <RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} />;
 
   const listHeader = (
     <View style={{ gap: spacing.sm, paddingBottom: spacing.md }}>
@@ -167,22 +206,27 @@ export function CoachBrowseList({ onOpenCoach, header, scrollEnabled = true }: C
     </View>
   );
 
+  // The three non-populated states carry no list, so a ScrollView is the right
+  // container for them: there is nothing to virtualize, and `header` can be
+  // arbitrarily tall (the Trainings tab puts its whole "My coaches" section
+  // there), so it has to be able to scroll. This is never nested inside
+  // another scroller, see the note on the props above.
   if (state === 'loading') {
     return (
-      <View style={{ padding: spacing.lg, gap: spacing.lg }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={STATE_CONTENT_STYLE} refreshControl={refreshControl}>
         {listHeader}
         <View style={{ gap: spacing.lg }}>
           <Skeleton shape="card" height={110} />
           <Skeleton shape="card" height={110} />
           <Skeleton shape="card" height={110} />
         </View>
-      </View>
+      </ScrollView>
     );
   }
 
   if (state === 'error') {
     return (
-      <View style={{ padding: spacing.lg, gap: spacing.lg }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={STATE_CONTENT_STYLE} refreshControl={refreshControl}>
         {listHeader}
         <View style={{ alignItems: 'center', gap: spacing.md, paddingVertical: spacing.xl }}>
           <TriangleAlert size={40} color={colors.danger} strokeWidth={1.75} />
@@ -195,13 +239,13 @@ export function CoachBrowseList({ onOpenCoach, header, scrollEnabled = true }: C
             <Text style={{ color: colors.text }}>Retry</Text>
           </Button>
         </View>
-      </View>
+      </ScrollView>
     );
   }
 
   if (state === 'empty') {
     return (
-      <View style={{ padding: spacing.lg, gap: spacing.lg }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={STATE_CONTENT_STYLE} refreshControl={refreshControl}>
         {listHeader}
         <View style={{ alignItems: 'center', gap: spacing.md, paddingVertical: spacing.xl }}>
           <View
@@ -223,7 +267,7 @@ export function CoachBrowseList({ onOpenCoach, header, scrollEnabled = true }: C
               : `No verified coaches near ${city} right now. Check back soon.`}
           </Text>
         </View>
-      </View>
+      </ScrollView>
     );
   }
 
@@ -232,12 +276,20 @@ export function CoachBrowseList({ onOpenCoach, header, scrollEnabled = true }: C
       data={items}
       keyExtractor={(item) => item.userId}
       ListHeaderComponent={listHeader}
-      scrollEnabled={scrollEnabled}
-      style={scrollEnabled ? { flex: 1 } : undefined}
-      contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}
-      refreshControl={
-        scrollEnabled ? <RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} /> : undefined
-      }
+      // Always its own scroller, always `flex: 1`. Both halves matter: the
+      // style is what gives the list a real viewport height, which is what
+      // `visibleLength` is read from, which is what makes virtualization and
+      // `onEndReached` mean anything at all. See the P0-3 note above.
+      style={{ flex: 1 }}
+      contentContainerStyle={{ padding: spacing.lg, gap: spacing.md, paddingBottom: spacing['4xl'] }}
+      refreshControl={refreshControl}
+      // Bounded render window. Without these the list still virtualizes, but
+      // RN's default `windowSize` of 21 keeps roughly 21 viewports of coach
+      // cards (and their avatars) mounted, which is the memory half of the
+      // same finding.
+      initialNumToRender={8}
+      maxToRenderPerBatch={8}
+      windowSize={7}
       ItemSeparatorComponent={() => <View style={{ height: spacing.md }} />}
       // CT-5 (P1-3): the only way this screen ever sees a coach past the
       // first bounded page. `onEndReachedThreshold` fires the next keyset
