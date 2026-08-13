@@ -1,8 +1,9 @@
 import { Tabs } from 'expo-router';
 import type { ComponentProps } from 'react';
 import { useEffect } from 'react';
-import { BackHandler } from 'react-native';
+import { BackHandler, View } from 'react-native';
 
+import { SessionDegradedBanner } from '@/components/organisms/SessionDegradedBanner';
 import { BottomNav, type BottomNavTab } from '@/components/ui/bottom-nav';
 import { useThemeColors } from '@/theme/use-theme-colors';
 
@@ -84,19 +85,27 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
 export default function TabsLayout() {
   const colors = useThemeColors();
 
+  // SCALE-INGRESS.md Gap B and section 2. The banner sits ABOVE the navigator
+  // in a plain column, not over it: a degraded session must never cover a tab
+  // or intercept a tap. It renders null whenever the session is healthy, which
+  // is every case except "the retries gave up", so this costs a single store
+  // read on the normal path.
   return (
-    <Tabs
-      tabBar={(props) => <CustomTabBar {...props} />}
-      screenOptions={{
-        headerShown: false,
-        sceneStyle: { backgroundColor: colors.bg },
-      }}
-    >
-      <Tabs.Screen name="index" options={{ title: 'Home' }} />
-      <Tabs.Screen name="trainings" options={{ title: 'Trainings' }} />
-      <Tabs.Screen name="clutch" options={{ title: 'Clutch' }} />
-      <Tabs.Screen name="courts" options={{ title: 'Courts' }} />
-      <Tabs.Screen name="you" options={{ title: 'You' }} />
-    </Tabs>
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <SessionDegradedBanner />
+      <Tabs
+        tabBar={(props) => <CustomTabBar {...props} />}
+        screenOptions={{
+          headerShown: false,
+          sceneStyle: { backgroundColor: colors.bg },
+        }}
+      >
+        <Tabs.Screen name="index" options={{ title: 'Home' }} />
+        <Tabs.Screen name="trainings" options={{ title: 'Trainings' }} />
+        <Tabs.Screen name="clutch" options={{ title: 'Clutch' }} />
+        <Tabs.Screen name="courts" options={{ title: 'Courts' }} />
+        <Tabs.Screen name="you" options={{ title: 'You' }} />
+      </Tabs>
+    </View>
   );
 }

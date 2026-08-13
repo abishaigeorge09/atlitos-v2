@@ -1,4 +1,5 @@
 import { spacing, spring } from '@atlitos/theme';
+import type { ApiError } from '@atlitos/types';
 import { router } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
@@ -13,7 +14,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AuthCta, AuthScene } from '@/components/organisms/auth/AuthScene';
+import { AuthScene } from '@/components/organisms/auth/AuthScene';
 import { useSessionStore } from '@/store/session-store';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
@@ -51,10 +52,29 @@ import { useThemeColors } from '@/theme/use-theme-colors';
  *     widened to make this work, whatever renders is exactly what the
  *     `anon` role already reads.
  *
- * Track D hardening carried over:
- *   - A signed-in session whose profile fetch FAILED (meError, me null) no
- *     longer routes to tabs as if fully onboarded; it shows a retry state
- *     wired to `refreshMe` instead (defect 3).
+ * Track D hardening carried over, and CORRECTED (SCALE-INGRESS.md Gap B):
+ *   - Track D made a signed-in session whose profile fetch FAILED stop on a
+ *     full screen "We could not load your profile" wall with a Try again
+ *     button and no route into the app. The half it got right is that such a
+ *     session must not be treated as fully onboarded. The half it got wrong is
+ *     the wall, and the wall is the more expensive half at launch scale: it
+ *     inverted the priority exactly backwards, degrading GUESTS gracefully
+ *     into the app while stopping RETURNING, PAYING users at the front door.
+ *
+ *     `getMe()` is five network calls (one GoTrue /auth/v1/user, then four
+ *     PostgREST reads) and throws on three of them. At 10,000 returning users
+ *     that is 10,000 GoTrue plus 40,000 PostgREST requests just to render this
+ *     screen, so a 1% transient failure rate is 100 people who cannot open the
+ *     app at all, and the 5% you would expect off a saturated 20 connection
+ *     pool is 500.
+ *
+ *     A signed-in user now enters `/(tabs)` on whatever is cached, exactly as
+ *     a guest does. `needsOnboarding()` already returns false while `me` is
+ *     null, so nothing reads the missing profile as "onboarding incomplete"
+ *     and no wizard is forced. The session store retries `getMe` in the
+ *     background with a bounded backoff, and `SessionDegradedBanner` (rendered
+ *     by the tabs layout) carries the non-blocking notice and the manual
+ *     retry. Nothing is silently swallowed; it is just no longer a door.
  *
  * Visual: the wordmark and tagline spring in over the shared AuthScene
  * aurora, so even the loading moment feels alive. All routing logic below is
@@ -64,11 +84,8 @@ export default function SplashScreen() {
   const colors = useThemeColors();
   const status = useSessionStore((state) => state.status);
   const hydrated = useSessionStore((state) => state.hydrated);
-  const me = useSessionStore((state) => state.me);
   const meLoading = useSessionStore((state) => state.meLoading);
-  const meError = useSessionStore((state) => state.meError);
   const continueAsGuest = useSessionStore((state) => state.continueAsGuest);
-  const refreshMe = useSessionStore((state) => state.refreshMe);
   const enterGuestUnminted = useSessionStore((state) => state.enterGuestUnminted);
 
   // Guards against firing continueAsGuest more than once while its promise
@@ -111,15 +128,19 @@ export default function SplashScreen() {
 
     if (status === 'signed_in') {
       guestAttempted.current = false;
-      if (meLoading) return; // wait for profile to resolve before deciding
-      if (!me && meError) return; // profile fetch failed: retry state below, never route as fake-onboarded
+      // Wait for the FIRST profile attempt to settle, so the common case
+      // still lands on a fully hydrated Home. But settle means settle:
+      // failure routes into the app too (see the Gap B note above), it does
+      // not park the user here. The store keeps retrying behind them and
+      // SessionDegradedBanner explains the state.
+      if (meLoading) return;
       router.replace('/(tabs)');
       return;
     }
 
     if (status === 'signed_out' && !guestAttempted.current) {
       guestAttempted.current = true;
-      continueAsGuest().catch(() => {
+      continueAsGuest().catch((error: unknown) => {
         // P0-4: persistent guest bootstrap failure (continueAsGuest already
         // retried with backoff). Degrade gracefully instead of a login wall:
         // flip to "guest_unminted" (Home renders on whatever the anon role
@@ -127,14 +148,17 @@ export default function SplashScreen() {
         // guest/guest_unminted branch above route into the app. A slower
         // background remint (session-store) keeps retrying; success upgrades
         // the session to a real "guest" automatically, no reinstall needed.
-        enterGuestUnminted();
+        //
+        // The error code is forwarded so the background loop can tell a
+        // rate limit apart from an outage: a RATE_LIMITED refusal waits out
+        // GoTrue's 120 s per-IP bucket refill instead of retrying in 2 s,
+        // which cannot win and starves every other user on the same IP.
+        enterGuestUnminted((error as ApiError | undefined)?.code);
       });
     }
-  }, [status, hydrated, me, meLoading, meError, continueAsGuest, enterGuestUnminted]);
+  }, [status, hydrated, meLoading, continueAsGuest, enterGuestUnminted]);
 
-  const showMeRetry = hydrated && status === 'signed_in' && !meLoading && !me && meError != null;
-  const showSpinner =
-    (!hydrated || (status === 'signed_in' && meLoading) || status === 'signed_out') && !showMeRetry;
+  const showSpinner = !hydrated || (status === 'signed_in' && meLoading) || status === 'signed_out';
 
   return (
     <AuthScene>
@@ -149,15 +173,6 @@ export default function SplashScreen() {
           </Animated.Text>
 
           {showSpinner ? <ActivityIndicator color={colors.accent} style={styles.spinner} /> : null}
-
-          {showMeRetry ? (
-            <View style={styles.actions}>
-              <Text style={[textStyle('caption'), styles.centered, { color: colors.danger }]}>
-                We could not load your profile. Check your connection and try again.
-              </Text>
-              <AuthCta label="Try again" onPress={() => void refreshMe()} />
-            </View>
-          ) : null}
         </View>
       </SafeAreaView>
     </AuthScene>
@@ -176,7 +191,5 @@ const styles = StyleSheet.create({
   eyebrow: { textAlign: 'center', marginBottom: spacing.sm },
   wordmark: { textAlign: 'center', fontSize: 56, lineHeight: 60 },
   tagline: { textAlign: 'center', maxWidth: 300 },
-  centered: { textAlign: 'center' },
   spinner: { marginTop: spacing.lg },
-  actions: { width: '100%', maxWidth: 320, gap: spacing.sm, marginTop: spacing.lg },
 });

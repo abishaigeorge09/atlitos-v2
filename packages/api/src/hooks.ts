@@ -159,7 +159,23 @@ export function useAuth(client: AtlitosClient) {
      * request, a cold edge) must not strand a first-time user on a login
      * wall: retry signInAnonymously a few times with short linear backoff
      * before surfacing failure. Only a persistent failure throws, which the
-     * splash screen then degrades into public browsing rather than a wall. */
+     * splash screen then degrades into public browsing rather than a wall.
+     *
+     * SCALE-INGRESS.md section 2: a 429 is NOT retried here, and that is the
+     * single most important line in this function. GoTrue limits anonymous
+     * sign-ins per EGRESS IP at a documented 30 per hour, a token bucket that
+     * refills one token every 120 seconds. Burning two more attempts 300 ms
+     * and 600 ms after a refusal cannot succeed (the bucket is provably empty
+     * for the next two minutes) and it does active harm: behind a shared NAT,
+     * the aggregate arrival rate from already-failed devices is what starves
+     * every NEW user of the single token. Retrying is correct per device and
+     * wrong per IP, because the contended resource is the IP bucket. Breaking
+     * out immediately takes the per-device request count on a rate-limited
+     * open from 3 to 1.
+     *
+     * A rate limited failure surfaces as `code: "RATE_LIMITED"`; the caller's
+     * background retry loop reads that and waits out the bucket rather than
+     * re-entering on its own short ladder. */
     async continueAsGuest(): Promise<Session> {
       const maxAttempts = 3;
       let lastError: unknown = { message: "No session returned for guest sign-in." };
@@ -167,6 +183,12 @@ export function useAuth(client: AtlitosClient) {
         const { data, error } = await client.auth.signInAnonymously();
         if (!error && data.session) return data.session;
         lastError = error ?? lastError;
+        if (error) {
+          const mapped = mapAuthError(error);
+          // Retrying an empty bucket cannot win it back, it only deepens the
+          // contention on the shared IP. Surface it now.
+          if (mapped.code === "RATE_LIMITED") throw mapped;
+        }
         if (attempt < maxAttempts) {
           await new Promise((resolve) => setTimeout(resolve, attempt * 300));
         }
