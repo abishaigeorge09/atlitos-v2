@@ -42,7 +42,6 @@ export default function TrainingsShellLayout() {
   const colors = useThemeColors();
   const segments = useSegments() as string[];
 
-  const status = useSessionStore((state) => state.status);
   const session = useSessionStore((state) => state.session);
   const me = useSessionStore((state) => state.me);
   const meLoading = useSessionStore((state) => state.meLoading);

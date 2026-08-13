@@ -62,6 +62,12 @@ function RootLayout() {
   // so it never crosses through any node_modules directory and survives
   // the Vercel upload. See docs/design/DESIGN-LANGUAGE.md for the token
   // names these map to (`packages/theme` `rnFontFamily`).
+  /* eslint-disable @typescript-eslint/no-require-imports --
+     Metro resolves static asset references through `require`, and that is
+     the documented contract for `useFonts`. An ESM import does not produce
+     the asset module id the native side needs, so this is not a style
+     choice that can be modernised away. See the note above for why the
+     files are local copies rather than package imports. */
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular: require('../../assets/fonts/Inter_400Regular.ttf'),
     Inter_500Medium: require('../../assets/fonts/Inter_500Medium.ttf'),
@@ -70,6 +76,7 @@ function RootLayout() {
     JetBrainsMono_500Medium: require('../../assets/fonts/JetBrainsMono_500Medium.ttf'),
     JetBrainsMono_600SemiBold: require('../../assets/fonts/JetBrainsMono_600SemiBold.ttf'),
   });
+  /* eslint-enable @typescript-eslint/no-require-imports */
 
   useEffect(() => {
     if (fontsLoaded || fontError) {

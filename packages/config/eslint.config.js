@@ -15,6 +15,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const js = require("@eslint/js");
 const tseslint = require("typescript-eslint");
+const reactHooks = require("eslint-plugin-react-hooks");
 
 /**
  * Every app/package script runs `eslint .` with its own package directory as
@@ -126,12 +127,39 @@ const houseRules = [
   },
 ];
 
+/**
+ * React hooks rules. `eslint-plugin-react-hooks` was installed but never
+ * registered, so every `react-hooks/*` rule name was undefined. That did two
+ * things: it made any file carrying an `eslint-disable react-hooks/...`
+ * comment fail with "Definition for rule was not found", and, far worse, it
+ * meant hooks were never actually linted at all. This app has shipped real
+ * hook defects (a video player constructed unconditionally on every mounted
+ * card, a gated action dropped because nothing held it across a re-render),
+ * exactly the class these rules exist to catch.
+ *
+ * `rules-of-hooks` is an error: it flags genuine violations and has a very
+ * low false positive rate. `exhaustive-deps` is a warning: it is frequently
+ * right but not always, and turning it into a build blocker across an
+ * existing codebase punishes the wrong people. Warnings still surface.
+ */
+const reactHooksRules = [
+  {
+    files: ["**/*.{jsx,tsx}"],
+    plugins: { "react-hooks": reactHooks },
+    rules: {
+      "react-hooks/rules-of-hooks": "error",
+      "react-hooks/exhaustive-deps": "warn",
+    },
+  },
+];
+
 module.exports = tseslint.config(
   {
     ignores: ["**/node_modules/**", "**/dist/**", "**/.next/**", "**/.expo/**", "**/build/**"],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  ...reactHooksRules,
   ...houseRules,
 );
 
