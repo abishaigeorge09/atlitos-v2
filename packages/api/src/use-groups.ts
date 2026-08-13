@@ -2,6 +2,26 @@ import type { ApiError, PaymentDomain, SessionStatus, Sport } from "@atlitos/typ
 
 import type { AtlitosClient } from "./client";
 import { mapEdgeFunctionError, mapPostgrestError } from "./errors";
+/** Page sizes for the coaching group surfaces.
+ *
+ * Bounded because PostgREST silently caps every select on this project, so an
+ * unbounded read is a truncation with a 200 OK rather than a slow query. See
+ * docs/qa/verify/SCALE-CLIENT.md. Each number is well under any plausible
+ * server cap so the cutoff belongs to this file.
+ *
+ * The roster and session numbers matter most: `training_groups.capacity` is a
+ * coach-set column with NO schema ceiling, and a group's session history grows
+ * for as long as the group runs. */
+const GROUP_LIST_PAGE_SIZE = 100;
+const GROUP_ROSTER_PAGE_SIZE = 200;
+const GROUP_SESSION_PAGE_SIZE = 100;
+/** Attendance is read as (sessions in the page) x (participants each), so it
+ * is bounded against the roster size rather than given a flat number. */
+const SESSION_PARTICIPANT_PAGE_SIZE = 500;
+const TRAINEE_NOTE_PAGE_SIZE = 100;
+const TRAINEE_SESSION_PAGE_SIZE = 100;
+
+
 
 /**
  * `@atlitos/api`'s training groups domain (Track A of the Groups phase).
@@ -372,6 +392,8 @@ async function fetchProfiles(
   const { data, error } = await client
     .from("public_profiles")
     .select("id, name, avatar_url")
+    // Unbounded and safe: primary key `.in()`, one row per id, bounded by the
+    // caller's own already-bounded id list.
     .in("id", userIds)
     .returns<PublicProfileRow[]>();
   if (error) throw mapPostgrestError(error);
@@ -403,6 +425,7 @@ export function useGroups(client: AtlitosClient) {
         .select("*")
         .eq("coach_id", userId)
         .order("created_at", { ascending: false })
+        .limit(GROUP_LIST_PAGE_SIZE)
         .returns<GroupRow[]>();
       if (error) throw mapPostgrestError(error);
       const rows = data ?? [];
@@ -420,6 +443,7 @@ export function useGroups(client: AtlitosClient) {
         .eq("coach_id", coachId)
         .eq("active", true)
         .order("created_at", { ascending: false })
+        .limit(GROUP_LIST_PAGE_SIZE)
         .returns<GroupRow[]>();
       if (error) throw mapPostgrestError(error);
       const rows = data ?? [];
@@ -450,6 +474,7 @@ export function useGroups(client: AtlitosClient) {
         .eq("group_id", groupId)
         .neq("status", "lapsed")
         .order("created_at", { ascending: true })
+        .limit(GROUP_ROSTER_PAGE_SIZE)
         .returns<MembershipRow[]>();
       if (membershipError) throw mapPostgrestError(membershipError);
       const memberships = membershipRows ?? [];
@@ -460,6 +485,7 @@ export function useGroups(client: AtlitosClient) {
         .from("sessions")
         .select("id")
         .eq("group_id", groupId)
+        .limit(GROUP_SESSION_PAGE_SIZE)
         .returns<{ id: string }[]>();
       if (sessionsError) throw mapPostgrestError(sessionsError);
       const sessionIds = (sessionRows ?? []).map((s) => s.id);
@@ -469,7 +495,10 @@ export function useGroups(client: AtlitosClient) {
         const { data: participantRows, error: participantsError } = await client
           .from("session_participants")
           .select("*")
+          // NOT input-bounded: `.in()` on a non unique column is one row per
+          // ATTENDEE per session, so this is (sessions) x (roster).
           .in("session_id", sessionIds)
+          .limit(SESSION_PARTICIPANT_PAGE_SIZE)
           .returns<ParticipantRow[]>();
         if (participantsError) throw mapPostgrestError(participantsError);
         participants = participantRows ?? [];
@@ -604,6 +633,7 @@ export function useGroups(client: AtlitosClient) {
         .select("*")
         .eq("player_id", userId)
         .order("created_at", { ascending: false })
+        .limit(GROUP_LIST_PAGE_SIZE)
         .returns<MembershipRow[]>();
       if (error) throw mapPostgrestError(error);
       const rows = data ?? [];
@@ -614,6 +644,8 @@ export function useGroups(client: AtlitosClient) {
         const { data: groupRows, error: groupError } = await client
           .from("training_groups")
           .select("*")
+          // Unbounded and safe: primary key `.in()`, one row per id, bounded by
+          // the membership page above.
           .in("id", groupIds)
           .returns<GroupRow[]>();
         if (groupError) throw mapPostgrestError(groupError);
@@ -631,6 +663,7 @@ export function useGroups(client: AtlitosClient) {
         .eq("group_id", groupId)
         .order("date", { ascending: false })
         .order("slot_start", { ascending: false })
+        .limit(GROUP_SESSION_PAGE_SIZE)
         .returns<GroupSessionRow[]>();
       if (error) throw mapPostgrestError(error);
       return (data ?? []).map(mapGroupSession);
@@ -667,6 +700,7 @@ export function useGroups(client: AtlitosClient) {
         .from("session_participants")
         .select("*")
         .eq("session_id", sessionId)
+        .limit(GROUP_ROSTER_PAGE_SIZE)
         .returns<ParticipantRow[]>();
       if (error) throw mapPostgrestError(error);
       const rows = data ?? [];
@@ -820,6 +854,7 @@ export function useGroups(client: AtlitosClient) {
         .eq("coach_id", userId)
         .eq("player_id", playerId)
         .order("created_at", { ascending: false })
+        .limit(TRAINEE_NOTE_PAGE_SIZE)
         .returns<NoteRow[]>();
       if (error) throw mapPostgrestError(error);
       return (data ?? []).map((r) => ({
@@ -899,6 +934,7 @@ export function useGroups(client: AtlitosClient) {
         .eq("player_id", playerId)
         .order("date", { ascending: false })
         .order("slot_start", { ascending: false })
+        .limit(TRAINEE_SESSION_PAGE_SIZE)
         .returns<TraineeSessionRow[]>();
       if (error) throw mapPostgrestError(error);
 
@@ -933,6 +969,7 @@ export function useGroups(client: AtlitosClient) {
         .eq("coach_id", userId)
         .eq("player_id", playerId)
         .not("status", "in", "(declined,cancelled)")
+        .limit(TRAINEE_SESSION_PAGE_SIZE)
         .returns<TraineeSessionRow[]>();
       if (sessionError) throw mapPostgrestError(sessionError);
 
@@ -942,6 +979,7 @@ export function useGroups(client: AtlitosClient) {
         .eq("player_id", playerId)
         .eq("training_groups.coach_id", userId)
         .neq("status", "pending")
+        .limit(GROUP_LIST_PAGE_SIZE)
         .returns<(MembershipRow & { training_groups: { id: string; name: string; coach_id: string } })[]>();
       if (membershipError) throw mapPostgrestError(membershipError);
 

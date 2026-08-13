@@ -339,6 +339,31 @@ interface ProductQueryRow {
   product_variant_availability: AvailabilityQueryRow[] | null;
 }
 
+/** Page sizes for the shop surfaces.
+ *
+ * Bounded because PostgREST silently caps every select on this project, so an
+ * unbounded read is a truncation with a 200 OK and no error rather than a slow
+ * query (docs/qa/verify/SCALE-CLIENT.md).
+ *
+ * `listProducts` is the single most expensive read on the project already:
+ * pg_stat_statements has it at 694 calls, mean 5.29 ms, max 68.71 ms, against
+ * 14 active products, and the measured payload is 935.6 bytes per row for this
+ * exact projection including all three embeds. Home called it with NO
+ * arguments to hydrate about eight recently viewed tiles, so a 2,000 product
+ * catalog meant 1.87 MB per Home mount and roughly a 5.6 MB transient heap
+ * spike once parsed (SCALE-CLIENT.md P1-2). Bounding the query is half the
+ * fix; the other half is a `listProductsByIds` for the rail, which is a screen
+ * change and is not in this pass. */
+const PRODUCT_PAGE_SIZE = 50;
+const AFFILIATE_PAGE_SIZE = 50;
+/** A single cart, wishlist or address book. Owner scoped and small in
+ * practice, but nothing caps any of them, and the cart read carries three
+ * embedded resources per row. */
+const CART_PAGE_SIZE = 200;
+const WISHLIST_PAGE_SIZE = 200;
+const ADDRESS_PAGE_SIZE = 50;
+const ORDER_PAGE_SIZE = 50;
+
 const PRODUCT_SELECT = `
   id, title, description, sport, category_id, base_price, recommended_rank,
   categories ( id, name, slug ),
@@ -541,7 +566,7 @@ export function useShop(client: AtlitosClient) {
      * mirrors the policy so PostgREST pushes it down rather than leaning on
      * RLS alone, same shape `listCourts` uses. */
     async listProducts(filters: ProductListFilters = {}): Promise<ShopProduct[]> {
-      let query = client.from("products").select(PRODUCT_SELECT).eq("active", true);
+      let query = client.from("products").select(PRODUCT_SELECT).eq("active", true).limit(PRODUCT_PAGE_SIZE);
 
       if (filters.categorySlug && filters.categorySlug !== "all") {
         query = query.eq("categories.slug", filters.categorySlug).not("categories", "is", null);
@@ -610,6 +635,9 @@ export function useShop(client: AtlitosClient) {
       const { data, error } = await client
         .from("shopper_categories")
         .select("id, name, slug")
+        // Unbounded and safe: `shopper_categories` is a fixed taxonomy, 4 rows
+        // on the live project, and it grows only when someone adds a category
+        // by hand. Not a function of users or of time.
         .order("name");
       if (error) throw mapPostgrestError(error);
       // Postgres views generate every column as nullable even where the
@@ -653,7 +681,8 @@ export function useShop(client: AtlitosClient) {
       let query = client
         .from("affiliate_products")
         .select(AFFILIATE_SELECT)
-        .eq("active", true);
+        .eq("active", true)
+        .limit(AFFILIATE_PAGE_SIZE);
       if (filters.sport) query = query.eq("sport", filters.sport);
       if (filters.query?.trim()) {
         const term = filters.query.trim().replace(/[%,()]/g, "");
@@ -721,7 +750,12 @@ export function useShop(client: AtlitosClient) {
         // here inside a join with three publicly browsable tables, which is
         // exactly the configuration CLAUDE.md warns about.
         .eq("user_id", userId)
+        // Note the ascending order. Under the silent server cap an ascending
+        // unbounded read drops the NEWEST rows, so the item the shopper just
+        // added is the one that vanishes. The explicit bound is what makes
+        // that a known cutoff instead of an invisible one.
         .order("created_at", { ascending: true })
+        .limit(CART_PAGE_SIZE)
         .returns<CartQueryRow[]>();
       if (error) throw mapPostgrestError(error);
 
@@ -797,7 +831,8 @@ export function useShop(client: AtlitosClient) {
         .select("id, line1, line2, city, state, pincode, is_default")
         .eq("user_id", userId)
         .order("is_default", { ascending: false })
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(ADDRESS_PAGE_SIZE);
       if (error) throw mapPostgrestError(error);
 
       return (data ?? []).map((row) => ({
@@ -895,6 +930,9 @@ export function useShop(client: AtlitosClient) {
       const { data, error } = await client
         .from("fee_config")
         .select("key, value")
+        // Unbounded and safe: `fee_config` holds 7 rows in total across every
+        // domain on the live project. It is platform configuration, not user
+        // data, and one domain is a handful of keys.
         .eq("domain", "commerce");
       if (error) throw mapPostgrestError(error);
 
@@ -1036,6 +1074,7 @@ export function useShop(client: AtlitosClient) {
         .select("id, order_number, status, total, created_at, order_items ( qty )")
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
+        .limit(ORDER_PAGE_SIZE)
         .returns<OrderListQueryRow[]>();
       if (error) throw mapPostgrestError(error);
 
@@ -1255,6 +1294,7 @@ export function useWishlist(client: AtlitosClient) {
         .select(`product_id, created_at, products ( ${PRODUCT_SELECT} )`)
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
+        .limit(WISHLIST_PAGE_SIZE)
         .returns<WishlistQueryRow[]>();
       if (error) throw mapPostgrestError(error);
 
@@ -1284,7 +1324,8 @@ export function useWishlist(client: AtlitosClient) {
       const { data, error } = await client
         .from("product_wishlist_items")
         .select("product_id")
-        .eq("user_id", userId);
+        .eq("user_id", userId)
+        .limit(WISHLIST_PAGE_SIZE);
       if (error) throw mapPostgrestError(error);
       return (data ?? []).map((row) => row.product_id);
     },

@@ -84,6 +84,16 @@ export interface CoachListPage {
 // key, per CT-5/D2, without spinning up the whole hook.
 export { encodeCoachCursor, decodeCoachCursor };
 
+/** A coach's own bookable catalog and weekly availability. Coach-authored, so
+ * small in practice, but nothing in the schema caps either, and both are read
+ * for a whole PAGE of coaches at once on the browse screen. Bounded so the
+ * browse payload stays a function of the page size and not of whatever the
+ * most prolific coach on the platform has created. */
+const COACH_SESSION_TYPES_PER_COACH = 20;
+const COACH_AVAILABILITY_WINDOWS_PER_COACH = 50;
+/** One page of the athlete's own session history, newest first. */
+const PLAYER_SESSION_PAGE_SIZE = 100;
+
 const COACH_LIST_DEFAULT_LIMIT = 20;
 const COACH_LIST_MAX_LIMIT = 50;
 
@@ -268,12 +278,18 @@ export function useCoaching(client: AtlitosClient) {
       const ids = pageRows.map((row) => row.user_id);
 
       const [{ data: profileRows, error: profileError }, { data: typeRows, error: typeError }] = await Promise.all([
+        // Unbounded and safe: primary key `.in()`, one row per id, and `ids` is
+        // the current listCoaches page (limit + 1).
         client.from("public_profiles").select("id, name, avatar_url").in("id", ids).returns<PublicProfileRow[]>(),
         client
           .from("session_types")
           .select("id, coach_id, name, duration_minutes, price, active")
+          // NOT input-bounded: `.in()` on a non unique column returns one row
+          // per session type per coach, so this is (page of coaches) x (types
+          // each). Bounded to the page size times a generous per coach ceiling.
           .in("coach_id", ids)
           .eq("active", true)
+          .limit(ids.length * COACH_SESSION_TYPES_PER_COACH)
           .returns<SessionTypeRow[]>(),
       ]);
       if (profileError) throw mapPostgrestError(profileError);
@@ -328,11 +344,13 @@ export function useCoaching(client: AtlitosClient) {
           .select("id, coach_id, name, duration_minutes, price, active")
           .eq("coach_id", coachId)
           .eq("active", true)
+          .limit(COACH_SESSION_TYPES_PER_COACH)
           .returns<SessionTypeRow[]>(),
         client
           .from("coach_availability_windows")
           .select("coach_id, day_of_week, start_time, end_time, effective_from")
           .eq("coach_id", coachId)
+          .limit(COACH_AVAILABILITY_WINDOWS_PER_COACH)
           .returns<AvailabilityWindowRow[]>(),
       ]);
 
@@ -484,6 +502,7 @@ export function useCoaching(client: AtlitosClient) {
         .eq("player_id", authData.user.id)
         .order("date", { ascending: false })
         .order("slot_start", { ascending: false })
+        .limit(PLAYER_SESSION_PAGE_SIZE)
         .returns<SessionRow[]>();
       if (error) throw mapPostgrestError(error);
 
@@ -685,8 +704,12 @@ async function hydrateSessions(client: AtlitosClient, rows: SessionRow[]): Promi
   const typeIds = Array.from(new Set(rows.map((row) => row.session_type_id)));
 
   const [{ data: profileRows }, { data: typeRows }] = await Promise.all([
-    client.from("public_profiles").select("id, name, avatar_url").in("id", coachIds).returns<PublicProfileRow[]>(),
-    client.from("session_types").select("id, coach_id, name, duration_minutes, price, active").in("id", typeIds).returns<SessionTypeRow[]>(),
+    // Unbounded and safe: primary key `.in()`, one row per id, bounded by the
+  // caller session page.
+  client.from("public_profiles").select("id, name, avatar_url").in("id", coachIds).returns<PublicProfileRow[]>(),
+    // Unbounded and safe: `.in("id", ...)` is a primary key lookup, one row per
+  // id, bounded by the caller session page.
+  client.from("session_types").select("id, coach_id, name, duration_minutes, price, active").in("id", typeIds).returns<SessionTypeRow[]>(),
   ]);
 
   const coachNameById = new Map((profileRows ?? []).map((row) => [row.id, row.name ?? "Coach"]));

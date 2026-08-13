@@ -310,6 +310,9 @@ export function useProfile(client: AtlitosClient) {
         { data: primaryRows, error: primaryError },
       ] = await Promise.all([
         client.from("users").select("*").eq("id", authData.user.id).maybeSingle(),
+        // Unbounded and safe: one row per role the caller holds, capped by the
+        // cardinality of the `app_role` enum, a schema constant. Does not grow
+        // with users or with time.
         client.from("user_roles").select("role").eq("user_id", authData.user.id),
         client.from("coach_profiles").select("status").eq("user_id", authData.user.id).maybeSingle(),
         // Primary sport from athlete_sports (is_primary first, else earliest
@@ -673,6 +676,24 @@ function mapCourtRow(client: AtlitosClient, row: CourtQueryRow, near?: { lat: nu
   };
 }
 
+/** Page sizes for the courts surfaces.
+ *
+ * Every number here is chosen to sit BELOW the PostgREST server side row cap
+ * rather than to be generous. See docs/qa/verify/SCALE-CLIENT.md: 0 of 751
+ * `WITH pgrst_source` statements on this project carry `LIMIT ALL` and 670
+ * carry a parameterised `LIMIT`, which proves a `db-max-rows` is set. The cap
+ * value itself is still UNREAD (Supabase dashboard, Settings, API, "Max
+ * rows"), so these are deliberately small enough that the cap cannot be the
+ * thing that truncates the list. */
+const BOOKINGS_PAGE_SIZE = 50;
+const BOOKINGS_MAX_PAGE_SIZE = 100;
+/** A city's browsable courts. `listCourts` sorts by haversine distance in
+ * JavaScript (see mapCourtRow), so the bound is what keeps that sort, and the
+ * payload, from growing with the whole country's court inventory. Recorded as
+ * P2 in SCALE-CLIENT.md: the correct long term shape is a bounding box filter
+ * server side, which is a migration and is deliberately NOT done here. */
+const COURTS_PAGE_SIZE = 100;
+
 const COURT_SELECT = `
   id, venue_id, name, sport, base_price_per_hour, active,
   venues!inner ( id, name, address, city, lat, lng, status, venue_photos ( storage_path, position ) )
@@ -688,7 +709,8 @@ export function useCourts(client: AtlitosClient) {
         .from("courts")
         .select(COURT_SELECT)
         .eq("active", true)
-        .eq("venues.status", "verified");
+        .eq("venues.status", "verified")
+        .limit(COURTS_PAGE_SIZE);
 
       if (filters.sport) {
         query = query.eq("sport", filters.sport);
@@ -802,18 +824,44 @@ export function useCourts(client: AtlitosClient) {
       return { bookingId: body.booking_id, status: body.status, outcome: body.outcome };
     },
 
-    /** v1 `sessions`-shaped "my bookings" list, courts variant. RLS
-     * (`court_bookings_select`) already scopes this to the caller's own
-     * bookings (or their venue's, for a partner/staff account, which this
-     * player-facing hook never calls as such). */
-    async listMyBookings(): Promise<CourtBooking[]> {
+    /** v1 `sessions`-shaped "my bookings" list, courts variant.
+     *
+     * The owner filter is EXPLICIT and is not left to RLS, per CLAUDE.md's
+     * "RLS is not scoping" rule. This docblock previously claimed
+     * `court_bookings_select` already scoped the read; that claim was both a
+     * house-rule breach and a measured performance defect.
+     * `court_bookings_select_merged` is
+     * `is_court_partner_or_staff(court_id) OR user_id = auth.uid() OR ...`,
+     * a permissive OR whose branches Postgres evaluates left to right, so the
+     * non-inlinable partner function ran on EVERY row of the whole table
+     * before the cheap owner test was ever tried. Measured on production
+     * (docs/qa/verify/SCALE-DATABASE.md P0-2): Seq Scan, 41 ms and 1,140
+     * buffers for 103 rows, which is 0.395 ms per row scanned, so the 8 s
+     * `authenticated` statement timeout is reached at 20,250 rows in the
+     * table, roughly month 7 at the 10k target. With the filter the same plan
+     * becomes an Index Scan on `idx_court_bookings_user_id` at 20.5 ms, and
+     * the cost becomes O(my bookings) rather than O(every booking in the
+     * product), which is the property that actually matters.
+     *
+     * The limit is separate and equally load bearing: PostgREST applies a
+     * silent server side row cap to every select, so an unbounded read is not
+     * slow, it is TRUNCATED with a 200 OK and no error anywhere in the stack.
+     * An explicit page size the code owns is visible in review and testable;
+     * an implicit cap the code does not know about is neither. */
+    async listMyBookings(limit: number = BOOKINGS_PAGE_SIZE): Promise<CourtBooking[]> {
+      const { data: authData, error: authError } = await client.auth.getUser();
+      if (authError) throw mapAuthError(authError);
+      if (!authData.user) throw mapAuthError({ message: "Sign in to see your bookings.", status: 401 });
+
       const { data, error } = await client
         .from("court_bookings")
         .select(
           "id, court_id, user_id, booking_source, date, slot_start, slot_end, subtotal, gst, platform_fee, total, status, rating, remarks, cancellation_reason, courts ( name, sport, venues ( name, address, city ) )",
         )
+        .eq("user_id", authData.user.id)
         .order("date", { ascending: false })
         .order("slot_start", { ascending: false })
+        .limit(Math.min(Math.max(limit, 1), BOOKINGS_MAX_PAGE_SIZE))
         .returns<CourtBookingQueryRow[]>();
       if (error) throw mapPostgrestError(error);
 
@@ -1105,6 +1153,18 @@ export interface UploadClipInput {
 }
 
 const CLUTCH_PAGE_SIZE = 10;
+/** Ceiling on the caller's own block list.
+ *
+ * Bounding a block list is the one place where truncation has a safety
+ * consequence rather than a cosmetic one: a blocked user dropped off the end
+ * of this set has their content reappear in the feed, the comments and the
+ * inbox. It is bounded anyway, and deliberately high, because the read is
+ * ALREADY truncated today by the silent PostgREST cap at a number nobody in
+ * this repo has read. Choosing 1000 moves the cutoff to somewhere this file
+ * controls and that is comfortably under any plausible `db-max-rows`. If a
+ * real user ever approaches it, the honest fix is to stop shipping the list to
+ * the device and filter server side. */
+const BLOCK_LIST_MAX = 1000;
 
 // SCALE-MEDIA M-4. One page of a profile clip GRID. Deliberately equal to
 // PLAYBACK_BATCH_MAX below so a full grid page resolves its posters in exactly
@@ -1300,6 +1360,10 @@ async function followProfiles(db: SupabaseClient, ids: string[]): Promise<Follow
   const { data, error } = await db
     .from("public_profiles")
     .select("id, name, avatar_url, handle")
+    // Unbounded and safe: `.in("id", ids)` on a primary key returns at most
+    // one row per id, so the result is exactly bounded by the caller's own
+    // already-bounded id list. Adding a `.limit()` here could only truncate a
+    // page the caller has already sized.
     .in("id", ids)
     .returns<Pick<PublicProfileRow, "id" | "name" | "avatar_url" | "handle">[]>();
   if (error) throw mapPostgrestError(error);
@@ -1327,6 +1391,9 @@ function makeClutchApi(client: AtlitosClient) {
     const { data, error } = await db
       .from("clip_likes")
       .select("clip_id")
+      // Unbounded and safe: `clip_likes_clip_id_user_id_key` makes
+      // (clip_id, user_id) unique, so owner plus an id list returns at most
+      // one row per requested clip, bounded by the caller's page of 10.
       .eq("user_id", authData.user.id)
       .in("clip_id", ids)
       .returns<{ clip_id: string }[]>();
@@ -1345,6 +1412,9 @@ function makeClutchApi(client: AtlitosClient) {
     const { data, error } = await db
       .from("clip_saves")
       .select("clip_id")
+      // Unbounded and safe, same shape as likedClipIds above:
+      // `clip_saves_clip_id_user_id_key` bounds this to one row per requested
+      // clip.
       .eq("user_id", authData.user.id)
       .in("clip_id", ids)
       .returns<{ clip_id: string }[]>();
@@ -1854,6 +1924,18 @@ function makeClutchApi(client: AtlitosClient) {
         .select(CLIP_OWNER_SELECT)
         .eq("owner_id", authData.user.id)
         .order("created_at", { ascending: false })
+// Note the interaction with the `deleted_at` filter below, which runs
+        // in JavaScript rather than as a `.is("deleted_at", null)` qual.
+        // `clips` has no `deleted_at` column on the live project, checked in
+        // information_schema, not inferred: `0100_clip_owner_delete.sql` adds
+        // it and the applied ceiling is `0097`. So the filter is a no-op TODAY
+        // (CLIP_OWNER_SELECT is `*`, the property is undefined, and
+        // `undefined == null` is true) and this page is always full.
+        // Once 0100 applies, a soft deleted clip consumes a slot in the page
+        // and is then dropped, so the grid can render fewer than
+        // CLUTCH_GRID_PAGE_SIZE tiles. Worth knowing before someone reads a
+        // short grid as a bug; the fix at that point is to move the predicate
+        // into the query, which the column existing is what makes possible.
         .limit(CLUTCH_GRID_PAGE_SIZE);
       if (cursor) query = query.lt("created_at", cursor);
 
@@ -1980,6 +2062,7 @@ export async function getBlockedUserIds(client: AtlitosClient): Promise<Set<stri
     .from("blocked_users")
     .select("blocked_id")
     .eq("blocker_id", authData.user.id)
+    .limit(BLOCK_LIST_MAX)
     .returns<BlockedUserRow[]>();
   if (error) throw mapPostgrestError(error);
   return new Set((data ?? []).map((row) => row.blocked_id));

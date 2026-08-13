@@ -448,10 +448,118 @@ Two SQL emitters were added alongside `notify-dispatch` and, like the RPCs liste
 - `notify_session_parties(p_session_id uuid, p_action text) returns int` — `service_role` only (`0103`). Called by `session_transition_internal` on `accept`, `decline`, `start` and `complete`. Writes one `session` type notification per athlete party (the 1:1 `player_id`, or every `session_participants` row for a group session) and never to the acting coach. Returns the number written.
 - `sweep_group_memberships() returns jsonb` — `service_role` only (`0104`), scheduled as `membership-sweep` daily. Writes `membership` type notifications for the renewal reminder, expiry and lapse. See SCHEMA.md "The membership sweep".
 
-**That relay now exists, and it is a sweeper rather than a trigger (`0107`/`0108`, SCALE-REALTIME R-7).** The premise the paragraph above rested on, that the push leg was still the P9 stub, expired: the Expo transport in `_shared/notify.ts` is fully implemented, so "the row is written and nothing pushes" stopped being a no-op and became the P0 that an athlete whose coach starts a session is told nothing and the 03:30 IST membership reminder reaches nobody.
+**That relay now exists, and it is a sweeper rather than a trigger (`0110`/`0111`, SCALE-REALTIME R-7).** The premise the paragraph above rested on, that the push leg was still the P9 stub, expired: the Expo transport in `_shared/notify.ts` is fully implemented, so "the row is written and nothing pushes" stopped being a no-op and became the P0 that an athlete whose coach starts a session is told nothing and the 03:30 IST membership reminder reaches nobody.
 
 - `notify-push-sweep` (edge function, SERVICE-ROLE ONLY, same `assertServiceRoleRequest` boundary as `notify-dispatch`). `POST {}` or `{ limit }`. Calls `claim_notification_push_batch(p_limit)`, which claims rows with `pushed_at is null` using `for update skip locked`, groups the claimed rows by identical `(type, title, body, deep_link)`, and pushes each group with `pushContentToUsers`. Rows older than 30 minutes are checkpointed without sending. Returns `{ claimed, pushed, suppressed, noDevice, retrying, expired }`. Deploy: `supabase functions deploy notify-push-sweep`.
-- `notification-push-sweep` (pg_cron job, `0108`) posts to it every 30 seconds over pg_net, authenticated from two Supabase Vault secrets, `project_url` and `service_role_key`. **The migration REFUSES to install the job if pg_net or either secret is missing**, because a job that 403s every 30 seconds into `net._http_response` looks healthy in `cron.job` and delivers nothing.
-- Not a trigger, and not a database webhook, deliberately. A per-row webhook fires once per recipient (so a group of 50 is 50 single-recipient HTTP calls, which is SCALE-REALTIME R-6 reintroduced), leaves no mark when it fails so nothing can retry, and would put an outbound HTTP call inside the transaction that moves a session's status. The four-point argument is in `0107`'s header.
+- `notification-push-sweep` (pg_cron job, `0111`) posts to it every 30 seconds over pg_net, authenticated from two Supabase Vault secrets, `project_url` and `service_role_key`. **The migration REFUSES to install the job if pg_net or either secret is missing**, because a job that 403s every 30 seconds into `net._http_response` looks healthy in `cron.job` and delivers nothing.
+- Not a trigger, and not a database webhook, deliberately. A per-row webhook fires once per recipient (so a group of 50 is 50 single-recipient HTTP calls, which is SCALE-REALTIME R-6 reintroduced), leaves no mark when it fails so nothing can retry, and would put an outbound HTTP call inside the transaction that moves a session's status. The four-point argument is in `0110`'s header.
 
 **Batching, R-6.** `notify-dispatch`'s per-recipient sequential loop is gone. `_shared/notify.ts` now exports `pushContentToUsers(service, content, userIds)` and `dispatchNotificationFanout(service, content, userIds)`: one bulk insert, bulk prefs and `push_tokens` reads chunked at 200 users, then Expo requests of up to 100 tokens each **across recipients**, paced against Expo's 600-per-second project allowance and bounded to 6 in flight. `notify-dispatch`'s request and response shapes are unchanged; identical content is grouped internally, so a group session roster is one Expo request rather than one per athlete.
+
+When the real APNs/FCM transport lands, the relay belongs on the `notifications` table itself, one trigger covering every domain, rather than being re-plumbed per RPC.
+
+---
+
+## Bounded reads (scale, 10k target)
+
+Recorded 2026-08-14 alongside the sweep that bounded every unbounded read in
+`packages/api`. Read `docs/qa/verify/SCALE-CLIENT.md` and
+`docs/qa/verify/SCALE-DATABASE.md` for the measurements behind these numbers.
+
+**The mechanism, because it changes what "unbounded" means here.** PostgREST
+applies a silent server side row cap to every select on this project. Verified,
+not assumed: of 751 `WITH pgrst_source` statements in `pg_stat_statements`,
+**0 carry `LIMIT ALL`** and **670 carry a parameterised `LIMIT $n OFFSET $m`**.
+PostgREST emits the literal `LIMIT ALL` when a query is genuinely unbounded, so
+a numeric limit on a query the client issued with no `.limit()` proves a
+`db-max-rows` is set. The consequence is that an unbounded read is not slow, it
+is **truncated with a 200 OK**, and nothing anywhere in the stack says so. Where
+the client's `.order()` is ascending, the rows dropped are the ones the user
+actually wants.
+
+**The cap's value is still UNREAD.** It is a PostgREST environment variable, not
+a database setting, so it is not in `pg_db_role_setting` and cannot be read over
+SQL. Read it from the Supabase dashboard (Settings, API, "Max rows") and record
+it here. Every page size below is chosen to sit comfortably under any plausible
+value precisely because nobody knows the real one.
+
+### Signature changes
+
+All three are backwards compatible: every existing call site passes no
+argument and gets the default page.
+
+| Method | Before | After |
+|---|---|---|
+| `useCourts().listMyBookings()` | no args, no owner filter, unbounded | `listMyBookings(limit = 50)`, plus an explicit `.eq("user_id", auth.uid())` |
+| `useEmpower().listUpas()` | no args, unbounded, one RPC per row | `listUpas(limit = 48)`, one batched balance RPC |
+| `useNotifications().list()` | no args, unbounded | `list(limit = 50)` |
+
+### Behaviour changes
+
+- **`useChat().listMessages(threadId)` now returns the NEWEST page, not the
+  oldest.** It still returns oldest-first within that page, so render order is
+  unchanged. The old query was `created_at ASC` with no limit, which under the
+  server cap returned the OLDEST N rows: a long thread opened to messages from
+  months ago with no way to reach today, and the message the user had just sent
+  vanished on the next open. There is no "load older" affordance yet, so a
+  thread longer than 50 messages currently starts at the 50th most recent.
+- **`useChat().listThreads()` no longer downloads every message in every
+  thread.** It calls the `chat_thread_previews` RPC and falls back to a bounded
+  batch read when that function is absent. See below.
+- **`useEmpower().listUpas()` no longer fans out one HTTP request per verified
+  UPA.** It calls `upa_fund_balances` and falls back to a bounded worker pool
+  (5 at a time) over the existing per-row RPC.
+
+### Depends on migration 0113, which is NOT applied
+
+`0113_bounded_reads_support.sql` adds `chat_thread_previews(uuid[])`,
+`upa_fund_balances(uuid[])` and `idx_notifications_user_created`. The applied
+migration ceiling on `syzzfgaudpifwvbpycyi` is **0097** (checked in
+`supabase_migrations.schema_migrations`), so **both functions are absent in
+production today and both fallback paths are the live ones.**
+
+That is deliberate, not an oversight. Each client checks for PostgREST's
+`PGRST202` schema-cache miss (and Postgres's `42883`) and degrades; any other
+error still surfaces. So applying 0113 is an improvement, never a prerequisite,
+and the gap between merging this and applying it does not break either screen.
+
+What is already fixed without 0113, and what still waits for it:
+
+| Fix | Live now | Needs 0113 |
+|---|---|---|
+| Bookings: owner filter, Seq Scan to Index Scan | yes | no |
+| Every explicit `.limit()` | yes | no |
+| Empower: no more N-wide request fan-out | yes, via the worker pool | one-call version |
+| Chat inbox: payload cut ~100x | yes | exactly one row per thread |
+| Notifications: no more full-history sort | bounded, sort remains | sort removed by the index |
+
+The one thing the fallback does NOT fix is a blank preview on a thread quiet
+longer than the newest bounded window, because PostgREST has no `DISTINCT ON`.
+That case only disappears when 0113 is applied.
+
+### Reads deliberately left unbounded
+
+Fourteen, each checked rather than skipped. Two shapes:
+
+- **Bounded by a primary key `.in()`**, so the result is one row per id and the
+  caller's own page already sizes it: `public_profiles` (four sites),
+  `training_groups` by id (two sites), `session_types` by id, `clip_likes` and
+  `clip_saves` (unique on `(clip_id, user_id)`).
+- **Bounded by the schema, not by users or time**: `user_roles` (role enum),
+  `notification_prefs` (max 8, `unique (user_id, notification_type)` against an
+  8 value enum, both verified in the catalog), `shopper_categories` (4 rows),
+  `fee_config` (7 rows), `promo_banners` (3 active rows).
+
+One read is unbounded and **knowingly wrong to bound**: the group member count
+in `use-chat.ts`'s `fetchGroupInfo`. `.in("thread_id", ...)` on a non unique
+column returns one row per seat, so it is (threads) x (members). A `.limit()`
+there would produce a silently WRONG COUNT rather than a short list, and a wrong
+member count has already cost this project a full investigation. It needs a
+server side aggregate; that is recorded, not half-fixed.
+
+### The checker
+
+`scripts/scan-unbounded-reads.mjs` enumerates every read chain in
+`packages/api/src` and classifies it. It is negative-tested: planting one
+unbounded read moves the count and removing it moves it back. Run it before
+adding a read.
