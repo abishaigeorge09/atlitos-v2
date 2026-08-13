@@ -398,6 +398,58 @@ launch-blocking P0. `supabase secrets list` shows `RAZORPAY_WEBHOOK_SECRET` is s
 contents alone; the secret was set directly against the project, which leaves no trace in the repo.
 **Absence of config in the tree is not evidence of absence in production.**
 
+### Live dark mode was NOT broken by the p6 merge, and the token system was never at fault
+Symptom: with the app already running, `simctl ui <udid> appearance dark` reports dark but the
+captured screens are indistinguishable from light. A COLD RELAUNCH under dark renders correctly.
+The device agent correctly refused to attribute this to the recent merge without an A/B. It is a
+regression, but from `025d77a` (2026-08-11, "resolve system theme to concrete light/dark before
+toggling dark class"), three days earlier and unrelated to the merge.
+
+Cold-launch-correct plus live-change-broken rules OUT the palette and the token plumbing, and
+`useThemeColors()` was verified reactive (it reads nativewind's `useColorScheme()`, not a
+one-shot). The broken thing is that the app PINS its own appearance and then cannot observe the OS.
+
+Mechanism, read out of the installed sources rather than inferred. `025d77a` made
+`applyTheme('system')` resolve to a concrete `'light'`/`'dark'` and call `colorScheme.set()` with
+it. That is right on web and actively harmful on native, because on native
+`colorScheme.set(v)` calls `Appearance.setColorScheme(v)`
+(`react-native-css-interop/src/runtime/native/appearance-observables.ts:32`), which is a hard OS
+level override:
+
+- iOS `RCTAppearance.mm:112` sets `window.overrideUserInterfaceStyle` on every window. The trait
+  collection is then pinned, so a later system change posts no
+  `RCTUserInterfaceStyleDidChangeNotification`, `appearanceChanged:` (line 130) never runs, and no
+  event reaches JS. RN's JS side compounds it: `Appearance.js:96` caches the concrete value in
+  `state.appearance`, and `getColorScheme()` returns that cache until an event it will never get.
+- Android `AppearanceModule.kt:85` maps it to `AppCompatDelegate.setDefaultNightMode(MODE_NIGHT_NO)`,
+  the same pin. So this is not iOS only.
+
+Cold launch works because `RCTAppearance` reads the key window's real trait collection in `init`,
+before anything is overridden. The manual `Appearance.addChangeListener` that `025d77a` added
+cannot rescue it: it listens for the event that is no longer emitted and reads the poisoned cache.
+
+**Fix (2 functional lines, `apps/mobile/src/lib/apply-theme.ts`): platform-gate the workaround.**
+Native forwards `'system'` straight through, which nativewind maps to
+`Appearance.setColorScheme('unspecified')`, clearing the iOS override and setting Android to
+`MODE_NIGHT_FOLLOW_SYSTEM`, and leaves `colorSchemeObservable` undefined so `colorScheme.get()`
+falls back to nativewind's own `systemColorScheme`, kept live by its Appearance and AppState
+listeners. Web keeps the resolve-to-concrete workaround that fixed J54/K59 etc.
+
+NOT device-proven, and cannot be from a worktree. The device pass must run the A/B in
+`docs/qa/verify/DARK-MODE-LIVE-SWITCH.md`; a fix that only ever shows a green after a relaunch
+proves nothing, because relaunch was already passing.
+
+Class sweep, appearance domain, all call sites enumerated: `_layout.tsx:41` (the sibling D23
+`dark` class toggle from the same QA batch) is already correctly `Platform.OS !== 'web'` gated and
+is NOT an instance. `use-theme-colors.ts` and `AuthScene.tsx` read the reactive nativewind hook,
+not a one-shot. The only two module-scope `StyleSheet.create` blocks in the app
+(`(auth)/splash.tsx:182`, `AuthScene.tsx:366`) carry spacing and radii only, no color, so there is
+no captured-at-import palette anywhere. `applyTheme` has exactly two callers, `_layout.tsx:113`
+and `SettingsContent.tsx:171`, and both inherit the fix. One LATENT instance of the same class,
+left alone deliberately: `packages/ui-native/src/ThemedText.tsx:39` defaults `mode = "light"`, a
+non-reactive theme read, but it has ZERO call sites in any app, so it cannot be the observed bug.
+It is flagged, not deleted: "unused" is exactly the absence-dressed-as-fact this section warns of.
+
 ---
 
 ## OPEN
