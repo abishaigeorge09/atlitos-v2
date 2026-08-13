@@ -3,6 +3,7 @@ import type {
   CoachStatus,
   Session,
   SessionStatus,
+  SessionTypeOption,
   Transaction,
   TransactionKind,
 } from "@atlitos/types";
@@ -233,11 +234,18 @@ export function useCoachSessions(client: AtlitosClient) {
       return (data ?? []).map(mapSessionRow);
     },
 
-    /** Upcoming: `accepted` or `rescheduled` (FR-19's "rescheduled behaves
-     * like accepted going forward"), soonest first. 1:1 rows only: group
-     * sessions (0076, NULL player_id) are also `accepted` on insert and
-     * would otherwise leak into this 1:1 shaped read; the groups domain
-     * reads them through `useGroups.groupSessions`. */
+    /** Upcoming: `accepted`, `in_progress` or `rescheduled` (FR-19's
+     * "rescheduled behaves like accepted going forward"), soonest first.
+     * 1:1 rows only: group sessions (0076, NULL player_id) are also
+     * `accepted` on insert and would otherwise leak into this 1:1 shaped
+     * read; the groups domain reads them through
+     * `useGroups.groupSessions`.
+     *
+     * `in_progress` (0077) has to be here now that the coach can actually
+     * reach that state from `session/[id].tsx`: the session the coach just
+     * started is the one they are standing in, and it would otherwise fall
+     * off their own dashboard the moment they tapped Start, leaving no
+     * route back to the screen that completes it. */
     async listUpcoming(): Promise<Session[]> {
       const userId = await requireUserId(client);
       const { data, error } = await client
@@ -245,7 +253,7 @@ export function useCoachSessions(client: AtlitosClient) {
         .select(SESSION_SELECT)
         .eq("coach_id", userId)
         .not("player_id", "is", null)
-        .in("status", ["accepted", "rescheduled"])
+        .in("status", ["accepted", "in_progress", "rescheduled"])
         .order("date", { ascending: true })
         .order("slot_start", { ascending: true })
         .returns<SessionQueryRow[]>();
@@ -327,6 +335,22 @@ export function useCoachSessions(client: AtlitosClient) {
       const { data, error } = await client.rpc("session_transition", {
         p_session_id: sessionId,
         p_action: "accept",
+      });
+      if (error) throw mapPostgrestError(error);
+      return mapSessionRpcRow(data as unknown as SessionRpcRow);
+    },
+
+    /** 0077. `accepted` to `in_progress`, coach only, NO time gate by
+     * design (0077 decision 1: the product trusts the coach on when their
+     * own session begins). Moves no money: the 1:1 earnings accrual is
+     * still written by `complete-session` alone, and `completeSession`
+     * below is unchanged, so starting a session cannot skip it. Refused
+     * from every state but `accepted`, so a cancelled or completed session
+     * can never be revived through this door. */
+    async startSession(sessionId: string): Promise<Session> {
+      const { data, error } = await client.rpc("session_transition", {
+        p_session_id: sessionId,
+        p_action: "start",
       });
       if (error) throw mapPostgrestError(error);
       return mapSessionRpcRow(data as unknown as SessionRpcRow);
@@ -490,10 +514,40 @@ export interface TraineeSummary {
   hasInPerson: boolean;
 }
 
-/** The gap doc's online representation: a session type whose name contains
- * "online" (no dedicated flag column exists on session_types). */
+/**
+ * ONLINE SESSION TYPES ARE A NAMING CONVENTION, DELIBERATELY.
+ *
+ * `session_types` has no `is_online` column and the product has no video
+ * call concept at all: no room provisioning, no join link, no provider.
+ * Adding a boolean today would be a schema field with nothing behind it,
+ * and every consumer would still have to fall back to the name for the rows
+ * written before it existed. So the convention stands, and it is now
+ * explicit on both ends rather than incidental:
+ *
+ *   read  side: `isOnlineSessionTypeName` (here, the single reader).
+ *   write side: `applyOnlineSessionTypeName` (here, the single writer),
+ *               called by the coach session types editor so the mode the
+ *               coach picks is what the name encodes, always.
+ *
+ * When a real online session ships (link, provider, join screen), add
+ * `session_types.is_online`, backfill it from this same predicate, and
+ * delete both functions together. Until then, do not read the name for
+ * online-ness anywhere except through `isOnlineSessionTypeName`.
+ */
 export function isOnlineSessionTypeName(name: string | null | undefined): boolean {
   return !!name && name.toLowerCase().includes("online");
+}
+
+/** Write side of the convention above: returns the name a session type must
+ * carry to read as `isOnline`. Idempotent, and never rewrites a name the
+ * coach already worded themselves. */
+export function applyOnlineSessionTypeName(name: string, isOnline: boolean): string {
+  const trimmed = name.trim();
+  if (isOnline) {
+    return isOnlineSessionTypeName(trimmed) ? trimmed : `Online ${trimmed}`;
+  }
+  if (!isOnlineSessionTypeName(trimmed)) return trimmed;
+  return trimmed.replace(/online/gi, "").replace(/\s+/g, " ").trim();
 }
 
 export function useCoachTrainees(client: AtlitosClient) {
@@ -524,7 +578,11 @@ export function useCoachTrainees(client: AtlitosClient) {
       const byPlayer = new Map<string, TraineeSummary>();
       for (const row of rows) {
         const existing = byPlayer.get(row.player_id);
-        const hasUpcoming = row.status === "accepted" || row.status === "rescheduled";
+        // Same list as listUpcoming, `in_progress` included: a trainee whose
+        // session is running right now is the most active trainee there is,
+        // and must not read as "No upcoming" on the Trainees tab.
+        const hasUpcoming =
+          row.status === "accepted" || row.status === "in_progress" || row.status === "rescheduled";
         const online = isOnlineSessionTypeName(row.session_types?.name);
         if (!existing) {
           byPlayer.set(row.player_id, {
@@ -704,6 +762,155 @@ export function useMyTraineeVideos(client: AtlitosClient) {
 }
 
 export type UseMyTraineeVideosResult = ReturnType<typeof useMyTraineeVideos>;
+
+// ---------------------------------------------------------------------------
+// session types and pricing. PRD-02 FR-4.
+// ---------------------------------------------------------------------------
+
+interface SessionTypeRow {
+  id: string;
+  coach_id: string;
+  name: string;
+  duration_minutes: number;
+  price: number;
+  active: boolean;
+}
+
+function mapSessionTypeRow(row: SessionTypeRow): SessionTypeOption {
+  return {
+    id: row.id,
+    coachId: row.coach_id,
+    name: row.name,
+    durationMinutes: row.duration_minutes,
+    price: row.price,
+    active: row.active,
+  };
+}
+
+const SESSION_TYPE_SELECT = "id, coach_id, name, duration_minutes, price, active";
+
+/**
+ * FR-4. A coach with zero `session_types` rows is unbookable, full stop:
+ * `sessions.session_type_id` is NOT NULL (0018_coaching.sql) and the athlete
+ * booking screen only ever lists `active` types, so this is the first thing
+ * a verified coach has to own.
+ *
+ * These are plain table writes, not RPCs, and that is correct under the
+ * financial invariant: `session_types.price` is a LIST price, not a money
+ * row and not a status field. Nothing here debits, credits, or transitions
+ * anything. The real charge is computed and re-validated server side at
+ * booking time (`PRICE_MISMATCH`), so a coach editing their own list price
+ * is the same trust level as a coach editing `training_groups.monthly_fee`,
+ * which 0080's own header note makes explicitly.
+ *
+ * The write path is `session_types_write_own` (0019_coaching_rls.sql:67):
+ * `has_role('coach') and coach_id = auth.uid()`, insert/update/delete in one
+ * policy pair. Every query below still carries its own `coach_id` filter;
+ * RLS is a floor, not scoping.
+ *
+ * Deliberately NO delete. A session type is deactivated, never removed:
+ * historical `sessions` rows point at it by FK and their detail screens read
+ * the name back. `deactivate` is the destructive-looking action a coach gets.
+ */
+export function useCoachSessionTypes(client: AtlitosClient) {
+  return {
+    /** Every one of this coach's session types, active first, then by name. */
+    async listMyTypes(): Promise<SessionTypeOption[]> {
+      const userId = await requireUserId(client);
+      const { data, error } = await client
+        .from("session_types")
+        .select(SESSION_TYPE_SELECT)
+        .eq("coach_id", userId)
+        .order("active", { ascending: false })
+        .order("name", { ascending: true })
+        .returns<SessionTypeRow[]>();
+      if (error) throw mapPostgrestError(error);
+      return (data ?? []).map(mapSessionTypeRow);
+    },
+
+    /** `coach_id` is set from the caller's own session, never from an
+     * argument: a client-supplied coach id here would be an ownership hole
+     * even with the policy's `with check` catching it. */
+    async createType(input: {
+      name: string;
+      durationMinutes: number;
+      price: number;
+      isOnline?: boolean;
+    }): Promise<SessionTypeOption> {
+      const userId = await requireUserId(client);
+      const { data, error } = await client
+        .from("session_types")
+        .insert({
+          coach_id: userId,
+          name: applyOnlineSessionTypeName(input.name, input.isOnline ?? false),
+          duration_minutes: input.durationMinutes,
+          price: input.price,
+          active: true,
+        })
+        .select(SESSION_TYPE_SELECT)
+        .single<SessionTypeRow>();
+      if (error) throw mapPostgrestError(error);
+      return mapSessionTypeRow(data);
+    },
+
+    /** Omitted fields stay unchanged. Editing the price of a type never
+     * touches an already booked session: `sessions` stores its own price,
+     * platform_fee and total at booking time (0018), so this is forward
+     * looking only, the same way availability edits are (FR-23). */
+    async updateType(input: {
+      typeId: string;
+      name?: string;
+      durationMinutes?: number;
+      price?: number;
+      active?: boolean;
+      isOnline?: boolean;
+    }): Promise<SessionTypeOption> {
+      const userId = await requireUserId(client);
+      const patch: {
+        name?: string;
+        duration_minutes?: number;
+        price?: number;
+        active?: boolean;
+      } = {};
+      if (input.name !== undefined) {
+        patch.name =
+          input.isOnline === undefined
+            ? input.name.trim()
+            : applyOnlineSessionTypeName(input.name, input.isOnline);
+      }
+      if (input.durationMinutes !== undefined) patch.duration_minutes = input.durationMinutes;
+      if (input.price !== undefined) patch.price = input.price;
+      if (input.active !== undefined) patch.active = input.active;
+
+      const { data, error } = await client
+        .from("session_types")
+        .update(patch)
+        .eq("id", input.typeId)
+        .eq("coach_id", userId)
+        .select(SESSION_TYPE_SELECT)
+        .single<SessionTypeRow>();
+      if (error) throw mapPostgrestError(error);
+      return mapSessionTypeRow(data);
+    },
+
+    /** Hide a type from athletes without breaking the sessions that already
+     * reference it. Existing accepted sessions are untouched. */
+    async setTypeActive(typeId: string, active: boolean): Promise<SessionTypeOption> {
+      const userId = await requireUserId(client);
+      const { data, error } = await client
+        .from("session_types")
+        .update({ active })
+        .eq("id", typeId)
+        .eq("coach_id", userId)
+        .select(SESSION_TYPE_SELECT)
+        .single<SessionTypeRow>();
+      if (error) throw mapPostgrestError(error);
+      return mapSessionTypeRow(data);
+    },
+  };
+}
+
+export type UseCoachSessionTypesResult = ReturnType<typeof useCoachSessionTypes>;
 
 // ---------------------------------------------------------------------------
 // availability windows. FR-22, FR-23.
