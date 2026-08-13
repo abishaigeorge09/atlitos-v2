@@ -369,26 +369,15 @@ begin
   -- --------------------------------------------------------------------
   -- 2. Anonymise what a second party still reads
   -- --------------------------------------------------------------------
-  -- Scrubbing the users row is what anonymises chat_messages, clip_comments,
-  -- sessions, court_bookings, group_memberships and orders in one move: they
-  -- all resolve their author through this row, and they all keep resolving.
-  update public.users set
-    name               = 'Deleted user',
-    phone              = null,
-    dob                = null,
-    avatar_url         = null,
-    cover_url          = null,
-    channel_name       = null,
-    handle             = null,
-    bio                = null,
-    city               = null,
-    state              = null,
-    sports             = '{}',
-    show_donor_name    = false,
-    theme              = 'system',
-    notification_prefs = '{"messages": false, "sessions": false, "promotions": false}'::jsonb,
-    deleted_at         = now()
-  where id = v_uid;
+  -- ORDER MATTERS. The public.users scrub is deliberately the LAST write in
+  -- this function, because setting deleted_at is what makes is_actor_active()
+  -- return false, and 0096's restrictive `<table>_active_update` policies call
+  -- it on every mutating table. This function is owned by `postgres`, which
+  -- carries BYPASSRLS on Supabase, so those policies do not currently apply to
+  -- it either way. Doing the scrub last means the function stays correct even
+  -- if it is ever re-owned by a role without BYPASSRLS, instead of silently
+  -- skipping the coach_profiles update (a table that really does carry two
+  -- restrictive policies) and leaving a deleted coach's bio published.
 
   -- Coach profile row survives because sessions and training_groups cascade off
   -- it. Only the free text and the discoverable detail go.
@@ -441,6 +430,28 @@ begin
   values (v_uid, 'account.deleted', 'users', v_uid,
           jsonb_build_object('removed', v_removed, 'retained', v_retained),
           'In app account deletion, Apple Guideline 5.1.1(v)');
+
+  -- The scrub, last. This one statement is what anonymises chat_messages,
+  -- clip_comments, sessions, court_bookings, group_memberships and orders: they
+  -- all resolve their author through this row, and they all keep resolving,
+  -- because the row is retained rather than deleted.
+  update public.users set
+    name               = 'Deleted user',
+    phone              = null,
+    dob                = null,
+    avatar_url         = null,
+    cover_url          = null,
+    channel_name       = null,
+    handle             = null,
+    bio                = null,
+    city               = null,
+    state              = null,
+    sports             = '{}',
+    show_donor_name    = false,
+    theme              = 'system',
+    notification_prefs = '{"messages": false, "sessions": false, "promotions": false}'::jsonb,
+    deleted_at         = now()
+  where id = v_uid;
 
   return jsonb_build_object(
     'status', 'deleted',
