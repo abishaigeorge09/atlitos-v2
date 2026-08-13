@@ -18,15 +18,42 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { AppError } from "./app-error.ts";
 import { round2 } from "./fee-config.ts";
 import type { CapturedIntent, FinalizeResult } from "./finalize-payment.ts";
+import { dispatchNotification } from "./notify.ts";
 
 interface CourtBookingRow {
   id: string;
   court_id: string;
+  user_id: string | null;
   status: string;
+  date: string;
+  slot_start: string;
+  slot_end: string;
   subtotal: number;
   gst: number;
   platform_fee: number;
   total: number;
+}
+
+/** "2026-08-12" -> "Aug 12, 2026", no hyphens in the rendered copy string. */
+function formatBookingDate(isoDate: string): string {
+  const [year, month, day] = isoDate.split("-").map((part) => Number(part));
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/** "18:00:00" -> "6:00 PM". */
+function formatBookingTime(time: string): string {
+  const [hourStr, minuteStr] = time.split(":");
+  const hour24 = Number(hourStr);
+  const minute = Number(minuteStr);
+  const period = hour24 >= 12 ? "PM" : "AM";
+  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+  return `${hour12}:${minute.toString().padStart(2, "0")} ${period}`;
 }
 
 export async function finalizeCourtBookingCaptured(
@@ -54,9 +81,9 @@ export async function finalizeCourtBookingCaptured(
 
   const { data: court, error: courtLookupError } = await supabase
     .from("courts")
-    .select("venue_id")
+    .select("venue_id, name")
     .eq("id", booking.court_id)
-    .single<{ venue_id: string }>();
+    .single<{ venue_id: string; name: string }>();
 
   if (courtLookupError || !court) {
     throw new AppError(
@@ -118,6 +145,28 @@ export async function finalizeCourtBookingCaptured(
       `Failed to write ledger_entries for booking ${bookingId}: ${ledgerError.message}`,
       500,
     );
+  }
+
+  // UC-96 / AT-146: tell the athlete their court is confirmed, in app and
+  // push. Best effort: the booking is already confirmed and the ledger group
+  // is already committed by this point, so a notification failure (a bad row,
+  // a push provider hiccup) must never roll back or fail the payment
+  // confirmation response the client is waiting on.
+  if (booking.user_id) {
+    try {
+      await dispatchNotification(supabase, {
+        userId: booking.user_id,
+        type: "booking",
+        title: "Court booked",
+        body: `Your booking at ${court.name} for ${formatBookingDate(booking.date)} at ${formatBookingTime(booking.slot_start)} is confirmed.`,
+        deepLink: `/courts/booking/${bookingId}`,
+      });
+    } catch (notifyError) {
+      console.error(
+        `[finalize-court-booking-payment] failed to dispatch booking notification for ${bookingId}:`,
+        notifyError instanceof Error ? notifyError.message : notifyError,
+      );
+    }
   }
 
   return {

@@ -16,7 +16,39 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "../fixtures";
+import { serviceClient } from "../helpers/sql.mjs";
 import { DEMO_PASSWORD, EMAIL } from "./support/rls.mjs";
+
+/**
+ * AUTH-03/AUTH-04 register a real account against production on every run.
+ * Best-effort self-teardown so repeat runs stop accumulating live rows (the
+ * same class of debt as the training_groups/chat_messages pollution this
+ * QA pass already found and cleaned up once, one layer up: auth accounts
+ * instead of app-domain rows). There is no in-app self-delete endpoint yet
+ * (apps/landing/delete-account.html is a manual email process, confirmed by
+ * reading it), so this needs the service role, same contract as every other
+ * spec's self-teardown in this repo (coaching.spec.ts CO-06/CO-08). Loud
+ * console note instead of a silent no-op when the key is absent.
+ */
+async function deleteE2eAuthAccount(email) {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.warn(`[auth.spec] SUPABASE_SERVICE_ROLE_KEY not set, leaving ${email} in production. Clean up manually.`);
+    return;
+  }
+  const admin = serviceClient();
+  // This project's installed gotrue-js only supports page/perPage on
+  // listUsers, no server-side email filter - fetch and match client-side.
+  // Fine at this scale (a few hundred users); revisit with pagination if
+  // the user base grows enough for one page to stop covering everyone.
+  const { data, error } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  if (error) {
+    console.warn(`[auth.spec] listUsers failed, leaving ${email} in production: ${error.message}`);
+    return;
+  }
+  const match = data?.users?.find((u) => u.email === email);
+  if (!match) return;
+  await admin.auth.admin.deleteUser(match.id);
+}
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -34,23 +66,18 @@ test.describe("AUTH — auth, onboarding, session, cross-portal role gates", () 
     // IS the cold start this case tests. Setting persona: "player" etc. is
     // what other tests do to authenticate; omitting it entirely is correct
     // here, not an oversight.
-    // Cold start: cleared storage means status resolves to signed_out, and
-    // splash (PRD-01 3.1) offers "Continue as guest" / "Log in" rather than
-    // forcing either — that IS the "no forced login redirect, no modal"
-    // contract. Guest browsing itself is a real anonymous Supabase session
-    // (session-store.ts), reached by completing that one deliberate tap.
+    // Cold start: splash.tsx's own docstring (PRD-01 3.1) documents that
+    // there is no first-run chooser screen any more. `signed_out` silently
+    // starts a guest session and routes straight to `/(tabs)`, same as
+    // `guest`/`signed_in`. Login/Register/onboarding are never forced at
+    // launch, only offered later where relevant (the guest gate on a
+    // gated tap, or Home's "Finish setting up" nudge). This replaced an
+    // older "Continue as guest" / "Log in" splash chooser this test used
+    // to assert against.
     await page.goto("/");
-    await expect(page).toHaveURL(/\/splash$/);
 
     // Not forced to /login, and the LoginGateSheet ("Want to hit the
     // spotlight?", its verbatim SPEC.md copy) never auto-opens.
-    await expect(page.getByText("Want to hit the spotlight?")).toHaveCount(0);
-    const guestButton = page.getByRole("button", { name: "Continue as guest" });
-    await expect(guestButton).toBeVisible();
-
-    await guestButton.click();
-
-    // Lands on Home (tabs root), not redirected back to any login screen.
     await expect.poll(() => new URL(page.url()).pathname, { timeout: 15_000 }).toBe("/");
     await expect(page).not.toHaveURL(/\/login$/);
     await expect(page.getByText("Want to hit the spotlight?")).toHaveCount(0);
@@ -89,70 +116,91 @@ test.describe("AUTH — auth, onboarding, session, cross-portal role gates", () 
 
   test("AUTH-03 register a new player routes to role select then the player wizard @smoke", async ({ page }) => {
     const stamp = randomUUID().slice(0, 8);
-    await page.goto("/register");
+    const email = `e2e.player.${stamp}@atlitos.dev`;
+    try {
+      await page.goto("/register");
 
-    await page.getByLabel("Full name input").fill(`AT E2E Player ${stamp}`);
-    await page.getByLabel("Email input").fill(`e2e.player.${stamp}@atlitos.dev`);
-    await page.getByLabel("Phone input").fill(`9${stamp.replace(/\D/g, "").padEnd(9, "1").slice(0, 9)}`);
-    await page.getByLabel("Date of birth input").fill("1999-05-14");
-    // exact: true, because getByLabel's default substring match makes plain
-    // "Password input" also match "Confirm password input" (strict-mode
-    // violation observed in practice: two elements resolved).
-    await page.getByLabel("Password input", { exact: true }).fill("E2ePlayerPass123!");
-    await page.getByLabel("Confirm password input").fill("E2ePlayerPass123!");
-    await page.getByRole("button", { name: "Create account" }).click();
+      await page.getByLabel("Full name input").fill(`AT E2E Player ${stamp}`);
+      await page.getByLabel("Email input").fill(email);
+      await page.getByLabel("Phone input").fill(`9${stamp.replace(/\D/g, "").padEnd(9, "1").slice(0, 9)}`);
+      await page.getByLabel("Date of birth input").fill("1999-05-14");
+      // exact: true, because getByLabel's default substring match makes plain
+      // "Password input" also match "Confirm password input" (strict-mode
+      // violation observed in practice: two elements resolved).
+      await page.getByLabel("Password input", { exact: true }).fill("E2ePlayerPass123!");
+      await page.getByLabel("Confirm password input").fill("E2ePlayerPass123!");
+      await page.getByRole("button", { name: "Create account" }).click();
 
-    // Two legitimate outcomes depending on whether email confirmation is on
-    // for this project: either straight through to role-select (the
-    // catalog's literal expectation), or a "check your email" confirmation
-    // gate (account still created, just not yet routable to the wizard).
-    // Both are asserted explicitly rather than only accepting one, so a
-    // silent regression to neither (e.g. a crash, or a field-validation
-    // error some fixture is tripping) still fails the test.
-    await expect(
-      page.getByText("Check your email").or(page.getByText("How will you use Atlitos")),
-    ).toBeVisible({ timeout: 15_000 });
+      // Two legitimate outcomes depending on whether email confirmation is on
+      // for this project: either straight through to Home (register.tsx's own
+      // docstring: PRD-01 FR-6/FR-7, success lands in Home, never a forced
+      // role select; onboarding is offered later via Home's "Finish setting
+      // up" nudge, not gated at registration), or a "check your email"
+      // confirmation gate (account still created, just not yet signed in).
+      // Both are asserted explicitly rather than only accepting one, so a
+      // silent regression to neither (e.g. a crash, or a field-validation
+      // error some fixture is tripping) still fails the test.
+      await expect(
+        page.getByText("Check your email").or(page.getByRole("button", { name: "Finish setting up" })),
+      ).toBeVisible({ timeout: 15_000 });
 
-    if (await page.getByText("Check your email").isVisible().catch(() => false)) {
-      test.info().annotations.push({
-        type: "note",
-        description: "Email confirmation is enabled on this project; registration stops short of role-select until confirmed.",
-      });
-      return;
+      if (await page.getByText("Check your email").isVisible().catch(() => false)) {
+        test.info().annotations.push({
+          type: "note",
+          description: "Email confirmation is enabled on this project; registration stops short of Home until confirmed.",
+        });
+        return;
+      }
+
+      // Home-first: registration does not force role-select. The "Finish
+      // setting up" nudge (shown because the new profile has no city yet)
+      // is the deferred entry point into the same role-select wizard.
+      await expect(page).toHaveURL(/\/\(tabs\)$|\/$/);
+      await page.getByRole("button", { name: "Finish setting up" }).click();
+      await expect(page).toHaveURL(/\/role-select$/);
+      await page.getByRole("button", { name: /I am a player/ }).click();
+      await expect(page).toHaveURL(/\/player-setup\/0$/);
+    } finally {
+      await deleteE2eAuthAccount(email);
     }
-
-    await expect(page).toHaveURL(/\/role-select$/);
-    await page.getByRole("button", { name: /I am a player/ }).click();
-    await expect(page).toHaveURL(/\/player-setup\/0$/);
   });
 
   test("AUTH-04 register a new coach routes to role select then the coach wizard", async ({ page }) => {
     const stamp = randomUUID().slice(0, 8);
-    await page.goto("/register");
+    const email = `e2e.coach.${stamp}@atlitos.dev`;
+    try {
+      await page.goto("/register");
 
-    await page.getByLabel("Full name input").fill(`AT E2E Coach ${stamp}`);
-    await page.getByLabel("Email input").fill(`e2e.coach.${stamp}@atlitos.dev`);
-    await page.getByLabel("Phone input").fill(`8${stamp.replace(/\D/g, "").padEnd(9, "2").slice(0, 9)}`);
-    await page.getByLabel("Date of birth input").fill("1990-11-02");
-    await page.getByLabel("Password input", { exact: true }).fill("E2eCoachPass123!");
-    await page.getByLabel("Confirm password input").fill("E2eCoachPass123!");
-    await page.getByRole("button", { name: "Create account" }).click();
+      await page.getByLabel("Full name input").fill(`AT E2E Coach ${stamp}`);
+      await page.getByLabel("Email input").fill(email);
+      await page.getByLabel("Phone input").fill(`8${stamp.replace(/\D/g, "").padEnd(9, "2").slice(0, 9)}`);
+      await page.getByLabel("Date of birth input").fill("1990-11-02");
+      await page.getByLabel("Password input", { exact: true }).fill("E2eCoachPass123!");
+      await page.getByLabel("Confirm password input").fill("E2eCoachPass123!");
+      await page.getByRole("button", { name: "Create account" }).click();
 
-    await expect(
-      page.getByText("Check your email").or(page.getByText("How will you use Atlitos")),
-    ).toBeVisible({ timeout: 15_000 });
+      // See AUTH-03 above: registration lands in Home, not a forced
+      // role-select, by design.
+      await expect(
+        page.getByText("Check your email").or(page.getByRole("button", { name: "Finish setting up" })),
+      ).toBeVisible({ timeout: 15_000 });
 
-    if (await page.getByText("Check your email").isVisible().catch(() => false)) {
-      test.info().annotations.push({
-        type: "note",
-        description: "Email confirmation is enabled on this project; registration stops short of role-select until confirmed.",
-      });
-      return;
+      if (await page.getByText("Check your email").isVisible().catch(() => false)) {
+        test.info().annotations.push({
+          type: "note",
+          description: "Email confirmation is enabled on this project; registration stops short of Home until confirmed.",
+        });
+        return;
+      }
+
+      await expect(page).toHaveURL(/\/\(tabs\)$|\/$/);
+      await page.getByRole("button", { name: "Finish setting up" }).click();
+      await expect(page).toHaveURL(/\/role-select$/);
+      await page.getByRole("button", { name: /I am a coach/ }).click();
+      await expect(page).toHaveURL(/\/coach-setup\/0$/);
+    } finally {
+      await deleteE2eAuthAccount(email);
     }
-
-    await expect(page).toHaveURL(/\/role-select$/);
-    await page.getByRole("button", { name: /I am a coach/ }).click();
-    await expect(page).toHaveURL(/\/coach-setup\/0$/);
   });
 
   test.fixme("AUTH-05 duplicate email/phone registration shows an inline field error", () => {
@@ -303,7 +351,14 @@ test.describe("AUTH — auth, onboarding, session, cross-portal role gates", () 
       await page.getByLabel("Email").fill(EMAIL.player);
       await page.getByLabel("Password").fill(DEMO_PASSWORD);
       await page.getByRole("button", { name: "Sign in" }).click();
-      await expect(page.getByText("This account does not have admin access.")).toBeVisible({ timeout: 15_000 });
+      // The same copy renders twice on a failed admin login: an inline form
+      // error (LoginPage) and a global toast (refine's notificationProvider
+      // firing on the same onError/onSuccess-with-failure). Both are real,
+      // intentional UI, not a duplication bug - scope to the form so the
+      // assertion is unambiguous rather than picking one arbitrarily.
+      await expect(page.locator("form").getByText("This account does not have admin access.")).toBeVisible({
+        timeout: 15_000,
+      });
       expect(new URL(page.url()).pathname, "must stay on /login, never reach the admin console").toBe("/login");
       await context.close();
     }

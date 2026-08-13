@@ -155,7 +155,15 @@ export function FundingDetail({ itemId, upaId }: { itemId: string; upaId: string
   // Funding is DERIVED from the item's own donation rows (0084), never the
   // funded_amount cache the QA audit found drifted.
   const derivedFunded = donations.reduce((sum, d) => sum + Number(d.amount), 0);
-  const pill = derivedItemPill(item.status, derivedFunded, Number(item.cost));
+  const cost = Number(item.cost);
+  const pill = derivedItemPill(item.status, derivedFunded, cost);
+  // The delivery affordance must use the same derived truth as the pill and
+  // funding bar (QA case 79): gating on the raw item.status column let the
+  // button show for an item that is not actually funded when the cache had
+  // drifted from the real donation total. The RPC still enforces the real
+  // gate server side; this only keeps the client from offering an action
+  // that cannot succeed.
+  const isDerivedFunded = item.status !== "delivered" && cost > 0 && derivedFunded >= cost;
 
   return (
     <div className="flex flex-1 flex-col gap-6" data-testid="funding-detail">
@@ -167,7 +175,7 @@ export function FundingDetail({ itemId, upaId }: { itemId: string; upaId: string
         <CardContent className="flex flex-col gap-4 p-6">
           <div className="flex items-center justify-between">
             <StatusPill label={pill.label} tone={pill.tone} />
-            {item.status === "funded" ? (
+            {isDerivedFunded ? (
               <Button size="sm" variant="outline" onClick={markDelivered} disabled={marking}>
                 {marking ? <Loader2 className="size-4 animate-spin" /> : <PackageCheck className="size-4" strokeWidth={1.75} />}
                 Mark as delivered

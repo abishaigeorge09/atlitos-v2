@@ -54,11 +54,13 @@ function ProductCard({
 
   const priceBlock = (
     <View className="flex-row items-center gap-xs">
-      <Text className="font-mono-semibold text-base text-text">{formatINR(price)}</Text>
+      <Text className="font-mono-semibold text-base" style={{ color: colors.text }}>
+        {formatINR(price)}
+      </Text>
       {originalPrice && originalPrice > price ? (
         // text-secondary, not tertiary: sits on bg-card, textTertiary fails
         // AA contrast against the card surface in dark mode.
-        <Text className="font-mono text-xs text-text-secondary line-through">
+        <Text className="font-mono text-xs line-through" style={{ color: colors.textSecondary }}>
           {formatINR(originalPrice)}
         </Text>
       ) : null}
@@ -141,7 +143,7 @@ function ProductCard({
         className={cn('gap-sm p-lg', isRow && 'flex-1 justify-center')}
       >
         <View style={{ pointerEvents: 'none' }} className="gap-sm">
-          <Text className="font-sans-medium text-sm text-text" numberOfLines={2}>
+          <Text className="font-sans-medium text-sm" style={{ color: colors.text }} numberOfLines={2}>
             {title}
           </Text>
 
@@ -170,7 +172,12 @@ function ProductCard({
               <Minus size={16} strokeWidth={1.75} color={colors.text} />
             </Pressable>
             <View style={{ pointerEvents: 'none' }}>
-              <Text className="font-mono-semibold min-w-6 text-center text-base text-text">{quantity}</Text>
+              <Text
+                className="font-mono-semibold min-w-6 text-center text-base"
+                style={{ color: colors.text }}
+              >
+                {quantity}
+              </Text>
             </View>
             <Pressable
               onPress={() => {

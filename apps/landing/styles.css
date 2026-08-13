@@ -420,7 +420,8 @@ html:not(.js) .vhero-hint { opacity: 1; }
 .stack-list { font-size: 1.0625rem; font-weight: 500; line-height: 1.85; color: var(--ink); }
 .stack-list + .stack-list { margin-top: 26px; }
 .step-video { position: relative; }
-.step-video video {
+.step-video video,
+.step-video img {
   width: 100%;
   height: clamp(300px, 48vh, 480px);
   object-fit: cover;
@@ -428,16 +429,6 @@ html:not(.js) .vhero-hint { opacity: 1; }
   border-radius: 10px;
   background: var(--surface);
   display: block;
-}
-.slot-chip {
-  position: absolute;
-  right: clamp(24px, 3vw, 40px); bottom: clamp(22px, 2.6vw, 36px);
-  background: var(--paper);
-  border: 1.5px dashed var(--ink);
-  border-radius: 999px;
-  padding: 4px 12px;
-  font-size: 0.625rem; font-weight: 700; letter-spacing: 0.08em;
-  color: var(--ink-secondary);
 }
 
 .demo-card { margin-top: auto; width: min(430px, 100%); }

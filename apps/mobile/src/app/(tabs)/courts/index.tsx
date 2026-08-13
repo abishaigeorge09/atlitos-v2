@@ -6,6 +6,7 @@ import { CalendarClock, LandPlot, MapPin, RefreshCw, TriangleAlert } from 'lucid
 import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
 import { LoginGateModal } from '@/components/organisms/LoginGateModal';
 import { Button } from '@/components/ui/button';
@@ -144,26 +145,48 @@ export default function CourtsIndexScreen() {
         </Text>
       </View>
 
-      <FlatList
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        data={SPORT_FILTERS}
-        keyExtractor={(item) => item}
-        style={{ flexGrow: 0 }}
-        contentContainerStyle={{ gap: spacing.sm, paddingVertical: spacing.xs }}
-        ListHeaderComponent={
-          <Chip label="All sports" variant="filter" selected={sport === null} onPress={() => setSport(null)} />
-        }
-        ItemSeparatorComponent={() => <View style={{ width: spacing.sm }} />}
-        renderItem={({ item }) => (
-          <Chip
-            label={SPORT_LABEL[item]}
-            variant="filter"
-            selected={sport === item}
-            onPress={() => setSport(item)}
-          />
-        )}
-      />
+      {/* Track D defect 18: the chip row overflows the viewport (5 chips
+          don't fit on a standard phone width). The list itself already
+          scrolls; what was missing is (a) trailing padding so the last chip
+          clears the screen edge with breathing room instead of sitting
+          flush against it, and (b) a visible edge fade so the cut off chip
+          reads as "more to scroll" rather than a clipped layout bug. */}
+      <View style={{ position: 'relative' }}>
+        <FlatList
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          data={SPORT_FILTERS}
+          keyExtractor={(item) => item}
+          style={{ flexGrow: 0 }}
+          contentContainerStyle={{ gap: spacing.sm, paddingVertical: spacing.xs, paddingRight: spacing.xl }}
+          ListHeaderComponent={
+            <Chip label="All sports" variant="filter" selected={sport === null} onPress={() => setSport(null)} />
+          }
+          ItemSeparatorComponent={() => <View style={{ width: spacing.sm }} />}
+          renderItem={({ item }) => (
+            <Chip
+              label={SPORT_LABEL[item]}
+              variant="filter"
+              selected={sport === item}
+              onPress={() => setSport(item)}
+            />
+          )}
+        />
+        <View
+          pointerEvents="none"
+          style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: spacing['2xl'] }}
+        >
+          <Svg width="100%" height="100%">
+            <Defs>
+              <LinearGradient id="sport-filter-fade" x1="0" y1="0" x2="1" y2="0">
+                <Stop offset="0" stopColor={colors.bg} stopOpacity={0} />
+                <Stop offset="1" stopColor={colors.bg} stopOpacity={1} />
+              </LinearGradient>
+            </Defs>
+            <Rect x="0" y="0" width="100%" height="100%" fill="url(#sport-filter-fade)" />
+          </Svg>
+        </View>
+      </View>
     </View>
   );
 

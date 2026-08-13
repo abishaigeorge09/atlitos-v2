@@ -54,9 +54,12 @@ marked `RETIRED` with a one-line reason, not removed, so IDs stay stable for his
 
 ## Known environment blockers at freeze time (from the B1a scaffold smoke run)
 
-- `upa.verified@`, `upa.tennis@`, `donor@atlitos.dev` return `invalid_credentials` against the live DB with both
-  `EmpowerDemo!2026` and `AtlitosDemo!2026`; `scripts/seed-empower-upa-users.mjs` appears never to have been run against
-  `syzzfgaudpifwvbpycyi`. Every EM case above and any AUTH/XP case touching these 3 personas is `BLOCKED` until reseeded.
+- RESOLVED 2026-08-11 (BUG-019, manual QA pass): `upa.verified@`, `upa.tennis@`, `upa.badminton@`, `upa.football@`,
+  `donor@atlitos.dev` returned `invalid_credentials` against the live DB. Root cause: all 5 accounts already existed
+  in prod, and `seed-empower-upa-users.mjs` only sets a password at account-creation time, so re-running it never
+  fixed the credential. Password reset directly via `auth.admin.updateUserById` and verified live with a real
+  `signInWithPassword` call for all 5. `EmpowerDemo!2026` now works for all 5 personas; EM/AUTH/XP cases that were
+  `BLOCKED` on this can proceed.
 - athlete-web (`atlitos-app.vercel.app`) serves six 404s for `@expo-google-fonts` TTFs (Inter 400/500/600/700,
   JetBrains Mono 500/600), silently falling back to system fonts, including for numeric readouts. This trips the
   consoleGuard fixture (XP-01) and is a house-rule violation (money/numeric readouts must render in JetBrains Mono);

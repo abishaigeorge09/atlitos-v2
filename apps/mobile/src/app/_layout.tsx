@@ -6,7 +6,7 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useColorScheme } from 'nativewind';
 import { useEffect } from 'react';
-import { StatusBar, Text, View } from 'react-native';
+import { Platform, StatusBar, Text, View } from 'react-native';
 
 import { usePushRegistration } from '@/hooks/use-push-registration';
 import { applyTheme } from '@/lib/apply-theme';
@@ -24,6 +24,24 @@ function RootLayout() {
   // see src/theme/use-theme-colors.ts for why the two can disagree on web.
   const { colorScheme: scheme } = useColorScheme();
   const colors = useThemeColors();
+
+  // D23 fix: on web, nativewind v4 resolves `useColorScheme()`/`colorScheme.set()`
+  // for the StyleSheet-driven token system (useThemeColors, above) but does not
+  // itself toggle a `dark` class on `<html>`, the selector global.css's `.dark:root`
+  // needs (tailwind.config.js's `darkMode: "class"`). Every screen that reads
+  // colors through a Tailwind className (BillSummary, Button's secondary/ghost
+  // text, ...) instead of useThemeColors() was silently stuck on the light-mode
+  // CSS variable values, e.g. the booking detail screen's cancel/reschedule
+  // actions and price breakdown render illegible near-invisible text in dark
+  // mode: light-theme near-black ink on a dark-theme near-black card, and a
+  // permanently white "secondary" button background. Mirrors this file's
+  // existing dark-class sync intent (see the comment on the hook above); keeps
+  // native untouched, where NativeWind's own Appearance-backed interop already
+  // works and this is a no-op (`document` does not exist there).
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    document.documentElement.classList.toggle('dark', scheme === 'dark');
+  }, [scheme]);
 
   // Loaded from local files under assets/fonts (not from
   // @expo-google-fonts/* package requires) so `expo export --platform web`
@@ -78,11 +96,14 @@ function RootLayout() {
   }, []);
 
   // Apply the signed-in user's persisted appearance preference (0087) once
-  // their profile resolves. 'system' hands control back to the OS. Guests
-  // (no me row) stay on system default.
+  // their profile resolves, defaulting guests (no me row) to 'system'.
+  // applyTheme() (not a bare nativewind colorScheme.set()) is required here:
+  // see apply-theme.ts for why passing 'system' straight through leaves the
+  // DOM `dark` class stuck on light while useThemeColors() correctly
+  // resolves dark, the root cause of the J/K section contrast bug.
   const themePref = useSessionStore((state) => state.me?.theme);
   useEffect(() => {
-    if (themePref) applyTheme(themePref);
+    applyTheme(themePref ?? 'system');
   }, [themePref]);
 
   // Push registration: requests permission, registers/unregisters the
