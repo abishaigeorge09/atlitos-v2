@@ -106,6 +106,11 @@ export function ClutchPreviewCard({ reloadKey }: { reloadKey: number }) {
           clip={clip}
           variant="feed"
           active={false}
+          // BUG-042: this teaser passes `active={false}`, so the player could
+          // never play. Mounting one anyway cost a full media3 sample buffer
+          // on the Home screen. The poster carries the card; tapping it opens
+          // the detail screen, which does mount a real player.
+          mountPlayer={false}
           compactActions
           playbackUrl={playbackUrl}
           posterUrl={posterUrl}
