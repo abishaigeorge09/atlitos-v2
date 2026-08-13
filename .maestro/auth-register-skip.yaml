@@ -41,7 +41,16 @@ appId: com.atlitos.app
     direction: UP
     timeout: 10000
     optional: true
-- assertVisible: "ATLITOS"
+# "ATLITOS" (all caps, AppBar.tsx line 90) is NOT a safe Home marker: it
+# false matches app.json's "name": "Atlitos" surfaced somewhere in the OS
+# accessibility tree, so this assertion can report COMPLETED while the app
+# sits on Register (proven via screenshot + screen-hierarchy JSON, see
+# docs/qa/P5-IOS-FINDINGS.md F-4). The Home search bar placeholder is
+# unique to Home (apps/mobile/src/components/ui/search-bar.tsx, only
+# rendered by (tabs)/index.tsx, home/search.tsx and shop category screens,
+# none of which are reachable from Login/Register), so it cannot false
+# match auth screens.
+- assertVisible: "What are you looking for..."
 
 - openLink: "atlitos://login"
 - waitForAnimationToEnd:
@@ -59,12 +68,17 @@ appId: com.atlitos.app
       - waitForAnimationToEnd:
           timeout: 1500
 
-# Register form fields, apps/mobile/src/app/(auth)/register.tsx.
+# Register form fields, apps/mobile/src/app/(auth)/register.tsx. Date of
+# birth was removed from signup and moved to the profile edit screen
+# (commit 24bb65a: "move date of birth off signup into the profile", see
+# apps/mobile/src/app/profile/edit.tsx line 317). Register now has five
+# fields, not six; confirmed both in source (register.tsx has no dob Input)
+# and in the installed build (main.jsbundle has zero "Date of birth *"
+# strings originating from register.tsx).
 - assertVisible: "Create your account"
 - assertVisible: "Full name *"
 - assertVisible: "Email *"
 - assertVisible: "Phone *"
-- assertVisible: "Date of birth *"
 - assertVisible: "Password *"
 - assertVisible: "Confirm password *"
 
@@ -92,5 +106,14 @@ appId: com.atlitos.app
       - tapOn: "Continue as guest"
       - waitForAnimationToEnd:
           timeout: 1500
-- assertVisible: "ATLITOS"
+# This is the assertion F-4 identified as a false pass under the old
+# "ATLITOS" text match (it can complete while still on Register, since
+# "Atlitos" the OS app name is present somewhere off screen in the a11y
+# tree). Use the Home search bar placeholder instead, which only renders
+# on Home, and wait for it explicitly rather than a bare assertVisible so
+# a real navigation delay is not mistaken for the same failure.
+- extendedWaitUntil:
+    visible: "What are you looking for..."
+    timeout: 8000
+- assertVisible: "What are you looking for..."
 - assertVisible: "Badminton"
