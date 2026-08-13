@@ -1,0 +1,45 @@
+# Tables in the public schema that carry BOTH an owner-scoped SELECT policy and
+# a public SELECT policy, and are therefore subject to the permissive-OR hazard
+# in CLAUDE.md ("Scope every query by owner. RLS is not scoping.").
+#
+# NOT hand-maintained. Derived 2026-08-14 by running the query below against the
+# live project syzzfgaudpifwvbpycyi, read only. scripts/security-invariants.sh
+# re-runs the same query in its db-dual-policy-drift check and FAILS if this file
+# and the live catalog disagree, so a table that gains a public policy later
+# cannot slip past the static owner-scope check.
+#
+#   with sel as (
+#     select c.relname as tbl,
+#            pg_get_expr(pol.polqual, pol.polrelid) as qual,
+#            (select array_agg(r.rolname) from pg_roles r where r.oid = any(pol.polroles)) as roles
+#     from pg_policy pol
+#     join pg_class c on c.oid = pol.polrelid
+#     join pg_namespace n on n.oid = c.relnamespace
+#     where n.nspname = 'public' and pol.polcmd in ('r','*') and pol.polpermissive
+#   ), app as (
+#     select * from sel where roles is null or roles && array['anon','authenticated','public']::name[]
+#   )
+#   select tbl from app group by tbl
+#   having count(*) filter (where qual ilike '%auth.uid()%') > 0
+#      and count(*) filter (where qual is null or qual not ilike '%auth.uid()%') > 0
+#   order by tbl;
+#
+# Policies are classified by their USING expression: one that reads auth.uid()
+# is an owner policy, one that does not is a public policy. Policies restricted
+# to a non-application role (supabase_auth_admin and friends) are excluded,
+# because no client token ever carries them.
+#
+clip_comments
+clips
+coach_availability_windows
+court_availability_windows
+court_blackouts
+court_pricing_rules
+courts
+gratitude_posts
+session_types
+training_groups
+upa_applications
+upa_wishlist_items
+venue_photos
+venues
