@@ -28,7 +28,13 @@ Every function in v1's `services/api.ts` contract (`PLAN-2-3-api-contract-and-ll
 | `getMe` | GET `/me` | PostgREST | `users` select, left join `coach_profiles` | RLS `id = auth.uid()` |
 | `updateMe` | PATCH `/me` | PostgREST | `users` update | sport-immutable-once-verified rule enforced by a `BEFORE UPDATE` trigger on `coach_profiles`, not this call |
 | `setupPlayer` | POST `/me/setup/player` | RPC | `complete_player_setup(sports, avatar_url, city, state)` | writes `users` fields and the `player` `user_roles` row in one transaction; raises `ALREADY_SETUP` if the role already exists |
-| `setupCoach` | POST `/me/setup/coach` | RPC | `submit_coach_verification(payload jsonb)` | writes `coach_profiles`, `coach_certificates`, `session_types`, `coach_availability_windows`, and the `verification_requests` row atomically; raises `ALREADY_SETUP` if a `pending_review` or `verified` profile exists |
+| `setupCoach` | POST `/me/setup/coach` | RPC | `submit_coach_verification(payload jsonb)` | writes `coach_profiles`, `coach_certificates` and the `verification_requests` row atomically; raises `ALREADY_SETUP` if a `pending_review` or `verified` profile exists. **Does NOT write `session_types` or `coach_availability_windows`**, see below |
+
+**Correction, 0088.** The row above claimed `submit_coach_verification` writes `session_types` and `coach_availability_windows`. It never has. `0004_player_and_coach_setup_rpc.sql` predates `0018_coaching.sql`, which creates those two tables, so it preserves the wizard's step 4 pricing and step 5 availability verbatim in `verification_requests.payload` and writes only what it can write to real columns. 0004's own header promised a later migration would backfill from that payload; none did.
+
+The consequence was not cosmetic. `sessions.session_type_id` is `NOT NULL`, and the athlete booking screen lists only `session_types` where `active`, so a coach who completed every step of onboarding and was approved had zero rows and could not receive a single booking request. `0088_backfill_coach_setup_from_verification_payload.sql` is the missing backfill, and the coach session types screen (below) is the durable fix, since a backfill cannot invent a type for a coach whose payload had none.
+
+Nothing about the RPC's behaviour changed; only this doc was wrong.
 
 ## home
 
@@ -66,6 +72,19 @@ Response `{ query, parsedIntent, results: SearchHit[] }` sorted `rankScore` desc
 |---|---|---|---|---|
 | `list` | GET `/coaches` | PostgREST | `coach_profiles` select, filters as query params | RLS restricts to `status = 'verified'` for non-owner readers |
 | `get` | GET `/coaches/:id` | PostgREST + RPC | `coach_profiles` select + `get_coach_busy_slots(coach_id, from, to)` | busy slots must hide other players' session details, so it is a `SECURITY DEFINER` RPC returning only occupied `(date, slot_start)` pairs, never the session rows themselves |
+
+### session types and pricing (PRD-02 FR-4)
+
+| `packages/api` call | v2 lane | Table / policy | Note |
+|---|---|---|---|
+| `useCoachSessionTypes().listMyTypes()` | PostgREST | `session_types` select, explicit `coach_id = auth.uid()` | active first, then by name |
+| `useCoachSessionTypes().createType()` | PostgREST | `session_types` insert, `session_types_write_own` (0019) | `coach_id` comes from the caller's session, never from an argument |
+| `useCoachSessionTypes().updateType()` | PostgREST | `session_types` update, same policy | omitted fields unchanged; never touches an already booked session, which stores its own price |
+| `useCoachSessionTypes().setTypeActive()` | PostgREST | `session_types` update, same policy | deactivate, the only destructive-looking action; there is no delete because historical `sessions` reference the row by FK |
+
+Plain table writes, no RPC, and that is not a financial invariant exception. `session_types.price` is a LIST price, not a money row and not a status field. The charge is derived and re-validated server side in `book-session` (`PRICE_MISMATCH`, see below), so the client's number is never what is charged. This is the same trust level 0080 records for a coach editing `training_groups.monthly_fee`.
+
+**Online is a naming convention, deliberately.** There is no `is_online` column on `session_types` and no video call concept anywhere in the product. `isOnlineSessionTypeName` (read) and `applyOnlineSessionTypeName` (write, called only by the coach session types screen) are the two ends of it. When a real online session ships, add `session_types.is_online`, backfill it from that same predicate, and delete both functions together.
 
 ## sessions
 
@@ -328,6 +347,10 @@ Training groups with monthly subscription fares (founder-ratified: manual renewa
 | `listMyTraineeNotes` / `addTraineeNote` / `deleteTraineeNote` | `coach_trainee_notes` | coach-private, insert gated by `coach_has_trainee`, no update ever |
 | `listTraineeSessions` / `listTraineePayments` | `sessions` (coach_id = me AND player_id = trainee) + memberships join | the trainee profile tabs; payments derive from coach-readable rows since payment_intents is owner-only |
 | `getTraineeProfile` | `public_profiles` | Track C, trainee profile Overview tab identity (name/handle/bio); `users` base table stays own-row/admin only so this never touches it |
+
+**Call sites, added by the coach creation layer.** `createGroup`, `updateGroup` and `createGroupSession` shipped with 0079/0080 and had ZERO callers until now, which is what the coach saw as "No training groups yet" and "No sessions scheduled for this group yet" with no affordance beside either. They are now called from `trainings/group/edit.tsx` (create and edit, keyed on an optional `id` param) and `trainings/group/schedule.tsx`. Both assert ownership explicitly on load before rendering a group, because `training_groups` carries a public browse policy and RLS is not scoping; the RPCs refuse the write regardless, but the form must never show a stranger's fee. `createGroupSession` is the only thing in the product that inserts a row with a `group_id`, so it is also what makes the group session detail, Start Session and attendance screens reachable at all.
+
+**`in_progress` in status filters.** 0077 added `in_progress` between `accepted` and `completed`, and four client filters were never updated, so a session the coach had started disappeared from the reader's world until it completed: `useCoachSessions.listUpcoming`, the `hasUpcoming` flag in `useCoachTrainees.listTrainees`, and the `LIVE_STATUSES` lists behind the athlete's bookings screen and the Trainings stat tiles (plus the Trainings payments totals, where it fell out of both delivered and booked ahead). All now include it. Any new filter over `sessions.status` should be written as "everything except `declined` and `cancelled`" rather than by enumerating the live states, which is how this class of bug got in four times.
 
 **Group awareness retrofitted onto `useCoachSessions` / `useCoachTrainees` (Track B).** Group session rows share `sessions` with a NULL `player_id`/`session_type_id` (0076), so every 1:1 shaped coach read now scopes them out explicitly: `listUpcoming` and `getSession` add `player_id is not null` (an accepted group session must never render as a broken 1:1 card, and a group id passed to `getSession` returns null), `listTrainees` filters them out of the roster and additionally joins `session_types.name` to flag each trainee `hasOnline` / `hasInPerson` for the Figma filter chips (`isOnlineSessionTypeName`: a session type whose name contains "online", the gap doc's representation; no flag column exists). `getStats` counts group sessions in `totalSessions` / `sessionsThisMonth` but never in `playersCoached`, and now also returns `totalSessions` plus `lifetimeEarnings` (from `get_coach_wallet_balance().lifetime_earned`, same figure as the Earnings screen) for the dashboard's Total Sessions / Total Earnings tiles.
 
