@@ -1,4 +1,8 @@
--- ATLITOS v2 — 0088_backfill_coach_setup_from_verification_payload.sql
+-- ATLITOS v2 — 0099_backfill_coach_setup_from_verification_payload.sql
+-- Renumbered from the originally authored 0088: by the time this branch was
+-- fixed, production had already applied three unrelated migrations at 0088
+-- through other in-flight branches (clip_saves, join_group_member_before_full,
+-- set_athlete_sports), and a fourth 0088 would have silently never run.
 -- Domain: coaching onboarding.
 --
 -- This is the backfill 0004_player_and_coach_setup_rpc.sql promised in its
