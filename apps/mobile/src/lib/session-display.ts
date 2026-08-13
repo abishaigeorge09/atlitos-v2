@@ -18,13 +18,20 @@ export const SESSION_STATUS_PILL: Record<SessionStatus, StatusPillStatus> = {
   rated: 'rated',
 };
 
-/** `group_memberships.status` (0076) -> `StatusPill`. `pending` reuses the
- * shared warning pill (payment not captured yet, same "awaiting" meaning as
- * every other domain's `pending`); only `active`/`lapsed` are groups
- * specific. */
+/** `group_memberships.status` (0076, extended by 0104) -> `StatusPill`.
+ * `pending` reuses the shared warning pill (payment not captured yet, same
+ * "awaiting" meaning as every other domain's `pending`).
+ *
+ * `expired` and `lapsed` deliberately share the Lapsed pill. They differ only
+ * in whether the seat is still held (expired keeps it through the grace
+ * window and renews on the same row; lapsed released it and re joins), which
+ * is a fares mechanic, not a distinction to put in front of an athlete. Both
+ * saying Lapsed is also what makes the athlete card and the coach roster chip
+ * read the same word on the same day. */
 export const GROUP_MEMBERSHIP_STATUS_PILL: Record<GroupMembershipStatus, StatusPillStatus> = {
   pending: 'pending',
   active: 'membershipActive',
+  expired: 'membershipLapsed',
   lapsed: 'membershipLapsed',
 };
 

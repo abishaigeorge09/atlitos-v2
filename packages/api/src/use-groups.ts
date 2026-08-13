@@ -28,7 +28,41 @@ import { mapEdgeFunctionError, mapPostgrestError } from "./errors";
 // Types
 // ---------------------------------------------------------------------------
 
-export type GroupMembershipStatus = "pending" | "active" | "lapsed";
+/**
+ * public.group_memberships.status (0076, extended by
+ * 0104_membership_expiry_sweep.sql).
+ *
+ * 'expired' is the state between a month ending and the seat being released:
+ * sweep_group_memberships moves active -> expired on the day after period_end
+ * and expired -> lapsed only after the grace window. An expired member STILL
+ * HOLDS THEIR SEAT (the one live per player index and join_training_group's
+ * capacity count both key off "not lapsed") and renews on the same row
+ * through renewMembership. A lapsed member has no seat and re joins.
+ *
+ * Both render as the same Lapsed pill to users; the distinction is a fares
+ * mechanic, not a word an athlete has to learn.
+ */
+export type GroupMembershipStatus = "pending" | "active" | "expired" | "lapsed";
+
+/**
+ * Whether this membership can be renewed on its existing row, which is
+ * exactly the set renew_group_membership (0104) accepts. The server is the
+ * authority; this mirrors it so a screen never offers a Renew button that the
+ * RPC will refuse with INVALID_TRANSITION. Deliberately NOT a date
+ * calculation: period_end is display, status is the truth.
+ */
+export function isMembershipRenewable(status: GroupMembershipStatus): boolean {
+  return status === "active" || status === "expired";
+}
+
+/**
+ * Whether the membership has run past its paid period, from the SERVER's
+ * status rather than from a client side date comparison. The coach roster and
+ * the athlete card both use this, which is what makes the two views agree.
+ */
+export function isMembershipUnpaid(status: GroupMembershipStatus): boolean {
+  return status === "expired" || status === "lapsed";
+}
 export type AttendanceStatus = "present" | "absent";
 
 export interface TrainingGroup {

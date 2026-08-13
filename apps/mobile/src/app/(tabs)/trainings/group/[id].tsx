@@ -41,14 +41,17 @@ function titleCase(value: string): string {
 }
 
 /** Membership display state for the Team Members chips. `lapsed` rows are
- * excluded from `getGroup`, but an `active` membership whose paid period
- * has ended reads as Lapsed under the manual renewal fares model (no
- * autopay, D-053): the member keeps their seat, the chip tells the coach
- * the month has not been renewed yet. */
+ * excluded from `getGroup` entirely. Reads `membership.status` directly
+ * (0104 membership_expiry_sweep is the sole writer of `expired`), never a
+ * client side date comparison: the sweep job and this screen used to
+ * disagree about the exact same row when this compared `periodEnd` to
+ * `todayISO()` locally instead of trusting the server's state machine.
+ * `expired` reads as Lapsed here too, matching `GROUP_MEMBERSHIP_STATUS_PILL`
+ * (session-display.ts): the athlete card and this roster chip must say the
+ * same word about the same row on the same day. */
 function memberChip(member: GroupMember): { label: string; tone: 'active' | 'lapsed' | 'pending' } {
   if (member.membership.status === 'pending') return { label: 'Pending', tone: 'pending' };
-  const periodEnd = member.membership.periodEnd;
-  if (periodEnd && periodEnd < todayISO()) return { label: 'Lapsed', tone: 'lapsed' };
+  if (member.membership.status === 'expired') return { label: 'Lapsed', tone: 'lapsed' };
   return { label: 'Active', tone: 'active' };
 }
 

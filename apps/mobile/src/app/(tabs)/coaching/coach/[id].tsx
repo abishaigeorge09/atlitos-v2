@@ -1,4 +1,12 @@
-import { computeAvailableSessionSlots, useCoaching, useGroups, type GroupMembership, type TrainingGroup } from '@atlitos/api';
+import {
+  computeAvailableSessionSlots,
+  isMembershipRenewable,
+  isMembershipUnpaid,
+  useCoaching,
+  useGroups,
+  type GroupMembership,
+  type TrainingGroup,
+} from '@atlitos/api';
 import type { ApiError, CoachProfile, SessionFrequency, SessionTypeOption, TimeSlot } from '@atlitos/types';
 import { formatINR, radii, spacing } from '@atlitos/theme';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -269,7 +277,7 @@ export default function CoachProfileScreen() {
                 const spotsLeft = group.capacity - (group.activeMembers ?? 0);
                 const membership = myMemberships.find((m) => m.groupId === group.id);
                 const isMember = membership?.status === 'active' || membership?.status === 'pending';
-                const isLapsed = membership?.status === 'lapsed';
+                const canRenew = !!membership && isMembershipUnpaid(membership.status) && isMembershipRenewable(membership.status);
 
                 return (
                   <View
@@ -311,7 +319,7 @@ export default function CoachProfileScreen() {
                           {membership?.status === 'pending' ? 'Payment pending' : 'Joined'}
                         </Text>
                       </Button>
-                    ) : isLapsed && membership ? (
+                    ) : canRenew && membership ? (
                       <Button
                         size="sm"
                         onPress={() =>
