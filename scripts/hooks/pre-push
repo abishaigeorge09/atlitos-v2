@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+# Git pre-push hook. THE CANONICAL COPY LIVES HERE, IN THE REPO.
+# Install it with scripts/install-hooks.sh, which copies it to .git/hooks/pre-push.
+#
+# Until 2026-08-14 this hook existed ONLY in .git/hooks, which is not versioned,
+# so nobody could review it, nobody else on the team had it, and its two most
+# important stanzas called scripts that had never existed in any commit. Keeping
+# the source of a gate outside version control is most of how that happened.
+#
+# This is the stand-in for required status checks. GitHub will not let a private
+# repo on the free plan require a check, so nothing server side can refuse a bad
+# merge. This refuses the push instead.
+#
+# Be honest about what it is not:
+#   - it applies only to a machine that has run install-hooks.sh
+#   - `git push --no-verify` skips it entirely
+#   - it cannot protect the remote from a push made anywhere else
+#
+# The GitHub Actions workflow in .github/workflows/dod.yml runs the same two
+# scripts on every push and pull request, so a push made with --no-verify or
+# from an uninstalled machine still gets checked, just after the fact rather
+# than before. Getting Pro and requiring the checks server side is recorded as
+# owed in docs/DEBT.md with an owner.
+
+set -uo pipefail
+
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+cd "$ROOT" || exit 0
+
+remote_ref_is_delete() { [ "$LOCAL_SHA" = "0000000000000000000000000000000000000000" ]; }
+
+# stdin: <local ref> <local sha> <remote ref> <remote sha>
+BLOCK=0
+while read -r LOCAL_REF LOCAL_SHA REMOTE_REF REMOTE_SHA; do
+  [ -z "${LOCAL_REF:-}" ] && continue
+  remote_ref_is_delete && continue          # branch deletion, nothing to check
+
+  case "$REMOTE_REF" in
+    refs/heads/main|refs/heads/master)
+      echo "pre-push: refusing to push straight to ${REMOTE_REF#refs/heads/}." >&2
+      echo "          Open a pull request from a branch instead." >&2
+      BLOCK=1
+      ;;
+  esac
+done
+
+[ "$BLOCK" = 1 ] && exit 1
+
+# --------------------------------------------------------------------------
+# A MISSING GATE IS A FAILED GATE.
+#
+# This block used to read `if [ -x scripts/dod.sh ]; then ... fi`, and the same
+# for the invariants. Neither file existed. Neither had ever existed in any
+# commit. So the guard was false, the body never ran, the hook printed nothing
+# and exited 0, and every push since 11 August 2026 passed a gate that was not
+# there. Read docs/qa/CURRENT-STATE.md, "A gate that references a script that
+# never existed", before weakening any of this back.
+#
+# The presence test now refuses the push instead of waving it through. If the
+# scripts are ever deliberately removed, this hook must be edited in the same
+# commit, in the open, rather than silently going quiet.
+# --------------------------------------------------------------------------
+for required in scripts/dod.sh scripts/security-invariants.sh; do
+  if [ ! -f "$required" ]; then
+    echo "pre-push: REQUIRED GATE MISSING: $required is not in the tree." >&2
+    echo "          Refusing the push. A gate that is absent has not passed," >&2
+    echo "          it has not run. See docs/qa/CURRENT-STATE.md." >&2
+    exit 1
+  fi
+  if [ ! -x "$required" ]; then
+    echo "pre-push: $required exists but is not executable, so it cannot run." >&2
+    echo "          Refusing the push. Fix with: chmod +x $required" >&2
+    exit 1
+  fi
+done
+
+# Security invariants first: seconds to run, and these are the checks whose
+# absence has cost the most here. Run on EVERY push, not only when a path that
+# looks security shaped changed. The old path filter
+# (supabase/|migrations/|policies|auth|...) would not have matched a hardcoded
+# colour, an emoji, an unscoped venue read or a client side money write, which
+# are four of the eight things the script checks.
+echo "pre-push: running scripts/security-invariants.sh"
+if ! ./scripts/security-invariants.sh --offline; then
+  echo >&2
+  echo "pre-push: security invariants are RED, so this push is refused." >&2
+  exit 1
+fi
+
+# Definition of Done, on everything being pushed.
+echo "pre-push: running scripts/dod.sh"
+if ! ./scripts/dod.sh; then
+  echo >&2
+  echo "pre-push: Definition of Done is RED, so this push is refused." >&2
+  echo "          Fix it, or push with --no-verify and own the consequence." >&2
+  exit 1
+fi
+
+# Landing motion checks (docs/MOTION-ARCHITECTURE.md section 9), when the push
+# touches apps/landing. Serves the static dir on a temp port and runs the
+# Playwright check script against it.
+if [ -f apps/landing/scripts/motion-check.mjs ]; then
+  changed=$(git diff --name-only "@{push}"..HEAD 2>/dev/null || git diff --name-only HEAD~1..HEAD 2>/dev/null || echo "")
+  if echo "$changed" | grep -q '^apps/landing/'; then
+    echo "pre-push: apps/landing changed, running motion-check"
+    ( cd apps/landing && python3 -m http.server 8973 >/dev/null 2>&1 & echo $! > /tmp/motion-check-server.pid )
+    sleep 1
+    NODE_BIN=$(command -v node)
+    [ -n "$NODE_BIN" ] || NODE_BIN=/opt/homebrew/bin/node
+    "$NODE_BIN" apps/landing/scripts/motion-check.mjs http://localhost:8973
+    MC=$?
+    kill "$(cat /tmp/motion-check-server.pid)" 2>/dev/null
+    rm -f /tmp/motion-check-server.pid
+    if [ "$MC" != 0 ]; then
+      echo >&2
+      echo "pre-push: motion checks are RED, so this push is refused." >&2
+      exit 1
+    fi
+  fi
+fi
+
+exit 0

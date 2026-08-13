@@ -45,6 +45,10 @@ export function VenuesList() {
     async function load() {
       setState("loading");
       const { data, error } = await supabaseClient
+        // invariant-allow: owner-scope the admin verification queue is
+        // deliberately every partner's venue. `venues_select_merged` reads
+        // `has_role('admin') OR partner_user_id = auth.uid()`, so this list is
+        // empty for anyone without the admin role rather than leaking rows.
         .from("venues")
         .select("id,partner_user_id,name,address,city,pincode,lat,lng,description,status,rejection_reason,created_at,updated_at")
         .order("created_at", { ascending: false });

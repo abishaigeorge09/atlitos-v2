@@ -160,6 +160,18 @@ green from a check that never ran is indistinguishable from a green that proves 
 hook or the check go red, then fix it. See [[feedback_checks_born_red]]. Applies to hooks, CI
 steps, lint rules, assertions and typechecks equally.
 
+**FIXED 2026-08-14, branch `track/dod-security-gates`.** `scripts/dod.sh` and
+`scripts/security-invariants.sh` now exist. The `[ -x ]` guard is gone: a missing or
+non-executable gate script REFUSES the push instead of exiting 0. The hook itself is now
+versioned at `scripts/hooks/pre-push` and installed by `scripts/install-hooks.sh`, because a gate
+whose source lives only in `.git/hooks` is unreviewable and is most of how this happened.
+`.github/workflows/dod.yml` runs the same scripts on every push and pull request, and reports
+rather than blocks, since a private repo on the free plan cannot require a status check. That gap
+is in `docs/DEBT.md` with an owner. Every check was planted, watched failing, and the plant
+removed, with the real output in `docs/qa/verify/GATES-BORN-RED.md`. Three defects were found by
+the planting that reading could not have found, including a pattern BSD awk silently mangled into
+matching nothing across all 386 files.
+
 **A cached green is evidence about a previous run.** Fifth disguise, and the cheapest to fall
 for. A session regenerated the route types, ran `pnpm turbo typecheck`, and got 12 of 12
 successful, 12 of 12 CACHED. A fully cached result says nothing whatever about the file just

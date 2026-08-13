@@ -1,5 +1,53 @@
 # Debt and incident log
 
+## 2026-08-14: a private repo on the free plan cannot require a status check
+
+**Owner: the founder (Abishai). Closes when the repo is on GitHub Pro or Team,
+or is made public, and `Definition of Done / Security invariants` is added to
+the branch protection rule for the default branch as a REQUIRED check.**
+
+`.github/workflows/dod.yml` now runs the invariants and the typecheck, lint and
+build on every push and pull request. On the free plan a **private** repository
+cannot mark a status check as required, so that workflow reports and cannot
+refuse. A red tick and a merged pull request can coexist. Per the house rule,
+CI that cannot block is not a gate, so it must not be described as one.
+
+**The stand-in gate is `scripts/hooks/pre-push`**, installed into a clone by
+`scripts/install-hooks.sh`. It refuses the push when the invariants or the
+Definition of Done are red. Its limits are real and are stated in its own
+header: it applies only to a machine that has run the installer, `git push
+--no-verify` skips it, and it cannot touch a push made anywhere else. It is a
+gate for one person on one machine.
+
+Until this is closed, the honest description of enforcement on this repo is:
+one laptop refuses, everything else reports.
+
+## 2026-08-14: two invariant sub-checks that cannot fully run
+
+Both are recorded rather than quietly dropped, because an unrunnable check that
+nobody wrote down reads as a passing one.
+
+1. **`db-dual-policy-drift` does not run in CI.** It re-derives the set of
+   tables carrying both an owner and a public policy from `pg_policy` and fails
+   if `docs/qa/verify/dual-policy-tables.txt` is stale. A GitHub runner has no
+   route to the Supabase project and no credentials, so CI and the pre-push hook
+   both pass `--offline`, and the script prints NOT RUN with what that leaves
+   uncovered. Consequence: a table that GAINS a public policy is not noticed
+   until someone runs the script with `ATLITOS_DB_URL` set, or supplies a
+   catalog dump with `--live-tables`. Owner: whoever next runs a migration that
+   adds a public read policy. Closes when a scheduled job with read-only
+   credentials runs the non-offline form.
+
+2. **`copy-dashes` does not catch an in-word hyphen.** It catches em-dashes,
+   en-dashes and a hyphen used as punctuation between spaces. It deliberately
+   does not catch `placeholder="YYYY-MM-DD"` at
+   `apps/mobile/src/app/profile/edit.tsx:318`, which is on the founder decision
+   list in `docs/qa/verify/VERIFICATION-WAVE-1.md` section 6, nor compound words
+   inside copy. Widening it today would fire on an undecided line, and a check
+   that fires on legitimate code is how a whole script gets ignored. Owner: the
+   founder, on the same decision. Closes when the date mask is settled, at which
+   point the pattern can be widened and re-born-red.
+
 ## 2026-08-11: unreviewed production DELETE during the manual QA pass
 
 A Fix-phase agent working finding F-31c ("E2E test data visible in production

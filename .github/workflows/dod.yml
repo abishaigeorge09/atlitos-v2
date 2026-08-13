@@ -1,0 +1,80 @@
+name: Definition of Done
+
+# The repo had no .github directory at all until 2026-08-14, so the pre-push
+# hook was the only gate, it lived on one laptop, and the two scripts it called
+# had never existed in any commit. See docs/qa/verify/VERIFICATION-WAVE-1.md
+# P1-6.
+#
+# READ THIS BEFORE TRUSTING A GREEN TICK HERE. On the free GitHub plan a private
+# repository cannot make a status check REQUIRED, so this workflow reports but
+# cannot refuse a merge. It is a detector, not a gate. The gate is
+# scripts/hooks/pre-push, installed by scripts/install-hooks.sh. Both facts are
+# recorded with an owner in docs/DEBT.md.
+
+on:
+  push:
+    branches-ignore: []
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: dod-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  invariants:
+    name: Security invariants
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The invariants are pure grep, awk and perl. They need no install step
+      # and no node_modules, which is why they run as their own job: a broken
+      # lockfile must not be able to stop the security checks from reporting.
+      - name: Prove the gate scripts are present
+        run: |
+          test -f scripts/security-invariants.sh || { echo "security-invariants.sh is MISSING"; exit 1; }
+          test -f scripts/dod.sh || { echo "dod.sh is MISSING"; exit 1; }
+          chmod +x scripts/security-invariants.sh scripts/dod.sh
+
+      # --offline because a GitHub runner has no route to the Supabase project
+      # and no credentials. The script prints exactly what that leaves
+      # uncovered, and the gap is recorded in docs/DEBT.md rather than being
+      # allowed to read as a clean pass.
+      - name: Run invariants
+        run: ./scripts/security-invariants.sh --offline
+
+      - name: Hooks in the tree match the ones that are meant to run
+        run: |
+          test -x scripts/install-hooks.sh || chmod +x scripts/install-hooks.sh
+          test -f scripts/hooks/pre-push || { echo "the versioned pre-push hook is MISSING"; exit 1; }
+
+  workspace:
+    name: Typecheck, lint, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # CI=1 matters: pnpm install can exit 0 having done nothing when it wants
+      # a from-scratch reinstall and the terminal is non-interactive
+      # (docs/qa/CURRENT-STATE.md, environment traps).
+      - name: Install
+        run: CI=1 pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm turbo typecheck
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Build
+        run: pnpm turbo build
