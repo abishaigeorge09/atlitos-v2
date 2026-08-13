@@ -13,6 +13,13 @@
 # Signs in as the athlete demo account first, then the coach demo account,
 # via the atlitos://login deep link. Unlike the guest suite this flow signs
 # in, but it still writes no server state (taps only lists, tabs, back).
+#
+# Coach1's display name is "Ravi Kumar" (confirmed live via read only SQL
+# against syzzfgaudpifwvbpycyi on 2026-08-13, user 5b262cf1-8f95-45df-b453-
+# 0802013f82a1), not "Demo Coach One": launch Phase 1's security lockdown
+# renamed/rotated the seed accounts. The player has a real accepted
+# session with this coach on 2026-07-30 (session 785c799c-5abf-419e-84d0-
+# 017b164b1c53), so the drill in assertion below still has a live target.
 appId: com.atlitos.app
 ---
 # ---------- Athlete: player@atlitos.dev ----------
@@ -123,7 +130,7 @@ appId: com.atlitos.app
     visible: "My coaches"
     timeout: 10000
 - assertVisible: "Browse coaches"
-- assertVisible: "Coach Demo Coach One"
+- assertVisible: "Coach Ravi Kumar"
 - assertVisible: "Trainings"
 - assertVisible: "Stats"
 - takeScreenshot: /tmp/trainings-shell/player-coaches
@@ -189,11 +196,11 @@ appId: com.atlitos.app
     timeout: 10000
 - scrollUntilVisible:
     element:
-      text: "Demo Coach One, 2026-07-30.*"
+      text: "Ravi Kumar, 2026-07-30.*"
     direction: DOWN
     timeout: 15000
 - tapOn:
-    text: "Demo Coach One, 2026-07-30.*"
+    text: "Ravi Kumar, 2026-07-30.*"
 - extendedWaitUntil:
     visible: "Session"
     timeout: 10000
