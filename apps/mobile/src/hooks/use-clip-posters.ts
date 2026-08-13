@@ -26,13 +26,26 @@ import { supabase } from '@/lib/supabase';
  * A clip whose mint fails (no thumbnail object, a 403, a placeholder fixture)
  * simply keeps its solid tile. Failure is never surfaced per tile: a poster is
  * decoration, and the tile is still tappable and still opens the clip.
+ *
+ * PENDING vs EMPTY (Track 3 finding 2). The mint takes about three seconds on
+ * a creator grid, and for those three seconds the tiles rendered as flat
+ * surface-muted squares: EXACTLY what a failed batch endpoint looks like. On
+ * device that was nearly filed as a poster regression. `pendingPosterIds` is
+ * the missing distinction, and it is deliberately derived from the batch
+ * SETTLING rather than from "no URL yet", because a clip the batch answered
+ * about and could not sign has a permanently absent poster and must stop
+ * shimmering.
  */
 export function useClipPosters(clips: Clip[]): {
   posterUrls: Record<string, string>;
+  /** Clips whose poster mint is still in flight. A tile in this set is
+   * LOADING, not empty, and renders a skeleton. */
+  pendingPosterIds: Set<string>;
   resetPosters: () => void;
 } {
   const clutch = useClutch(supabase);
   const [posterUrls, setPosterUrls] = useState<Record<string, string>>({});
+  const [pendingPosterIds, setPendingPosterIds] = useState<Set<string>>(new Set());
   // Ids a mint has already been attempted for, so a static grid re-rendering
   // does not re-mint every pass (an unresolved mint is not retried in a loop,
   // which would be a slow flood rather than a fast one).
@@ -41,6 +54,7 @@ export function useClipPosters(clips: Clip[]): {
   const resetPosters = useCallback(() => {
     attempted.current.clear();
     setPosterUrls({});
+    setPendingPosterIds(new Set());
   }, []);
 
   useEffect(() => {
@@ -51,19 +65,48 @@ export function useClipPosters(clips: Clip[]): {
     if (pending.length === 0) return;
     pending.forEach((clip) => attempted.current.add(clip.id));
 
-    void clutch.getPlaybackUrls(pending.map((clip) => clip.id), 'thumb').then((batch) => {
-      if (cancelled || batch.urls.length === 0) return;
-      setPosterUrls((prev) => {
-        const next = { ...prev };
-        for (const entry of batch.urls) next[entry.clipId] = entry.url;
+    const pendingIds = pending.map((clip) => clip.id);
+    setPendingPosterIds((prev) => {
+      const next = new Set(prev);
+      for (const id of pendingIds) next.add(id);
+      return next;
+    });
+
+    // Clears the shimmer for this batch whether it succeeded, partially
+    // succeeded or threw. A skeleton that outlives its request is the same
+    // never-resolving state this hook is being fixed for, one level down.
+    const settle = () => {
+      if (cancelled) return;
+      setPendingPosterIds((prev) => {
+        const next = new Set(prev);
+        for (const id of pendingIds) next.delete(id);
         return next;
       });
-    });
+    };
+
+    clutch
+      .getPlaybackUrls(pendingIds, 'thumb')
+      .then((batch) => {
+        if (cancelled || batch.urls.length === 0) return;
+        setPosterUrls((prev) => {
+          const next = { ...prev };
+          for (const entry of batch.urls) next[entry.clipId] = entry.url;
+          return next;
+        });
+      })
+      // The previous `void ...then()` had no rejection handler at all, so a
+      // throwing batch (offline, 429) surfaced as an unhandled promise
+      // rejection AND left the grid blank with no explanation.
+      .catch(() => {
+        // Poster mint failure is non blocking by design: the tile keeps its
+        // solid surface and still opens the clip.
+      })
+      .finally(settle);
 
     return () => {
       cancelled = true;
     };
   }, [clips, clutch]);
 
-  return { posterUrls, resetPosters };
+  return { posterUrls, pendingPosterIds, resetPosters };
 }

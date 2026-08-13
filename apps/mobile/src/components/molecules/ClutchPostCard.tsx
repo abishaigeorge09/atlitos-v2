@@ -1,10 +1,11 @@
 import { spacing } from '@atlitos/theme';
 import type { Clip } from '@atlitos/types';
 import * as Haptics from 'expo-haptics';
-import { Bookmark, BookmarkCheck, EllipsisVertical, Heart, MessageCircle, Share2, WifiOff } from 'lucide-react-native';
+import { Bookmark, BookmarkCheck, EllipsisVertical, Film, Heart, MessageCircle, Share2, WifiOff } from 'lucide-react-native';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 
 import { ClipVideo } from '@/components/molecules/clip-video';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
 import { cn } from '@/lib/utils';
 import { useThemeColors } from '@/theme/use-theme-colors';
@@ -34,6 +35,13 @@ export interface ClutchPostCardProps {
    * feed passes this rather than clip.thumbUrl because thumb_path is a raw
    * private-bucket path that cannot load as an <Image> source. */
   posterUrl?: string;
+  /** Thumb variant only. True while this tile's signed poster is still being
+   * minted by the grid's batch call. Without it a loading tile and a tile whose
+   * poster does not exist rendered identically (a flat surface-muted square),
+   * which on device read as the batch endpoint failing for the ~3 seconds the
+   * mint takes. A loading state indistinguishable from a failure state is a
+   * bug in its own right. */
+  posterPending?: boolean;
   /** True only for the single on-screen card, drives muted autoplay. */
   active?: boolean;
   /** F1 (P5 fix pass): whether this card should hold a live `ClipVideo`
@@ -91,6 +99,7 @@ export function ClutchPostCard({
   variant = 'feed',
   playbackUrl,
   posterUrl,
+  posterPending = false,
   active = false,
   mountPlayer = true,
   compactActions = false,
@@ -123,21 +132,37 @@ export function ClutchPostCard({
     // source, so without the signed poster the tile renders blank beige. Same
     // rule the feed card follows for its poster.
     const thumbSource = posterUrl ?? clip.thumbUrl;
+    // A tile with no poster YET pulses; a tile whose poster came back empty
+    // stays a solid surface. The like count is suppressed while pulsing so the
+    // skeleton reads as one loading block rather than a half drawn tile.
+    const showSkeleton = !thumbSource && posterPending;
     // Single Pressable, only non-interactive children (no nested pressables).
     return (
       <Pressable
         onPress={onOpen}
         accessibilityRole="button"
-        accessibilityLabel={`Open clip, ${clip.likes} likes`}
+        accessibilityLabel={showSkeleton ? 'Loading clip' : `Open clip, ${clip.likes} likes`}
         className="aspect-square flex-1 overflow-hidden rounded-sm bg-surface-muted active:opacity-90"
       >
         {thumbSource ? (
           <Image source={{ uri: thumbSource }} className="absolute inset-0 h-full w-full" resizeMode="cover" />
-        ) : null}
-        <View className="absolute bottom-xs left-xs flex-row items-center gap-xs">
-          <Heart size={16} strokeWidth={2} color={colors.textInverse} fill={colors.textInverse} />
-          <Text className="font-mono text-xs text-text-inverse">{clip.likes}</Text>
-        </View>
+        ) : showSkeleton ? (
+          <Skeleton shape="tile" className="absolute inset-0 h-full w-full rounded-sm" />
+        ) : (
+          // Settled with no poster. An icon placeholder rather than a bare
+          // fill, matching what CourtCard and ProductCard already do for a
+          // missing image, so "no poster" reads as a state and not as a tile
+          // that failed to paint.
+          <View className="absolute inset-0 items-center justify-center">
+            <Film size={24} strokeWidth={1.75} color={colors.textTertiary} />
+          </View>
+        )}
+        {showSkeleton ? null : (
+          <View className="absolute bottom-xs left-xs flex-row items-center gap-xs">
+            <Heart size={16} strokeWidth={2} color={colors.textInverse} fill={colors.textInverse} />
+            <Text className="font-mono text-xs text-text-inverse">{clip.likes}</Text>
+          </View>
+        )}
       </Pressable>
     );
   }

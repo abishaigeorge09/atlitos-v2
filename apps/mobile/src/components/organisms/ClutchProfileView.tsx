@@ -6,6 +6,7 @@ import { ActivityIndicator, FlatList, Pressable, View } from 'react-native';
 
 import { ClutchPostCard } from '@/components/molecules/ClutchPostCard';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { StatusPill, type Status } from '@/components/ui/status-pill';
 import { Text } from '@/components/ui/text';
 import { Avatar } from '@/components/ui/avatar';
@@ -37,7 +38,23 @@ export interface ClutchProfileViewProps {
    * of blank tiles. Optional so a caller that has not wired the batch yet
    * degrades to the old blank tile rather than crashing. */
   posterUrls?: Record<string, string>;
+  /** Clips whose poster mint is still in flight (`useClipPosters`). Those
+   * tiles pulse; a tile that is merely posterless does not. Before this, the
+   * two looked identical for the ~3 seconds the batch takes, which on device
+   * read as the batch endpoint failing. */
+  pendingPosterIds?: Set<string>;
   followBusy?: boolean;
+  /** Keyset pagination. `getCreatorClips`/`getMyClips` are bounded to
+   * CLUTCH_GRID_PAGE_SIZE (24), so without this a creator with more than 24
+   * published clips silently lost the rest: the grid simply stopped, with no
+   * spinner, no end marker and nothing to scroll to. Both are optional so a
+   * caller that has not wired continuation still renders. */
+  onEndReached?: () => void;
+  /** True while the next page is in flight, drives the footer. */
+  loadingMore?: boolean;
+  /** False once the server has returned a short page, which is what turns the
+   * footer from "loading" into "that is all of them". */
+  hasMore?: boolean;
   onRetry: () => void;
   onToggleFollow?: () => void;
   onOpenClip: (clipId: string) => void;
@@ -71,7 +88,11 @@ export function ClutchProfileView({
   errorMessage,
   isOwn,
   posterUrls,
+  pendingPosterIds,
   followBusy,
+  onEndReached,
+  loadingMore = false,
+  hasMore = false,
   onRetry,
   onToggleFollow,
   onOpenClip,
@@ -81,9 +102,30 @@ export function ClutchProfileView({
   const colors = useThemeColors();
 
   if (state === 'loading') {
+    // SPEC Section 9: "every screen ships 4 states: loading skeleton, never
+    // spinner only". A centered spinner over an empty screen was the same
+    // shape as the blank-tile finding: it says something is happening but
+    // nothing about what is about to appear.
     return (
-      <View className="flex-1 items-center justify-center">
-        <ActivityIndicator color={colors.accent} />
+      <View style={{ padding: spacing.lg, gap: spacing.lg }}>
+        <View className="flex-row items-center gap-lg">
+          <Skeleton shape="circle" width={80} height={80} />
+          <View className="flex-1 gap-sm">
+            <Skeleton shape="line" width="60%" />
+            <Skeleton shape="line" width="40%" />
+          </View>
+        </View>
+        <Skeleton shape="line" width="45%" />
+        <View className="flex-row gap-xs">
+          <Skeleton shape="card" className="flex-1" height={110} />
+          <Skeleton shape="card" className="flex-1" height={110} />
+          <Skeleton shape="card" className="flex-1" height={110} />
+        </View>
+        <View className="flex-row gap-xs">
+          <Skeleton shape="card" className="flex-1" height={110} />
+          <Skeleton shape="card" className="flex-1" height={110} />
+          <Skeleton shape="card" className="flex-1" height={110} />
+        </View>
       </View>
     );
   }
@@ -110,6 +152,25 @@ export function ClutchProfileView({
       numColumns={3}
       columnWrapperStyle={{ gap: spacing.xs }}
       contentContainerStyle={{ gap: spacing.xs, paddingBottom: spacing.xl }}
+      // Keyset continuation for the 24 clip page. `onEndReached` can fire more
+      // than once per scroll, so the guard against a duplicate page request
+      // lives in the caller's `loadMore` (the same shape CoachBrowseList uses)
+      // rather than in a flag here.
+      onEndReached={onEndReached ? () => onEndReached() : undefined}
+      onEndReachedThreshold={0.5}
+      ListFooterComponent={
+        onEndReached && clips.length > 0 ? (
+          <View style={{ paddingVertical: spacing.lg, alignItems: 'center' }}>
+            {loadingMore ? (
+              <ActivityIndicator color={colors.accent} />
+            ) : hasMore ? null : (
+              <Text style={[textStyle('caption'), { color: colors.textTertiary }]}>
+                That is every clip.
+              </Text>
+            )}
+          </View>
+        ) : null
+      }
       ListHeaderComponent={
         <View style={{ padding: spacing.lg, gap: spacing.lg }}>
           <View className="flex-row items-center gap-lg">
@@ -171,6 +232,7 @@ export function ClutchProfileView({
               clip={item}
               variant="thumb"
               posterUrl={posterUrls?.[item.id]}
+              posterPending={pendingPosterIds?.has(item.id)}
               onOpen={() => onOpenClip(item.id)}
             />
             {pill ? (

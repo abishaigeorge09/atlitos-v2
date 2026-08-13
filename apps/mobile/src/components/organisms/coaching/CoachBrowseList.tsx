@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, RefreshControl, ScrollView, View } from 'react-native';
 
+import { LocationStatusRow } from '@/components/molecules/LocationStatusRow';
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { CoachCard } from '@/components/ui/coach-card';
@@ -93,8 +94,24 @@ export function CoachBrowseList({ onOpenCoach, header, onRefresh }: CoachBrowseL
   const colors = useThemeColors();
   const coaching = useCoaching(supabase);
 
-  const locationStatus = useLocationStore((state) => state.status);
   const city = useLocationStore((state) => state.city);
+  const locationRequested = useLocationStore((state) => state.requested);
+  const requestLocation = useLocationStore((state) => state.requestLocation);
+  const profileCity = useSessionStore((s) => s.me?.city ?? null);
+
+  // Track 3 sweep. This surface READ the location store but never asked it for
+  // anything, so a player who opens Trainings > Coaches before ever opening
+  // Courts browsed against the store's Hyderabad DEFAULT while the line above
+  // the list claimed "Showing coaches near Hyderabad". The city is a real query
+  // filter here (`listCoaches({ city })`), not decoration, so an unrequested
+  // default is a wrong result set, not just wrong copy. Same trigger rule as
+  // Courts: request once, never on every mount.
+  useEffect(() => {
+    if (!locationRequested) void requestLocation(profileCity);
+    // Intentionally mount only, matching courts/index.tsx: `requested` flipping
+    // true must not re-run this, and a retry is user driven from the row below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Default the sport filter to the player's primary sport (athlete_sports,
   // via the session me) so a cricket player lands on cricket coaches, not "All
@@ -179,9 +196,7 @@ export function CoachBrowseList({ onOpenCoach, header, onRefresh }: CoachBrowseL
     <View style={{ gap: spacing.sm, paddingBottom: spacing.md }}>
       {header}
 
-      <Text className="font-sans text-sm text-text-secondary">
-        {locationStatus === 'loading' ? 'Finding your location...' : `Showing coaches near ${city}`}
-      </Text>
+      <LocationStatusRow resolvedLabel={`Showing coaches near ${city}`} profileCity={profileCity} />
 
       <FlatList
         horizontal

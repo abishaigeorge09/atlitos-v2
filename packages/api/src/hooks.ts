@@ -1240,6 +1240,57 @@ const BLOCK_LIST_MAX = 1000;
 // throttle on a single screen open.
 export const CLUTCH_GRID_PAGE_SIZE = 24;
 
+/**
+ * A page of a profile clip grid, mirroring `CoachListPage` (CT-5) rather than
+ * inventing a second pagination shape.
+ *
+ * WHY THE SHAPE CHANGED. `getCreatorClips`/`getMyClips` previously returned a
+ * bare `Clip[]` bounded to CLUTCH_GRID_PAGE_SIZE with an optional `cursor`
+ * argument that no screen ever passed, so a creator with more than 24
+ * published clips silently lost the rest: the grid stopped at 24 with no
+ * marker and nothing to scroll to. A caller cannot derive "is there more" from
+ * an array length here, because `getMyClips` drops soft deleted rows AFTER the
+ * limit, so a short page is not proof of exhaustion. `nextCursor` is decided
+ * server side from a limit+1 probe and is null exactly on the last page.
+ */
+export interface ClipPage {
+  items: Clip[];
+  nextCursor: string | null;
+}
+
+// Keyset cursor over (created_at desc, id desc). The id half is not
+// decoration: `created_at` alone is not unique, and two clips sharing a
+// timestamp across a page boundary would drop one of them silently, which is
+// the same class of invisible loss the hard stop at 24 was.
+function encodeClipCursor(createdAt: string, id: string): string {
+  return `${createdAt}|${id}`;
+}
+
+function decodeClipCursor(cursor: string): { createdAt: string; id: string } | null {
+  const at = cursor.lastIndexOf("|");
+  if (at <= 0 || at === cursor.length - 1) return null;
+  return { createdAt: cursor.slice(0, at), id: cursor.slice(at + 1) };
+}
+
+/** Shared page assembly for both clip grids: take the limit+1 probe, decide
+ * `nextCursor` from whether the extra row existed, and never return it.
+ *
+ * `keepRow` filters rows out of `items` WITHOUT affecting the cursor, which is
+ * the whole reason it lives here: the cursor must describe where the SERVER
+ * page ended, not where the filtered list ended. */
+function toClipPage(
+  rows: ClipFeedRow[],
+  mapRow: (row: ClipFeedRow) => Clip,
+  keepRow?: (row: ClipFeedRow) => boolean,
+): ClipPage {
+  const hasNextPage = rows.length > CLUTCH_GRID_PAGE_SIZE;
+  const pageRows = hasNextPage ? rows.slice(0, CLUTCH_GRID_PAGE_SIZE) : rows;
+  const last = pageRows[pageRows.length - 1];
+  const nextCursor = hasNextPage && last ? encodeClipCursor(last.created_at, last.id) : null;
+  const kept = keepRow ? pageRows.filter(keepRow) : pageRows;
+  return { items: kept.map(mapRow), nextCursor };
+}
+
 // CT-1 (Phase 3 LAUNCH, P1-1). The endpoint rejects a batch over 24 ids
 // (BATCH_TOO_LARGE); getPlaybackUrls chunks any longer list itself so a call
 // site never has to. Concurrency caps how many chunk requests are ever
@@ -2060,21 +2111,32 @@ function makeClutchApi(client: AtlitosClient) {
      * a 500 clip creator returned 500 rows and, once the grid mints posters,
      * ceil(500/24) = 21 batch calls on one screen open. One page of
      * CLUTCH_GRID_PAGE_SIZE keeps the grid inside a SINGLE batch call, which
-     * is the whole point of the batch endpoint; pass the last row's
-     * `createdAt` as `cursor` for the next page. */
-    async getCreatorClips(creatorId: string, cursor?: string): Promise<Clip[]> {
+     * is the whole point of the batch endpoint; pass the previous page's
+     * `nextCursor` for the next page.
+     *
+     * PAGINATED, not merely bounded. The bound shipped without a continuation
+     * and neither grid screen passed a cursor, so a creator with more than 24
+     * published clips lost the rest with no indication. */
+    async getCreatorClips(creatorId: string, cursor?: string): Promise<ClipPage> {
       let query = db
         .from("clips")
         .select(CLIP_FEED_SELECT)
         .eq("owner_id", creatorId)
         .eq("status", "published")
         .order("created_at", { ascending: false })
-        .limit(CLUTCH_GRID_PAGE_SIZE);
-      if (cursor) query = query.lt("created_at", cursor);
+        .order("id", { ascending: false })
+        // limit + 1: the extra row decides `nextCursor` and is never returned.
+        .limit(CLUTCH_GRID_PAGE_SIZE + 1);
+      const decoded = cursor ? decodeClipCursor(cursor) : null;
+      if (decoded) {
+        query = query.or(
+          `created_at.lt.${decoded.createdAt},and(created_at.eq.${decoded.createdAt},id.lt.${decoded.id})`,
+        );
+      }
 
       const { data, error } = await query.returns<ClipFeedRow[]>();
       if (error) throw mapPostgrestError(error);
-      return (data ?? []).map((r) => mapClipRow(r, false));
+      return toClipPage(data ?? [], (r) => mapClipRow(r, false));
     },
 
     /** The signed-in athlete's own clips for their own Clutch profile, in
@@ -2094,16 +2156,17 @@ function makeClutchApi(client: AtlitosClient) {
      * column that does not exist yet 400s the whole query. This is not a
      * security boundary being moved client side, it is an own-scoped read of
      * the caller's own rows hiding rows the caller themselves deleted. */
-    async getMyClips(cursor?: string): Promise<Clip[]> {
+    async getMyClips(cursor?: string): Promise<ClipPage> {
       const { data: authData, error: authError } = await client.auth.getUser();
       if (authError) throw mapAuthError(authError);
-      if (!authData.user) return [];
+      if (!authData.user) return { items: [], nextCursor: null };
 
       let query = db
         .from("clips")
         .select(CLIP_OWNER_SELECT)
         .eq("owner_id", authData.user.id)
         .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
 // Note the interaction with the `deleted_at` filter below, which runs
         // in JavaScript rather than as a `.is("deleted_at", null)` qual.
         // `clips` has no `deleted_at` column on the live project, checked in
@@ -2116,12 +2179,23 @@ function makeClutchApi(client: AtlitosClient) {
         // CLUTCH_GRID_PAGE_SIZE tiles. Worth knowing before someone reads a
         // short grid as a bug; the fix at that point is to move the predicate
         // into the query, which the column existing is what makes possible.
-        .limit(CLUTCH_GRID_PAGE_SIZE);
-      if (cursor) query = query.lt("created_at", cursor);
+        //
+        // It is also why `nextCursor` is decided from the RAW page and not
+        // from `items.length`: a page that returns 20 tiles after dropping 4
+        // soft deleted rows is not the last page, and a caller that stopped
+        // paginating on a short page would hide the rest of the grid, which is
+        // the exact bug this continuation exists to fix.
+        .limit(CLUTCH_GRID_PAGE_SIZE + 1);
+      const decoded = cursor ? decodeClipCursor(cursor) : null;
+      if (decoded) {
+        query = query.or(
+          `created_at.lt.${decoded.createdAt},and(created_at.eq.${decoded.createdAt},id.lt.${decoded.id})`,
+        );
+      }
 
       const { data, error } = await query.returns<ClipFeedRow[]>();
       if (error) throw mapPostgrestError(error);
-      return (data ?? []).filter((r) => r.deleted_at == null).map((r) => mapClipRow(r, false));
+      return toClipPage(data ?? [], (r) => mapClipRow(r, false), (r) => r.deleted_at == null);
     },
 
     /** v1 `clutch.upload` step 1 -> `stream-upload-url` edge function. Mints

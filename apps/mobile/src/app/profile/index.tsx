@@ -3,7 +3,7 @@ import { spacing } from '@atlitos/theme';
 import type { ApiError, Clip, ClipStatus } from '@atlitos/types';
 import { router } from 'expo-router';
 import { Bookmark, Heart, LayoutGrid, LogIn, RotateCcw, Settings, TriangleAlert } from 'lucide-react-native';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Image, Pressable, RefreshControl, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
@@ -11,6 +11,7 @@ import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { ClutchPostCard } from '@/components/molecules/ClutchPostCard';
 import { EmptyState } from '@/components/organisms/EmptyState';
 import { AppBar } from '@/components/ui/app-bar';
+import { useClipPosters } from '@/hooks/use-clip-posters';
 import { Avatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { StatusPill, type Status } from '@/components/ui/status-pill';
@@ -88,11 +89,10 @@ export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {
   const [refreshing, setRefreshing] = useState(false);
   const [tab, setTab] = useState<ProfileTab>('posts');
 
-  // Signed poster URL per grid clip, minted in batches via getPlaybackUrls.
-  const [posterUrls, setPosterUrls] = useState<Record<string, string>>({});
-  // Clips a poster mint has already been attempted for, so a static grid never
-  // re-mints every render (an unresolved mint is not retried in a loop).
-  const mintAttempted = useRef<Set<string>>(new Set());
+  // Keyset continuation for the posts tab. Liked and saved are separate,
+  // already bounded reads (limit 100) with no cursor plumbing of their own.
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   // P1-6 (CT-6): per-clip Retry busy/error state, keyed by clip id, so one
   // tile's retry never disables the whole grid.
@@ -107,14 +107,15 @@ export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {
         setError(null);
       }
       try {
-        const [creator, myClips, likedClips, savedClips] = await Promise.all([
+        const [creator, myClipsPage, likedClips, savedClips] = await Promise.all([
           clutch.getCreator(myId),
           clutch.getMyClips(),
           clutch.listLikedClips(),
           clutch.listSavedClips(),
         ]);
         setProfile(creator);
-        setClips(myClips);
+        setClips(myClipsPage.items);
+        setNextCursor(myClipsPage.nextCursor);
         setLiked(likedClips);
         setSaved(savedClips);
         setState(creator ? 'ready' : 'error');
@@ -130,52 +131,42 @@ export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {
     if (myId) void load(false);
   }, [load, myId]);
 
+  const gridClips = tab === 'posts' ? clips : tab === 'liked' ? liked : saved;
+
+  // Signed posters for the active grid, in BATCHES (P1-1, CT-1). This was a
+  // hand rolled copy of `useClipPosters`, which is why the blank-tile-while-
+  // loading finding existed here too and had to be fixed twice. It now shares
+  // the hook, so the pending/empty distinction (and the missing rejection
+  // handler on the batch call) is fixed for every grid at once.
+  const { posterUrls, pendingPosterIds, resetPosters } = useClipPosters(gridClips);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
       // Re-mint posters on an explicit pull to refresh (a save/unsave elsewhere
       // may have changed the saved grid).
-      mintAttempted.current.clear();
-      setPosterUrls({});
+      resetPosters();
       await load(true);
     } finally {
       setRefreshing(false);
     }
-  }, [load]);
+  }, [load, resetPosters]);
 
-  const gridClips = tab === 'posts' ? clips : tab === 'liked' ? liked : saved;
-
-  // Mint signed posters for every clip in the active grid that has not been
-  // attempted yet, in BATCHES (P1-1, CT-1) instead of one getPlaybackUrl call
-  // per tile: a >= 12 clip grid used to fire n network calls on mount, the
-  // exact flood this phase's readiness work targets. getPlaybackUrls chunks
-  // to <= 24 ids per call with concurrency <= 4, kind "thumb" (3600s TTL, no
-  // per-card refresh timer needed the way the feed's video URLs need).
-  // A `failed` clip is skipped: it has no storage object to mint a poster
-  // for, its tile renders the Retry overlay instead (below).
-  useEffect(() => {
-    let cancelled = false;
-    const pending = gridClips.filter((clip) => clip.status !== 'failed' && !mintAttempted.current.has(clip.id));
-    if (pending.length === 0) return;
-    pending.forEach((clip) => mintAttempted.current.add(clip.id));
-    void clutch.getPlaybackUrls(
-      pending.map((clip) => clip.id),
-      'thumb',
-    ).then((batch) => {
-      if (cancelled) return;
-      if (batch.urls.length === 0) return;
-      setPosterUrls((prev) => {
-        const next = { ...prev };
-        for (const entry of batch.urls) next[entry.clipId] = entry.url;
-        return next;
-      });
-      // A clip in `batch.failed` (placeholder-bytes fixture, or a 403) just
-      // keeps its solid poster surface; no error surfaced per tile.
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [gridClips, clutch]);
+  /** Appends the next page of own clips. Posts tab only: `liked` and `saved`
+   * are separate bounded reads with no cursor of their own. */
+  const loadMore = useCallback(async () => {
+    if (tab !== 'posts' || loadingMore || !nextCursor) return;
+    setLoadingMore(true);
+    try {
+      const page = await clutch.getMyClips(nextCursor);
+      setClips((previous) => [...previous, ...page.items]);
+      setNextCursor(page.nextCursor);
+    } catch {
+      // A failed tail page leaves the shown grid intact; scrolling refires.
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [clutch, loadingMore, nextCursor, tab]);
 
   /** P1-6 (CT-6). Retry a `failed` own clip: RPC failed -> uploading, then a
    * fresh stream-upload-url mint against the same row, then route to Upload
@@ -394,6 +385,19 @@ export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {
         contentContainerStyle={{ gap: spacing.xs, paddingBottom: spacing.xl }}
         ListHeaderComponent={header}
         refreshControl={refreshControl}
+        onEndReached={() => void loadMore()}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          tab === 'posts' && gridClips.length > 0 ? (
+            <View style={{ paddingVertical: spacing.lg, alignItems: 'center' }}>
+              {loadingMore ? (
+                <ActivityIndicator color={colors.accent} />
+              ) : nextCursor === null ? (
+                <Text style={[textStyle('caption'), { color: colors.textTertiary }]}>That is every clip.</Text>
+              ) : null}
+            </View>
+          ) : null
+        }
         ListEmptyComponent={
           <View style={{ padding: spacing.xl, alignItems: 'center', gap: spacing.sm }}>
             <EmptyIcon size={40} color={colors.textTertiary} strokeWidth={1.75} />
@@ -417,6 +421,7 @@ export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {
                 clip={item}
                 variant="thumb"
                 posterUrl={posterUrls[item.id]}
+                posterPending={pendingPosterIds.has(item.id)}
                 onOpen={
                   isFailed
                     ? undefined

@@ -480,6 +480,42 @@ It is flagged, not deleted: "unused" is exactly the absence-dressed-as-fact this
   the app using a native RN `Modal`, which the house rule forbids.
 - **Video analysis is not being built** but six surfaces still reference it, including "My review
   videos" on the athlete dashboard which links to a screen that can never have content.
+- **FIXED 2026-08-14 (Track 3): Courts hung on "Finding your location..." forever.** Both themes,
+  simulator, never resolved and never failed. It is NOT the HTTP timeout bug and a fetch level
+  deadline could not have caught it: `packages/api/src/client.ts` wraps supabase's `fetch`, and
+  `expo-location`'s `requestForegroundPermissionsAsync`/`getCurrentPositionAsync` are native
+  module calls that never touch fetch and take no timeout. A simulator with no location
+  simulated, and a real device indoors with a cold GPS, both leave the position call PENDING with
+  no resolve and no reject, so the store sat in `loading` and its two honest terminal states
+  (`denied`, `unavailable`) were unreachable. Same shape as the HTTP bug (an await that never
+  settles bypasses the degrade path behind it), different mechanism. `location-store.ts` now
+  deadlines all three native calls (permission 20s, fix 12s, reverse geocode 6s), records
+  `canAskAgain` and `timedOut`, and adds a `manual` status. A single `LocationStatusRow`
+  (`components/molecules/`) renders every terminal state with a way forward: retry, open Settings
+  once the OS will not prompt again, or name a city. Class sweep in the same change:
+  `CoachBrowseList` had the identical two state ternary AND never called `requestLocation` at all,
+  so a player who opened Trainings > Coaches first browsed against the store's Hyderabad DEFAULT
+  while the header claimed to be showing coaches near it; `city` is a real query filter there, so
+  that was a wrong result set, not only wrong copy. Home's `LocationRow` rendered the untried
+  default, the denial fallback and a real GPS fix identically.
+
+  **Proven born red, then green**, by running the real store against a stubbed `expo-location`
+  whose position call never settles (a throwaway tsx harness, deleted after the run; there is
+  still no test infrastructure in this monorepo to keep it in). The PRE-FIX store, taken from
+  `git show HEAD:...location-store.ts`: `baseline after 25005ms: race=still-loading
+  status=loading`, exit 1, which is the reported bug reproduced off device. The fixed store:
+  `status=unavailable city=Chennai coords=null timedOut=true elapsedMs=12003` for the hung fix,
+  `elapsedMs=20002` for an unanswered permission dialog, `status=denied canAskAgain=false` for a
+  denial, `status=granted city=Bengaluru` for a real fix, `status=manual city=Kochi coords=null`
+  for a named city. 13 of 13 assertions passed. Still NOT device verified: no screenshot, no
+  Maestro run, per this track's instruction to leave the device pass to the integrated tree.
+- **RESOLVED 2026-08-14 (Track 3), pending a device pass on the integrated tree.** Both grids now
+  paginate: `getCreatorClips`/`getMyClips` return `ClipPage { items, nextCursor }` from a limit+1
+  probe over a keyset `(created_at desc, id desc)`, and all three call sites
+  (`(tabs)/clutch/profile.tsx`, `(tabs)/clutch/creator/[id].tsx`, `profile/index.tsx` posts tab)
+  wire `onEndReached` with a loading footer and an end marker. Page size stays 24. The founder
+  question below (is 24 right permanently, now that it doubles as `PLAYBACK_BATCH_MAX`) is
+  UNANSWERED and still open. The original finding follows.
 - **Clutch grid pagination is half wired, p6 integration audit 2026-08-14.** Track 1's media scale
   fix bounded `getCreatorClips`/`getMyClips` to `CLUTCH_GRID_PAGE_SIZE` (24) and gave both an
   optional `cursor` parameter (`packages/api/src/hooks.ts`), closing the API side of the

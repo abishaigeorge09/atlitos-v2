@@ -2,12 +2,13 @@ import { useCourts } from '@atlitos/api';
 import type { ApiError, Court, Sport } from '@atlitos/types';
 import { radii, spacing } from '@atlitos/theme';
 import { router } from 'expo-router';
-import { CalendarClock, LandPlot, MapPin, RefreshCw, TriangleAlert } from 'lucide-react-native';
+import { CalendarClock, LandPlot, RefreshCw, TriangleAlert } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
+import { LocationStatusRow } from '@/components/molecules/LocationStatusRow';
 import { LoginGateModal } from '@/components/organisms/LoginGateModal';
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
@@ -62,7 +63,6 @@ export default function CourtsIndexScreen() {
   // dropped when the gate opened.
   const { requireAuth, clearPendingAction } = usePendingAuthAction(requiresAuthGate);
 
-  const locationStatus = useLocationStore((state) => state.status);
   const locationRequested = useLocationStore((state) => state.requested);
   const city = useLocationStore((state) => state.city);
   const coords = useLocationStore((state) => state.coords);
@@ -142,18 +142,17 @@ export default function CourtsIndexScreen() {
         </Pressable>
       </View>
 
-      <View className="flex-row items-center gap-xs">
-        <MapPin size={14} strokeWidth={1.75} color={colors.textTertiary} />
-        <Text className="font-sans text-sm text-text-secondary">
-          {locationStatus === 'loading'
-            ? 'Finding your location...'
-            : /* F4: a resolved city with no court within a plausible
-                 distance is not a claim this line should make. */
-              locationIsMeaningful
-              ? `Showing courts near ${city}`
-              : 'Showing all verified courts'}
-        </Text>
-      </View>
+      {/* Track 3: this was a two state ternary over a five state machine, and
+          `loading` had no exit, so a hung permission prompt or a simulator
+          with no location left "Finding your location..." on screen forever.
+          LocationStatusRow renders every terminal state and the ways forward;
+          the F4 rule (a resolved city with no court within a plausible
+          distance is not a claim to make) still belongs here, because only
+          this screen knows how far its results are. */}
+      <LocationStatusRow
+        resolvedLabel={locationIsMeaningful ? `Showing courts near ${city}` : 'Showing all verified courts'}
+        profileCity={profileCity}
+      />
 
       {/* Track D defect 18: the chip row overflows the viewport (5 chips
           don't fit on a standard phone width). The list itself already
