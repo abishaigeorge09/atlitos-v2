@@ -165,3 +165,53 @@ Run live against production, not via the fan-out workflow (driven directly in th
 ### Note: pre-existing typecheck failure, unrelated to this integration
 
 `pnpm turbo typecheck --filter @atlitos/mobile` fails with `src/lib/push.ts(3,40): error TS2307: Cannot find module 'expo-modules-core' or its corresponding type declarations.` This import (`import type { EventSubscription } from 'expo-modules-core'`) is present verbatim at the pre-integration tip of `qa-fixes/manual-pass` (commit 047dca0, confirmed via `git show 047dca0:apps/mobile/src/lib/push.ts`), i.e. before any of the 12 branches merged in this pass touched anything. It looks like a pnpm phantom-dependency issue (`expo-modules-core` is present in the pnpm store as a transitive dep of `expo-notifications` but not hoisted/linked at `apps/mobile/node_modules`, and not declared directly in `apps/mobile/package.json`), reproducible even after a fresh `pnpm install` at the workspace root. None of the 12 merged fixes touch `push.ts` or its import graph. Every other affected package (`@atlitos/admin`, `@atlitos/portal-court`, `@atlitos/portal-life`, `@atlitos/ui-web`, `@atlitos/api`, `@atlitos/theme`, `@atlitos/types`) typechecks clean post-merge. Flagging for a human/founder decision on whether to add `expo-modules-core` as a direct `apps/mobile` dependency, since it predates this QA pass and is out of scope for any of the 13 reported fixes.
+
+## BUG-P5-CLUTCH-RENDER: Clutch "television static" is bad seed DATA, not a render bug
+
+Branch `phase-11/p5-clutch-render` (investigation only, nothing merged, no data touched). Reported as a P1 rendering bug: every Clutch feed card and the Home Clutch teaser render as black and white television static on both iOS and Android Release. Five prior explanations were wrong, and the sixth framing handed to this pass was wrong too: it asserted the source assets were "proven clean" and pointed at a chroma / stride / plane-order / colour-space fault between decoder and surface, on the strength of the burned-in white caption surviving while the saturated colour bars died.
+
+**There is no rendering bug. The Clutch render path is correct on iOS Release. The stored media for 5 of 12 clips is genuinely television static, and the app renders it faithfully.**
+
+### How the wrong premise arose
+
+The "proven clean" asset was fetched for a *different clip* than the one observed failing. The verified-clean thumbnail is the `ATLITOS 01 CRICKET` fixture, 64,706 bytes. The clip actually on screen in the failing captures is `b8c0c76e-ca27-48de-8fcf-98b6ee040dc8` ("Husband s"), whose thumbnail is 541,379 bytes of noise carrying a burned-in `ATLITOS 04 BADMINTON` caption and a cyan rectangle at bottom left. Both the caption surviving and the one surviving patch of colour, read as diagnostic clues pointing at chroma corruption, are simply *painted into the source asset*. Noise compresses poorly, which is why the corrupt thumbnails are 8 to 10 times larger than the clean ones; byte size alone separates the two populations.
+
+### Evidence
+
+1. **Isolation (the requested first experiment), image pipeline exonerated.** A temporary probe route rendered, on one screen: solid `<View>` primaries; the byte-identical clean test-pattern JPEG *bundled* into the app (no network, no signed URL, no auth) under `resizeMode="contain"`; and the same bundled JPEG under `resizeMode="cover"` inside `StyleSheet.absoluteFill`, the exact geometry `ClipVideo` gives its poster. All three rendered perfect colour bars on iOS Release. The `<Image>` path, the decoder and cover scaling are all correct.
+2. **The Home teaser already ruled out the video surface before any build.** `ClutchPreviewCard.tsx:113` passes `mountPlayer={false}`, so that card renders only `<Image source={{uri: posterUrl}} resizeMode="cover" />` with no `VideoView` mounted at all, and it still shows static. The video surface was never implicated.
+3. **On-device byte proof.** The probe minted the poster URL through the app's own client and auth and downloaded it through the app's own networking: `HTTP 200`, `content-type: image/jpeg`, `content-length: 541379`, `content-encoding: null`, `downloaded bytes: 541379`, magic `ff d8 ff e0 00 10 4a 46 49 46` (valid JFIF). Byte count matches an independent download from the Mac exactly, so nothing corrupts the payload in transit. That same URL rendered as static in an `<Image>` sitting directly above the bundled clean JPEG rendering as colour bars, in the same frame, same component, same props.
+4. **The asset itself, viewed directly.** Downloading `seed-thumbs/b8c0c76e-....jpg` and opening it shows television static with `ATLITOS 04 BADMINTON` and the cyan block, matching the device pixel for pixel. The matching **video** is static too, so this is not a poster-only problem.
+5. **Positive control on the real product surface.** Deep-linking to a clip whose stored asset is clean (`6d0a88b3`, "Hi") renders full saturated colour bars, the diagonal, the checkerboard and readable `ATLITOS 01 CRICKET`, with the video actively playing, through the identical `ClutchPostCard` / `ClipVideo` / `<Image>` path.
+
+Quantitative screenshot forensics also contradicted the chroma hypothesis before any build: per-column mean luma across the failing card is flat (44 to 53) end to end. Six saturated bars ranging from blue (Y≈29) to yellow (Y≈226) cannot survive any chroma-only fault with their luma structure erased; a stride or plane-order fault also displaces geometry, and the caption's position and scale matched an exact `cover` fit of 720x1280 into the device frame.
+
+### Scope, by stored asset (read-only scan of all 12 published clips)
+
+| clip | caption | thumb bytes | verdict |
+|------|---------|-------------|---------|
+| 6d0a88b3 | Hi | 64,706 | clean |
+| 535154a7 | Crosscourt backhand winner | 126,370 | clean |
+| f481b1d4 | Perfect volley finish in rain | 64,706 | clean |
+| **04651620** | mod-url real-bytes ready probe | **541,379** | **STATIC** |
+| e0fb7284 | e2e CL-10 0f55036a | 126,370 | clean |
+| **bd8b4f7d** | e2e CL-10 e37d41fb | **649,457** | **STATIC** |
+| 690516e5 | e2e CL-10 76177102 | 49,168 | clean |
+| d18cf904 | e2e CL-10 c0a6b0d6 | 126,370 | clean |
+| **db5d71ba** | e2e CL-10 f5386a70 | **541,379** | **STATIC** |
+| **b8c0c76e** | Husband s | **541,379** | **STATIC** |
+| 1e0e1559 | Track F scripted proof clip | 49,168 | clean |
+| **03c6ae85** | e2e CL-10 aa8d3117 | **541,379** | **STATIC** |
+
+5 of 12, not "every clip". Four share byte length 541,379, so the same static file was uploaded repeatedly. The affected rows are dominated by `e2e CL-10 *` and `mod-url real-bytes ready probe` captions, i.e. **E2E test fixtures leaked into the production feed**, the same class of production pollution already recorded twice in this file (leaked `training_groups`, leaked `e2e.*` auth accounts). "Husband s" is the newest row, which is why it sorts to the top of the feed and makes the failure look universal on both the Clutch tab and the Home teaser.
+
+### What was NOT done, and what remains
+
+No fix is possible inside the owned paths, because nothing in the owned paths is broken. The fix is a **data** fix: regenerate or remove the 5 static assets under `seed-thumbs/` and their matching `clips/` videos. That is explicitly outside this pass's mandate (writes and re-seeding forbidden, `supabase/**` not owned), so it is handed to the founder rather than attempted. Note the corrupt rows are test fixtures in a customer-facing feed, so removing the rows is likely more correct than regenerating their media.
+
+Recommended follow-ups, none actioned here:
+- Root-cause the *generator*: whichever fixture script produced these wrote real noise rather than a test pattern, and did it at least 4 times. Fixing the assets without fixing the generator ships this again.
+- Give the E2E clip fixtures teardown, matching the `coaching.spec.ts` CO-06/CO-08 contract already established in this file.
+- Consider an upload-time sanity check on clip thumbnails, since a near-zero-chroma, poorly-compressible thumbnail is cheaply detectable.
+
+Evidence images are kept outside the repo at `~/Documents/atlitos-evidence/bug-p5-clutch-render/` (`ios-probe.png` isolation, `ios-bytes.png` on-device byte proof, `ios-clean-clip.png` positive control, `ios-home-fresh.png` reproduction, `husband-thumb.jpg` and `vframe_b8c0c76e.png` the stored asset itself). The probe route used to produce them is preserved in history at commit `83c0c5d` and removed again in `8065a11` so no debug surface can ship.
