@@ -53,6 +53,20 @@ from public.sessions s
 where s.id = sp.session_id
   and s.group_id is not null;
 
+-- Groups created by coach-group-create. Without this they ACCUMULATE: the flow
+-- has no assertion that could notice, so a second run silently leaves two
+-- "Evening Cricket Squad" rows and a third leaves three. Observed 2026-08-14.
+--
+-- Order matters now. 0107 retargeted group_memberships.group_id to ON DELETE
+-- RESTRICT precisely so a paid-into group cannot vanish under its memberships,
+-- so the memberships must go first and only for THIS fixture group. That the
+-- delete below would fail without this step is 0107 working as intended.
+delete from public.group_memberships
+where group_id in (select id from public.training_groups where name = 'Evening Cricket Squad');
+
+delete from public.training_groups
+where name = 'Evening Cricket Squad';
+
 -- Session types created by coach-session-type-create. It asserts the name it
 -- just typed, so a leftover row from last run makes the assertion pass
 -- vacuously, which is worse than failing.
