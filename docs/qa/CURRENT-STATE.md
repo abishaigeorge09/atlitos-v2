@@ -463,10 +463,19 @@ money-free claim rather than trusting `group_id`.
 
 ### Environment traps added tonight
 
-- **The springboard chooser.** Other projects' apps share this simulator. `Open
-  in "Follow Me"?` renders ON TOP of a correct screen and holds accessibility
-  focus, so every assert beneath it fails. It survived a Cancel tap AND
-  uninstalling the app; only a simulator reboot cleared it. That is trap #10.
+- **The springboard chooser. KEEP THE QA SIMULATOR SINGLE-APP.** Other
+  projects' apps were installed on `8AF6A5E2-F889-4477-8634-97B4AB5D5453`
+  (Follow Me, BelieversDiary). Opening `atlitos://` raised `Open in "Follow
+  Me"?` ON TOP of a correct screen, holding accessibility focus so every assert
+  beneath it failed; it survived a Cancel tap AND uninstalling that app, and
+  only a reboot cleared it. With Follow Me gone the chooser simply offered the
+  next sibling, and a later run HANDED THE DEEP LINK TO BELIEVERSDIARY, whose
+  onboarding screen was captured mid-suite under a `back to Atlitos` status
+  bar. It is NOT a real scheme collision: all three Info.plists were read and
+  none claims another's scheme, so this is stale LaunchServices state. Both
+  sibling apps are now uninstalled from that simulator; it carries Atlitos and
+  the Maestro runner only. If a deep link behaves oddly again, check what else
+  is installed BEFORE suspecting the router. That is trap #10.
 - **XCUITest cannot see the comments sheet.** With it open, the hierarchy is
   SEVEN text nodes, all simulator status bar. `assertVisible` on a comment row
   cannot pass however correct the render. Prove that sheet with screenshots. The

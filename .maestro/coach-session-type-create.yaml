@@ -1,0 +1,92 @@
+appId: com.atlitos.app
+---
+# COACH CREATES A SESSION TYPE. The write path that unblocks the whole
+# marketplace, and nothing has ever tested it.
+#
+# Why this one first: `sessions` cannot exist without a `session_type_id`, so a
+# coach with zero session types is NOT BOOKABLE BY ANYONE. The screen's own
+# empty state says it out loud: "You are not bookable yet". Until tonight this
+# could not be tested at all, because creating a session type is a WRITE and
+# production is read only by standing rule.
+#
+# Runs against the LOCAL stack. Never point this at production.
+- launchApp:
+    clearState: true
+- runFlow:
+    when:
+      visible: "Not Now"
+    commands:
+      - tapOn: "Not Now"
+
+- openLink: atlitos://login
+# Other projects' apps share this simulator and the springboard chooser
+# ("Open in ...?") renders on top of a correct screen while holding
+# accessibility focus, so every assert beneath it fails and reads exactly like
+# the screen never loaded. Cost an hour on 2026-08-14; dismiss it, do not
+# debug it.
+- runFlow:
+    when:
+      visible: "Open in .*"
+    commands:
+      - tapOn: "Cancel"
+- extendedWaitUntil:
+    visible: "Email or phone.*"
+    timeout: 10000
+- tapOn: "Email or phone input"
+- inputText: "coach1@atlitos.dev"
+- tapOn: "Password input"
+- inputText: "AtlitosDemo!2026"
+- tapOn:
+    text: "Log in"
+    index: 1
+- extendedWaitUntil:
+    visible: "Hyderabad|Save Password.*"
+    timeout: 20000
+- runFlow:
+    when:
+      visible: "Save Password.*"
+    commands:
+      - tapOn: "Not Now"
+
+- openLink: atlitos://trainings/session-types
+- runFlow:
+    when:
+      visible: "Open in .*"
+    commands:
+      - tapOn: "Cancel"
+- extendedWaitUntil:
+    visible: "Session types"
+    timeout: 15000
+- takeScreenshot: /tmp/coach-verify/01-session-types
+
+# Open the form. The copy differs by state: "New session type" when the coach
+# already has one, and the empty state offers its own affordance.
+- runFlow:
+    when:
+      visible: "New session type"
+    commands:
+      - tapOn: "New session type"
+- extendedWaitUntil:
+    visible: "Name"
+    timeout: 10000
+- takeScreenshot: /tmp/coach-verify/02-form-open
+
+- tapOn: "Batting fundamentals"
+- inputText: "Powerplay batting"
+- tapOn: "60"
+- inputText: "45"
+- tapOn: "800"
+- inputText: "1200"
+- takeScreenshot: /tmp/coach-verify/03-form-filled
+
+- tapOn: "Add session type"
+- extendedWaitUntil:
+    visible: "Powerplay batting"
+    timeout: 15000
+- takeScreenshot: /tmp/coach-verify/04-created
+
+# THE POINT OF THE FLOW. Creating the type is only half of it; the coach has to
+# actually become bookable. "You are not bookable yet" must be gone.
+- assertNotVisible: "You are not bookable yet"
+- assertVisible: "Powerplay batting"
+- takeScreenshot: /tmp/coach-verify/05-bookable

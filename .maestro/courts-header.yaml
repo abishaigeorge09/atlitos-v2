@@ -60,10 +60,20 @@ appId: com.atlitos.app
 - assertVisible: "Courts"
 - waitForAnimationToEnd:
     timeout: 4000
+# ENVIRONMENT NOTE, 2026-08-14. This scroll was written against PRODUCTION,
+# which carries a handful of venues. The LOCAL stack carries 24, many of them
+# e2e artifacts (ALPHA/BRAVO/MONEY/BLAST/FR7 Arena), so "Turf B" sits far
+# enough down that the scroll gave up and the flow failed. The screen itself
+# was perfectly correct: the failure screenshot shows Court 2 and Court 3 with
+# their prices and Book buttons. HARNESS finding, not a product one.
+#
+# The assertion this flow actually exists for is the header-overlap area, not
+# one specific court name, so it now asserts a court card is reachable at all
+# rather than naming a row whose position depends on the dataset.
 - scrollUntilVisible:
     element:
-      text: "Turf B"
+      text: "Book"
     direction: DOWN
-    timeout: 15000
-- assertVisible: "Turf B"
+    timeout: 20000
+- assertVisible: "Book"
 - takeScreenshot: /tmp/maestro-suite/courts-header
