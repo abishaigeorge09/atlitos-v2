@@ -1,3 +1,27 @@
+appId: com.atlitos.app
+---
+# KNOWN LOCAL GAP, 2026-08-14: this flow needs a PAYMENTS dataset the local seed
+# does not provide. It passes against production and fails locally, which makes
+# it a HARNESS finding, not a product one.
+#
+# Fixed along the way, both now in scripts/reset-local-fixtures.sh:
+#   - the 1:1 coaching chat thread (the "Ravi Kumar" chat assertion)
+#   - three completed sessions, since Analytics renders an honest empty state
+#     ("Complete at least 3 sessions to see your trends here") below that
+#
+# STILL BLOCKED: public.payment_intents is EMPTY locally (0 rows), so the
+# Payments tab has nothing to list and the "Ravi Kumar, <date>" transaction row
+# cannot appear.
+#
+# DO NOT hand-seed payment rows to make this green. Money rows carry a
+# double-entry ledger with a deferred balance constraint, and inventing them by
+# hand is exactly the shape that produced 73 captured payments orphaned from
+# their entity (task #40). A fake-money fixture that makes a test pass is worse
+# than a test that honestly cannot run.
+#
+# THE RIGHT FIX is to let the product create them: run a Razorpay TEST payment
+# through book-session against the local stack once the payment edge functions
+# are deployed (task #43), then snapshot that state as a fixture.
 # Trainings fixed shell verification, both roles (PRD-01 3.3, PRD-02 3.2
 # to 3.9). Proves the founder directive: the module title plus
 # TrainingsSubNav stay fixed while switching tabs (only the content below

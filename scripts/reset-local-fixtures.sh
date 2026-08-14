@@ -90,6 +90,52 @@ where cp.status = 'verified'
     where w.coach_id = cp.user_id and w.day_of_week = d.dow
   );
 
+-- The 1:1 coaching chat thread. trainings-shell asserts the coach's name in the
+-- Chat tab, and it FAILED locally on 2026-08-14 for a data reason, not a
+-- product one: a completed 1:1 session between this athlete and coach1 exists,
+-- but no thread does, because the session was seeded straight into SQL and so
+-- bypassed whatever opens a thread in the app. Production has the thread from
+-- real usage, which is why the flow passes there and failed here.
+--
+-- The check constraint requires context_type <> 'group' to carry BOTH
+-- participants, ordered participant_a < participant_b. coach1
+-- (032cde8d...) sorts before the athlete (382caa08...), so the coach is a.
+insert into public.chat_threads (participant_a, participant_b, context_type, context_id, last_message_at)
+select s.coach_id, s.player_id, 'coaching', s.id, now()
+from public.sessions s
+where s.group_id is null
+  and s.coach_id < s.player_id
+  and not exists (
+    select 1 from public.chat_threads t
+    where t.context_type = 'coaching'
+      and t.participant_a = s.coach_id and t.participant_b = s.player_id
+  )
+limit 1;
+
+-- ANALYTICS NEEDS THREE COMPLETED SESSIONS. trainings-shell asserts the
+-- "Sessions held" stat tile, and the Analytics tab renders an honest empty
+-- state instead ("Not enough sessions yet. Complete at least 3 sessions to see
+-- your trends here.") until the athlete has THREE. The local seed creates one,
+-- so the flow could never reach that assertion here. Production has more from
+-- real usage, which is why it passes there.
+--
+-- This is seed data, not a product finding: the empty state is correct
+-- behaviour and good copy. Top up to three, priced to match the existing row so
+-- any earnings maths stays coherent. No payment_intents and no ledger rows are
+-- created, exactly as the other seeded sessions do it.
+insert into public.sessions (coach_id, player_id, session_type_id, frequency, date, slot_start, slot_end, price, platform_fee, total, status)
+select s.coach_id, s.player_id, s.session_type_id, 'one_time',
+       (current_date - (g.n * 7)), time '09:00', time '10:00',
+       s.price, s.platform_fee, s.total, 'completed'
+from public.sessions s
+cross join generate_series(1, 2) as g(n)
+where s.group_id is null
+  and s.status = 'completed'
+  and (select count(*) from public.sessions x
+       where x.group_id is null and x.status = 'completed'
+         and x.player_id = s.player_id) < 3
+limit 2;
+
 -- The denormalised comment counter is owned by clip_comments_maintain_count on
 -- INSERT and DELETE. Reconcile anyway, because the clips seed used to write a
 -- literal on top of it and any stale row makes the rail disagree with the sheet.

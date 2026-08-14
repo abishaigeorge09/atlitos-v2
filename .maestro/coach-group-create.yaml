@@ -97,3 +97,27 @@ appId: com.atlitos.app
 - tapOn: "Group name"
 - tapOn: "Create group"
 - takeScreenshot: /tmp/coach-verify/12-group-created
+
+# A REAL ASSERTION. Without one this flow passed while creating NOTHING, and
+# later while creating a DUPLICATE every run: a flow made only of taps and
+# screenshots always passes, because nothing in it can fail. The duplicates were
+# only ever visible in SQL.
+#
+# Creating a group navigates to the GROUP DETAIL page, not back to the trainees
+# list. Two earlier assertion attempts targeted screens this flow never reaches:
+# the trainees card's accessibilityLabel (trainees.tsx:212) and "spots left",
+# which lives on the ATHLETE's coach profile (coaching/coach/[id].tsx:307).
+# Both would have failed for entirely the wrong reason. The screenshot is what
+# settled it.
+#
+# "0 of 16" is rendered ONLY by the saved group's detail page, from the stored
+# capacity against its live member count. The form holds a bare "16" in an
+# input and never that phrase, so this cannot be satisfied by text left behind,
+# which is exactly how the session type flow first went green over an empty
+# table.
+- extendedWaitUntil:
+    visible: ".*0 of 16.*"
+    timeout: 15000
+- assertVisible: ".*0 of 16.*"
+- assertVisible: "Monthly fee"
+- takeScreenshot: /tmp/coach-verify/13-group-card
