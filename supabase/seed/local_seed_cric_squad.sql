@@ -137,3 +137,27 @@ begin
     where coach_id = v_coach and player_id = v_player and status = 'completed'
   );
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- COACH AVAILABILITY. Without this, no coach is BOOKABLE and the entire
+-- athlete booking funnel is untestable: the coach profile's CTA stays on
+-- "Choose a type, date, and time" because there are no slots to choose.
+--
+-- Measured 2026-08-14. Local had coach1 verified with 1 active session type
+-- and ZERO windows. Production, read only, was healthier but not clean:
+-- 3 verified coaches, 2 with a session type, 2 with availability, so 2 of 3
+-- actually bookable. The third is verified, appears in browse, and cannot be
+-- booked by anyone.
+--
+-- Seven days, 17:00 to 20:00, which is when after-work coaching actually
+-- happens in Hyderabad and keeps the slot picker non-empty on any test day.
+-- ---------------------------------------------------------------------------
+insert into public.coach_availability_windows (coach_id, day_of_week, start_time, end_time, effective_from)
+select cp.user_id, d.dow, time '17:00', time '20:00', current_date - 1
+from public.coach_profiles cp
+cross join generate_series(0, 6) as d(dow)
+where cp.status = 'verified'
+  and not exists (
+    select 1 from public.coach_availability_windows w
+    where w.coach_id = cp.user_id and w.day_of_week = d.dow
+  );
