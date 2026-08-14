@@ -92,6 +92,50 @@ so they need that file to point at the local stack before they can run against i
 that file was never read in this pass (permission denied by design; credentials come from
 `supabase status` only).
 
+## Pointing the mobile app at the local stack
+
+`apps/mobile/.env` stays untouched: it is permission denied by design on this repo, and even
+without that, a build that silently points at localhost and gets shipped is a far worse outcome
+than any bug chased here.
+
+`apps/mobile/scripts/run-local.sh` exports `EXPO_PUBLIC_SUPABASE_URL`,
+`EXPO_PUBLIC_SUPABASE_ANON_KEY` (both from `supabase status`) and a Razorpay TEST key directly
+into its own process before execing `expo run:ios --configuration Release`. Expo's env loader
+only fills a variable from a `.env` file when it is not already present in the process
+environment, so these three exported values win over `apps/mobile/.env` for that one run only,
+no file on disk changes. Run it with `pnpm --filter @atlitos/mobile ios:local` or directly as
+`apps/mobile/scripts/run-local.sh`.
+
+Why it cannot leak into a shipped build:
+1. It is a plain, reviewable script, never invoked by `eas build`, `pnpm build`, or any CI or
+   release path in this repo. Only a developer running it by name triggers it.
+2. `eas build`'s production profile (`apps/mobile/eas.json`) sets its own `EXPO_PUBLIC_*` values
+   under `build.production.env`, a separate code path unaffected by this script, and EAS builds
+   run in EAS's own cloud checkout with a fresh process environment that never sees it.
+3. The URL is hardcoded to `127.0.0.1`, unreachable outside the machine running the simulator, so
+   even a mistaken invocation produces an app that obviously cannot talk to anything, not a silent
+   pointer at production.
+
+## Cric Squad fixture for the write-path Maestro flows
+
+`.maestro/groups-athlete.yaml` and `.maestro/groups-coach.yaml` have never run, since production
+is read only and both write. They both depend on a "Cric Squad" training group that only
+production's fixtures had. `supabase/seed/local_seed_cric_squad.sql` recreates it locally,
+idempotently, with two values pinned to what the flows literally assert rather than left
+"reasonable": capacity 8 (so the coach detail screen's "4 of 8 spots left" matches the flow's
+".*of 8 spots left.*") and every membership's `period_end` fixed at 2026-09-25 (matching the
+flow's literal "Active until 25 Sep 2026" string). It also creates a `coach_profiles` row for
+`coach1@atlitos.dev`, verified, since the local stack's demo accounts never completed coach
+onboarding (`seed_identity.sql`'s email mismatch, documented above, leaves coach1 with zero
+coach_profiles rows on a from-scratch stack) and `training_groups.coach_id` references
+`coach_profiles(user_id)`, not `users(id)`, so nothing coach-owned can exist without it.
+
+Run after the seven `supabase/seed/*.sql` files above:
+
+```
+psql "$LOCAL_DB_URL" -f supabase/seed/local_seed_cric_squad.sql
+```
+
 ## Danger: the default URL in every seed script is PRODUCTION
 
 `scripts/seed-demo-users.mjs`, `scripts/seed-empower-upa-users.mjs`,
