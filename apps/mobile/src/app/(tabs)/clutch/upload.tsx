@@ -116,7 +116,14 @@ export default function ClutchUploadScreen() {
       // is routinely black or still exposing.
       const { uri } = await VideoThumbnails.getThumbnailAsync(videoUri, { time: 500, quality: 0.7 });
       const thumbResponse = await fetch(uri);
-      const thumbBody = await thumbResponse.blob();
+      // ArrayBuffer, NOT blob(). React Native's Blob carries an empty `type`,
+      // and supabase-js derives the PUT's Content-Type from the body when it
+      // can, so a Blob upload lands in storage as text/plain no matter what
+      // `contentType` below says. Verified on device 2026-08-14: a real upload
+      // produced storage.objects rows with mimetype text/plain for BOTH the
+      // mp4 and the jpg. An ArrayBuffer has no type of its own, so the option
+      // is used.
+      const thumbBody = await thumbResponse.arrayBuffer();
       const { error: thumbUploadError } = await supabase.storage
         .from(ticket.bucket)
         .uploadToSignedUrl(ticket.thumbPath, ticket.thumbToken, thumbBody, {
@@ -140,7 +147,11 @@ export default function ClutchUploadScreen() {
       // NATIVE PASS: swap this whole-file fetch for a resumable/streamed
       // upload with progress (VIDEO.md).
       const fileResponse = await fetch(asset.uri);
-      const fileBody = await fileResponse.blob();
+      // ArrayBuffer, not blob(); see the note in the thumbnail upload above.
+      // A wrong stored Content-Type does not fail the upload, it fails the
+      // PLAYBACK later, on someone else's device, which is the worst place to
+      // find it.
+      const fileBody = await fileResponse.arrayBuffer();
       const { error: uploadError } = await supabase.storage
         .from(ticket.bucket)
         .uploadToSignedUrl(ticket.path, ticket.token, fileBody, {

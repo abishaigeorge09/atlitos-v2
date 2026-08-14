@@ -115,7 +115,13 @@ export function TraineeVideoAnalytics({ playerId }: TraineeVideoAnalyticsProps) 
     try {
       const ticket = await videos.requestUploadUrl(playerId, caption.trim() || undefined);
       const fileResponse = await fetch(asset.uri);
-      const fileBody = await fileResponse.blob();
+      // ArrayBuffer, NOT blob(). React Native's Blob carries an empty `type`,
+      // so supabase-js stores the object as text/plain no matter what the
+      // `contentType` below says. Proven on device 2026-08-14 through the
+      // Clutch upload path, which had the identical shape: both the mp4 and
+      // the jpg landed in storage.objects as text/plain. A wrong stored
+      // content type does not fail the upload, it fails the PLAYBACK later.
+      const fileBody = await fileResponse.arrayBuffer();
       const { error: uploadErr } = await supabase.storage
         .from(ticket.bucket)
         .uploadToSignedUrl(ticket.path, ticket.token, fileBody, {
