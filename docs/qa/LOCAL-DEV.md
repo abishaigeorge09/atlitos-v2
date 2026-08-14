@@ -190,10 +190,18 @@ This is what made `search-domains` fail. Note the app itself behaved WELL there,
 showing an honest "Couldn't run that search" rather than a silent empty list,
 which is the opposite of the empty-catch bugs found the same day.
 
-Fix attempted: CLI upgraded 2.75.0 -> 2.114.0. If a token still fails, pin local
-auth to symmetric signing in `config.toml` rather than working around it in test
-code; three separate audit tracks each invented a different workaround for this
-exact wall and their results were consequently not comparable.
+RESOLVED 2026-08-14 by upgrading the CLI 2.75.0 -> 2.114.0. Verified after the
+upgrade: the token is STILL ES256, but the 2.114 edge gateway verifies
+asymmetric tokens correctly, and `ai-search` returns HTTP 200 with real results
+(a badminton query resolved a clip and a Kukatpally Badminton Academy court).
+So the fix was the gateway, not the token.
+
+**MINIMUM CLI VERSION IS THEREFORE 2.114.0.** On 2.75 every authenticated edge
+function is unreachable locally and the write-path suite cannot run at all. If
+you are on an older CLI, upgrade before concluding anything about an edge
+function. Three separate audit tracks each invented a DIFFERENT workaround for
+this exact wall (a hand-signed JWT, the GoTrue admin API, abandoning HTTP), and
+their results were consequently not comparable to each other.
 
 ### 4. Flows written against production assume production's dataset.
 
