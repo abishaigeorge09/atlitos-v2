@@ -461,6 +461,36 @@ docblock claimed group rows were allowed; the live function refused `complete`
 from every state with no group exemption. `0118` narrows the gate and PROVES the
 money-free claim rather than trusting `group_id`.
 
+### A brew upgrade can break every iOS build, and it looks like a Hermes bug
+
+`ios/.xcode.env.local` (gitignored, so it is per machine and invisible in
+review) pinned a VERSION SPECIFIC node path:
+
+    export NODE_BINARY=/opt/homebrew/Cellar/node/24.7.0/bin/node
+
+A `brew upgrade` on 2026-08-14 moved node to 26.7.0 and took `simdjson` with
+it, leaving that exact binary linking against a library that no longer exists.
+Every iOS Release build then failed inside the Hermes script phase:
+
+    Script '[CP-User] [Hermes] Replace Hermes for the right configuration' failed
+    ...
+    dyld: Library not loaded: /opt/homebrew/opt/simdjson/lib/libsimdjson.26.dylib
+    Referenced from: /opt/homebrew/Cellar/node/24.7.0/bin/node
+    Abort trap: 6
+
+IT PRESENTS AS A NATIVE BUILD FAILURE and nothing points at node or Homebrew
+unless you read the dyld lines inside the script output. Two wrong hypotheses
+were tried first (xcodebuild contention, then stale Pods); `pod install` cost a
+full build cycle to disprove.
+
+FIX: point NODE_BINARY at `/opt/homebrew/bin/node`, the stable symlink that
+survives version bumps. Never a Cellar path.
+
+TWO HABITS THIS EARNED. Do not pipe a build log through `tail`: the first
+failure's real error was lost that way and cost an extra rebuild. And treat a
+Homebrew upgrade mid-session as a change with a blast radius; the CLI upgrade
+that fixed the edge function 401 also broke the native toolchain.
+
 ### Environment traps added tonight
 
 - **The springboard chooser. KEEP THE QA SIMULATOR SINGLE-APP.** Other
