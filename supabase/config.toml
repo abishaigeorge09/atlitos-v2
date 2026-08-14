@@ -389,3 +389,32 @@ s3_region = "env(S3_REGION)"
 s3_access_key = "env(S3_ACCESS_KEY)"
 # Configures AWS_SECRET_ACCESS_KEY for S3 bucket
 s3_secret_key = "env(S3_SECRET_KEY)"
+
+# ---------------------------------------------------------------------------
+# Edge function JWT verification.
+#
+# THREE functions must run WITHOUT a JWT and the CLI default is verify_jwt =
+# true, so without these stanzas the next `supabase functions deploy` silently
+# closes them. Verified against production 2026-08-14 via list_edge_functions:
+# 25 active, and exactly these three at verify_jwt = false. Nothing in the repo
+# reproduced that, so the only thing holding them open was un-versioned
+# dashboard state.
+#
+# razorpay-webhook is the sharpest: Razorpay calls it with a signature, not a
+# user token. Flip it to true and every capture 401s. Razorpay retries a non
+# 2xx, so the symptom is SILENT: money captured at Razorpay, finalization never
+# running, which is exactly the unfinalized_captures condition 0109 exists to
+# surface. The signature check inside the function is the real gate.
+#
+# The two clip playback functions are called by signed out viewers browsing the
+# Clutch feed, which is the product's acquisition path.
+# ---------------------------------------------------------------------------
+
+[functions.razorpay-webhook]
+verify_jwt = false
+
+[functions.get-clip-playback-url]
+verify_jwt = false
+
+[functions.get-clip-playback-urls]
+verify_jwt = false
