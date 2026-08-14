@@ -110,6 +110,18 @@ appId: com.atlitos.app
 - assertVisible: "Attendance rate"
 - assertVisible: "Total sessions"
 - assertVisible: "Attendance policy"
+# The policy card sits at the bottom of the overview scroll view, so its
+# HEADING can be on screen while its BODY is still below the fold. The flow
+# asserted the body without scrolling and failed, which reads exactly like the
+# group having no attendance policy. It is not: the heading and the body are
+# siblings inside a single `group.attendancePolicy ? (...) : null` block
+# (group/[id].tsx:374-390), so a visible heading PROVES the body is in the tree,
+# and the local database holds the text. assertVisible means visible ON SCREEN,
+# not present, so the scroll is the fix.
+- scrollUntilVisible:
+    element: "Be on the ground 10 minutes before the session starts.*"
+    direction: DOWN
+    timeout: 10000
 - assertVisible: "Be on the ground 10 minutes before the session starts.*"
 - takeScreenshot: /tmp/groups-verify/coach-group-overview
 
