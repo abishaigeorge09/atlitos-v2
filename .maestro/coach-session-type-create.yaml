@@ -157,14 +157,19 @@ appId: com.atlitos.app
 # (packages/theme/src/index.ts:41, Indian grouping), and the raw price input
 # holds "1200" without the comma, so this cannot be satisfied by text left in
 # the form.
-# NO assertVisible HERE, AND THAT IS DELIBERATE. This screen is INVISIBLE to
-# XCUITest: dumped at this exact step, the hierarchy holds SEVEN text nodes and
-# all seven are the simulator status bar ("0%", "No signal", "3 of 3 Wi-Fi
-# bars"). The rendered card is absent from it, so assertVisible on the name,
-# the price ("1,200") or the duration ("45 min") all fail while the screenshot
-# plainly shows "Powerplay batting, Rs 1,200, 45 min" and public.session_types
-# holds the row. Second screen with this signature after the Clutch comments
-# sheet, so it is a pattern, not a quirk.
+# CORRECTION 2026-08-14: an earlier version of this comment claimed the screen
+# was INVISIBLE to XCUITest, citing a hierarchy dump of seven status-bar nodes.
+# THAT WAS WRONG, and the dump was the wrong evidence. Maestro's
+# screen-hierarchy JSON is written at FAILURE time and is degraded; it is not a
+# record of what the harness can see. Proven on the Clutch post detail: two
+# consecutive assertVisible calls on real screen text both PASSED, and the dump
+# taken at the very next failure held five nodes, all status bar.
+#
+# The assertions here failed for ORDINARY reasons instead: the price renders in
+# JetBrains Mono with tabular figures and did not match a plain "1,200" regex,
+# and the card sits below the fold once the list holds two types. Screenshot
+# plus the SQL check below is still the right proof for a write, but not
+# because the screen cannot be seen.
 #
 # The write is therefore verified by the SCREENSHOT plus a database check, not
 # by a green assertion. Run this to confirm a real run:
