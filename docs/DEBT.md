@@ -218,3 +218,42 @@ recurring. There is no in-app self-delete endpoint yet - confirmed by
 reading `apps/landing/delete-account.html`, which is a manual
 email-support process, Guideline 5.1.1 debt already tracked in
 `docs/phases/OAUTH-GOOGLE-APPLE-SPEC.md`.
+
+## Production configuration that exists only in the dashboard
+
+**Owner: founder. Opened 2026-08-14.**
+
+Five separate settings have now been found that exist in the production project
+and leave NO trace in this repo. Each one made a clean environment silently
+disagree with production, and in every case the symptom was an empty result or
+a silent refusal rather than an error:
+
+| Setting | Symptom when absent | Found by |
+|---|---|---|
+| `RAZORPAY_WEBHOOK_SECRET` | webhook signature check cannot run | earlier, in CURRENT-STATE |
+| `enable_anonymous_sign_ins` | every guest flow dies, "Guest browsing is unavailable" | running Maestro locally |
+| `custom_access_token_hook` registration | `has_role()` is FALSE for every user, so every role gated policy returns empty WITH NO ERROR | coach dashboard showed "No sessions yet" over a database holding a completed session |
+| `verify_jwt = false` on 3 edge functions | next deploy 401s every Razorpay capture, silently, because Razorpay retries a non 2xx | surface audit |
+| `pg_net` extension plus 2 vault secrets | migration 0111 cannot apply at all | local stack bring up |
+
+Four of the five are now pinned in `supabase/config.toml`. The fifth needs a
+human in the dashboard.
+
+**Why this is a class and not five bugs.** The failure mode is identical every
+time: the absence passes. Nothing errors, nothing logs, a query just returns
+nothing and it looks exactly like missing data. It is the same shape as the
+pre-push hook calling scripts that never existed, and as the storage policies
+that gated on bucket name alone.
+
+It also invalidated work. The surface audit's three tracks each hit the
+`custom_access_token_hook` hole independently and each worked around it
+DIFFERENTLY (a hand signed JWT, the GoTrue admin API, and abandoning the HTTP
+path entirely), so no local authorization result from that audit is comparable
+across tracks. Any future agent told "run the auth tests locally" would have got
+a vacuous green.
+
+**The fix that closes the class:** production configuration belongs in
+`config.toml` or a versioned deploy script, never only in a dashboard. Anything
+that cannot live there is recorded here with an owner. A clean checkout that
+cannot reproduce production is not a test environment, it is a different
+product.
