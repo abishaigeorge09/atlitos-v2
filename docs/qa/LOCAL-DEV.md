@@ -143,3 +143,77 @@ psql "$LOCAL_DB_URL" -f supabase/seed/local_seed_cric_squad.sql
 `SUPABASE_URL` to `https://syzzfgaudpifwvbpycyi.supabase.co` (production) when the env var is
 unset. Always export `SUPABASE_URL=http://127.0.0.1:54321` before running any of them locally.
 None of these scripts were run without that override in this pass.
+
+---
+
+## Running the Maestro suite locally, and the four things that will waste your day
+
+Added 2026-08-14 after the first full local suite run: 16 flows, 8 pass, 4 fail,
+and EVERY failure was environment or leftover state. Not one was a product
+regression. Read this before you file anything.
+
+### 1. Reset the fixtures first. Write-path flows eat what they assert on.
+
+    ./scripts/reset-local-fixtures.sh
+
+`groups-coach` asserts its seeded session is `Accepted`, then starts it, marks
+attendance and ENDS it. So it passes once and fails forever after, on an
+assertion that was correct both times. That is true of every write-path flow.
+
+The reset also clears the PREVIOUS run's attendance marks, which matters more
+than it sounds: leaving them makes `3 of 3 present` pass BEFORE the flow marks
+anything. A green that proves nothing is worse than a red.
+
+It refuses any non-loopback target.
+
+### 2. The QA simulator must carry Atlitos and nothing else.
+
+`8AF6A5E2-F889-4477-8634-97B4AB5D5453` had Follow Me and BelieversDiary on it
+from other projects. Opening `atlitos://` raised a springboard chooser ON TOP of
+a correct screen, holding accessibility focus so every assert beneath it failed;
+one run handed the deep link to BelieversDiary entirely and captured its
+onboarding screen mid-suite. It is NOT a scheme collision (all three
+Info.plists were read; none claims another's scheme) but stale LaunchServices
+state, and it survived both a Cancel tap and an uninstall until the simulator
+was rebooted. Both sibling apps are now removed.
+
+### 3. Authenticated EDGE FUNCTION calls 401 locally on CLI 2.75.
+
+    {"msg":"Invalid JWT"}   HTTP 401
+
+Local GoTrue issues **ES256** (asymmetric, with a `kid`); the edge gateway
+verifies **HS256** against the legacy secret. Every authenticated edge function
+is unreachable, which is most of the write paths: `book-session`, `checkout`,
+`verify-payment`, `join-group`, `stream-upload-url`, `ai-search`.
+
+This is what made `search-domains` fail. Note the app itself behaved WELL there,
+showing an honest "Couldn't run that search" rather than a silent empty list,
+which is the opposite of the empty-catch bugs found the same day.
+
+Fix attempted: CLI upgraded 2.75.0 -> 2.114.0. If a token still fails, pin local
+auth to symmetric signing in `config.toml` rather than working around it in test
+code; three separate audit tracks each invented a different workaround for this
+exact wall and their results were consequently not comparable.
+
+### 4. Flows written against production assume production's dataset.
+
+`courts-header` scrolled for a court named "Turf B". It exists locally, but
+local carries 24 venues against production's handful (many are e2e artifacts:
+ALPHA/BRAVO/MONEY/BLAST/FR7 Arena), so it sat below where the scroll gave up.
+The screen was perfect in the failure screenshot. Assert on a shape, not on a
+specific row whose position depends on the dataset.
+
+### Seeding
+
+`scripts/seed-*.mjs` now refuse a production target via
+`scripts/lib/guard-target.mjs`. All eight previously DEFAULTED to production,
+which is how production acquired fixture rows across five tables. Point them at
+the local stack:
+
+    SUPABASE_URL=http://127.0.0.1:54321 \
+    SUPABASE_SERVICE_ROLE_KEY=$(supabase status -o env | grep SERVICE_ROLE_KEY | cut -d= -f2-) \
+    node scripts/seed-demo-users.mjs
+
+Coach availability is seeded by the reset script. Without it NO coach is
+bookable and the whole athlete booking funnel is untestable, because the coach
+profile CTA stays on "Choose a type, date, and time" with no slots to choose.
