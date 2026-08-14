@@ -118,7 +118,7 @@ begin
 
   insert into public.clips (
     owner_id, caption, sport, status, storage_path, playback_id, thumb_path,
-    likes_count, comment_count, created_at
+    likes_count, created_at
   ) values (
     creator_1,
     'Perfect volley finish in rain, first time connecting with the court partner',
@@ -128,13 +128,12 @@ begin
     'clips/published-1-tennis-volley.mp4',
     'clips/published-1-tennis-volley-thumb.jpg',
     3,
-    2,
     now() - interval '2 days'
   ) returning id into clip_published_1;
 
   insert into public.clips (
     owner_id, caption, sport, status, storage_path, playback_id, thumb_path,
-    likes_count, comment_count, created_at
+    likes_count, created_at
   ) values (
     creator_2,
     'Crosscourt backhand winner off the serve return',
@@ -144,7 +143,6 @@ begin
     'clips/published-2-badminton-backhand.mp4',
     'clips/published-2-badminton-backhand-thumb.jpg',
     7,
-    1,
     now() - interval '1 day'
   ) returning id into clip_published_2;
 

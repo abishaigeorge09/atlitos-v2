@@ -42,6 +42,12 @@ export interface ClutchCommentsSheetProps {
   /** False when the creator has closed the thread (clips.comments_enabled,
    * 0101). The composer is hidden rather than left to fail on submit. */
   commentsEnabled: boolean;
+  /** Set when the thread FAILED to load. Distinct from an empty thread: the
+   * sheet used to swallow the error and render "No comments yet", which tells
+   * the viewer something false about a clip that may have hundreds. Same
+   * shape as the empty catch in mintPlayback that rendered a failed clip as a
+   * bare black rectangle. */
+  loadError: string | null;
   requiresAuthGate: boolean;
   draft: string;
   sending: boolean;
@@ -127,6 +133,7 @@ export function ClutchCommentsSheet({
   commentCount,
   currentUserId,
   commentsEnabled,
+  loadError,
   requiresAuthGate,
   draft,
   sending,
@@ -224,9 +231,11 @@ export function ClutchCommentsSheet({
                 ListEmptyComponent={
                   <View style={{ paddingVertical: spacing.xl, alignItems: 'center' }}>
                     <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
-                      {commentsEnabled
-                        ? 'No comments yet. Start the conversation.'
-                        : 'Comments are turned off for this clip.'}
+                      {loadError
+                        ? loadError
+                        : commentsEnabled
+                          ? 'No comments yet. Start the conversation.'
+                          : 'Comments are turned off for this clip.'}
                     </Text>
                   </View>
                 }

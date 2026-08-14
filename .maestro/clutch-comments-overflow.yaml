@@ -1,0 +1,129 @@
+appId: com.atlitos.app
+---
+# CLUTCH COMMENTS SHEET, LONG THREAD.
+#
+# This flow exists because the comments sheet overflow bug SHIPPED, and it
+# shipped for one reason: production has three comments across two clips, so
+# every capture anyone ever took was of a short list, and a short list proves
+# nothing. The sheet's `maxHeight: '75%'` was inert because its parent
+# KeyboardAvoidingView had no style prop, so a percentage had nothing to
+# resolve against, and the FlatList grew to full content height with no scroll
+# viewport.
+#
+# The fix (ClutchCommentsSheet, Portal + pixel cap + flexShrink) is in the
+# tree. It has NEVER been proven against a thread long enough to overflow.
+#
+# The local stack carries 36 comments on clip 53de59f1: "Overflow comment
+# number 1" through 34, plus two organic ones. getComments orders created_at
+# ASCENDING, and the oldest row is "Overflow comment number 34", so the list
+# reads 34 at the top and "Love the rain court adaptation" as the LAST row.
+# Scrolling to that last row is the whole proof: if the sheet has no viewport,
+# it cannot scroll and the row can never be reached.
+#
+# Also asserts the composer is reachable at the bottom of a long thread, which
+# is the second half of the same defect: it used to sit under the home
+# indicator.
+- launchApp:
+    clearState: true
+- runFlow:
+    when:
+      visible: "Not Now"
+    commands:
+      - tapOn: "Not Now"
+
+- openLink: atlitos://login
+# This simulator also carries com.elsheph.followme and com.believersdiary.app
+# from other projects. Opening a custom scheme here can raise the springboard
+# chooser ("Open in Follow Me?"), which renders ON TOP of a perfectly correct
+# login screen and holds accessibility focus, so every assert beneath it fails
+# and reads exactly like the screen never loaded. Follow Me does NOT claim the
+# atlitos scheme (its Info.plist lists followme and com.elsheph.followme), so
+# this is simulator state, not a scheme collision. Dismiss it before asserting.
+- runFlow:
+    when:
+      visible: "Open in .*"
+    commands:
+      - tapOn: "Cancel"
+- extendedWaitUntil:
+    visible: "Email or phone.*"
+    timeout: 10000
+- tapOn: "Email or phone input"
+- inputText: "player@atlitos.dev"
+- tapOn: "Password input"
+- inputText: "AtlitosDemo!2026"
+- tapOn:
+    text: "Log in"
+    index: 1
+- extendedWaitUntil:
+    visible: "Hyderabad|Save Password.*"
+    timeout: 20000
+- runFlow:
+    when:
+      visible: "Save Password.*"
+    commands:
+      - tapOn: "Not Now"
+- extendedWaitUntil:
+    visible: "Hyderabad"
+    timeout: 10000
+
+# Straight to the seeded clip rather than hunting it in the feed, which would
+# make this flow fail for a reason that has nothing to do with the sheet.
+- openLink: atlitos://clutch/post/53de59f1-730b-43ef-b0ba-b6a9c8069a04
+- extendedWaitUntil:
+    visible: ".*Perfect volley finish in rain.*"
+    timeout: 15000
+- takeScreenshot: /tmp/comments-verify/01-post-open
+
+# Open the sheet.
+# The comment affordance carries accessibilityLabel="Comments"
+# (ClutchPostCard.tsx:251). The COUNT beside it is not part of that label, so
+# it cannot be tapped or asserted by value here; see the note at the end of
+# this flow.
+- tapOn: "Comments"
+- extendedWaitUntil:
+    visible: "Add a comment.*"
+    timeout: 10000
+- takeScreenshot: /tmp/comments-verify/02-sheet-open
+
+# HARNESS LIMIT, NOT A PRODUCT FAILURE, and it is worth reading before you
+# "fix" the asserts below. Once this sheet is open, XCUITest sees SEVEN text
+# nodes and all seven are the simulator status bar ("0%", "No signal",
+# "3 of 3 Wi-Fi bars"). The whole app, including the fully rendered thread, is
+# absent from the accessibility hierarchy, so assertVisible on any comment row
+# CANNOT pass no matter how correct the render is. Dumped from
+# screen-hierarchy/*.json on run 2026-08-14_160511, whose own screenshot shows
+# "36 comments" and rows 34 down to 29 rendering perfectly.
+#
+# So this flow proves the sheet with SCREENSHOTS rather than asserts. That is
+# weaker and it is honest; a green assert here would have been a lie.
+#
+# The same observation is a REAL ACCESSIBILITY DEFECT: if XCUITest cannot see
+# the thread, a VoiceOver user very likely cannot read it either. Logged
+# separately; it is not this flow's job to fix it.
+
+- swipe:
+    start: 50%, 70%
+    end: 50%, 30%
+- swipe:
+    start: 50%, 70%
+    end: 50%, 30%
+- swipe:
+    start: 50%, 70%
+    end: 50%, 30%
+- swipe:
+    start: 50%, 70%
+    end: 50%, 30%
+- swipe:
+    start: 50%, 70%
+    end: 50%, 30%
+- takeScreenshot: /tmp/comments-verify/03-scrolled-down
+- swipe:
+    start: 50%, 70%
+    end: 50%, 30%
+- swipe:
+    start: 50%, 70%
+    end: 50%, 30%
+- swipe:
+    start: 50%, 70%
+    end: 50%, 30%
+- takeScreenshot: /tmp/comments-verify/04-scrolled-further

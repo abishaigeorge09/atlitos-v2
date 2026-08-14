@@ -113,6 +113,9 @@ export default function ClutchPostViewerScreen() {
   // Comments open in a single sheet for whichever clip the viewer tapped.
   const [commentsClip, setCommentsClip] = useState<Clip | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
+  // A failed thread load must never render as an empty thread. See
+  // ClutchCommentsSheet's loadError prop.
+  const [commentsError, setCommentsError] = useState<string | null>(null);
   const [commentCursor, setCommentCursor] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
@@ -401,12 +404,16 @@ export default function ClutchPostViewerScreen() {
     setCommentsClip(clip);
     setComments([]);
     setCommentCursor(null);
+    setCommentsError(null);
     try {
       const page = await clutch.getComments(clip.id);
       setComments(page.comments);
       setCommentCursor(page.nextCursor);
-    } catch {
-      // Leave the thread empty; the sheet still opens with the composer.
+    } catch (err) {
+      // Do NOT swallow this. An empty catch here renders a clip with a full
+      // thread as "No comments yet", which is a false statement to the user
+      // and hides the real failure from anyone debugging it.
+      setCommentsError((err as ApiError).message || 'Comments could not load. Pull to retry.');
     }
   }
 
@@ -590,6 +597,7 @@ export default function ClutchPostViewerScreen() {
         commentCount={commentCursor === null ? comments.length : (commentsClip?.commentCount ?? 0)}
         currentUserId={myId}
         commentsEnabled={commentsClip?.commentsEnabled !== false}
+        loadError={commentsError}
         requiresAuthGate={requiresAuthGate}
         draft={draft}
         sending={sending}
