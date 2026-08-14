@@ -1,5 +1,30 @@
 appId: com.atlitos.app
 ---
+# STATUS: RED, AND DELIBERATELY LEFT RED. NOT part of the green suite yet.
+# Do not "fix" it by weakening an assertion; read this first.
+#
+# WHAT WORKS: login, the deep link, the screen, and the Name field.
+# WHAT DOES NOT: the iOS NUMERIC KEYPAD covers the duration chips, the price
+# field and the submit button. Maestro reports those taps COMPLETED because the
+# elements exist in the view hierarchy and it taps their COORDINATES, which sit
+# underneath the keypad. So the taps land on the keypad, nothing is created,
+# and every step still reports success.
+#
+# THIS FLOW ALREADY LIED ONCE AND THAT IS THE REAL LESSON. It previously ended:
+#     assertVisible: "Powerplay batting"
+#     assertNotVisible: "You are not bookable yet"
+# and PASSED while creating nothing. The first matched the text still sitting in
+# the Name INPUT; the second was already true because this coach has an existing
+# type. Green flow, empty database. Exactly the vacuous-pass shape CLAUDE.md
+# warns about, reproduced inside a brand new test on 2026-08-14.
+#
+# It now asserts the FORM CLOSED and the PRICE RENDERED, neither of which can be
+# satisfied by text typed into an input, so it fails honestly instead.
+#
+# TO FINISH IT: get the fields above the keypad before tapping them (scroll the
+# card up after each entry, or drive the form in an order that keeps the target
+# visible). Verify the fix by checking public.session_types for the row, NOT by
+# reading the flow's own green.
 # COACH CREATES A SESSION TYPE. The write path that unblocks the whole
 # marketplace, and nothing has ever tested it.
 #
@@ -71,18 +96,51 @@ appId: com.atlitos.app
     timeout: 10000
 - takeScreenshot: /tmp/coach-verify/02-form-open
 
-- tapOn: "Batting fundamentals"
+# Select each field RELATIVE TO ITS LABEL, not by its placeholder text. Tapping
+# the placeholder does not reliably move focus once the form has content, and
+# the failure is silent and awful to read: on 2026-08-14 all three inputs
+# landed in the Name field, which ended up as "Powerplay battingr45v1200" while
+# the flow reported only that the created type was not visible.
+- tapOn:
+    below: "Name"
 - inputText: "Powerplay batting"
-- tapOn: "60"
-- inputText: "45"
+# DISMISS THE KEYBOARD BETWEEN FIELDS. With it up it covers the lower half of
+# this form, so a tap aimed at the duration chips or the price field lands on
+# the keyboard instead, focus stays in Name, and every later inputText appends
+# there. That produced "Powerplay battingev1200" in Name with the 45 chip never
+# selected, while the flow reported only that the created type was not visible.
+- hideKeyboard
+# Duration is a CHIP ROW (30/45/60/90), not a text field. `below: "Duration in
+# minutes"` lands on the chips, tapping a chip does not move text focus, and
+# every later inputText therefore kept appending to Name: the field ended up
+# reading "Powerplay battingw45v1200" while the flow reported only that the
+# created type was not visible. Read the screenshot, not the assertion.
+- tapOn: "45"
 - tapOn: "800"
 - inputText: "1200"
+# No trailing hideKeyboard: the numeric pad has no dismiss affordance here, so
+# the command fails with nothing to hide and takes the whole flow with it.
 - takeScreenshot: /tmp/coach-verify/03-form-filled
 
+# The numeric keypad covers the submit button, so tapping it hits the keypad
+# and nothing is created. Dismiss by tapping a label first.
+- tapOn: "Name"
 - tapOn: "Add session type"
+
+# ASSERT ON WHAT ONLY A CREATED CARD HAS, NOT ON THE NAME.
+#
+# This flow previously passed while creating NOTHING. `assertVisible: "Powerplay
+# batting"` was satisfied by the text still sitting in the Name INPUT, and
+# `assertNotVisible: "You are not bookable yet"` was already true because this
+# coach has an existing type. Green, and the database had no such row. That is
+# the vacuous-pass shape CLAUDE.md warns about, reproduced in a brand new test.
+#
+# The form closing is the only signal the server accepted the write, and the
+# price appears only on a rendered card, never in the empty-placeholder field.
 - extendedWaitUntil:
-    visible: "Powerplay batting"
+    notVisible: "New session type"
     timeout: 15000
+- assertVisible: ".*1,200.*"
 - takeScreenshot: /tmp/coach-verify/04-created
 
 # THE POINT OF THE FLOW. Creating the type is only half of it; the coach has to
