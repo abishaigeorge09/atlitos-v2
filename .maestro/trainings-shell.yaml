@@ -49,8 +49,7 @@ appId: com.atlitos.app
 # no data change at all. Matches any upcoming session with this coach
 # instead (".*Ravi Kumar, 2026-.*"), which does not require re-editing
 # every time the clock advances past whatever date was hardcoded.
-appId: com.atlitos.app
----
+
 # ---------- Athlete: player@atlitos.dev ----------
 # Fresh app process per run: three account switches in one long lived dev
 # process can flake the profile refresh, which is not what this flow is

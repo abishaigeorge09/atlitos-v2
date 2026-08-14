@@ -107,11 +107,16 @@ appId: com.atlitos.app
     end: 50%, 30%
 - takeScreenshot: /tmp/athlete-verify/04-date-step
 
-# The slots shown are derived from the coach's availability windows: seeded
-# 17:00 to 20:00, sliced into 60 minute slots for a 60 minute session type, and
-# the screen renders exactly 17:00-18:00, 18:00-19:00 and 19:00-20:00. Picking
-# one is the last input the gate needs.
-- tapOn: "17:00 to 18:00"
+# TAP WHATEVER SLOT IS OFFERED, never a hardcoded time. Slots come from the
+# coach's availability (seeded 17:00 to 20:00, sliced per session length) MINUS
+# the times the coach is already busy, so which ones appear depends on the day.
+#
+# Hardcoding "17:00 to 18:00" broke this flow the moment the date rolled over:
+# on 2026-08-15 the seeded GROUP session sits at 17:00 to 18:00, so the funnel
+# correctly dropped that slot and offered only 18:00 and 19:00. The product was
+# right and the test was wrong. That exclusion is real behaviour worth keeping
+# proven: a coach cannot be double booked.
+- tapOn: ".*:00 to .*:00"
 - takeScreenshot: /tmp/athlete-verify/05-slot-selected
 
 # THE VERDICT. The CTA must flip out of its refusing state and name the price.
