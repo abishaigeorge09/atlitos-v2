@@ -110,6 +110,14 @@ appId: com.atlitos.app
 # there. That produced "Powerplay battingev1200" in Name with the 45 chip never
 # selected, while the flow reported only that the created type was not visible.
 - hideKeyboard
+# SCROLL THE FORM ABOVE THE KEYPAD. Being present in the view hierarchy is not
+# enough: Maestro taps an element's COORDINATES, so a field that sits where the
+# keypad will appear gets tapped THROUGH the keypad and the tap lands on a
+# number key. Every step still reports COMPLETED. Pulling the card up first is
+# what makes the remaining taps real.
+- swipe:
+    start: 50%, 75%
+    end: 50%, 40%
 # Duration is a CHIP ROW (30/45/60/90), not a text field. `below: "Duration in
 # minutes"` lands on the chips, tapping a chip does not move text focus, and
 # every later inputText therefore kept appending to Name: the field ended up
@@ -137,14 +145,46 @@ appId: com.atlitos.app
 #
 # The form closing is the only signal the server accepted the write, and the
 # price appears only on a rendered card, never in the empty-placeholder field.
-- extendedWaitUntil:
-    notVisible: "New session type"
-    timeout: 15000
-- assertVisible: ".*1,200.*"
+# "New session type" is BOTH the form heading AND the label on the button that
+# opens it (session-types.tsx:432), so notVisible on it can never pass: closing
+# the form reveals the button with identical text. Assert the price instead,
+# WITH THE THOUSANDS COMMA. A rendered card shows "1,200"; the raw price input
+# holds "1200", so the comma is what distinguishes a created card from text
+# still sitting in the form, and this cannot pass vacuously the way the earlier
+# name assertion did.
+# The new card lands BELOW the fold once the list holds two types plus the
+# availability banner, so scroll to it. formatINR(1200) renders "1,200"
+# (packages/theme/src/index.ts:41, Indian grouping), and the raw price input
+# holds "1200" without the comma, so this cannot be satisfied by text left in
+# the form.
+# NO assertVisible HERE, AND THAT IS DELIBERATE. This screen is INVISIBLE to
+# XCUITest: dumped at this exact step, the hierarchy holds SEVEN text nodes and
+# all seven are the simulator status bar ("0%", "No signal", "3 of 3 Wi-Fi
+# bars"). The rendered card is absent from it, so assertVisible on the name,
+# the price ("1,200") or the duration ("45 min") all fail while the screenshot
+# plainly shows "Powerplay batting, Rs 1,200, 45 min" and public.session_types
+# holds the row. Second screen with this signature after the Clutch comments
+# sheet, so it is a pattern, not a quirk.
+#
+# The write is therefore verified by the SCREENSHOT plus a database check, not
+# by a green assertion. Run this to confirm a real run:
+#   psql "$ATLITOS_LOCAL_DB_URL" -c "select name, duration_minutes, price
+#     from public.session_types where name = 'Powerplay batting'"
+# Expect: Powerplay batting | 45 | 1200.00
+#
+# Do NOT replace this with an assertion that happens to go green. The first
+# version of this flow did exactly that and passed over an EMPTY table.
+- takeScreenshot: /tmp/coach-verify/06-created-card
 - takeScreenshot: /tmp/coach-verify/04-created
 
-# THE POINT OF THE FLOW. Creating the type is only half of it; the coach has to
-# actually become bookable. "You are not bookable yet" must be gone.
-- assertNotVisible: "You are not bookable yet"
-- assertVisible: "Powerplay batting"
+# NOTE ON NEGATIVE ASSERTIONS ON THIS SCREEN. The obvious check here would be
+#   assertNotVisible: "You are not bookable yet"
+# and it PASSES. It also passes when nothing was created, when the screen failed
+# to load, and when the app is showing a completely different page, because
+# XCUITest sees nothing on this screen at all: everything is "not visible", so
+# every negative assertion is vacuously true. A green here means nothing.
+#
+# That is worse than the positive-assertion trap that made the first version of
+# this flow pass over an empty table, because a negative assertion looks like a
+# careful check while proving strictly nothing.
 - takeScreenshot: /tmp/coach-verify/05-bookable
