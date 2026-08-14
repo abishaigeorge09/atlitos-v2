@@ -379,3 +379,95 @@ anywhere in the monorepo. Five Maestro flows wrap taps in retry loops that hide 
 
 Note the launch program re-uses phase numbers 0 to 7 from `docs/PLAN.md`. Launch-program docs are
 prefixed `LAUNCH-`. `docs/phases/PHASE-5-STATUS.md` is the Clutch phase, NOT native QA.
+
+---
+
+## 2026-08-14. What the local stack found in its first night
+
+Docker was reinstalled (colima) and `supabase start` ran for the first time in
+this repo's history. Local dev had NEVER been initialised: there was no
+`config.toml`. That single fact explains why every test before tonight was
+read-only against production, and why the findings below sat undetected.
+
+### The class that matters most: production config that exists only in a dashboard
+
+Five settings were found that exist in the production project and leave NO
+trace in the repo. In every case the symptom was silence, never an error:
+
+| Setting | Symptom when absent |
+|---|---|
+| `RAZORPAY_WEBHOOK_SECRET` | signature check cannot run |
+| `enable_anonymous_sign_ins` | every guest flow dies |
+| `custom_access_token_hook` registration | `has_role()` is FALSE for EVERY user, so every role-gated policy returns an empty set with no error |
+| `verify_jwt = false` on 3 edge functions | the next deploy 401s every Razorpay capture, silently, because Razorpay retries a non-2xx |
+| `pg_net` + 2 vault secrets | migration 0111 cannot apply |
+
+Four are now pinned in `supabase/config.toml`. The fifth needs a human.
+
+**The `custom_access_token_hook` one invalidated work.** Three separate audit
+tracks hit it independently and each worked around it DIFFERENTLY (a hand-signed
+JWT, the GoTrue admin API, abandoning HTTP entirely), so no local authorization
+result from that audit is comparable across tracks. If you are told "run the auth
+tests locally", check this hook is registered first or you will get a vacuous
+green.
+
+### A clean checkout could never stand up
+
+THREE migration files each claimed version `0088`. `schema_migrations` has
+`version` as its primary key, so the second one failed with `23505` and the whole
+stack rolled back. Merged into one file. Also note **production's migration
+history is timestamp-versioned and disjoint from these file numbers** (104 rows,
+`20260713064243` onward, filename in `name`), because migrations reached
+production through the management API, never `supabase db push`. Reasoning like
+"renumbering an applied migration confuses the runner" does not apply here.
+
+### P0, closed: an unreviewed charity applicant's photo was public
+
+Every anon SELECT policy on `storage.objects` gated on the BUCKET NAME ALONE
+while each owning table gated on status, so the database refused the row and
+then served its photograph. Reproduced with no credentials at all: HTTP 200,
+2.79 MB. `0116` makes each policy mirror its table's condition.
+
+**`0116` was necessary and NOT sufficient, and the gap would fool a policy
+review.** On a bucket with `public = true`, `/object/public/` is served WITHOUT
+consulting RLS. Enumeration closed; direct fetch stayed open. `0117` makes
+`upa-photos` private. Consequence: portal-life needs signed URLs (task #44).
+
+**Verify storage fixes with a cache-buster.** Three retests returned 200 from
+Cloudflare's edge and read exactly like a failed fix; only `?cb=$RANDOM` showed
+the origin's 400.
+
+### The empty-catch class, two instances found
+
+`mintPlayback` swallowed every error, so a failed clip rendered as a bare black
+rectangle. `openComments` swallowed every error, so a clip with 36 comments
+rendered as "No comments yet. Start the conversation." Both now surface a real
+error state. **When a catch is empty, the failure becomes indistinguishable from
+emptiness, and emptiness is a lie the UI tells confidently.** Sweep for more.
+
+### The generator that polluted production
+
+All eight `scripts/seed-*.mjs` defaulted to production: either
+`?? 'https://syzzfgaudpifwvbpycyi.supabase.co'` or by reading
+`apps/mobile/.env`. `node scripts/seed-demo-users.mjs` with no environment
+seeded production. `assertWritableTarget` now refuses unless
+`ATLITOS_ALLOW_PRODUCTION_WRITE=yes-i-mean-production`.
+
+### A coach could start a group session and never end it
+
+Found by running `groups-coach.yaml`, which had never executed once because it
+writes. `completeGroupSession` called `session_transition('complete')` whose
+docblock claimed group rows were allowed; the live function refused `complete`
+from every state with no group exemption. `0118` narrows the gate and PROVES the
+money-free claim rather than trusting `group_id`.
+
+### Environment traps added tonight
+
+- **The springboard chooser.** Other projects' apps share this simulator. `Open
+  in "Follow Me"?` renders ON TOP of a correct screen and holds accessibility
+  focus, so every assert beneath it fails. It survived a Cancel tap AND
+  uninstalling the app; only a simulator reboot cleared it. That is trap #10.
+- **XCUITest cannot see the comments sheet.** With it open, the hierarchy is
+  SEVEN text nodes, all simulator status bar. `assertVisible` on a comment row
+  cannot pass however correct the render. Prove that sheet with screenshots. The
+  same fact is a real accessibility defect worth fixing.
