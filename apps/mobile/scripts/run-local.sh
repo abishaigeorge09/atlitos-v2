@@ -38,8 +38,16 @@ export EXPO_PUBLIC_SUPABASE_URL="http://127.0.0.1:54321"
 export EXPO_PUBLIC_SUPABASE_ANON_KEY="sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH"
 export EXPO_PUBLIC_RAZORPAY_KEY_ID="${EXPO_PUBLIC_RAZORPAY_KEY_ID:-rzp_test_TCwxkMaUz54BPH}"
 
+# The Release build phase's "Upload Debug Symbols to Sentry" script shells
+# out to sentry-cli, which needs an authenticated org (SENTRY_ORG or an
+# org-scoped token) to upload. That is a CI/release concern, not a local dev
+# one, and no such auth exists on this machine, so the upload fails the
+# whole xcodebuild step (exit 65) with no product code involved. Disabling
+# the auto upload for local runs only, per sentry-cli's own suggested fix.
+export SENTRY_DISABLE_AUTO_UPLOAD=true
+
 echo "Running mobile app against LOCAL Supabase: $EXPO_PUBLIC_SUPABASE_URL"
 echo "This is NOT production. apps/mobile/.env is untouched."
 
 cd "$(dirname "$0")/.."
-exec expo run:ios --device "${LOCAL_IOS_UDID:-8AF6A5E2-F889-4477-8634-97B4AB5D5453}" --configuration Release
+exec ./node_modules/.bin/expo run:ios --device "${LOCAL_IOS_UDID:-8AF6A5E2-F889-4477-8634-97B4AB5D5453}" --configuration Release "$@"

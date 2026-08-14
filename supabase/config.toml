@@ -163,8 +163,17 @@ enable_refresh_token_rotation = true
 refresh_token_reuse_interval = 10
 # Allow/disallow new user signups to your project.
 enable_signup = true
-# Allow/disallow anonymous sign-ins to your project.
-enable_anonymous_sign_ins = false
+# Allow/disallow anonymous sign-ins to your project. Production has this ON
+# (the app's guest mode is a real anonymous auth session, not a client-side
+# fake), set directly against the project rather than through this file, the
+# same shape docs/qa/CURRENT-STATE.md documents for RAZORPAY_WEBHOOK_SECRET:
+# "the secret was set directly against the project, which leaves no trace in
+# the repo." This file defaulted to the CLI's own template value (false) and
+# was never updated to match, which on a from-scratch local stack breaks
+# every guest flow with "Guest browsing is unavailable right now" and
+# "Invalid or expired session", confirmed 2026-08-14 running
+# .maestro/auth-register-skip.yaml and .maestro/search-domains.yaml locally.
+enable_anonymous_sign_ins = true
 # Allow/disallow testing manual linking of accounts
 enable_manual_linking = false
 # Passwords shorter than this value will be rejected as weak. Minimum 6, recommended 8 or more.
@@ -260,9 +269,21 @@ max_frequency = "5s"
 # uri = "pg-functions://postgres/auth/before-user-created-hook"
 
 # This hook runs before a token is issued and allows you to add additional claims based on the authentication method used.
-# [auth.hook.custom_access_token]
-# enabled = true
-# uri = "pg-functions://<database>/<schema>/<hook_name>"
+# public.custom_access_token_hook (supabase/migrations/0001_identity.sql) projects
+# public.user_roles into the JWT's app_metadata.roles, which public.has_role() reads.
+# Production registers this against Auth > Hooks in the dashboard/Management API, a
+# step outside SQL migrations; a from-scratch local stack never performs it, so
+# has_role() silently evaluates false for every user regardless of their real
+# user_roles rows, which breaks every has_role()-gated RLS policy (sessions,
+# session_types, and more) without a single error, just an empty result set that
+# looks exactly like missing data. Confirmed 2026-08-14: coach1@atlitos.dev has a
+# real 'coach' row in public.user_roles, but sessions_select_merged's
+# has_role('coach') branch never matched until this was uncommented and the stack
+# restarted, which is exactly why the coach Trainings > Stats dashboard showed
+# "No sessions yet" against a database that already held a completed session.
+[auth.hook.custom_access_token]
+enabled = true
+uri = "pg-functions://postgres/public/custom_access_token_hook"
 
 # Configure one of the supported SMS providers: `twilio`, `twilio_verify`, `messagebird`, `textlocal`, `vonage`.
 [auth.sms.twilio]

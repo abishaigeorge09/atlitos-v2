@@ -116,6 +116,26 @@ Why it cannot leak into a shipped build:
    even a mistaken invocation produces an app that obviously cannot talk to anything, not a silent
    pointer at production.
 
+## Cric Squad fixture for the write-path Maestro flows
+
+`.maestro/groups-athlete.yaml` and `.maestro/groups-coach.yaml` have never run, since production
+is read only and both write. They both depend on a "Cric Squad" training group that only
+production's fixtures had. `supabase/seed/local_seed_cric_squad.sql` recreates it locally,
+idempotently, with two values pinned to what the flows literally assert rather than left
+"reasonable": capacity 8 (so the coach detail screen's "4 of 8 spots left" matches the flow's
+".*of 8 spots left.*") and every membership's `period_end` fixed at 2026-09-25 (matching the
+flow's literal "Active until 25 Sep 2026" string). It also creates a `coach_profiles` row for
+`coach1@atlitos.dev`, verified, since the local stack's demo accounts never completed coach
+onboarding (`seed_identity.sql`'s email mismatch, documented above, leaves coach1 with zero
+coach_profiles rows on a from-scratch stack) and `training_groups.coach_id` references
+`coach_profiles(user_id)`, not `users(id)`, so nothing coach-owned can exist without it.
+
+Run after the seven `supabase/seed/*.sql` files above:
+
+```
+psql "$LOCAL_DB_URL" -f supabase/seed/local_seed_cric_squad.sql
+```
+
 ## Danger: the default URL in every seed script is PRODUCTION
 
 `scripts/seed-demo-users.mjs`, `scripts/seed-empower-upa-users.mjs`,
