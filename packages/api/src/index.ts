@@ -17,3 +17,4 @@ export * from "./use-coach";
 export * from "./use-groups";
 export * from "./use-shop";
 export * from "./use-home";
+export * from "./use-account-deletion";

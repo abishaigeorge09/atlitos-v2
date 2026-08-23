@@ -661,3 +661,63 @@ replace`, `0043`'s clip/comment branches unchanged byte-for-byte) gains a
 never a hard delete) and a `user` remove arm (resolves the report as
 `actioned` with no further row mutation; account enforcement is Track B's
 separate, separately audited `admin_suspend_user`).
+
+## Account deletion (migration `0098`)
+
+Apple Guideline 5.1.1(v). Three policy-surface changes, all additive.
+
+### `account_deletions` (new table)
+
+RLS enabled, two SELECT policies, **no client write policy at all**:
+
+- `account_deletions_select_own`: `user_id = (select auth.uid())`. The deleted
+  user can still read their own receipt for the seconds between the RPC
+  returning and the client signing out.
+- `account_deletions_select_admin`: `has_role('admin')`.
+
+Every write goes through `delete_my_account()` /
+`account_deletion_mark_auth_released()`, both SECURITY DEFINER. There is no
+INSERT, UPDATE or DELETE policy, so a client cannot forge or erase a deletion
+record even with a valid token.
+
+### `is_actor_active()` widened
+
+`0096` created restrictive `<table>_active_insert` / `_active_update` /
+`_active_delete` policies calling `is_actor_active()` on **every** mutating
+table, derived from the live `pg_policies` set rather than a hand written list.
+`0098` changes only the function body:
+
+```
+status <> 'suspended'          -- 0096
+status = 'active' and deleted_at is null   -- 0098
+```
+
+Because `user_status` is still exactly `('active','suspended')`, the first
+clause is behaviour-identical for every existing row; the `deleted_at` clause is
+the new refusal. This one edit is what gates a deleted account platform wide
+without touching a single policy. The fail-OPEN posture for a missing `users`
+row is unchanged, so guests are still never bricked.
+
+Verified locally, with the control planted first so the assertion cannot pass
+vacuously: an ACTIVE user's `update public.users set bio = ...` on their own row
+returns `UPDATE 1`; the same statement by the same user after deletion returns
+`UPDATE 0`, and `is_actor_active()` returns `f`.
+
+### `coach_profiles_public` view
+
+Was `where status = 'verified'`. Now also joins `users` and requires
+`u.deleted_at is null`. The base `coach_profiles` row must survive deletion
+(`sessions.coach_id` and `training_groups.coach_id` are `ON DELETE CASCADE` off
+it), so discovery is filtered at the view instead of by mutating `status`.
+The view keeps `security_invoker = false`, unchanged, so it stays the sole
+public read surface past the owner-and-admin-only base table RLS.
+
+### Anonymised reads go through `public_profiles`, never `public.users`
+
+Worth stating explicitly, because a test got this wrong first: `users` is
+owner-and-admin only (`users_select_merged`), so a coach joining
+`chat_messages -> public.users` to render a sender name gets **zero rows**, both
+before and after any deletion. Every cross-user name/avatar read must go through
+`public_profiles`. Through that view a deleted author correctly resolves to
+`name = 'Deleted user'`, `avatar_url = null`, which is exactly the tombstone
+behaviour the retained rows depend on.
