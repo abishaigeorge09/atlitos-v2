@@ -62,8 +62,12 @@ function CoachCard({
       )}
 
       <View className="flex-1 gap-xs">
-        <View className="flex-row items-center justify-between">
-          <Text className="font-sans-semibold text-lg text-text">{name}</Text>
+        <View className="flex-row items-center justify-between gap-sm">
+          {/* flex-1 + numberOfLines: this label is UNBOUNDED user data sitting in a
+          justify-between row, the same shape that made "Sessions this month"
+          collide with its icon at 393pt. A long coach name pushed the element on the
+          right off screen instead of ellipsizing. Swept 2026-08-22. */}
+          <Text numberOfLines={1} className="flex-1 font-sans-semibold text-lg text-text">{name}</Text>
           <View className="flex-row items-center gap-xs">
             <Star size={14} strokeWidth={1.75} color={colors.warning} fill={colors.warning} />
             <Text className="font-mono text-sm text-text">{rating.toFixed(1)}</Text>

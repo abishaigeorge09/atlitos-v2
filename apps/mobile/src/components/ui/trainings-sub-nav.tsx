@@ -38,7 +38,13 @@ const TABS_BY_ROLE: Record<TrainingsSubNavRole, Array<{ key: TrainingsSubNavTab;
     { key: 'trainees', label: 'Trainees' },
     { key: 'earnings', label: 'Earnings' },
     { key: 'chat', label: 'Chat' },
-    { key: 'analytics', label: 'Video Analytics' },
+    // "Analytics", NOT "Video Analytics". This tab opens NUMERIC analytics
+    // (sessions, earnings, retention). Video analysis is NOT BUILT, and the
+    // founder asked that no surface promise it. The player role already used
+    // the honest label above; only the coach role advertised a feature that
+    // does not exist. Changed 2026-08-16 after a peer session read both files
+    // and found the contradiction.
+    { key: 'analytics', label: 'Analytics' },
   ],
 };
 

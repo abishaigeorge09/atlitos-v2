@@ -71,6 +71,55 @@ Three rules for anyone editing it:
 
 ---
 
+### Two build traps that each cost a full cycle, 2026-08-22
+
+**1. `expo run:ios` exits 1 AFTER a successful build.** The failure is the launch step:
+`osascript -e tell app "System Events" to count processes whose name is "Simulator"`
+exits non-zero without the automation permission. The compile is fine. Do NOT read a
+non-zero exit as a broken build. Grep the log for `Succeeded` and install by hand:
+`xcrun simctl install <udid> <DerivedData>/Release-iphonesimulator/Atlitos.app`.
+
+**2. Grepping that log for "Build Succeeded" ALWAYS RETURNS ZERO.** Xcodebuild's pretty
+printer puts ANSI codes between the words, so the literal string is never present. Strip
+first: `tr -cd '\11\12\15\40-\176' < log | sed 's/\[[0-9;]*m//g'`. This produced a
+false "the build failed" reading before the real cause was found.
+
+**3. The Sentry debug-symbols phase fails a local Release build.** `ios/sentry.properties`
+carries no org or project and falls back to `SENTRY_ORG` / `SENTRY_PROJECT` /
+`SENTRY_AUTH_TOKEN`, which are not set locally, so `sentry-cli` errors with "An
+organization ID or slug is required" and the build stops. Export
+`SENTRY_DISABLE_AUTO_UPLOAD=true` for local QA builds. Do not edit the project file.
+
+### The coach dashboard header row is clean at 393pt, and the sweep found a real bug next to it
+
+Proven 2026-08-22 on atlitos-390 (iPhone 16, 393pt), Release build, exit 0. Screenshot:
+`~/.maestro/tests/2026-08-22_172356/coach-dash-header-393/takeScreenshot/tmp/header393/01-coach-dash-393.png`
+
+`(shell)/index.tsx:419` once put "Upcoming sessions" plus three sm text buttons in one
+`flex-row` with no wrap and no `flexShrink`. The two-row plus `flexWrap` fix HOLDS: the
+heading sits on its own line and all three links render in full with margin to spare.
+A peer session had proven this at 440pt and correctly refused to call it clean, because
+440pt is not the width that overflows. It is now backed at the width that does.
+
+TWO THINGS THIS COST, WORTH KEEPING:
+
+1. **Maestro drives that device with `--udid`, not `--device`.** The peer was blocked for
+   a full session believing the device could not be driven. It can.
+2. **THE SCREENSHOT FOUND A BUG EVERY ASSERTION MISSED.** All eight `assertVisible` calls
+   passed while "Sessions this month" and "Earnings this month" ran flush into their icons
+   with zero gap. `StatTile` (`components/ui/stat-tile.tsx:28`) had the SAME SHAPE as the
+   header bug it was sitting under: a `justify-between` row, a label that cannot shrink, no
+   gap. This is exactly why the house rule says open the screenshot. An assertion cannot
+   tell wrapped from clipped from collided; it only knows the node exists.
+
+Swept the class rather than fixing the instance. 13 rows share the shape. Most pair short
+static copy and are fine. Four carried UNBOUNDED USER DATA and were fixed:
+`stat-tile.tsx` (label vs icon, the proven one), `coach-card.tsx` `{name}`,
+`session-card.tsx` `{personName}`, `GroupMembersSheet.tsx` `{groupName}`.
+`ChatThreadList.tsx` `{title}` was CHECKED AND DELIBERATELY LEFT ALONE: it is "Messages"
+or absent, never unbounded. Shape alone is not a bug, and a cosmetic edit to a row that
+cannot break is how a sweep turns into noise.
+
 ## DISPROVEN. Read this before theorising.
 
 ### The Clutch "static" is NOT a rendering bug

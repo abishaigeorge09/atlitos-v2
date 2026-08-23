@@ -337,6 +337,14 @@ export function AuthCta({ label, onPress, loading, disabled, style }: AuthCtaPro
 
   return (
     <AnimatedPressable
+      // Stable handle for the submit button. Every auth screen renders its CTA
+      // label as BOTH the heading and the button ("Log in" appears twice on
+      // login.tsx), so a text selector is ambiguous and index/relative
+      // selectors proved unreliable: a peer QA session lost several runs to it
+      // and had to fall back to raw screen coordinates. Coordinates then break
+      // again whenever the keyboard shifts the card. One testID removes the
+      // whole class.
+      testID="auth-cta"
       accessibilityRole="button"
       accessibilityState={{ disabled: isDisabled, busy: loading }}
       disabled={isDisabled}

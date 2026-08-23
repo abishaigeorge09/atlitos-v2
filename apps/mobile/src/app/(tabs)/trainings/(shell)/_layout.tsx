@@ -19,10 +19,17 @@ const SEGMENT_TO_TAB: Record<string, TrainingsSubNavTab> = {
   payments: 'payments',
   earnings: 'earnings',
   chat: 'chat',
-  // Numeric analytics (sessions, earnings, retention over months), NOT
-  // video. It sits where the Figma video tab sat, which is the only reason
-  // it reads as one; the screen it opens has never shown a video and its
-  // copy never promises one, so it stays as is.
+  // Numeric analytics (sessions, earnings, retention over months), NOT video.
+  // It sits where the Figma video tab sat, which is the only reason it reads
+  // as one.
+  //
+  // CORRECTION 2026-08-16: this comment used to end "its copy never promises
+  // one, so it stays as is". THAT WAS FALSE. The coach tab was literally
+  // labelled "Video Analytics" in trainings-sub-nav.tsx while the player tab
+  // said "Analytics", so the copy DID promise a feature that is not built.
+  // The label is now "Analytics" for both roles. A comment asserting a
+  // property of a DIFFERENT file is worth exactly nothing unless someone
+  // checks it, and for months nobody did.
   analytics: 'analytics',
 };
 
