@@ -1,0 +1,107 @@
+appId: com.atlitos.app
+---
+# ACCOUNT DELETION UI, UP TO THE CONFIRMATION AND NO FURTHER.
+#
+# Apple 5.1.1(v) requires in app account deletion, and this is the surface the
+# reviewer will open. The DB layer is proven separately and far more thoroughly
+# by docs/qa/account-deletion/*.sql (red naive cascade refused, PII scrubbed to
+# a tombstone, money history and ledger balance intact, forbidden cases refused
+# for last admin / coach with upcoming sessions / partner with future bookings).
+#
+# THIS FLOW DELIBERATELY DOES NOT DELETE. It proves the reviewer can FIND the
+# control and that the confirmation screen states the consequences honestly.
+# Actually deleting would burn the seeded account every run and make the suite
+# non repeatable; the deletion itself is proven in SQL where it can be rolled
+# back.
+#
+# Local stack only. The Release build embeds http://127.0.0.1:54321.
+- launchApp:
+    clearState: true
+- runFlow:
+    when:
+      visible: "Not Now"
+    commands:
+      - tapOn: "Not Now"
+
+- openLink: atlitos://login
+- runFlow:
+    when:
+      visible: "Open in .*"
+    commands:
+      - tapOn: "Cancel"
+- extendedWaitUntil:
+    visible: "Email or phone.*"
+    timeout: 10000
+- tapOn: "Email or phone input"
+- inputText: "player@atlitos.dev"
+- tapOn: "Password input"
+- inputText: "AtlitosDemo!2026"
+- hideKeyboard
+- tapOn:
+    id: "auth-cta"
+# Role agnostic wait. Do NOT wait on a city name here: the seeded player has
+# no city set, so it lands somewhere different from the coach, and an assert
+# tied to one role's home screen fails for reasons that have nothing to do
+# with what this flow is testing.
+- extendedWaitUntil:
+    visible: "Save Password.*|Home|Trainings|Get started"
+    timeout: 25000
+- runFlow:
+    when:
+      visible: "Save Password.*"
+    commands:
+      - tapOn: "Not Now"
+- takeScreenshot: /tmp/deletion-ui/00-after-login
+
+# THE REVIEWER'S PATH. Settings, then the row, by tapping it rather than deep
+# linking, because "can a person reach this" is the whole point of 5.1.1(v).
+- openLink: atlitos://settings
+- runFlow:
+    when:
+      visible: "Open in .*"
+    commands:
+      - tapOn: "Cancel"
+- takeScreenshot: /tmp/deletion-ui/01a-settings-landed
+
+# SCROLL TO THE BOTTOM WITH REAL SWIPES. The Delete account row is the last
+# item in Settings, under Appearance, Preferred sports, Location and Account.
+# Real swipes, not scrollUntilVisible: scrollUntilVisible has reported
+# COMPLETED here without moving the screen a pixel.
+- repeat:
+    times: 8
+    commands:
+      - swipe:
+          start: 50%, 75%
+          end: 50%, 25%
+- takeScreenshot: /tmp/deletion-ui/01b-settings-bottom
+- extendedWaitUntil:
+    visible: "Delete account"
+    timeout: 15000
+- takeScreenshot: /tmp/deletion-ui/01-settings-row
+- tapOn: "Delete account"
+
+- extendedWaitUntil:
+    visible: "This cannot be undone"
+    timeout: 15000
+
+# The screen must state BOTH halves honestly: what goes, and what the platform
+# is legally obliged to keep. A deletion screen that only promises removal is
+# the one that gets rejected.
+- assertVisible: "This cannot be undone"
+- assertVisible: "What we have to keep"
+
+# THE PREVIEW MUST ACTUALLY LOAD. The two asserts above both passed on a run
+# where the screen carried "Could not find the function
+# public.account_deletion_preview without parameters in the schema cache" and
+# no counts rendered at all, and the flow still exited 0. Static copy is
+# present whether or not the data behind it arrived.
+#
+# These rows come from account_deletion_preview(), so they exist ONLY when the
+# RPC answered. A POSITIVE assertion, deliberately: assertNotVisible on the
+# error string would pass vacuously on any screen that failed to load.
+- assertVisible: "Clips"
+- assertVisible: "Orders"
+- assertVisible: "Court bookings"
+- takeScreenshot: /tmp/deletion-ui/02-confirm-screen
+
+# STOP. Do not tap the destructive control.

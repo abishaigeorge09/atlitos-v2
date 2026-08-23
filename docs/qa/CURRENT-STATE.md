@@ -120,6 +120,61 @@ static copy and are fine. Four carried UNBOUNDED USER DATA and were fixed:
 or absent, never unbounded. Shape alone is not a bug, and a cosmetic edit to a row that
 cannot break is how a sweep turns into noise.
 
+### A whole afternoon of device QA ran against PRODUCTION while I believed it was local
+
+2026-08-23. The worst kind of error: everything reported green, nothing lied, and
+nothing was checked.
+
+THE MECHANISM. I grepped a built bundle once to confirm its backend:
+
+    grep -aoE "https://[a-z]+\.supabase\.co|http://127\.0\.0\.1:54321" main.jsbundle
+
+That character class `[a-z]` CANNOT MATCH a real Supabase project ref, because
+refs contain digits and `syzzfgaudpifwvbpycyi` is matched only if digits are
+allowed. The production URL was sitting in the bundle the whole time. The grep
+found only the local URL (present as an unrelated default), I read the absence
+of a production hit as PROOF OF LOCAL, and wrote "the Release build embeds
+http://127.0.0.1:54321, good, safe" into the record and into a message to a
+peer session. Every device run after that was pointed at production.
+
+WHAT IT COST, honestly accounted:
+  - No destructive write. Verified after the fact on production:
+    `Deleted user` tombstones = 0, and the deletion RPCs are not even deployed
+    there, so the one destructive screen refused on arrival.
+  - The only writes were AUTH SIGN INS for demo accounts. player@atlitos.dev
+    carries a last_sign_in_at stamped at the exact time of my flow runs.
+  - One invented bug. The delete account screen showed "Could not find the
+    function public.account_deletion_preview without parameters in the schema
+    cache". I chased it through four wrong hypotheses (stale PostgREST cache,
+    missing EXECUTE grant, POST body shape, GET vs POST volatility), each
+    disproved by curl against the LOCAL stack where every calling convention
+    returned 200. The screen was right and I was wrong: it was PRODUCTION
+    correctly reporting that 0098 is not applied there.
+  - The 393pt layout proof is still valid, and is arguably better evidence for
+    having run on real production strings and values.
+
+That was luck, not design. The luck is why this entry exists.
+
+THE GENERAL LESSON, which is bigger than this project:
+**A grep that finds nothing is not evidence of absence until the pattern has
+been shown to match something.** Negative test the check itself. This is the
+second time the same shape has bitten this repo: `git grep -E` ignoring `\b`
+made guard greps pass while violations sat in the tree.
+
+THE FIX. `scripts/assert-build-target.sh` reports which project a built .app
+talks to and fails when it is not the one you expected. It SELF TESTS ITS OWN
+PATTERN first and refuses to report a clean result if it cannot match a string
+known to be present, which is precisely the failure above. Born red against the
+production build (exit 1), and proven able to pass (exit 0 with
+`production` expected), so it is not a check that only ever fails.
+
+    bash scripts/assert-build-target.sh <path-to-.app> local
+
+RUN IT BEFORE EVERY QA FLOW. `EXPO_PUBLIC_SUPABASE_URL` and
+`EXPO_PUBLIC_SUPABASE_ANON_KEY` set in the build environment take precedence
+over `apps/mobile/.env`, which holds production and is the default any plain
+`npx expo run:ios` will pick up.
+
 ## DISPROVEN. Read this before theorising.
 
 ### The Clutch "static" is NOT a rendering bug
