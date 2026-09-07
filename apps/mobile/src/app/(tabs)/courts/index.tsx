@@ -88,6 +88,16 @@ export default function CourtsIndexScreen() {
       setError(null);
       try {
         const result = await courts.listCourts({ sport: sport ?? undefined, near: coords });
+        // BUG-03. The header promises "courts near <city>" and the list then
+        // showed every verified venue in the country sorted by distance, each
+        // with a live Book button. Observed on a device located outside India:
+        // venues at 13,486 km and 13,499 km, offered as bookable.
+        //
+        // RECONCILIATION 2026-09-14: a 150 km radius filter was proposed here
+        // (origin/main f1a5fa2, BUG-03). NOT taken. It empties the list for anyone
+        // far from the seeded cities, which includes an App Review tester and
+        // every simulator with a foreign GPS. The F4 rule above handles that case
+        // honestly: show every venue, hide a distance once it is implausible.
         const sorted = [...result].sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
         setItems(sorted);
         setState(sorted.length === 0 ? 'empty' : 'populated');

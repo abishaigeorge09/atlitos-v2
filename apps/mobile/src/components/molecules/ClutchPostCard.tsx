@@ -1,7 +1,8 @@
+import { useClutch } from '@atlitos/api';
 import { spacing } from '@atlitos/theme';
 import type { Clip } from '@atlitos/types';
 import * as Haptics from 'expo-haptics';
-import { Bookmark, BookmarkCheck, Heart, MessageCircle, Share2, WifiOff } from 'lucide-react-native';
+import { Bookmark, BookmarkCheck, EllipsisVertical, Heart, MessageCircle, Share2, WifiOff } from 'lucide-react-native';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 
 import { ClipVideo } from '@/components/molecules/clip-video';
@@ -70,6 +71,10 @@ export interface ClutchPostCardProps {
   onShare?: () => void;
   onSave?: () => void;
   onOpen?: () => void;
+  /** App Store guideline 1.2. Opens the report and block sheet for this clip.
+   * Absent on surfaces showing the viewer's OWN clips, where reporting
+   * yourself is not a thing. */
+  onReportOrBlock?: () => void;
 }
 
 function timeAgo(iso: string): string {
@@ -97,6 +102,7 @@ export function ClutchPostCard({
   onShare,
   onSave,
   onOpen,
+  onReportOrBlock,
 }: ClutchPostCardProps) {
   const colors = useThemeColors();
 
@@ -267,6 +273,16 @@ export function ClutchPostCard({
           )}
           {compactActions ? null : <Text className="text-xs text-text-inverse">Save</Text>}
         </Pressable>
+        {onReportOrBlock ? (
+          <Pressable
+            onPress={onReportOrBlock}
+            accessibilityRole="button"
+            accessibilityLabel="Report or block"
+            className="min-h-11 min-w-11 items-center justify-center gap-xs"
+          >
+            <EllipsisVertical size={24} strokeWidth={1.75} color={colors.textInverse} />
+          </Pressable>
+        ) : null}
         <Pressable
           onPress={onShare}
           accessibilityRole="button"

@@ -19,6 +19,8 @@ export type Status =
   | 'requested'
   | 'accepted'
   | 'inProgress'
+  | 'rejected'
+  | 'removed'
   | 'declined'
   | 'rated'
   // group_memberships.status (0076 Trainings Groups fares model): a live
@@ -48,6 +50,12 @@ const STATUS_CONFIG: Record<Status, StatusConfig> = {
   confirmed: { label: 'Confirmed', bgClass: 'bg-success-tint', textClass: 'text-success' },
   completed: { label: 'Completed', bgClass: 'bg-success-tint', textClass: 'text-success' },
   cancelled: { label: 'Cancelled', bgClass: 'bg-danger-tint', textClass: 'text-danger' },
+  // BUG-05. A clip a moderator refused or took down is NOT 'Cancelled':
+  // that word tells the creator they did it to themselves, and hides the
+  // fact that a moderation decision was made about their upload
+  // (PRD-01 FR-44/FR-45 want the owner to understand their own clip's state).
+  rejected: { label: 'Rejected', bgClass: 'bg-danger-tint', textClass: 'text-danger' },
+  removed: { label: 'Removed', bgClass: 'bg-danger-tint', textClass: 'text-danger' },
   rescheduled: { label: 'Rescheduled', bgClass: 'bg-warning-tint', textClass: 'text-warning' },
   delivered: { label: 'Delivered', bgClass: 'bg-success-tint', textClass: 'text-success' },
   shipped: { label: 'Shipped', bgClass: 'bg-info-tint', textClass: 'text-info' },

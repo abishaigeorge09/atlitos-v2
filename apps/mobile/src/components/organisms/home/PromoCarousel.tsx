@@ -88,11 +88,21 @@ export function PromoCarousel({ reloadKey }: { reloadKey: number }) {
             {/* Bottom scrim only, not a full-card tint: keeps the branded
                 banner art visible while guaranteeing contrast for the
                 overlaid title/body/CTA against any image (contrast
-                insurance called for by the promo banner fix). */}
-            <View
-              className="absolute inset-x-0 bottom-0"
-              style={{ pointerEvents: 'none', height: '60%', backgroundColor: colors.overlay }}
-            />
+                insurance called for by the promo banner fix).
+
+                BUG-06: rendered ONLY when there is an image behind it. The
+                scrim exists to guarantee contrast against arbitrary photo
+                content; with no image it was tinting the card's own branded
+                background instead, which read on screen as a grey slab dropped
+                across the headline and body copy, lowering the contrast it was
+                meant to protect. The card's own background is already a known
+                quantity chosen for legible inverse text, so it needs no scrim. */}
+            {item.imageUrl ? (
+              <View
+                className="absolute inset-x-0 bottom-0"
+                style={{ pointerEvents: 'none', height: '60%', backgroundColor: colors.overlay }}
+              />
+            ) : null}
             <View className="absolute inset-0 justify-end gap-sm p-lg" style={{ pointerEvents: 'none' }}>
               <Text className="font-sans-semibold text-lg text-text-inverse">{item.title}</Text>
               {item.body ? (
