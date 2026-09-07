@@ -89,11 +89,32 @@ export default function EarningsPage() {
       chartPoints.push({ date: d, amount: bookings.filter((b) => b.date === d).reduce((sum, b) => sum + b.total, 0) });
     }
 
-    const pendingCredits = (ledgerResult.data ?? []).reduce((sum, e) => sum + e.amount, 0);
+    // MONEY DISPLAY FIX (audit 2026-09-03 SEC-F2). `direction` was selected and
+    // then ignored, so a DEBIT was summed as +amount. `record_transfer` writes
+    // the transfer's debit leg against this same (court_partner, venue owner)
+    // account, so a payout of T was added as +T here and then subtracted again
+    // as `transferredTotal` below: net (C + T) - T = C. The partner was shown
+    // their gross accrual labelled as a withdrawable balance.
+    //
+    // This expression is now character-for-character the same arithmetic as
+    // `get_payout_account_balance` (0028), which is what
+    // `razorpay-route-transfer` actually validates against:
+    //   sum(case when direction = 'credit' then amount else -amount end)
+    //
+    // The duplication is forced: that RPC is SECURITY DEFINER over an arbitrary
+    // payout_account_id and is granted to service_role ONLY, because widening
+    // it would let any member read any partner's balance. Display-only either
+    // way: the server re-derives before moving money and refuses
+    // INSUFFICIENT_BALANCE, so this never could have caused an over-withdrawal.
+    // ponytail: duplicated formula, collapse into an owner-scoped RPC if a
+    // third caller ever needs it.
+    const pendingBalance = (ledgerResult.data ?? []).reduce(
+      (sum, e) => sum + (e.direction === "credit" ? e.amount : -e.amount),
+      0,
+    );
 
     let transfers: EarningsData["transfers"] = [];
     let lastPayout: EarningsData["lastPayout"] = null;
-    let transferredTotal = 0;
     const payoutAccountId = payoutAccountResult.data?.id;
 
     if (payoutAccountId) {
@@ -103,7 +124,6 @@ export default function EarningsPage() {
         .eq("payout_account_id", payoutAccountId)
         .order("created_at", { ascending: false });
       transfers = transferRows ?? [];
-      transferredTotal = transfers.reduce((sum, t) => sum + t.amount, 0);
       const paid = transfers.find((t) => t.status === "paid");
       if (paid) lastPayout = { amount: paid.amount, date: paid.created_at };
     }
@@ -112,7 +132,9 @@ export default function EarningsPage() {
       grossThisMonth,
       platformFeeThisMonth,
       netThisMonth,
-      pendingBalance: Math.max(0, pendingCredits - transferredTotal),
+      // Still clamped at zero: a negative balance is a reconciliation problem
+      // to investigate, not a number to show a partner.
+      pendingBalance: Math.max(0, pendingBalance),
       lastPayout,
       chartPoints,
       transfers,
