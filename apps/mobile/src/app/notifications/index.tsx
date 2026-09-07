@@ -89,7 +89,12 @@ export default function NotificationsScreen() {
       setState('populated');
     }, meId);
     return () => {
-      channel.unsubscribe();
+      // removeChannel, not just unsubscribe. `notifications:self` is a NAMED
+      // channel on the singleton client, so unsubscribe leaves it registered
+      // and the next open of this screen re-subscribes onto a dead channel.
+      // chat/[id].tsx already documents this exact failure; this caller was
+      // missed.
+      void supabase.removeChannel(channel);
     };
   }, [isSignedIn, meId]);
 
