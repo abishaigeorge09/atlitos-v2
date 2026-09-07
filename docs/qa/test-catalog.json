@@ -1230,5 +1230,61 @@
     "lane": "EXPO+EXT",
     "priority": "P0",
     "expected": "Becoming a coach is NOT instant. Settings Account 'Become a coach' (shown only when me.coachStatus is not verified/pending) opens the coach-setup wizard, which creates a verification_requests row + coach_profiles.status='pending_review' (PRD-02 FR-6). The Trainings tab then renders CoachVerificationStatus (pending) instead of coach tools, and only there (FR-7). Server gate: coach_profiles_public is WHERE status='verified' and is_verified_coach(uuid) checks status='verified', so a pending coach is not discoverable/bookable (SQL-proven on prod). Admin approves in apps/admin Verification Queue Coach tab via admin_approve_verification_request, which flips status to verified and unlocks coach features; reject requires a reason via admin_reject_verification_request. Wizard submit + admin click are code-proven (no in-session auth); DB gate + RPCs SQL-proven."
+  },
+  {
+    "id": "SEC-01",
+    "surface": "supabase/functions/stream-webhook",
+    "persona": "coach1@ vs any other clip owner",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "A client-supplied thumb_path outside the caller's own owner-id folder (and any ../ traversal out of it) is refused 403 FORBIDDEN and clips.thumb_path is left null. Without the guard the column is written verbatim and both signed-URL mints hand it to storage under the service role, making every object in the private clips bucket readable."
+  },
+  {
+    "id": "SEC-02",
+    "surface": "supabase/functions/get-clip-playback-url",
+    "persona": "coach1@ vs any other clip owner",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "After a planted cross-owner thumb_path, the owner-branch playback mint on the attacker's own clip returns thumbUrl null and a video URL under the attacker's own folder only. The takedown/privacy model holds: no signed URL is ever minted for another owner's object."
+  },
+  {
+    "id": "SEC-03",
+    "surface": "supabase/migrations/0089 (RLS)",
+    "persona": "coach1@ vs a non-trainee",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "A direct INSERT into coach_trainee_videos is refused by the ROW-LEVEL SECURITY POLICY (asserted on the message, not just SQLSTATE 42501, so a missing GRANT cannot masquerade as an enforced policy) when it carries a client-chosen storage_path, or a player_id with no sessions row linking them to the coach. The caption-only draft for a real trainee still inserts."
+  },
+  {
+    "id": "SEC-04",
+    "surface": "supabase/functions/get-coach-trainee-video-url",
+    "persona": "coach1@",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "A coach_trainee_videos row seeded (service role) with a storage_path outside coach-videos/{coach_id}/{player_id}/ does not mint a signed URL: the mint re-derives the prefix and refuses 403. Covers rows written before 0089, which a policy change cannot retract."
+  },
+  {
+    "id": "SEC-05",
+    "surface": "supabase/migrations/0088 + _shared/finalize-payment.ts",
+    "persona": "n/a",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "payment_finalization_backlog() lists a captured intent with null finalized_at and excludes a finalized one, an uncaptured one, and one still inside the grace window; has_ledger_group separates work-missing from marker-missing; expire_stale_holds() reports the payments arm. Standing integrity assertion: no live captured intent in court/commerce/donation/membership has zero ledger_entries rows."
+  },
+  {
+    "id": "SEC-06",
+    "surface": "supabase/migrations/0090 + _shared/supabase.ts",
+    "persona": "throwaway account + admin@",
+    "lane": "SQL",
+    "priority": "P0",
+    "expected": "Suspension is an enforcement control. On the SAME access token: protected edge functions return 403 ACCOUNT_SUSPENDED, direct PostgREST inserts are refused by the restrictive policy, and custom_access_token_hook returns a 403 error object instead of claims. Exactly one audit_log row and one notification per action, written in the same transaction; re-suspending writes no second row; reinstating restores access. Uses a throwaway account, never a shared demo persona."
+  },
+  {
+    "id": "SEC-07",
+    "surface": "supabase/migrations/0091",
+    "persona": "admin@",
+    "lane": "SQL",
+    "priority": "P1",
+    "expected": "order_transition writes exactly one order.advance audit row per accepted edge, in the same transaction, recording the OBSERVED prior status. A refused edge writes none. Specifically: placed -> cancelled audits a before of placed, where the pre-0091 edge-function lookup fabricated in_transit."
   }
 ]
