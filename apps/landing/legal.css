@@ -1,0 +1,189 @@
+/* ATLITOS legal pages (privacy, terms, content policy).
+   Deliberately its own small stylesheet rather than a section of styles.css:
+   these pages carry none of the landing page's animation framework, sticky
+   files or reveal system, and loading that machinery to render a document
+   would be the only reason those scripts ran. Tokens are copied from
+   styles.css so the two stay visually identical; if a token changes there,
+   change it here. */
+
+:root {
+  --paper: #FBF7F1;
+  --surface: #FFFFFF;
+  --ink: #1C1712;
+  --ink-secondary: #5B5248;
+  --ink-tertiary: #8C8072;
+  --border: #E7DECF;
+  --ember: #E46136;
+  --ink-on-accent: #2A0E02;
+
+  --font-display: "Fraunces", Georgia, serif;
+  --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --shell: 720px;
+  --radius: 12px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 17px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+}
+.skip-link:focus {
+  left: 1rem;
+  top: 1rem;
+  z-index: 10;
+  background: var(--surface);
+  padding: .6rem 1rem;
+  border-radius: var(--radius);
+}
+
+.legal-header {
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.legal-header .inner {
+  max-width: var(--shell);
+  margin: 0 auto;
+  padding: 1.1rem 1.25rem;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.wordmark {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 1.35rem;
+  letter-spacing: -.01em;
+  color: var(--ink);
+  text-decoration: none;
+}
+.legal-header nav {
+  display: flex;
+  gap: 1.1rem;
+  font-size: .875rem;
+}
+.legal-header nav a { color: var(--ink-secondary); text-decoration: none; }
+.legal-header nav a:hover,
+.legal-header nav a[aria-current="page"] { color: var(--ember); }
+
+main {
+  max-width: var(--shell);
+  margin: 0 auto;
+  padding: clamp(2rem, 6vw, 4rem) 1.25rem 5rem;
+}
+
+h1 {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: clamp(2rem, 6vw, 3rem);
+  line-height: 1.05;
+  letter-spacing: -.02em;
+  margin: 0 0 .5rem;
+  text-wrap: balance;
+}
+.updated {
+  font-family: var(--font-mono);
+  font-size: .8125rem;
+  color: var(--ink-tertiary);
+  margin: 0 0 2.5rem;
+}
+h2 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.5rem;
+  line-height: 1.2;
+  margin: 2.75rem 0 .75rem;
+  text-wrap: balance;
+}
+h3 {
+  font-weight: 600;
+  font-size: 1.0625rem;
+  margin: 1.75rem 0 .4rem;
+}
+p, li { color: var(--ink-secondary); }
+p { margin: 0 0 1rem; }
+strong { color: var(--ink); font-weight: 600; }
+a { color: var(--ember); }
+
+ul, ol { padding-left: 1.25rem; margin: 0 0 1rem; }
+li { margin-bottom: .45rem; }
+
+.lede {
+  font-size: 1.125rem;
+  color: var(--ink);
+}
+
+.table-wrap { overflow-x: auto; margin: 0 0 1.5rem; }
+table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 34rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: .9375rem;
+}
+th {
+  text-align: left;
+  font-size: .6875rem;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  padding: .7rem .9rem;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+td {
+  padding: .7rem .9rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  color: var(--ink-secondary);
+}
+tbody tr:last-child td { border-bottom: 0; }
+
+.callout {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--ember);
+  border-radius: var(--radius);
+  padding: 1.1rem 1.25rem;
+  margin: 0 0 1.75rem;
+}
+.callout p:last-child { margin-bottom: 0; }
+
+footer.legal-footer {
+  border-top: 1px solid var(--border);
+  margin-top: 4rem;
+  padding-top: 1.5rem;
+  font-size: .875rem;
+  color: var(--ink-tertiary);
+}
+footer.legal-footer a { color: var(--ink-secondary); }
+
+:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #14100B;
+    --surface: #1E1810;
+    --ink: #FBF7F1;
+    --ink-secondary: #C6BAA9;
+    --ink-tertiary: #8C8072;
+    --border: #33291D;
+    --ember: #F0805A;
+    --ink-on-accent: #2A0E02;
+  }
+}
