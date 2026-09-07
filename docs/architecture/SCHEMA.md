@@ -1284,3 +1284,71 @@ PLAN.md calls out `UNIQUE(court_id, date, slot_start)` as the mechanism that res
 The read path is `get_coach_wallet_balance()` and `get_my_transactions(kind?, limit?, offset?)` (`0025_wallet_and_transactions_rpcs.sql`, AT-44), both `security definer`, both scoped by `auth.uid()`, both deriving every figure at call time from `ledger_entries` and `payment_intents`. No screen sums money client side and no table anywhere gained a balance column.
 
 `ledger_entries` is insert-only and every economic event writes a balanced group (see the worked example above). This gives three properties the product requires: a coach's or partner's balance is always `sum(credits) - sum(debits)` computed live, never a value that can drift from reality; a refund or a payout failure is a new reversing group, never a mutation of history, so `audit_log` and `ledger_entries` together form a complete replayable record; and every screen that shows money (`Earnings`, `My Impact`, admin's `Order Detail` refund panel) reads the same table through a different filter, so there is exactly one place a money bug could live.
+
+## Security remediation, 2026-09-04 (0088-0091)
+
+Four migrations closing the SQL half of the 2026-09-04 security audit. All four are proven by `scripts/verify-security-fixes.sql`, which `./scripts/verify-migrations-local.sh` replays against a scratch Postgres with no credentials.
+
+**`payment_intents.finalized_at timestamptz` (`0088`, SEC-F2).** A second axis beside `status`. `captured` means the money moved; `finalized_at` means the domain handler that owed work for that charge completed. The gate in `_shared/finalize-payment.ts` flips `created -> captured` before dispatching, so a downstream failure used to leave a captured charge whose booking, order, donation, membership or ledger group never landed, and every retry returned `already_processed`. `captured` + `finalized_at is null` now means "money moved, work owed", and the gate re-enters the domain handler for exactly that state. Backfilled to `updated_at` for every row already at or past `captured`, without which the entire live history would read as work-owed on deploy.
+
+| Function | Grant | What it does |
+|---|---|---|
+| `payment_finalization_backlog(p_grace interval)` | `service_role` only | Captured intents with no `finalized_at` older than `p_grace`, each with a `has_ledger_group` flag separating "work missing" from "marker missing". Read-only: repair lives in the edge-function handlers, which own the Razorpay and ledger-leg logic, and duplicating that in SQL would mean two implementations of the same money arithmetic. |
+| `is_active_user()` (`0090`, SEC-F4) | `anon, authenticated, service_role` | False only when the caller's `users.status` is `suspended`. A live read rather than a JWT claim, so a suspension takes effect on the next request instead of the next token refresh. |
+| `admin_suspend_user(p_user_id, p_reason)` (`0090`) | `authenticated` (admin checked inside), `service_role` | PRD-04 FR-35..FR-38. Status change, `audit_log` row and member notification in ONE transaction. Reason required, idempotent on an already-suspended user, refuses self-suspension. |
+| `admin_reinstate_user(p_user_id, p_reason)` (`0090`) | `authenticated` (admin checked inside), `service_role` | Lifts a suspension and clears `suspended_reason`, same atomicity. |
+
+`expire_stale_holds()` (`0088`) gains a fifth arm, `payments_unfinalized` / `payments_unfinalized_without_ledger`. It counts rather than repairs, for the reason above; a non-zero value is an alert condition, not a routine one.
+
+`order_transition()` (`0091`, SEC-F5) now writes its `audit_log` row inside the same transaction as the status change and the `order_timeline` row, reading the prior status under the row lock rather than letting the caller reconstruct it. Signature, grants, machine and error strings are unchanged.
+
+`custom_access_token_hook` (`0090`) refuses to mint claims for a suspended user (a returned `error` object denies sign-in and refresh) and injects `app_metadata.user_status` beside `roles`. It needs `supabase_auth_admin` to hold `select` on `public.users`, granted in the same migration; without that the status lookup silently returns null for every user, the exact failure `0017` fixed for roles.
+
+## 0092 to 0095 (release hardening, 2026-09-07)
+
+### `user_blocks` (0092)
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid pk | |
+| `blocker_id` | uuid not null, fk `users` cascade | The member who blocked |
+| `blocked_id` | uuid not null, fk `users` cascade | The member being blocked |
+| `created_at` | timestamptz not null | |
+
+`check (blocker_id <> blocked_id)`, `unique (blocker_id, blocked_id)`, plus
+`idx_user_blocks_blocked_id` for the reverse lookup the admin queue uses.
+
+Blocking is one directional and invisible to the blocked member. The
+subtraction is enforced by RESTRICTIVE policies on `clips` and `clip_comments`
+(see RLS.md), not by a client filter, so a read written later cannot forget it.
+
+### `users.deleted_at` (0093)
+
+Nullable timestamptz. Non-null means the member exercised their deletion right.
+Personal data is purged and the row anonymized in place; money-bearing rows are
+retained. The row cannot be deleted because `orders.user_id` has NO on-delete
+action and `payment_intents.user_id` cascades, which would orphan every
+`ledger_entries` row pointing at the intent.
+
+`delete_my_account()` (SECURITY DEFINER, `authenticated`) takes no arguments and
+targets `auth.uid()` only. Idempotent.
+
+### `rate_limit_counters` (0095)
+
+| Column | Type | Notes |
+|---|---|---|
+| `bucket_key` | text | pk part, e.g. `ai-search:user:<uuid>` |
+| `window_start` | timestamptz | pk part, floor of now() to the window |
+| `count` | integer | |
+
+RLS enabled with NO policy: service role only, reached through
+`rate_limit_hit(key, limit, window_seconds)`, which increments and tests in one
+statement so concurrent callers cannot both take the last slot.
+`prune_rate_limit_counters()` runs from the existing `expire_stale_holds()`
+sweep, which now also returns `rate_limit_rows_pruned`.
+
+### `chat_thread_previews(uuid[])` (0094)
+
+SECURITY INVOKER SQL function returning one latest message per thread via
+`distinct on (thread_id)` over the existing `idx_chat_messages_thread_id`.
+Replaces a client-side fold over every message in every thread.

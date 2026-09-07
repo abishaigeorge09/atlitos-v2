@@ -354,3 +354,28 @@ PLAN.md's edge function roster includes several functions v1 never had a mock fo
 | `admin-order-refund` | `apps/admin` Order Detail refund action | new function beyond PLAN.md's original list (see PRD-04 open question 2), calls Razorpay refund API, writes `ledger_entries` |
 | `admin_approve_verification_request` (RPC, not an edge function) | `apps/admin` Verification Detail approve action | `SECURITY DEFINER` RPC (`supabase/migrations/0007_admin_verification_rpcs.sql`), not an edge function, since it needs no third-party call, just an atomic multi-table write under elevated privilege: admin/moderator only (`has_role`), sets `verification_requests.status='approved'`, mirrors onto `coach_profiles.status` for `applicant_type='coach'` (venue/upa branches are no-ops until those tables exist), writes exactly one `audit_log` row. Exists because `audit_log` carries no `authenticated` write policy at all (`RLS.md`), so the admin client cannot write it directly; PRD-04 FR-9/FR-53. As of `0066` it also writes one `verification` `notifications` row to the applicant (FR-9), in-app delivery |
 | `admin_reject_verification_request` (RPC) | `apps/admin` Verification Detail reject action | same shape as above, requires a non-empty `p_reason`, sets `status='rejected'` + `rejection_reason`, mirrors `coach_profiles.status='rejected'`; PRD-04 FR-10/FR-53. As of `0066` the rejection reason is delivered to the applicant as a `verification` `notifications` row (FR-10, in-app delivery), in addition to being recorded in `audit_log` |
+
+## Release hardening additions (2026-09-07)
+
+| Surface | Call | Notes |
+|---|---|---|
+| moderation | `useClutch().report(entityType, entityId, reason)` | Inserts `reports`. `reporter_id` comes from the session, never an argument. Reason capped at 500 chars. |
+| moderation | `useClutch().blockUser(userId)` | Upsert into `user_blocks`, idempotent. The subtraction is RLS (0092), not this call. |
+| moderation | `useClutch().unblockUser(userId)` | |
+| moderation | `useClutch().blockedUserIds()` | Owner scoped read for an unblock list. UI not yet built. |
+| account | `useProfile().deleteAccount()` | Invokes the `delete-account` edge function. Caller MUST sign out immediately after. |
+| search | `POST ai-search` | Now rate limited to 30 requests per 60s per user AND per IP, enforced before the two Anthropic calls. Returns `429 RATE_LIMITED` with a `Retry-After` header. |
+| chat | `useChat().threads()` | Previews now come from `chat_thread_previews` (0094) instead of a client-side fold over every message. |
+
+New error codes: `ACCOUNT_DELETED` (403), and `RATE_LIMITED` (429) is now
+actually raised. `AppError` carries an optional `retryAfterSeconds` that
+`errorResponse` emits as `Retry-After`.
+
+### `delete-account` edge function
+
+POST, member's own JWT, no body. Runs `delete_my_account()` as the member (so
+the RPC's `auth.uid()` authorization applies and this cannot be pointed at
+anyone else), then scrubs the auth identity under the service role: email
+randomized to `deleted+<uid>@deleted.atlitos.invalid`, metadata cleared,
+`ban_duration` 100 years. Step 1 is idempotent, so a failure at step 2 is safe
+to retry.

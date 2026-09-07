@@ -389,3 +389,48 @@ No new ERROR was introduced. The residual accepted count the biased approver sig
 ### Isolation proof (non-vacuous, the AT-62 lesson)
 
 Every migration was proven not to change any role's visible-row set, using two real users whose ids were asserted to **differ first**: `A` = `58756043…` (player; owns 5 orders, 35 payment_intents, 11 sessions as player, 6 donations, 4 clips, 2 drill_completions) and `B` = `b290a0c8…` (roleless guest; owns 3 clips), plus `C` = coach `5b262cf1…`, two court partners, and the true `anon` role. For each of `orders, order_items, sessions, payment_intents, ledger_entries, refunds, transfers, donations, upa_applications, drill_completions, xp_events, user_milestones, cart_items, addresses, product_wishlist_items, clips, clip_likes, follows, coach_profiles, venues` a fingerprint (`md5` of the ordered `row::text` of the full visible set) plus row count and cross-owner counts were captured under each user's simulated JWT before any change and after each of `0062`, `0063`, `0064`. **The before-vs-after diff was 0 rows every time** — the visible-row set was byte-identical for all six viewers across all twenty tables. On the strictly-private money tables (`orders`, `payment_intents`, `order_items`, `refunds`, `transfers`, `ledger_entries`) the non-owner `B` and the unrelated coach `C` saw **zero** of `A`'s rows; the only nonzero cross-user counts were the by-design dual-key surfaces (a coach sees the sessions they coach; a UPA sees donations attributed to it), and those too were identical before and after. No non-owner gained visibility. The catastrophic case "user B sees user A's orders" was tested directly and returned 0.
+
+## Security remediation, 2026-09-04
+
+**Suspension as a restrictive layer (`0090`, SEC-F4).** `users.status` existed from `0001` and `0065` stopped a member editing it, but nothing ever READ it: a suspended account kept booking, paying and posting. Enforcement is now layered, because no single layer covers everything. The access-token hook denies a token (widest, bounded by the access-token TTL). `getAuthenticatedUser()` refuses on the spot, which closes every edge function immediately. And for the tables a client writes directly through PostgREST, `0090` adds a RESTRICTIVE insert policy, `<table>_active_user_only`, calling `is_active_user()`:
+
+`clips, clip_comments, reports, chat_threads, chat_messages, gratitude_posts, upa_evidence, upa_wishlist_items, coach_trainee_notes, coach_trainee_videos, verification_requests, addresses`.
+
+RESTRICTIVE deliberately: it ANDs with whatever permissive policy the table already has, so twelve tables gain a condition without twelve existing predicates being reproduced and possibly mistyped. `support_tickets` is excluded on purpose. A suspended member must still be able to open a ticket to appeal, and a suspension that cannot be appealed is a product failure rather than a security win.
+
+**`coach_trainee_videos` insert lock (`0089`, SEC-F3).** `0082` granted `authenticated` a direct INSERT checking only `coach_id = auth.uid() and has_role('coach')`, leaving `storage_path` and `player_id` to the caller. That was a second door around `coach-trainee-video-upload-url`, which derives a safe object key and verifies the trainee relationship. A coach could name themselves as owner, any athlete as `player_id`, and any object in the private `clips` bucket as `storage_path`, then have `get-coach-trainee-video-url` mint a signed URL for it under the service role. The policy now additionally requires `storage_path is null` (only the service-role function may set it) and an existing `sessions` row linking coach to player. The read half is guarded separately in the edge function, because a policy change does not retract rows already written.
+
+**Testing note.** `scripts/verify-security-fixes.sql` asserts these refusals on the error MESSAGE, not on SQLSTATE. A missing GRANT and a policy violation both raise `42501`, so matching the state alone lets a privilege gap masquerade as an enforced policy. This is the same class of mistake as the AT-62 vacuous-isolation lesson above, and it was caught in practice while writing that file.
+
+## Blocking (0092)
+
+Two RESTRICTIVE policies, which AND with every permissive policy rather than
+widening anything:
+
+| Table | Policy | Predicate |
+|---|---|---|
+| `clips` | `clips_hide_blocked` | `not exists (user_blocks where blocker_id = auth.uid() and blocked_id = clips.owner_id)` |
+| `clip_comments` | `clip_comments_hide_blocked` | same, against `clip_comments.user_id` |
+
+Both are `to authenticated` only: anon has no `auth.uid()` and therefore no
+blocks, so an anon arm would evaluate a subquery per row to always return true.
+`auth.uid()` is wrapped in a scalar subselect, matching 0062.
+
+This is the deliberate exception to the standing "RLS is a floor, not scoping"
+rule. That rule is about OWNERSHIP, where the danger is a permissive-OR policy
+returning other people's rows to an unscoped read. A block is a SUBTRACTION
+that must hold on every read, including reads written by someone who has never
+heard of blocking, and a RESTRICTIVE policy is the only construct that cannot
+be forgotten at a call site. `scripts/verify-security-fixes.sql` asserts it
+against a completely unfiltered select, and the negative control (flipping
+RESTRICTIVE to PERMISSIVE) fails that assertion.
+
+`user_blocks` itself is owner scoped: select/insert/delete on
+`blocker_id = auth.uid()`, no update. A member cannot read who blocked them.
+
+## Account deletion (0093)
+
+`is_active_user()` now returns false for `status = 'suspended'` OR
+`deleted_at is not null`, so the twelve RESTRICTIVE insert policies from 0090
+cover deletion with no new policy. `custom_access_token_hook` refuses the token,
+and `getAuthenticatedUser` refuses on the next edge request.
