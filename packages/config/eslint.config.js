@@ -82,6 +82,7 @@ const noEmojiOnly = {
  * alongside `compat.extends("next/core-web-vitals", "next/typescript")`
  * instead of spreading the full default export.
  */
+
 const houseRules = [
   // packages/theme is the one place hex literals are the point, it IS the
   // token source. Emoji stay banned everywhere, no exceptions. Everywhere
@@ -144,7 +145,7 @@ const houseRules = [
  */
 const reactHooksRules = [
   {
-    files: ["**/*.{jsx,tsx}"],
+    files: ["**/*.{js,jsx,ts,tsx}"],
     plugins: { "react-hooks": reactHooks },
     rules: {
       "react-hooks/rules-of-hooks": "error",
