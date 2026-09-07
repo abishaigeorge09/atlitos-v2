@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils';
 import * as Haptics from 'expo-haptics';
-import { Bell, ChevronLeft } from 'lucide-react-native';
+import { Bell, ChevronLeft, ShoppingCart } from 'lucide-react-native';
 import type { ReactNode } from 'react';
 import { Image, Pressable, View } from 'react-native';
 
@@ -25,6 +25,23 @@ export interface AppBarProps {
   variant: AppBarVariant;
   title?: string;
   avatarUri?: string;
+  /**
+   * BUG-05/BUG-08. The signed-in member's display name, used only for the
+   * initials fallback when they have no avatar image, which is most members.
+   * Before this the fallback was the hardcoded letter "A", so every user wore
+   * the same wrong initial and a signed-in member was indistinguishable from
+   * a guest in the header. Omit it for a guest and the fallback stays "A".
+   */
+  avatarName?: string;
+  /**
+   * NAV-01. Cart affordance for the brand header. Shop is not one of the five
+   * bottom tabs, so before this the cart was reachable only by scrolling Home
+   * to the Shop rail and tapping through: a member with items in their cart had
+   * no persistent way back to it from anywhere else in the app. Passing
+   * `onPressCart` renders a cart button here with a count badge.
+   */
+  onPressCart?: () => void;
+  cartCount?: number;
   hasUnreadNotifications?: boolean;
   onPressBack?: () => void;
   onPressNotifications?: () => void;
@@ -59,6 +76,9 @@ function AppBar({
   variant,
   title,
   avatarUri,
+  avatarName,
+  onPressCart,
+  cartCount = 0,
   hasUnreadNotifications,
   onPressBack,
   onPressNotifications,
@@ -105,6 +125,20 @@ function AppBar({
 
       {!showBack ? (
         <View className="flex-row items-center gap-xs">
+          {onPressCart ? (
+            <IconButton onPress={onPressCart}>
+              <View>
+                <ShoppingCart size={24} strokeWidth={1.75} color={colors.text} />
+                {cartCount > 0 ? (
+                  <View className="absolute -right-1 -top-1 h-4 min-w-4 items-center justify-center rounded-pill bg-accent px-[3px]">
+                    <Text className="font-mono text-[10px] text-ink-on-accent">
+                      {cartCount > 9 ? '9+' : cartCount}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+            </IconButton>
+          ) : null}
           <IconButton onPress={onPressNotifications}>
             <View>
               <Bell size={24} strokeWidth={1.75} color={colors.text} />
@@ -123,7 +157,9 @@ function AppBar({
               <Image source={{ uri: avatarUri }} className="h-9 w-9 rounded-pill" />
             ) : (
               <View className="h-9 w-9 items-center justify-center rounded-pill bg-surface-muted">
-                <Text className="font-sans-semibold text-sm text-text-secondary">A</Text>
+                <Text className="font-sans-semibold text-sm text-text-secondary">
+                  {initialsFor(avatarName)}
+                </Text>
               </View>
             )}
           </Pressable>
@@ -131,6 +167,16 @@ function AppBar({
       ) : null}
     </View>
   );
+}
+
+/**
+ * At most two initials from a display name. Falls back to "A" for a guest or an
+ * unnamed account, which is what the header showed for everyone before BUG-08.
+ */
+function initialsFor(name?: string): string {
+  const parts = (name ?? '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'A';
+  return parts.slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 }
 
 export { AppBar };

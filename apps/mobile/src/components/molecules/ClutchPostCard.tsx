@@ -1,11 +1,14 @@
+import { useClutch } from '@atlitos/api';
 import { spacing } from '@atlitos/theme';
 import type { Clip } from '@atlitos/types';
 import * as Haptics from 'expo-haptics';
-import { Heart, MessageCircle, Share2 } from 'lucide-react-native';
+import { EllipsisVertical, Heart, MessageCircle, Share2 } from 'lucide-react-native';
+import { useEffect, useState } from 'react';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 
 import { ClipVideo } from '@/components/molecules/clip-video';
 import { Text } from '@/components/ui/text';
+import { supabase } from '@/lib/supabase';
 import { useThemeColors } from '@/theme/use-theme-colors';
 
 /**
@@ -39,6 +42,10 @@ export interface ClutchPostCardProps {
   onComment?: () => void;
   onShare?: () => void;
   onOpen?: () => void;
+  /** App Store guideline 1.2. Opens the report and block sheet for this clip.
+   * Absent on surfaces showing the viewer's OWN clips, where reporting
+   * yourself is not a thing. */
+  onReportOrBlock?: () => void;
 }
 
 function timeAgo(iso: string): string {
@@ -61,6 +68,7 @@ export function ClutchPostCard({
   onComment,
   onShare,
   onOpen,
+  onReportOrBlock,
 }: ClutchPostCardProps) {
   const colors = useThemeColors();
 
@@ -71,6 +79,46 @@ export function ClutchPostCard({
     onLike?.();
   };
 
+  // BUG-02. Every tile in every profile grid rendered blank, on purpose and
+  // permanently. `mapClipRow` sets `thumbUrl` only when `clips.thumb_path` is
+  // already an absolute http URL, and it never is: the column holds a path into
+  // the PRIVATE clips bucket, so `isHttpUrl` is false for every row and the
+  // poster was always undefined. hooks.ts even says it is waiting for "a
+  // signed-thumb seam"; this is that seam.
+  //
+  // The feed variant already receives a signed `posterUrl` because the feed
+  // screen mints one per visible card. The grid has no such owner, so the tile
+  // mints its own. `get-clip-playback-url` returns `thumbUrl` beside the video
+  // URL and applies the same authorisation, so the owner still sees their own
+  // pending or rejected clips and nobody else does.
+  //
+  // Safe to do per tile: FlatList virtualises the grid, so only tiles that are
+  // actually on screen ever mount and call this. Skipped entirely when a poster
+  // was passed in or the row already had a usable URL.
+  const clutch = useClutch(supabase);
+  const [mintedThumb, setMintedThumb] = useState<string | undefined>(undefined);
+  const needsThumb = variant === 'thumb' && !posterUrl && !clip.thumbUrl;
+
+  useEffect(() => {
+    if (!needsThumb) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const playback = await clutch.getPlaybackUrl(clip.id);
+        if (!cancelled && playback.thumbUrl) setMintedThumb(playback.thumbUrl);
+      } catch {
+        // A clip whose bytes never landed, or one this viewer may not see,
+        // legitimately has no poster. The tile keeps its surface colour rather
+        // than showing a broken image.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [needsThumb, clip.id, clutch]);
+
+  const thumbSource = posterUrl ?? clip.thumbUrl ?? mintedThumb;
+
   if (variant === 'thumb') {
     // Single Pressable, only non-interactive children (no nested pressables).
     return (
@@ -80,8 +128,8 @@ export function ClutchPostCard({
         accessibilityLabel={`Open clip, ${clip.likes} likes`}
         className="aspect-square flex-1 overflow-hidden rounded-sm bg-surface-muted active:opacity-90"
       >
-        {clip.thumbUrl ? (
-          <Image source={{ uri: clip.thumbUrl }} className="absolute inset-0 h-full w-full" resizeMode="cover" />
+        {thumbSource ? (
+          <Image source={{ uri: thumbSource }} className="absolute inset-0 h-full w-full" resizeMode="cover" />
         ) : null}
         <View className="absolute bottom-xs left-xs flex-row items-center gap-xs">
           <Heart size={16} strokeWidth={2} color={colors.textInverse} fill={colors.textInverse} />
@@ -161,6 +209,16 @@ export function ClutchPostCard({
           <MessageCircle size={24} strokeWidth={1.75} color={colors.textInverse} />
           <Text className="font-mono text-xs text-text-inverse">{clip.commentCount}</Text>
         </Pressable>
+        {onReportOrBlock ? (
+          <Pressable
+            onPress={onReportOrBlock}
+            accessibilityRole="button"
+            accessibilityLabel="Report or block"
+            className="min-h-11 min-w-11 items-center justify-center gap-xs"
+          >
+            <EllipsisVertical size={24} strokeWidth={1.75} color={colors.textInverse} />
+          </Pressable>
+        ) : null}
         <Pressable
           onPress={onShare}
           accessibilityRole="button"

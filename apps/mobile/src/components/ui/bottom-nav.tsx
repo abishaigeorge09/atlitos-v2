@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils';
 import * as Haptics from 'expo-haptics';
-import { Dumbbell, Home, LandPlot, Play, SlidersHorizontal, type LucideIcon } from 'lucide-react-native';
+import { CircleUser, Dumbbell, Home, LandPlot, Play, type LucideIcon } from 'lucide-react-native';
 import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -21,7 +21,11 @@ const TABS: Array<{ key: BottomNavTab; label: string; icon: LucideIcon }> = [
   { key: 'trainings', label: 'Trainings', icon: Dumbbell },
   { key: 'clutch', label: 'Clutch', icon: Play },
   { key: 'courts', label: 'Courts', icon: LandPlot },
-  { key: 'you', label: 'You', icon: SlidersHorizontal },
+  // NAV-02. Was SlidersHorizontal, three sliders, the universal filters/settings
+  // glyph, on a tab that opens a social profile with followers and a clip grid.
+  // People read the icon before the label, so the profile sat behind an icon
+  // promising adjustment controls.
+  { key: 'you', label: 'You', icon: CircleUser },
 ];
 
 export interface BottomNavProps {

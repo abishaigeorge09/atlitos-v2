@@ -34,8 +34,8 @@ const CLIP_STATUS_PILL: Partial<Record<ClipStatus, Status>> = {
   uploading: 'pending',
   processing: 'pending',
   ready: 'underReview',
-  rejected: 'cancelled',
-  removed: 'cancelled',
+  rejected: 'rejected',
+  removed: 'removed',
 };
 
 const AVATAR_SIZE = 80 as const;

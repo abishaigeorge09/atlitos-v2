@@ -1,4 +1,4 @@
-import { useNotifications } from '@atlitos/api';
+import { useNotifications, useShop } from '@atlitos/api';
 import { radii, spacing } from '@atlitos/theme';
 import { router, useFocusEffect } from 'expo-router';
 import { X } from 'lucide-react-native';
@@ -41,6 +41,33 @@ export default function HomeScreen() {
   const requiresAuthGate = status !== 'signed_in';
 
   const signOut = useSessionStore((state) => state.signOut);
+
+  // NAV-01. The cart badge in the header. Refreshed on focus rather than once
+  // on mount, so returning from Shop after adding something shows the new
+  // count instead of a stale one. Guests have no cart, so it stays 0 and the
+  // button opens the login gate.
+  const shop = useShop(supabase);
+  const [cartCount, setCartCount] = useState(0);
+  useFocusEffect(
+    useCallback(() => {
+      if (status !== 'signed_in') {
+        setCartCount(0);
+        return;
+      }
+      let cancelled = false;
+      void (async () => {
+        try {
+          const lines = await shop.getCart();
+          if (!cancelled) setCartCount(lines.reduce((n, line) => n + line.qty, 0));
+        } catch {
+          // A cart read failing must never break Home; the badge just stays put.
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [status, shop]),
+  );
   const continueAsGuest = useSessionStore((state) => state.continueAsGuest);
 
   const [gateVisible, setGateVisible] = useState(false);
@@ -120,6 +147,15 @@ export default function HomeScreen() {
         variant="brand"
         hasUnreadNotifications={hasUnread}
         avatarUri={me?.avatarUrl ?? undefined}
+        avatarName={me?.name ?? undefined}
+        cartCount={cartCount}
+        onPressCart={() => {
+          if (requiresAuthGate) {
+            openGate();
+            return;
+          }
+          router.push('/shop/cart');
+        }}
         onPressNotifications={() => {
           if (requiresAuthGate) {
             openGate();

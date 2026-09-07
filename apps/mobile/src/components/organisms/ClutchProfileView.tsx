@@ -18,8 +18,8 @@ const CLIP_STATUS_PILL: Partial<Record<ClipStatus, Status>> = {
   uploading: 'pending',
   processing: 'pending',
   ready: 'underReview',
-  rejected: 'cancelled',
-  removed: 'cancelled',
+  rejected: 'rejected',
+  removed: 'removed',
 };
 
 export interface ClutchProfileViewProps {

@@ -25,6 +25,17 @@ const SPORT_FILTERS: Sport[] = ['football', 'cricket', 'badminton', 'tennis'];
 type LoadState = 'loading' | 'empty' | 'populated' | 'error';
 
 /**
+ * BUG-03. How far "near me" may stretch before a venue stops being a real
+ * option. 150 km covers a metro and its satellite towns, which is the widest
+ * anyone would plausibly travel for an hour on a court, and it is far short of
+ * the cross-continent distances the unbounded list was offering.
+ *
+ * ponytail: one constant, not a user-facing radius control. Add the control
+ * when someone actually asks to widen the search, not before.
+ */
+const MAX_NEARBY_KM = 150;
+
+/**
  * Courts tab root. PRD-01 3.5 / SPEC.md 6.6: sport chips filter over a
  * CourtCard list, real `venues`/`courts` data (RLS already restricts reads
  * to `venues.status = 'verified'`), sorted by distance from the location
@@ -58,7 +69,23 @@ export default function CourtsIndexScreen() {
       setError(null);
       try {
         const result = await courts.listCourts({ sport: sport ?? undefined, near: coords });
-        const sorted = [...result].sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
+        // BUG-03. The header promises "courts near <city>" and the list then
+        // showed every verified venue in the country sorted by distance, each
+        // with a live Book button. Observed on a device located outside India:
+        // venues at 13,486 km and 13,499 km, offered as bookable.
+        //
+        // Sorting by distance is not the same as being near. Anyone who denies
+        // location, travels, or is simply not in the seeded city gets a list of
+        // unreachable venues, and the honest answer ("none near you") was
+        // unreachable because the empty state only fired on zero rows.
+        //
+        // A venue with no distance is KEPT: that means we could not compute one
+        // (no coords), and hiding rows we failed to measure would be worse than
+        // showing them.
+        const withinReach = result.filter(
+          (court) => court.distanceKm == null || court.distanceKm <= MAX_NEARBY_KM,
+        );
+        const sorted = [...withinReach].sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
         setItems(sorted);
         setState(sorted.length === 0 ? 'empty' : 'populated');
       } catch (err) {

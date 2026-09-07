@@ -65,8 +65,18 @@ function CoachCard({
         <View className="flex-row items-center justify-between">
           <Text className="font-sans-semibold text-lg text-text">{name}</Text>
           <View className="flex-row items-center gap-xs">
-            <Star size={14} strokeWidth={1.75} color={colors.warning} fill={colors.warning} />
-            <Text className="font-mono text-sm text-text">{rating.toFixed(1)}</Text>
+            {rating > 0 ? (
+              <>
+                <Star size={14} strokeWidth={1.75} color={colors.warning} fill={colors.warning} />
+                <Text className="font-mono text-sm text-text">{rating.toFixed(1)}</Text>
+              </>
+            ) : (
+              // BUG-09. A coach with no ratings yet rendered as a filled star
+              // beside "0.0", visually identical to a coach genuinely rated
+              // zero. That is unfair to every new coach and actively
+              // discourages the first booking they need in order to get rated.
+              <Text className="text-sm text-text-tertiary">New</Text>
+            )}
           </View>
         </View>
 
