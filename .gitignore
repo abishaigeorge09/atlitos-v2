@@ -11,3 +11,11 @@ supabase/.temp/
 .vercel
 .env*
 .claude/worktrees/
+
+# Local scratch, not part of the project.
+# markitdown/ is a third-party tool cloned in for one-off document conversion
+# and carries its own .git; output/ holds generated audit documents whose
+# reviewed versions live in docs/qa/.
+markitdown/
+output/
+tmp/
