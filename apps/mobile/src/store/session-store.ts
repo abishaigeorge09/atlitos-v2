@@ -1,4 +1,4 @@
-import { useAuth, useProfile, type MeRow } from "@atlitos/api";
+import { makeAuthApi, makeProfileApi, type MeRow } from "@atlitos/api";
 import type { ApiError } from "@atlitos/types";
 import type { Session } from "@supabase/supabase-js";
 import { create } from "zustand";
@@ -27,8 +27,11 @@ export type SessionStatus =
 
 export type OnboardingStep = "role_select" | "player_setup" | "coach_setup" | "done";
 
-const auth = useAuth(supabase);
-const profile = useProfile(supabase);
+// Module scope, outside React: these MUST be the plain factories, never the
+// `useAuth`/`useProfile` hooks, which call useMemo and would throw "Invalid
+// hook call" here.
+const auth = makeAuthApi(supabase);
+const profile = makeProfileApi(supabase);
 
 interface SessionState {
   status: SessionStatus;

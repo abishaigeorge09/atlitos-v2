@@ -15,6 +15,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const js = require("@eslint/js");
 const tseslint = require("typescript-eslint");
+const reactHooks = require("eslint-plugin-react-hooks");
 
 /**
  * Every app/package script runs `eslint .` with its own package directory as
@@ -81,6 +82,35 @@ const noEmojiOnly = {
  * alongside `compat.extends("next/core-web-vitals", "next/typescript")`
  * instead of spreading the full default export.
  */
+/**
+ * React hooks rules. Registered here rather than per app because every React
+ * surface in the monorepo (mobile, portals, admin, landing) has the same
+ * hazard: a dependency array that lies produces a stale closure, and the one
+ * that bit us (BUG-001, an unstable hook return re-triggering its own
+ * debounce forever) was invisible while this plugin was absent.
+ *
+ * It was absent for a long time. Source files carried
+ * `eslint-disable-next-line react-hooks/exhaustive-deps` directives for a rule
+ * nothing registered, which ESLint 9 reports as "Definition for rule was not
+ * found" — so `pnpm lint` was red AND no dependency array was ever checked.
+ * Registering it fixes both halves.
+ *
+ * exhaustive-deps is a warning, matching the React team's own default: it has
+ * real false positives around refs and intentionally-once effects, and an
+ * error would push authors back to blanket disable comments, which is the
+ * state this replaced. rules-of-hooks stays an error because it has none.
+ */
+const reactHookRules = [
+  {
+    files: ["**/*.{js,jsx,ts,tsx}"],
+    plugins: { "react-hooks": reactHooks },
+    rules: {
+      "react-hooks/rules-of-hooks": "error",
+      "react-hooks/exhaustive-deps": "warn",
+    },
+  },
+];
+
 const houseRules = [
   // packages/theme is the one place hex literals are the point, it IS the
   // token source. Emoji stay banned everywhere, no exceptions. Everywhere
@@ -132,7 +162,9 @@ module.exports = tseslint.config(
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  ...reactHookRules,
   ...houseRules,
 );
 
 module.exports.houseRules = houseRules;
+module.exports.reactHookRules = reactHookRules;

@@ -57,7 +57,7 @@ function isEmail(identifier: string): boolean {
   return identifier.includes("@");
 }
 
-export function useAuth(client: AtlitosClient) {
+export function makeAuthApi(client: AtlitosClient) {
   return {
     /** v1 `login`. Accepts an email or a phone number as `identifier`. */
     async login(identifier: string, password: string): Promise<Session> {
@@ -153,6 +153,18 @@ export function useAuth(client: AtlitosClient) {
   };
 }
 
+/**
+ * Memoized on [client] for a STABLE identity across renders. Without this every
+ * render hands consumers a new object, so any effect or callback that honestly
+ * lists it as a dependency re-runs forever (BUG-001).
+ *
+ * Outside React (module scope, a plain async function) call makeAuthApi directly:
+ * this one calls useMemo and will throw "Invalid hook call" there.
+ */
+export function useAuth(client: AtlitosClient) {
+  return useMemo(() => makeAuthApi(client), [client]);
+}
+
 export type UseAuthResult = ReturnType<typeof useAuth>;
 
 // ---------------------------------------------------------------------------
@@ -226,7 +238,7 @@ export interface SubmitCoachVerificationPayload {
   availabilityWindows: Array<{ dayOfWeek: number; from: string; to: string }>;
 }
 
-export function useProfile(client: AtlitosClient) {
+export function makeProfileApi(client: AtlitosClient) {
   return {
     /** v1 `getMe`. RLS restricts every read here to the caller's own row. */
     async getMe(): Promise<MeRow | null> {
@@ -349,6 +361,25 @@ export function useProfile(client: AtlitosClient) {
       return (data ?? []).length === 0;
     },
 
+    /**
+     * App Store 5.1.1(v) in-app account deletion. Calls the `delete-account`
+     * edge function, which runs `delete_my_account()` (0093) as the member and
+     * then scrubs the auth identity under the service role.
+     *
+     * Personal data is purged; money-bearing rows (orders, payment intents,
+     * ledger entries, donations) are RETAINED against an anonymized users row,
+     * because `orders.user_id` has no on-delete action and the ledger would be
+     * orphaned. The caller must sign out immediately after this resolves: the
+     * access token stays syntactically valid until it expires, and every layer
+     * that refuses it returns an error rather than a redirect.
+     */
+    async deleteAccount(): Promise<void> {
+      const { error } = await client.functions.invoke("delete-account", {
+        body: {},
+      });
+      if (error) throw await mapEdgeFunctionError(error);
+    },
+
     /** v1 `setupCoach` -> `submit_coach_verification` RPC. Returns the new
      * `verification_requests.id`. */
     async submitCoachVerification(payload: SubmitCoachVerificationPayload): Promise<string> {
@@ -363,6 +394,18 @@ export function useProfile(client: AtlitosClient) {
       return data as string;
     },
   };
+}
+
+/**
+ * Memoized on [client] for a STABLE identity across renders. Without this every
+ * render hands consumers a new object, so any effect or callback that honestly
+ * lists it as a dependency re-runs forever (BUG-001).
+ *
+ * Outside React (module scope, a plain async function) call makeProfileApi directly:
+ * this one calls useMemo and will throw "Invalid hook call" there.
+ */
+export function useProfile(client: AtlitosClient) {
+  return useMemo(() => makeProfileApi(client), [client]);
 }
 
 export type UseProfileResult = ReturnType<typeof useProfile>;
@@ -562,7 +605,10 @@ const COURT_SELECT = `
 `;
 
 export function useCourts(client: AtlitosClient) {
-  return {
+  // Memoized on [client] for a STABLE identity across renders. Without this
+  // every render hands consumers a new object, so any effect or callback that
+  // honestly lists it as a dependency re-runs forever (BUG-001).
+  return useMemo(() => ({
     /** v1 `courts.list`. RLS already restricts the `venues!inner` join to
      * `status = 'verified'`; the explicit filter here is defense in depth
      * and lets PostgREST push it down instead of relying on RLS alone. */
@@ -752,7 +798,7 @@ export function useCourts(client: AtlitosClient) {
 
       return mapCourtBookingRpcRow(data as unknown as CourtBookingRpcRow);
     },
-  };
+  }), [client]);
 }
 
 export type UseCourtsResult = ReturnType<typeof useCourts>;
@@ -1135,6 +1181,119 @@ function makeClutchApi(client: AtlitosClient) {
   }
 
   return {
+    /**
+     * App Store guideline 1.2: a member must be able to report objectionable
+     * content. `reports` and its admin queue existed since 0041; nothing ever
+     * inserted a row, so the queue was permanently empty and the control did
+     * not exist in practice.
+     *
+     * `reporter_id` is set from the session here rather than accepted as an
+     * argument, so a report can never be filed in someone else's name.
+     * `reports_insert_own` (0042) enforces the same thing at the database.
+     */
+    async report(
+      entityType: "clip" | "comment",
+      entityId: string,
+      reason: string,
+    ): Promise<void> {
+      const trimmed = reason.trim();
+      if (trimmed.length === 0) {
+        throw { code: "VALIDATION", message: "Tell us what is wrong with this post." };
+      }
+      const { data: authData } = await client.auth.getUser();
+      if (!authData.user) {
+        throw { code: "UNAUTHENTICATED", message: "Sign in to report content." };
+      }
+      const { error } = await db.from("reports").insert({
+        entity_type: entityType,
+        entity_id: entityId,
+        reporter_id: authData.user.id,
+        // 0041 caps nothing, but an unbounded free-text field reaching a
+        // moderator queue is the shape F2 warns about. 500 is plenty for
+        // "why is this bad" and bounds the row.
+        reason: trimmed.slice(0, 500),
+      });
+      if (error) throw mapPostgrestError(error);
+    },
+
+    /**
+     * App Store guideline 1.2: a member must be able to block another member.
+     *
+     * The subtraction itself is a RESTRICTIVE RLS policy (0092), not a filter
+     * applied here, so blocked content disappears from every read including
+     * ones written later that forget about blocking. This call only records
+     * the block.
+     */
+    async blockUser(userId: string): Promise<void> {
+      const { data: authData } = await client.auth.getUser();
+      if (!authData.user) {
+        throw { code: "UNAUTHENTICATED", message: "Sign in to block someone." };
+      }
+      if (authData.user.id === userId) {
+        throw { code: "VALIDATION", message: "You cannot block yourself." };
+      }
+      const { error } = await db
+        .from("user_blocks")
+        // Idempotent: blocking twice is not an error the member should see.
+        .upsert(
+          { blocker_id: authData.user.id, blocked_id: userId },
+          { onConflict: "blocker_id,blocked_id", ignoreDuplicates: true },
+        );
+      if (error) throw mapPostgrestError(error);
+    },
+
+    async unblockUser(userId: string): Promise<void> {
+      const { data: authData } = await client.auth.getUser();
+      if (!authData.user) return;
+      const { error } = await db
+        .from("user_blocks")
+        .delete()
+        .eq("blocker_id", authData.user.id)
+        .eq("blocked_id", userId);
+      if (error) throw mapPostgrestError(error);
+    },
+
+    /**
+     * The accounts the caller has blocked, with enough to render an unblock
+     * list. Names come from `public_profiles` (0072), the security-definer view
+     * that is the ONLY cross-user read surface for `users`; reading `users`
+     * directly returns nothing for anyone but yourself.
+     *
+     * A blocked account's own clips are hidden by the RESTRICTIVE policy, but
+     * `public_profiles` is not filtered by it, which is what makes an unblock
+     * list possible at all: you can still see the name of the person you chose
+     * to stop seeing.
+     */
+    async blockedUsers(): Promise<Array<{ id: string; name: string }>> {
+      const ids = await this.blockedUserIds();
+      if (ids.length === 0) return [];
+      const { data, error } = await db
+        .from("public_profiles")
+        .select("id, name, channel_name")
+        .in("id", ids)
+        .returns<{ id: string; name: string | null; channel_name: string | null }[]>();
+      if (error) throw mapPostgrestError(error);
+      const byId = new Map((data ?? []).map((r) => [r.id, r.channel_name || r.name || "Member"]));
+      // Keep every blocked id even if its profile row cannot be resolved, so a
+      // block can always be undone.
+      return ids.map((id) => ({ id, name: byId.get(id) ?? "Member" }));
+    },
+
+    /** Ids the caller has blocked, for rendering an unblock list in settings.
+     * Owner-scoped explicitly on top of `user_blocks_select_own` (CLAUDE.md:
+     * RLS is a floor, not scoping). */
+    async blockedUserIds(): Promise<string[]> {
+      const { data: authData } = await client.auth.getUser();
+      if (!authData.user) return [];
+      const { data, error } = await db
+        .from("user_blocks")
+        .select("blocked_id")
+        .eq("blocker_id", authData.user.id)
+        .returns<{ blocked_id: string }[]>();
+      if (error) throw mapPostgrestError(error);
+      return (data ?? []).map((r) => r.blocked_id);
+    },
+
     /** v1 `clutch.feed`. Keyset pagination on `created_at`, newest first.
      * `status='published'` is filtered EXPLICITLY here, never left to RLS:
      * RLS is permissive-OR (an owner can additionally read their own clip in

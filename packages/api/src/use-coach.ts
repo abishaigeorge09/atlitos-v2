@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import type {
   AvailabilityWindow,
   CoachStatus,
@@ -156,7 +157,10 @@ export interface CoachVerificationStatus {
 }
 
 export function useCoachVerification(client: AtlitosClient) {
-  return {
+  // Memoized on [client] for a STABLE identity across renders. Without this
+  // every render hands consumers a new object, so any effect or callback that
+  // honestly lists it as a dependency re-runs forever (BUG-001).
+  return useMemo(() => ({
     /** Reads `coach_profiles.status` plus the latest
      * `verification_requests` row (`applicant_type = 'coach'`) for the
      * rejection reason FR-9 requires. `coachStatus: null` means this user
@@ -186,7 +190,7 @@ export function useCoachVerification(client: AtlitosClient) {
         submittedAt: requestRow?.created_at ?? null,
       };
     },
-  };
+  }), [client]);
 }
 
 export type UseCoachVerificationResult = ReturnType<typeof useCoachVerification>;
@@ -215,7 +219,10 @@ function startOfCurrentMonthISO(): string {
 }
 
 export function useCoachSessions(client: AtlitosClient) {
-  return {
+  // Memoized on [client] for a STABLE identity across renders. Without this
+  // every render hands consumers a new object, so any effect or callback that
+  // honestly lists it as a dependency re-runs forever (BUG-001).
+  return useMemo(() => ({
     /** FR-12: sessions in `requested`, soonest first, explicitly scoped to
      * `coach_id = auth.uid()` (RLS here is a ceiling, not a filter, see the
      * file header). */
@@ -465,7 +472,7 @@ export function useCoachSessions(client: AtlitosClient) {
 
       return slots;
     },
-  };
+  }), [client]);
 }
 
 export type UseCoachSessionsResult = ReturnType<typeof useCoachSessions>;
@@ -497,7 +504,10 @@ export function isOnlineSessionTypeName(name: string | null | undefined): boolea
 }
 
 export function useCoachTrainees(client: AtlitosClient) {
-  return {
+  // Memoized on [client] for a STABLE identity across renders. Without this
+  // every render hands consumers a new object, so any effect or callback that
+  // honestly lists it as a dependency re-runs forever (BUG-001).
+  return useMemo(() => ({
     /** FR-20: every athlete with at least one session against this coach,
      * any status, deduplicated. */
     async listTrainees(): Promise<TraineeSummary[]> {
@@ -561,7 +571,7 @@ export function useCoachTrainees(client: AtlitosClient) {
       if (error) throw mapPostgrestError(error);
       return (data ?? []).map(mapSessionRow);
     },
-  };
+  }), [client]);
 }
 
 export type UseCoachTraineesResult = ReturnType<typeof useCoachTrainees>;
@@ -622,7 +632,10 @@ function mapCoachTraineeVideoRow(row: CoachTraineeVideoRow): CoachTraineeVideo {
  * (never left to RLS alone, RLS.md's "not scoping" rule), even though the
  * table's own owner-scoped policy already enforces it. */
 export function useCoachTraineeVideos(client: AtlitosClient) {
-  return {
+  // Memoized on [client] for a STABLE identity across renders. Without this
+  // every render hands consumers a new object, so any effect or callback that
+  // honestly lists it as a dependency re-runs forever (BUG-001).
+  return useMemo(() => ({
     /** All of this coach's review videos for one trainee, newest first. */
     async listForTrainee(playerId: string): Promise<CoachTraineeVideo[]> {
       const userId = await requireUserId(client);
@@ -671,7 +684,7 @@ export function useCoachTraineeVideos(client: AtlitosClient) {
         .eq("coach_id", userId);
       if (error) throw mapPostgrestError(error);
     },
-  };
+  }), [client]);
 }
 
 export type UseCoachTraineeVideosResult = ReturnType<typeof useCoachTraineeVideos>;
@@ -680,7 +693,10 @@ export type UseCoachTraineeVideosResult = ReturnType<typeof useCoachTraineeVideo
  * from their profile (least invasive spot per the Track F brief; there is no
  * existing athlete "trainings" detail screen to hang a tab off of). */
 export function useMyTraineeVideos(client: AtlitosClient) {
-  return {
+  // Memoized on [client] for a STABLE identity across renders. Without this
+  // every render hands consumers a new object, so any effect or callback that
+  // honestly lists it as a dependency re-runs forever (BUG-001).
+  return useMemo(() => ({
     async list(): Promise<CoachTraineeVideo[]> {
       const userId = await requireUserId(client);
       const { data, error } = await client
@@ -700,7 +716,7 @@ export function useMyTraineeVideos(client: AtlitosClient) {
       if (error) throw await mapEdgeFunctionError(error);
       return data as CoachTraineeVideoPlayback;
     },
-  };
+  }), [client]);
 }
 
 export type UseMyTraineeVideosResult = ReturnType<typeof useMyTraineeVideos>;
@@ -732,7 +748,10 @@ function mapAvailabilityRow(row: AvailabilityWindowRow): AvailabilityWindowItem 
 }
 
 export function useCoachAvailability(client: AtlitosClient) {
-  return {
+  // Memoized on [client] for a STABLE identity across renders. Without this
+  // every render hands consumers a new object, so any effect or callback that
+  // honestly lists it as a dependency re-runs forever (BUG-001).
+  return useMemo(() => ({
     async listWindows(): Promise<AvailabilityWindowItem[]> {
       const userId = await requireUserId(client);
       const { data, error } = await client
@@ -777,7 +796,7 @@ export function useCoachAvailability(client: AtlitosClient) {
         .eq("coach_id", userId);
       if (error) throw mapPostgrestError(error);
     },
-  };
+  }), [client]);
 }
 
 export type UseCoachAvailabilityResult = ReturnType<typeof useCoachAvailability>;
@@ -818,7 +837,10 @@ const TRANSACTION_KIND_MAP: Record<
 };
 
 export function useCoachEarnings(client: AtlitosClient) {
-  return {
+  // Memoized on [client] for a STABLE identity across renders. Without this
+  // every render hands consumers a new object, so any effect or callback that
+  // honestly lists it as a dependency re-runs forever (BUG-001).
+  return useMemo(() => ({
     /** FR-26: balance/pending/this month are always derived from
      * `ledger_entries` server side (`get_coach_wallet_balance`), never a
      * denormalized column the client could drift from. `NOT_COACH` (403)
@@ -921,7 +943,7 @@ export function useCoachEarnings(client: AtlitosClient) {
       const body = data as { transfer_id: string; status: string; amount: number };
       return { transferId: body.transfer_id, status: body.status, amount: body.amount };
     },
-  };
+  }), [client]);
 }
 
 export type UseCoachEarningsResult = ReturnType<typeof useCoachEarnings>;
@@ -946,7 +968,10 @@ export interface CoachAnalytics {
 const INSUFFICIENT_DATA_THRESHOLD = 3;
 
 export function useCoachAnalytics(client: AtlitosClient) {
-  return {
+  // Memoized on [client] for a STABLE identity across renders. Without this
+  // every render hands consumers a new object, so any effect or callback that
+  // honestly lists it as a dependency re-runs forever (BUG-001).
+  return useMemo(() => ({
     /** FR-32: computed entirely from existing `sessions` (completed/rated),
      * joined to `session_types` for duration, plus `get_my_transactions`
      * (`kind='earning'`) for the earnings trend, no new tracked metric. FR-33:
@@ -1012,7 +1037,7 @@ export function useCoachAnalytics(client: AtlitosClient) {
     },
 
     insufficientDataThreshold: INSUFFICIENT_DATA_THRESHOLD,
-  };
+  }), [client]);
 }
 
 export type UseCoachAnalyticsResult = ReturnType<typeof useCoachAnalytics>;

@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import type {
   ApiError,
   AvailabilityWindow,
@@ -103,7 +104,10 @@ function byCityFirst(city?: string) {
 }
 
 export function useCoaching(client: AtlitosClient) {
-  return {
+  // Memoized on [client] for a STABLE identity across renders. Without this
+  // every render hands consumers a new object, so any effect or callback that
+  // honestly lists it as a dependency re-runs forever (BUG-001).
+  return useMemo(() => ({
     /** v1 `coaches.list`. Reads `coach_profiles_public`, a definer view
      * already filtered to `status = 'verified'` (0001_identity.sql, per
      * RLS.md: "the base table has no public SELECT policy, public
@@ -451,7 +455,7 @@ export function useCoaching(client: AtlitosClient) {
     async getSessionRefund(sessionId: string): Promise<RefundSummary | null> {
       return readRefundSummary(client, "session", sessionId);
     },
-  };
+  }), [client]);
 }
 
 export type UseCoachingResult = ReturnType<typeof useCoaching>;

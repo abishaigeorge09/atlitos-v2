@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import type { AtlitosClient } from "./client";
 import { mapPostgrestError } from "./errors";
 
@@ -37,7 +38,10 @@ interface PromoBannerRow {
 }
 
 export function useHome(client: AtlitosClient) {
-  return {
+  // Memoized on [client] for a STABLE identity across renders. Without this
+  // every render hands consumers a new object, so any effect or callback that
+  // honestly lists it as a dependency re-runs forever (BUG-001).
+  return useMemo(() => ({
     /** Active promo banners, sorted low to high. Empty on a read error rather
      * than throwing, the Home carousel hides itself on an empty list. */
     async listPromoBanners(): Promise<PromoBanner[]> {
@@ -61,7 +65,7 @@ export function useHome(client: AtlitosClient) {
         sort: row.sort,
       }));
     },
-  };
+  }), [client]);
 }
 
 export type UseHomeResult = ReturnType<typeof useHome>;
