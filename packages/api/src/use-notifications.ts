@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import type { AppNotification, NotificationPref, NotificationType } from "@atlitos/types";
 
@@ -65,6 +66,9 @@ function mapPrefRow(row: PrefRow): NotificationPref {
   };
 }
 
+/** Newest-first page size for the notification list. */
+const NOTIFICATION_PAGE_SIZE = 100;
+
 export function useNotifications(client: AtlitosClient) {
   async function currentUserId(): Promise<string> {
     const { data, error } = await client.auth.getUser();
@@ -73,9 +77,18 @@ export function useNotifications(client: AtlitosClient) {
     return data.user.id;
   }
 
-  return {
+  // Memoized on [client] for a STABLE identity across renders (BUG-001).
+  // `currentUserId` above closes over `client` only, and the memo recomputes
+  // whenever `client` changes, so the captured helper is always the current one.
+  return useMemo(() => ({
     /** The caller's own notifications, newest first. Owner-scoped by the
-     * explicit `.eq("user_id", me)` on top of RLS. */
+     * explicit `.eq("user_id", me)` on top of RLS.
+     *
+     * SCALING: bounded. `notifications` only ever grows, and an unbounded read
+     * here meant a long-lived account eventually loaded thousands of rows to
+     * render one screen. Nobody scrolls past the most recent page of these;
+     * older ones are noise, not history.
+     */
     async list(): Promise<AppNotification[]> {
       const me = await currentUserId();
       const { data, error } = await client
@@ -83,6 +96,7 @@ export function useNotifications(client: AtlitosClient) {
         .select(NOTIFICATION_SELECT)
         .eq("user_id", me)
         .order("created_at", { ascending: false })
+        .limit(NOTIFICATION_PAGE_SIZE)
         .returns<NotificationRow[]>();
       if (error) throw mapPostgrestError(error);
       return (data ?? []).map(mapNotificationRow);
@@ -189,7 +203,7 @@ export function useNotifications(client: AtlitosClient) {
         )
         .subscribe((status) => onStatusChange?.(status));
     },
-  };
+  }), [client]);
 }
 
 export type UseNotificationsResult = ReturnType<typeof useNotifications>;

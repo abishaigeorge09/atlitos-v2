@@ -37,7 +37,8 @@
 import { handleCorsPreflight } from "../_shared/cors.ts";
 import { jsonResponse, withErrorHandling } from "../_shared/http.ts";
 import { AppError } from "../_shared/app-error.ts";
-import { userScopedClient } from "../_shared/supabase.ts";
+import { getAuthenticatedUser, userScopedClient } from "../_shared/supabase.ts";
+import { callerIp, enforceRateLimit } from "../_shared/rate-limit.ts";
 
 import {
   type Candidate,
@@ -54,6 +55,14 @@ import {
   SPORTS,
 } from "./search-core.ts";
 import { llmEnabled, llmParseIntent, llmRerank } from "./llm.ts";
+
+/**
+ * SEC-F9 spend ceiling. 30 searches a minute is far above what a human typing
+ * into a search box produces (the client debounces) and far below what a
+ * scripted loop wants. Raise it if real usage ever bumps it; do not remove it
+ * while a paid model sits behind this endpoint.
+ */
+const SEARCH_RATE_LIMIT = { limit: 30, windowSeconds: 60 };
 
 // --------------------------------------------------------------------------
 // Request
@@ -391,6 +400,20 @@ Deno.serve((req) =>
     }
 
     const body = parseRequestBody(await request.json().catch(() => null));
+
+    // SEC-F9. Enforced HERE, before the two Anthropic calls below, and keyed on
+    // BOTH the caller and their IP: 0008 lets anyone mint a fresh anonymous
+    // session, so a user key alone resets for free.
+    //
+    // Deliberately applied to the whole endpoint, not just the LLM branch. The
+    // deterministic path still runs five table scans per request, and gating
+    // only the paid branch would leave the limit off on the exact day the key
+    // is unset and the endpoint is cheapest to hammer.
+    const user = await getAuthenticatedUser(request);
+    await enforceRateLimit(
+      [`ai-search:user:${user.id}`, `ai-search:ip:${callerIp(request)}`],
+      SEARCH_RATE_LIMIT,
+    );
 
     const supabase = userScopedClient(request);
 

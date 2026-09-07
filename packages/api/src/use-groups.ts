@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import type { ApiError, PaymentDomain, SessionStatus, Sport } from "@atlitos/types";
 
 import type { AtlitosClient } from "./client";
@@ -357,7 +358,7 @@ async function requireUserId(client: AtlitosClient): Promise<string> {
 // Hook
 // ---------------------------------------------------------------------------
 
-export function useGroups(client: AtlitosClient) {
+export function makeGroupsApi(client: AtlitosClient) {
   return {
     /** Coach home: my groups, any active state, with live member counts.
      * Explicitly scoped to coach_id = me; the public browse policy would
@@ -595,6 +596,32 @@ export function useGroups(client: AtlitosClient) {
         .from("sessions")
         .select("id, group_id, coach_id, date, slot_start, slot_end, focus_area, location, status")
         .eq("group_id", groupId)
+        .order("date", { ascending: false })
+        .order("slot_start", { ascending: false })
+        .returns<GroupSessionRow[]>();
+      if (error) throw mapPostgrestError(error);
+      return (data ?? []).map(mapGroupSession);
+    },
+
+    /**
+     * Sessions for MANY groups in one round trip.
+     *
+     * SCALING. Both callers previously did
+     * `Promise.all(groupIds.map(groupSessions))`, which is one query per group
+     * on every open of the Trainings shell. Bounded by how many groups a member
+     * joins, which is small today and is exactly the kind of bound that stops
+     * being true quietly.
+     *
+     * Same explicit scoping as `groupSessions`: `sessions` is a permissive-OR
+     * table across coach and player policies (CLAUDE.md), and the group ids
+     * here come from the caller's OWN `myMemberships()` read, never a browse.
+     */
+    async groupSessionsForGroups(groupIds: string[]): Promise<GroupSession[]> {
+      if (groupIds.length === 0) return [];
+      const { data, error } = await client
+        .from("sessions")
+        .select("id, group_id, coach_id, date, slot_start, slot_end, focus_area, location, status")
+        .in("group_id", groupIds)
         .order("date", { ascending: false })
         .order("slot_start", { ascending: false })
         .returns<GroupSessionRow[]>();
@@ -932,4 +959,16 @@ export function useGroups(client: AtlitosClient) {
       return entries.sort((a, b) => (a.date < b.date ? 1 : -1));
     },
   };
+}
+
+/**
+ * Memoized on [client] for a STABLE identity across renders. Without this every
+ * render hands consumers a new object, so any effect or callback that honestly
+ * lists it as a dependency re-runs forever (BUG-001).
+ *
+ * Outside React (module scope, a plain async function) call makeGroupsApi directly:
+ * this one calls useMemo and will throw "Invalid hook call" there.
+ */
+export function useGroups(client: AtlitosClient) {
+  return useMemo(() => makeGroupsApi(client), [client]);
 }

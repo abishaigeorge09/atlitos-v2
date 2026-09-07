@@ -1,3 +1,5 @@
+import { useMemo } from "react";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import type { ChatMessage, ChatThread, ChatThreadMember } from "@atlitos/types";
 
@@ -90,16 +92,31 @@ function mapThreadRow(
   groupInfo?: GroupInfo,
 ): ChatThread {
   if (row.context_type === "group") {
+    // BUG-11. `groupInfo` is absent whenever `training_groups` is unreadable
+    // for this caller, which happens for every thread whose group the caller
+    // is a chat member of but not a MEMBER of (RLS on training_groups scopes
+    // to membership). Observed live: 10 group threads, 1 readable name.
+    //
+    // The old fallback was the bare word "Group", so those threads were all
+    // titled identically and could not be told apart in the list. "Group chat"
+    // at least reads as a description rather than a name; the row already
+    // renders a member count underneath.
+    //
+    // The ROOT CAUSE is server side: a chat member arguably should be able to
+    // read the name of the group whose thread they are in. Fixing that means
+    // widening a SELECT policy on training_groups, which is a security change
+    // and not something to do unilaterally for a cosmetic label. Raised as a
+    // separate decision rather than smuggled in here.
     return {
       id: row.id,
       participantId: "",
-      participantName: groupInfo?.name ?? "Group",
+      participantName: groupInfo?.name ?? "Group chat",
       participantAvatarUrl: undefined,
       lastMessage: preview.text,
       lastMessageAt: row.last_message_at ?? row.created_at,
       unreadCount: 0,
       isGroup: true,
-      groupName: groupInfo?.name ?? "Group",
+      groupName: groupInfo?.name ?? "Group chat",
       memberCount: groupInfo?.memberCount ?? 0,
       lastSenderName: preview.senderName,
     };
@@ -174,6 +191,16 @@ async function fetchGroupInfo(
   return result;
 }
 
+/** One row of `chat_thread_previews` (0094). Declared here because the RPC is
+ * not in the generated `Database` type on this branch, the same escape hatch
+ * hooks.ts documents in its TYPING NOTE. */
+interface ThreadPreviewRow {
+  thread_id: string;
+  text: string;
+  created_at: string;
+  sender_name: string | null;
+}
+
 export function useChat(client: AtlitosClient) {
   async function currentUserId(): Promise<string> {
     const { data, error } = await client.auth.getUser();
@@ -182,7 +209,10 @@ export function useChat(client: AtlitosClient) {
     return data.user.id;
   }
 
-  return {
+  // Memoized on [client] for a STABLE identity across renders (BUG-001).
+  // `currentUserId` above closes over `client` only, and the memo recomputes
+  // whenever `client` changes, so the captured helper is always the current one.
+  return useMemo(() => ({
     /** Thread list, most recent message first (PRD-02 FR-31).
      * `last_message_at` is trigger-maintained (0022_chat.sql), so ordering
      * by it needs no client-side re-sort of a bare `created_at`. The latest
@@ -204,27 +234,26 @@ export function useChat(client: AtlitosClient) {
       if (rows.length === 0) return [];
 
       const [{ data: recentMessages, error: msgError }, groupInfoByThread] = await Promise.all([
-        client
-          .from("chat_messages")
-          .select("thread_id, text, created_at, sender_profile:users!sender_id ( name )")
-          .in(
-            "thread_id",
-            rows.map((row) => row.id),
-          )
-          .order("created_at", { ascending: false })
-          .returns<{ thread_id: string; text: string; created_at: string; sender_profile: { name: string } | null }[]>(),
+        // SCALING (0094). This used to select EVERY message in EVERY thread and
+        // keep the first per thread client side, which is O(total messages) on
+        // every open of the chat list. The RPC does `distinct on (thread_id)`
+        // against the existing (thread_id, created_at) index and returns one
+        // row per thread.
+        (client as unknown as SupabaseClient).rpc("chat_thread_previews", {
+          p_thread_ids: rows.map((row) => row.id),
+        }),
         fetchGroupInfo(client, rows),
       ]);
       if (msgError) throw mapPostgrestError(msgError);
 
+      // The RPC already returns exactly one row per thread, so this is a
+      // straight index rather than the previous first-wins fold.
       const previewByThread = new Map<string, MessagePreview>();
-      for (const message of recentMessages ?? []) {
-        if (!previewByThread.has(message.thread_id)) {
-          previewByThread.set(message.thread_id, {
-            text: message.text,
-            senderName: message.sender_profile?.name,
-          });
-        }
+      for (const message of (recentMessages ?? []) as ThreadPreviewRow[]) {
+        previewByThread.set(message.thread_id, {
+          text: message.text,
+          senderName: message.sender_name ?? undefined,
+        });
       }
 
       return rows.map((row) =>
@@ -429,7 +458,7 @@ export function useChat(client: AtlitosClient) {
         )
         .subscribe((status) => onStatusChange?.(status));
     },
-  };
+  }), [client]);
 }
 
 export type UseChatResult = ReturnType<typeof useChat>;

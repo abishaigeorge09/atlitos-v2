@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import type { ApiError, ApiErrorCode, OrderStatus, Sport } from "@atlitos/types";
 
 import type { AtlitosClient } from "./client";
@@ -522,8 +523,14 @@ export interface ProductListFilters {
   query?: string;
 }
 
+/** Newest-first page size for order history. */
+const ORDER_HISTORY_PAGE_SIZE = 100;
+
 export function useShop(client: AtlitosClient) {
-  return {
+  // Memoized on [client] for a STABLE identity across renders. Without this
+  // every render hands consumers a new object, so any effect or callback that
+  // honestly lists it as a dependency re-runs forever (BUG-001).
+  return useMemo(() => ({
     /** v1 `products` list. PRD-07 FR-1/FR-2/FR-3. `products` is public browse
      * (`active = true` in the policy) and carries no per user rows, so there
      * is no owner filter to apply here; the explicit `.eq("active", true)`
@@ -1025,6 +1032,9 @@ export function useShop(client: AtlitosClient) {
         .select("id, order_number, status, total, created_at, order_items ( qty )")
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
+        // SCALING: bounded. Orders accumulate for the life of the account and
+        // this list had no ceiling, so it got slower every purchase.
+        .limit(ORDER_HISTORY_PAGE_SIZE)
         .returns<OrderListQueryRow[]>();
       if (error) throw mapPostgrestError(error);
 
@@ -1177,7 +1187,7 @@ export function useShop(client: AtlitosClient) {
 
       return { id: data.id, rating: data.rating, remarks: data.remarks, createdAt: data.created_at };
     },
-  };
+  }), [client]);
 }
 
 export type UseShopResult = ReturnType<typeof useShop>;
@@ -1223,7 +1233,10 @@ export interface WishlistEntry {
 }
 
 export function useWishlist(client: AtlitosClient) {
-  return {
+  // Memoized on [client] for a STABLE identity across renders. Without this
+  // every render hands consumers a new object, so any effect or callback that
+  // honestly lists it as a dependency re-runs forever (BUG-001).
+  return useMemo(() => ({
     /** PRD-07 FR-28. Live price and available stock at display time, read
      * through the same product mapper the browse grid uses, so a wishlisted
      * item can never show a price the PDP disagrees with. Explicit owner
@@ -1277,7 +1290,7 @@ export function useWishlist(client: AtlitosClient) {
       if (error) throw mapPostgrestError(error);
       return (data ?? []).map((row) => row.product_id);
     },
-  };
+  }), [client]);
 }
 
 export type UseWishlistResult = ReturnType<typeof useWishlist>;

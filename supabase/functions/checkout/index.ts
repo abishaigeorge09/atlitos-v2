@@ -101,6 +101,10 @@ interface CheckoutRequestBody {
   delivery_charges?: number;
   gst_and_others?: number;
   total?: number;
+  /** The client's own roundup figure, carried only so the comparison below can
+   * catch a client that computed it wrong. Declared rather than smuggled in
+   * through a `Record<string, unknown>` cast, which did not typecheck. */
+  __client_roundup?: number;
 }
 
 interface AddressRow {
@@ -221,7 +225,7 @@ function parseRequestBody(raw: unknown): CheckoutRequestBody {
   if (typeof roundupInput === "number") {
     // Carried through only so the comparison below can catch a client that
     // computed the roundup itself and got it wrong.
-    (parsed as Record<string, unknown>).__client_roundup = roundupInput;
+    parsed.__client_roundup = roundupInput;
   }
 
   return parsed;
@@ -384,7 +388,7 @@ Deno.serve((req) =>
     // the client can re-display BillSummary for confirmation without a second
     // round trip.
     // ------------------------------------------------------------------
-    const clientRoundup = (body as Record<string, unknown>).__client_roundup;
+    const clientRoundup = body.__client_roundup;
     const mismatches: string[] = [];
     const compare = (label: string, expected: number, actual: number | undefined) => {
       if (actual === undefined) return;

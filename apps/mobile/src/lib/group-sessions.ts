@@ -1,5 +1,5 @@
 import type { AtlitosClient, GroupMembership, GroupSession } from '@atlitos/api';
-import { useGroups } from '@atlitos/api';
+import { makeGroupsApi } from '@atlitos/api';
 
 /** One group session, hydrated with the group name for the "Group" labeled
  * rows on the athlete Upcoming/Sessions lists (Track D, COACH-TRAININGS-GAP
@@ -23,13 +23,16 @@ export async function fetchMyGroupSessions(
   client: AtlitosClient,
   memberships: GroupMembership[],
 ): Promise<MyGroupSessionEntry[]> {
-  const groups = useGroups(client);
+  // Plain async function, not a component: use the factory, not the hook.
+  const groups = makeGroupsApi(client);
   const byGroupId = new Map(memberships.map((m) => [m.groupId, m.group?.name ?? 'Group']));
   const groupIds = [...byGroupId.keys()];
   if (groupIds.length === 0) return [];
 
-  const results = await Promise.all(groupIds.map((groupId) => groups.groupSessions(groupId)));
-  return results.flatMap((sessions, index) =>
-    sessions.map((session) => ({ session, groupName: byGroupId.get(groupIds[index]) ?? 'Group' })),
-  );
+  // One query for every group, not one per group (see groupSessionsForGroups).
+  const sessions = await groups.groupSessionsForGroups(groupIds);
+  return sessions.map((session) => ({
+    session,
+    groupName: (session.groupId ? byGroupId.get(session.groupId) : undefined) ?? 'Group',
+  }));
 }
