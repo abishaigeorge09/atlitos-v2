@@ -34,7 +34,12 @@ import { handleCorsPreflight } from "../_shared/cors.ts";
 import { jsonResponse, withErrorHandling } from "../_shared/http.ts";
 import { AppError, appErrorFromPostgrestMessage } from "../_shared/app-error.ts";
 import { getAuthenticatedUser, serviceRoleClient } from "../_shared/supabase.ts";
-import { CLIPS_BUCKET, fetchLiveClip, type LiveClip } from "../_shared/clip-access.ts";
+import {
+  assertPathUnderPrefix,
+  CLIPS_BUCKET,
+  fetchLiveClip,
+  type LiveClip,
+} from "../_shared/clip-access.ts";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -150,7 +155,19 @@ Deno.serve((req) =>
     }
 
     // Optional client-captured thumbnail path (v1 does client-side thumbs).
+    // SECURITY: this value is client supplied but is later handed straight to
+    // mintSignedClipUrl under the service role (get-clip-playback-url and
+    // get-clip-moderation-url both mint `thumb_path` unconditionally), so an
+    // unconstrained value mints a signed URL for ANY object in the private
+    // `clips` bucket, another owner's uploading/rejected/removed video
+    // included, by pointing an own clip's thumb at it. Constrain it to the
+    // caller's own owner-id folder, the same prefix stream-upload-url derives
+    // storage_path under, and refuse traversal segments that climb back out.
+    // The same guard the mints now apply (assertPathUnderPrefix), enforced at
+    // the write too so a poisoned value never reaches the column in the first
+    // place. One shared predicate, two enforcement points.
     if (body.thumb_path) {
+      assertPathUnderPrefix(body.thumb_path, `${user.id}/`);
       await supabase.from("clips").update({ thumb_path: body.thumb_path }).eq("id", clip.id);
     }
 

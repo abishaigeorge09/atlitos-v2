@@ -66,6 +66,40 @@ export async function finalizeCourtBookingCaptured(
     );
   }
 
+  // SEC-F2 ledger idempotency, the guard courts was missing while commerce,
+  // donation and membership all had one. The gate can now re-enter this handler
+  // for a captured intent whose downstream work never finished, and a re-entry
+  // that reached this point AFTER a previous attempt wrote the group would
+  // otherwise double-credit the partner.
+  //
+  // "Any ledger row for this payment_intent_id" is the right predicate rather
+  // than a narrower one: the capture group is always the FIRST group an intent
+  // has, so its presence proves this handler already completed. A later
+  // reversing refund group shares the payment_intent_id, which is exactly why a
+  // unique index could not be used here (0088's header explains).
+  const { data: existingLegs, error: existingLegsError } = await supabase
+    .from("ledger_entries")
+    .select("id")
+    .eq("payment_intent_id", intent.id)
+    .limit(1);
+
+  if (existingLegsError) {
+    throw new AppError(
+      "INTERNAL",
+      `Failed to check existing ledger group for booking ${bookingId}: ${existingLegsError.message}`,
+      500,
+    );
+  }
+
+  if (existingLegs && existingLegs.length > 0) {
+    return {
+      outcome: "captured",
+      domain: "court",
+      entityId: bookingId,
+      entityStatus: booking.status,
+    };
+  }
+
   const entryGroupId = crypto.randomUUID();
   const partnerPayable = round2(booking.subtotal + booking.gst);
 

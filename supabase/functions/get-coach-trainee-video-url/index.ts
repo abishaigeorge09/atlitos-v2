@@ -72,7 +72,17 @@ Deno.serve((req) =>
       throw new AppError("FORBIDDEN", "This video is not available.", 403);
     }
 
-    const url = await mintSignedClipUrl(supabase, video.storage_path);
+    // SEC-F3: the row's own storage_path is NOT trusted. 0082's INSERT policy
+    // let a coach create a row with a chosen storage_path, bypassing the
+    // upload function that derives a safe one, so the mint re-derives the only
+    // prefix this row may ever point at and refuses anything else. 0088 closes
+    // the policy side; this is the read-side half, and it also refuses rows
+    // written before that migration is applied.
+    const url = await mintSignedClipUrl(
+      supabase,
+      video.storage_path,
+      `coach-videos/${video.coach_id}/${video.player_id}/`,
+    );
 
     return jsonResponse(
       { videoId: video.id, url, expiresIn: SIGNED_URL_TTL_SECONDS },

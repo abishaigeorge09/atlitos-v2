@@ -174,3 +174,19 @@ Four functions on project `syzzfgaudpifwvbpycyi`. All under `service_role` for t
 Verified adversarially over real HTTP against a real clip id (`404ad654...`): a real MP4 pushed by a script through `stream-upload-url` and a signed PUT, finalized once then a redelivery no-op; owner and admin mints served a resolving URL while a non-owner and a normal user were refused on the same `ready` clip; the clip driven `published` (guest URL resolves) then `removed` via `moderate_clip`, after which the public, owner, and moderation mints all refused (403); and the private bucket object returned 400 to a direct anon path fetch (no stored-URL bypass).
 
 **FB-004 re-proof (phase-9, 2026-07-29, project `syzzfgaudpifwvbpycyi`).** Two distinct seed users, `A = 58756043…` (owner) and `B = afc9b95e…` (non-owner), asserted to differ first (AT-62 anti-vacuity). A fresh `processing` clip (`c62a5c9f…`) was seeded owned by A alongside A's existing `rejected` clip (`97dbc3f5…`). Under the `clips` RLS policies, owner A SELECTed both own non-published rows; non-owner B saw ZERO of them while still seeing A's `published` clip (positive control, proving the query was live). The fn's new decision predicate was evaluated as a truth table over `processing`/`rejected`/`published` for owner/non-owner/admin: owner `true` in every status (the fix); non-owner `true` only for `published`; admin `true` for non-terminal only (`rejected` refused). The seeded clip was deleted after. **The `get-clip-playback-url` edge function must be REDEPLOYED for this widening to take effect in production** (the change is in the deployed fn code; RLS is unchanged, so no migration).
+
+## Storage path validation at the mint (SEC-F1 / SEC-F3, 2026-09-04)
+
+Two separate write paths let a client choose an object key that was later handed to a service-role signed-URL mint against the private `clips` bucket: `stream-webhook`'s `thumb_path` body field, and `coach_trainee_videos`'s direct INSERT policy. Either one turned "mint a URL for this row's media" into "mint a URL for any byte in the bucket", which is the whole takedown and privacy model.
+
+Guarding the writes alone is not enough, because rows poisoned before the guards landed are still in their tables and a policy change does not retract them. So the guard also lives at the read, on the one function all four mints route through:
+
+```ts
+mintSignedClipUrl(supabase, objectPath, requiredPrefix)  // prefix is REQUIRED
+```
+
+`assertPathUnderPrefix` refuses anything not under `requiredPrefix` and any path containing a `..` segment. The prefix is derived from the row being minted, never from the request body: `${clip.owner_id}/` for clip video and thumbnail (`get-clip-playback-url`, `get-clip-moderation-url`), `coach-videos/${coach_id}/${player_id}/` for trainee video (`get-coach-trainee-video-url`). It is a required positional argument rather than an optional one specifically so a new call site cannot forget it without failing to compile.
+
+`stream-webhook` applies the same predicate at the write, so a poisoned value never reaches the column either. One shared predicate, two enforcement points.
+
+**Both halves need the edge functions REDEPLOYED to take effect in production.** `0089` closes the `coach_trainee_videos` policy, but the mint guards are function code.

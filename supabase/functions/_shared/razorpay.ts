@@ -118,7 +118,13 @@ async function hmacSha256Hex(secret: string, message: string): Promise<string> {
     .join("");
 }
 
-function timingSafeEqual(a: string, b: string): boolean {
+/**
+ * Exported for _shared/notify.ts (SEC-F10): notify-dispatch authorizes on a
+ * bare equality against the service role key, which is secret material and so
+ * needs the same constant-time treatment the webhook signatures get. Kept here
+ * rather than copied there so there is one implementation of this comparison.
+ */
+export function timingSafeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let mismatch = 0;
   for (let i = 0; i < a.length; i++) {

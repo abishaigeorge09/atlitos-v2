@@ -52,6 +52,12 @@ export interface CapturedIntent {
   domain: string;
   entity_id: string | null;
   status: string;
+  /**
+   * SEC-F2. Null on a `captured` row means the charge landed but its domain
+   * handler never finished, so the next delivery must re-enter that handler
+   * instead of reporting the charge complete. See 0088.
+   */
+  finalized_at: string | null;
 }
 
 export interface FinalizeResult {
@@ -85,7 +91,7 @@ export async function finalizePaymentCaptured(
     })
     .eq("razorpay_order_id", params.razorpayOrderId)
     .eq("status", "created")
-    .select("id, domain, entity_id, status")
+    .select("id, domain, entity_id, status, finalized_at")
     .returns<CapturedIntent[]>();
 
   if (intentUpdateError) {
@@ -97,11 +103,65 @@ export async function finalizePaymentCaptured(
   }
 
   if (!updatedIntents || updatedIntents.length === 0) {
-    return await describeAlreadyProcessed(supabase, params.razorpayOrderId);
+    // Nobody won the flip. Either this charge is genuinely complete, or a
+    // previous attempt flipped it and then failed downstream (SEC-F2). Only
+    // the second case may re-enter a domain handler.
+    return await resumeOrDescribe(supabase, params.razorpayOrderId);
   }
 
-  const intent = updatedIntents[0];
+  return await runDomainFinalization(supabase, updatedIntents[0]);
+}
 
+/**
+ * SEC-F2. Dispatch to the domain handler, then record that the downstream work
+ * completed. Split out of the gate so BOTH entry points reach it: the winner of
+ * the `created -> captured` flip, and a retry that finds a captured intent with
+ * work still owed.
+ *
+ * Every handler this dispatches to is idempotent by construction. The domain
+ * RPCs return the existing row untouched on a repeat, and each handler that
+ * owes a ledger group checks for one before writing (courts gained that guard
+ * alongside this change; sessions owe no ledger at capture at all). Re-entry
+ * therefore completes whatever is missing and touches nothing that already
+ * landed.
+ */
+async function runDomainFinalization(
+  supabase: SupabaseClient,
+  intent: CapturedIntent,
+): Promise<FinalizeResult> {
+  const result = await dispatchDomain(supabase, intent);
+  await markFinalized(supabase, intent.id);
+  return result;
+}
+
+/**
+ * Stamp `finalized_at`. Deliberately does NOT throw on failure: by the time
+ * this runs the domain handler has already committed its work, and turning a
+ * successful finalization into a 500 would tell Razorpay (and the athlete's
+ * client) that a completed charge failed. An unstamped row surfaces in
+ * `payment_finalization_backlog()` with `has_ledger_group = true`, which is the
+ * signal for "work done, marker missing" rather than "work missing", and the
+ * next delivery of the same capture re-runs the idempotent handler and stamps
+ * it.
+ */
+async function markFinalized(supabase: SupabaseClient, intentId: string): Promise<void> {
+  const { error } = await supabase
+    .from("payment_intents")
+    .update({ finalized_at: new Date().toISOString() })
+    .eq("id", intentId)
+    .is("finalized_at", null);
+
+  if (error) {
+    console.error(
+      `SEC-F2: domain finalization completed for payment_intent ${intentId} but finalized_at could not be stamped: ${error.message}`,
+    );
+  }
+}
+
+async function dispatchDomain(
+  supabase: SupabaseClient,
+  intent: CapturedIntent,
+): Promise<FinalizeResult> {
   // COMMERCE RUNS BEFORE THE NULL entity_id CHECK, DELIBERATELY (AT-72).
   // Courts and sessions hand this gate an entity that already exists, so a
   // null entity_id for them means something is wrong. Commerce is the domain
@@ -160,18 +220,17 @@ export async function finalizePaymentCaptured(
 }
 
 /**
- * The UPDATE matched nothing: either no such intent exists (a real problem,
- * NOT_FOUND) or the other finalization path already captured it (expected,
- * idempotent, not an error). Read-only, so this branch can never write a
- * second ledger group no matter how many times it runs.
+ * The UPDATE matched nothing. Three cases now, not two: no such intent
+ * (NOT_FOUND), a captured intent whose downstream work is still owed (SEC-F2,
+ * resume it), or a genuinely complete charge (describe it, read-only).
  */
-async function describeAlreadyProcessed(
+async function resumeOrDescribe(
   supabase: SupabaseClient,
   razorpayOrderId: string,
 ): Promise<FinalizeResult> {
   const { data: existing, error: lookupError } = await supabase
     .from("payment_intents")
-    .select("id, domain, entity_id, status")
+    .select("id, domain, entity_id, status, finalized_at")
     .eq("razorpay_order_id", razorpayOrderId)
     .maybeSingle<CapturedIntent>();
 
@@ -189,6 +248,24 @@ async function describeAlreadyProcessed(
       `No payment_intent for razorpay_order_id ${razorpayOrderId}.`,
       404,
     );
+  }
+
+  // SEC-F2, the repair path. A `captured` intent with no `finalized_at` is a
+  // charge whose domain handler never finished. Before 0088 this branch
+  // returned `already_processed` and the work was owed forever. Re-enter it.
+  //
+  // Scoped strictly to `captured`: a `refunded` or `partially_refunded` intent
+  // has moved past capture and must not have its capture-time handler re-run.
+  if (existing.status === "captured" && existing.finalized_at === null) {
+    console.warn(
+      `SEC-F2: resuming unfinished finalization for payment_intent ${existing.id} (domain ${existing.domain}).`,
+    );
+    // Returns outcome "captured", not a third value: from every caller's point
+    // of view the charge is now complete, and widening the public
+    // `"captured" | "already_processed"` contract would ripple through eight
+    // typed client call sites for an observability nicety. The server log and
+    // `finalized_at` carry the distinction.
+    return await runDomainFinalization(supabase, existing);
   }
 
   const entityId = existing.entity_id ?? "";

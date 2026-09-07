@@ -336,5 +336,3 @@ $$;
 revoke all on function public.session_transition(uuid, text, text, date, time) from public;
 revoke execute on function public.session_transition(uuid, text, text, date, time) from anon;
 grant execute on function public.session_transition(uuid, text, text, date, time) to authenticated;
-</content>
-</invoke>

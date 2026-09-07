@@ -411,7 +411,18 @@ async function handleWalkInBooking(
     );
   }
 
-  await supabase.from("audit_log").insert({
+  // SEC-F5. The result used to be discarded outright, so a failed audit write
+  // on a walk-in that DID create a confirmed booking and a ledger group left no
+  // trace anywhere. It is logged rather than thrown: the booking, the payment
+  // intent and the ledger group are all committed by this point, and turning
+  // that into a 500 would tell the partner their walk-in failed when it did
+  // not, which is how double bookings get attempted.
+  //
+  // ponytail: log, not atomicity. The real fix is one RPC owning the whole
+  // walk-in write the way order_transition now owns the advance; that is a
+  // four-statement refactor of this handler and belongs in its own change.
+  // Upgrade when a walk-in audit gap is actually observed.
+  const { error: walkInAuditError } = await supabase.from("audit_log").insert({
     actor_id: user.id,
     action: "court_booking.walk_in_create",
     entity_type: "court_bookings",
@@ -427,6 +438,12 @@ async function handleWalkInBooking(
     },
     note: body.price_override_reason ?? null,
   });
+
+  if (walkInAuditError) {
+    console.error(
+      `SEC-F5: walk-in booking ${booking.id} was confirmed and ledgered but its audit_log row failed: ${walkInAuditError.message}`,
+    );
+  }
 
   return {
     booking_id: booking.id,

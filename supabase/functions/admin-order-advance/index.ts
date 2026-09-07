@@ -195,26 +195,15 @@ Deno.serve((req) =>
 
     const advanced = order as { id: string; status: string; order_number: string };
 
-    // 2. Exactly one audit_log row (PRD-04 FR-23, FR-53). Written after the
-    //    transition succeeded, so a rejected advance leaves no audit row
-    //    claiming something happened.
-    const { error: auditError } = await supabase.from("audit_log").insert({
-      actor_id: actorId,
-      action: "order.advance",
-      entity_type: "order",
-      entity_id: advanced.id,
-      before: { status: toStatusPrevious(toStatus) },
-      after: { status: advanced.status },
-      note: [location, note].filter(Boolean).join(", ") || null,
-    });
-
-    if (auditError) {
-      throw new AppError(
-        "INTERNAL",
-        `Order ${advanced.id} advanced but the audit row failed: ${auditError.message}`,
-        500,
-      );
-    }
+    // 2. The audit_log row is NO LONGER WRITTEN HERE. SEC-F5: it used to be a
+    //    second round trip after the transition had already committed, so an
+    //    audit failure returned a 500 for an advance that really happened, and
+    //    the `before` status was reconstructed from a lookup table rather than
+    //    observed. 0091 moves the insert inside `order_transition`, in the same
+    //    transaction as the status change and the timeline row, reading the
+    //    real prior status under the row lock. PRD-04 FR-23/FR-53 still get
+    //    exactly one row per accepted advance; it is now impossible for that
+    //    row and the transition to disagree.
 
     return jsonResponse({
       order_id: advanced.id,
@@ -223,15 +212,3 @@ Deno.serve((req) =>
     });
   })
 );
-
-/**
- * The status an order must have been in for `to` to have been accepted. Safe
- * to derive rather than re-read: `order_transition` has already proven the
- * edge was legal, and each of these three targets has exactly one predecessor
- * in the machine, so there is no ambiguity to resolve.
- */
-function toStatusPrevious(to: string): string {
-  if (to === "shipped") return "placed";
-  if (to === "in_transit") return "shipped";
-  return "in_transit";
-}

@@ -107,6 +107,44 @@ export async function fetchLiveClip(
 }
 
 /**
+ * SEC-F1 / SEC-F3, the shared storage-path choke point.
+ *
+ * Every signed URL in this codebase is minted under the SERVICE ROLE against
+ * the private `clips` bucket, so the object path is the only thing standing
+ * between a caller and any byte in that bucket. Two separate doors let a
+ * client put an arbitrary path into a column that is later minted:
+ *
+ *   1. `stream-webhook`'s `thumb_path` body field (SEC-F1), now prefix-guarded
+ *      at the write, and guarded again here at the read.
+ *   2. `coach_trainee_videos`'s direct INSERT policy (SEC-F3), which let a
+ *      coach choose `storage_path` outright, bypassing the edge function that
+ *      derives a safe one.
+ *
+ * Guarding only the writes leaves rows already poisoned before the fix, and
+ * any future write path, still mintable. So the guard lives HERE, on the one
+ * function all four mints route through, and the prefix is a REQUIRED
+ * argument rather than an optional one: a new call site cannot forget it
+ * without failing to compile.
+ *
+ * The prefix a caller passes must be derived from the row being minted
+ * (`${clip.owner_id}/`, `coach-videos/${coach_id}/${player_id}/`), never from
+ * the request body.
+ */
+export function assertPathUnderPrefix(objectPath: string, requiredPrefix: string): void {
+  if (
+    !requiredPrefix ||
+    !objectPath.startsWith(requiredPrefix) ||
+    objectPath.split("/").includes("..")
+  ) {
+    throw new AppError(
+      "FORBIDDEN",
+      "This media is not available.",
+      403,
+    );
+  }
+}
+
+/**
  * Mint a short lived (TTL 300s) signed download URL for a clip object path,
  * against the private `clips` bucket, under the service role. Never stored.
  * Throws NOT_FOUND if the clip has no object yet (a clip still `uploading`
@@ -120,10 +158,12 @@ export async function fetchLiveClip(
 export async function mintSignedClipUrl(
   supabase: SupabaseClient,
   objectPath: string | null,
+  requiredPrefix: string,
 ): Promise<string> {
   if (!objectPath) {
     throw new AppError("NOT_FOUND", "Clip has no stored video yet.", 404);
   }
+  assertPathUnderPrefix(objectPath, requiredPrefix);
   const { data, error } = await supabase.storage
     .from(CLIPS_BUCKET)
     .createSignedUrl(objectPath, SIGNED_URL_TTL_SECONDS);

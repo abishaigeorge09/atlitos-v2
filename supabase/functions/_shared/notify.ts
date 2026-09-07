@@ -33,6 +33,7 @@
 
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { AppError } from "./app-error.ts";
+import { timingSafeEqual } from "./razorpay.ts";
 
 /** Kept in lockstep with public.notification_type (0002_notifications.sql)
  * and packages/types NOTIFICATION_TYPES. */
@@ -250,7 +251,11 @@ export function assertServiceRoleRequest(req: Request): void {
   const header = req.headers.get("Authorization") ?? "";
   const bearer = header.replace(/^Bearer\s+/i, "").trim();
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-  if (!serviceKey || bearer !== serviceKey) {
+  // SEC-F10: constant-time. This comparison IS the authorization boundary for
+  // a function that writes a notification row for an arbitrary user_id, so a
+  // prefix-revealing timing signal on the service key is worth removing even
+  // though exploiting it across the edge network is impractical.
+  if (!serviceKey || !timingSafeEqual(bearer, serviceKey)) {
     throw new AppError(
       "FORBIDDEN",
       "notify-dispatch is a service-role-only endpoint.",

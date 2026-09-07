@@ -73,10 +73,15 @@ Deno.serve((req) =>
       throw new AppError("FORBIDDEN", "This clip is not available.", 403);
     }
 
-    const videoUrl = await mintSignedClipUrl(supabase, clip.storage_path);
+    // Both mints are pinned to THIS clip's owner folder, the prefix
+    // stream-upload-url derives storage_path under. A row poisoned before the
+    // SEC-F1 guard landed (or by any future write path) therefore still
+    // refuses here rather than minting another owner's object.
+    const ownerPrefix = `${clip.owner_id}/`;
+    const videoUrl = await mintSignedClipUrl(supabase, clip.storage_path, ownerPrefix);
     let thumbUrl: string | null = null;
     if (clip.thumb_path) {
-      thumbUrl = await mintSignedClipUrl(supabase, clip.thumb_path);
+      thumbUrl = await mintSignedClipUrl(supabase, clip.thumb_path, ownerPrefix);
     }
 
     return jsonResponse(
