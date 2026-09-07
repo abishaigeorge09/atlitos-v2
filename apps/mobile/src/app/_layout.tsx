@@ -1,4 +1,5 @@
 import '../../global.css';
+import { AppErrorBoundary } from '@/components/organisms/AppErrorBoundary';
 
 import { PortalHost } from '@rn-primitives/portal';
 import { useFonts } from 'expo-font';
@@ -11,6 +12,13 @@ import { StatusBar } from 'react-native';
 import { applyTheme } from '@/lib/apply-theme';
 import { startSessionListener, useSessionStore } from '@/store/session-store';
 import { useThemeColors } from '@/theme/use-theme-colors';
+
+/**
+ * BUG-01. How long the splash may wait on the font load before the app is
+ * shown anyway. Long enough that a healthy launch never trips it, short enough
+ * that a stalled one does not look broken.
+ */
+const FONT_WAIT_MS = 5000;
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   // Not fatal, the splash screen just hides on its own default timing.
@@ -51,12 +59,35 @@ export default function RootLayout() {
     JetBrainsMono_600SemiBold: require('../../assets/fonts/JetBrainsMono_600SemiBold.ttf'),
   });
 
+  // BUG-01. The splash was held until `useFonts` settled, with no other exit.
+  // If that promise never resolves or rejects, and a font load stalling on a
+  // slow or half-open connection is exactly the case where it will not, the
+  // app sits on the splash indefinitely: no spinner change, no timeout, no
+  // message, nothing to retry. The user's only move is to force quit.
+  //
+  // The fix is a deadline, not a retry. Fonts are a presentation concern; the
+  // app is perfectly usable in the platform fallback face while they arrive,
+  // and NativeWind re-renders text once they land. So after FONT_WAIT_MS we
+  // show the app regardless and let the fonts catch up.
+  //
+  // Note what this does NOT fix: a debug build whose Metro bundler is
+  // unreachable never runs any JavaScript at all, so no JS-side guard can help
+  // there. That case is developer-only, since a release build embeds its
+  // bundle. This guard covers the case a real user can hit.
   useEffect(() => {
     if (fontsLoaded || fontError) {
       SplashScreen.hideAsync().catch(() => {
         // Not fatal.
       });
+      return;
     }
+
+    const deadline = setTimeout(() => {
+      SplashScreen.hideAsync().catch(() => {
+        // Not fatal.
+      });
+    }, FONT_WAIT_MS);
+    return () => clearTimeout(deadline);
   }, [fontsLoaded, fontError]);
 
   // Starts the one supabase.auth.onAuthStateChange subscription for the
@@ -90,12 +121,17 @@ export default function RootLayout() {
   return (
     <>
       <StatusBar barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'} />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: colors.bg },
-        }}
-      />
+      {/* Wraps the whole navigator: before this, ANY render error anywhere in
+          the tree left a blank screen with no way out but a force quit, and a
+          release build shows no red box to explain it. */}
+      <AppErrorBoundary surface="root">
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: colors.bg },
+          }}
+        />
+      </AppErrorBoundary>
       <PortalHost />
     </>
   );
