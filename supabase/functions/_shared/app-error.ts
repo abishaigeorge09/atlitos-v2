@@ -9,11 +9,20 @@
 export class AppError extends Error {
   readonly code: string;
   readonly status: number;
+  /** Seconds until the caller may retry. Emitted as the `Retry-After` header
+   * by errorResponse. Only meaningful on 429 and 503. */
+  readonly retryAfterSeconds?: number;
 
-  constructor(code: string, message: string, status = 400) {
+  constructor(
+    code: string,
+    message: string,
+    status = 400,
+    retryAfterSeconds?: number,
+  ) {
     super(message);
     this.code = code;
     this.status = status;
+    this.retryAfterSeconds = retryAfterSeconds;
     this.name = "AppError";
   }
 }
@@ -37,6 +46,16 @@ export function appErrorFromPostgrestMessage(message: string): AppError {
 const STATUS_BY_CODE: Record<string, number> = {
   UNAUTHENTICATED: 401,
   FORBIDDEN: 403,
+  // SEC-F4 (0090): the caller authenticated fine but their account is
+  // suspended. Distinct from FORBIDDEN so a client can tell "you may not do
+  // this" from "your account is disabled" and route to support.
+  ACCOUNT_SUSPENDED: 403,
+  // 0093: the account was deleted by its owner. Distinct from
+  // ACCOUNT_SUSPENDED so the client signs out silently rather than routing the
+  // member to support for an account they chose to remove.
+  ACCOUNT_DELETED: 403,
+  // SEC-F9: over a spend or abuse ceiling. Paired with a Retry-After header.
+  RATE_LIMITED: 429,
   NOT_FOUND: 404,
   VALIDATION: 400,
   REASON_REQUIRED: 400,

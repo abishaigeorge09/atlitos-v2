@@ -4,7 +4,7 @@ import type { ApiError, Clip } from '@atlitos/types';
 import { router } from 'expo-router';
 import { Play, Plus, TriangleAlert } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, View, type ViewToken } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Pressable, View, type ViewToken } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ClutchPostCard } from '@/components/molecules/ClutchPostCard';
@@ -22,6 +22,17 @@ type LoadState = 'loading' | 'empty' | 'populated' | 'error';
 /** Refresh a signed playback URL this many seconds before its 300s TTL so an
  * on-screen clip never stalls on an expired URL mid-watch. */
 const PLAYBACK_REFRESH_LEAD_S = 15;
+
+/** Fixed reasons rather than a free-text box as the first step: a moderator
+ * queue is only useful if the rows are comparable, and a member reporting
+ * abuse should not have to compose a sentence. */
+const REPORT_REASONS = [
+  'Nudity or sexual content',
+  'Violence or dangerous acts',
+  'Hate speech or harassment',
+  'Spam or a scam',
+  'Something else',
+] as const;
 
 /**
  * Clutch feed (PRD-01 3.4, FR-42/FR-43). Full-bleed vertical video feed, one
@@ -47,6 +58,58 @@ export default function ClutchFeedScreen() {
   const [cursor, setCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [gateVisible, setGateVisible] = useState(false);
+
+  /**
+   * App Store guideline 1.2. Both required controls behind one control on the
+   * content itself: report the clip, or block its author outright.
+   *
+   * Blocking removes the author's clips from this member's feed immediately.
+   * The subtraction is a RESTRICTIVE RLS policy (0092), so the next fetch
+   * simply does not contain them; the local splice below is only so the
+   * current screen updates without waiting for a refetch.
+   */
+  function openReportOrBlock(clip: Clip) {
+    Alert.alert('This post', 'Tell us what is wrong, or stop seeing posts from this account.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Report post',
+        onPress: () =>
+          requireAuth(() => {
+            Alert.alert('Report this post', 'What is the problem?', [
+              { text: 'Cancel', style: 'cancel' },
+              ...REPORT_REASONS.map((reason) => ({
+                text: reason,
+                onPress: () => void submitReport(clip, reason),
+              })),
+            ]);
+          }),
+      },
+      {
+        text: `Block ${clip.channel}`,
+        style: 'destructive' as const,
+        onPress: () => requireAuth(() => void submitBlock(clip)),
+      },
+    ]);
+  }
+
+  async function submitReport(clip: Clip, reason: string) {
+    try {
+      await clutch.report('clip', clip.id, reason);
+      Alert.alert('Thanks for telling us', 'Our team will review this post.');
+    } catch {
+      Alert.alert('We could not send that report', 'Please try again.');
+    }
+  }
+
+  async function submitBlock(clip: Clip) {
+    try {
+      await clutch.blockUser(clip.ownerId);
+      setClips((current) => current.filter((c) => c.ownerId !== clip.ownerId));
+      Alert.alert('Blocked', `You will not see posts from ${clip.channel} again.`);
+    } catch {
+      Alert.alert('We could not block that account', 'Please try again.');
+    }
+  }
 
   const [containerH, setContainerH] = useState(0);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -263,6 +326,7 @@ export default function ClutchFeedScreen() {
                 onComment={() => openDetail(item.id)}
                 onLike={() => void handleLike(item)}
                 onShare={() => requireAuth(() => openDetail(item.id))}
+                onReportOrBlock={() => openReportOrBlock(item)}
               />
             </View>
           )}
@@ -275,6 +339,28 @@ export default function ClutchFeedScreen() {
         style={{ pointerEvents: 'box-none', position: 'absolute', top: insets.top, left: 0, right: 0, paddingHorizontal: spacing.lg }}
         className="flex-row items-center justify-between"
       >
+        {/* BUG-04. The header sits directly on the video with no separation, so
+            "Clutch" and the Post pill collided with whatever the clip itself
+            renders at the top, most visibly a clip's own burned-in title card.
+            Two white texts over arbitrary video is unreadable for both.
+
+            A scrim rather than a solid bar: the feed is deliberately full
+            bleed (SPEC 3.4), so an opaque header would eat a slice of every
+            clip. This darkens only the strip the controls occupy, fading to
+            nothing, which is the standard treatment for controls over video
+            and keeps the full-bleed look intact. Non-interactive so it cannot
+            swallow a tap meant for the Post button. */}
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: -insets.top,
+            left: 0,
+            right: 0,
+            height: insets.top + spacing['4xl'],
+            backgroundColor: 'rgba(0,0,0,0.35)',
+          }}
+        />
         <Text style={[textStyle('h2'), { color: colors.textInverse }]}>Clutch</Text>
         <Pressable
           accessibilityRole="button"

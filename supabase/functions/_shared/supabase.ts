@@ -87,5 +87,71 @@ export async function getAuthenticatedUser(
     );
   }
 
+  await assertNotSuspended(data.user.id);
+
   return { id: data.user.id, email: data.user.email ?? undefined };
+}
+
+/**
+ * SEC-F4 (0090). `users.status = 'suspended'` was enforced nowhere before this:
+ * an admin could suspend an account and it would keep booking, paying and
+ * uploading indefinitely.
+ *
+ * This is the layer that closes immediately. 0090's access-token hook also
+ * denies a suspended user their next token, but that is bounded by the
+ * access-token TTL, so a suspended member would keep their current token's
+ * worth of access. Every protected edge function -- every money path, every
+ * upload, every admin mutation -- routes through getAuthenticatedUser, so
+ * checking here shuts all of them at once, on the very next request.
+ *
+ * The read is under the SERVICE ROLE on purpose. Reading through the caller's
+ * own client would make the check depend on a SELECT policy on `users`, and a
+ * policy change (or a caller whose row is not readable) would silently turn the
+ * check into a no-op. That is the failure mode 0017 documents for the roles
+ * lookup, and it is worth one extra client construction to avoid repeating.
+ *
+ * Deliberately NOT applied to `getOptionalUserId` in clip-access.ts. That helper
+ * exists for the public clip feed, where a resolved session only ever GRANTS
+ * more (owner/admin previews) and never authorizes a write. A suspended member
+ * watching their own clip back is not a security event, and adding a
+ * service-role round trip to the guest playback path would cost every anonymous
+ * viewer a query for nothing.
+ */
+async function assertNotSuspended(userId: string): Promise<void> {
+  const { data, error } = await serviceRoleClient()
+    .from("users")
+    .select("status, deleted_at")
+    .eq("id", userId)
+    .maybeSingle<{ status: string; deleted_at: string | null }>();
+
+  if (error) {
+    throw new AppError(
+      "INTERNAL",
+      `Failed to check account status: ${error.message}`,
+      500,
+    );
+  }
+
+  // 0093. A deleted account keeps a valid access token until it expires, and
+  // the token hook only refuses the NEXT refresh. This is the layer that shuts
+  // every edge function on the very next request, the same reason suspension
+  // is checked here rather than trusting the JWT claim. Checked first so the
+  // caller is told the accurate reason.
+  if (data?.deleted_at) {
+    throw new AppError(
+      "ACCOUNT_DELETED",
+      "This account has been deleted.",
+      403,
+    );
+  }
+
+  // No row is normal: anonymous sessions have no `users` row until onboarding
+  // writes one. Absence is not suspension.
+  if (data?.status === "suspended") {
+    throw new AppError(
+      "ACCOUNT_SUSPENDED",
+      "This account is suspended. Contact support.",
+      403,
+    );
+  }
 }

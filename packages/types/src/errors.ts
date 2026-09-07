@@ -109,6 +109,12 @@ export type ApiErrorCode =
   | 'ALREADY_MEMBER'
   | 'GROUP_INACTIVE'
   | 'NOT_A_MEMBER'
+  // account state (0090 suspension, 0093 deletion). Both are 403s that the
+  // caller authenticated fine for, and they route differently: SUSPENDED sends
+  // the member to support, DELETED signs them out without offering an appeal
+  // for an account they chose to remove.
+  | 'ACCOUNT_SUSPENDED'
+  | 'ACCOUNT_DELETED'
   // generic
   | 'INTERNAL';
 
