@@ -5,7 +5,7 @@
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
-    "lint": "turbo lint && ./scripts/check-tokens.sh",
+    "lint": "turbo lint && ./scripts/check-tokens.sh && ./scripts/check-release-config.sh",
     "typecheck": "turbo typecheck"
   },
   "devDependencies": {
