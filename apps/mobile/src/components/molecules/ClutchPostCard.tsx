@@ -1,4 +1,3 @@
-import { useClutch } from '@atlitos/api';
 import { spacing } from '@atlitos/theme';
 import type { Clip } from '@atlitos/types';
 import * as Haptics from 'expo-haptics';

@@ -1,4 +1,4 @@
-import { useNotifications, useShop } from '@atlitos/api';
+import { useNotifications } from '@atlitos/api';
 import { radii, spacing } from '@atlitos/theme';
 import { router, useFocusEffect } from 'expo-router';
 import { X } from 'lucide-react-native';
@@ -47,28 +47,9 @@ export default function HomeScreen() {
   // on mount, so returning from Shop after adding something shows the new
   // count instead of a stale one. Guests have no cart, so it stays 0 and the
   // button opens the login gate.
-  const shop = useShop(supabase);
-  const [cartCount, setCartCount] = useState(0);
-  useFocusEffect(
-    useCallback(() => {
-      if (status !== 'signed_in') {
-        setCartCount(0);
-        return;
-      }
-      let cancelled = false;
-      void (async () => {
-        try {
-          const lines = await shop.getCart();
-          if (!cancelled) setCartCount(lines.reduce((n, line) => n + line.qty, 0));
-        } catch {
-          // A cart read failing must never break Home; the badge just stays put.
-        }
-      })();
-      return () => {
-        cancelled = true;
-      };
-    }, [status, shop]),
-  );
+  // RECONCILIATION 2026-09-14: a cart count badge for the app bar (origin/main
+  // f1a5fa2) was NOT taken. It fetched the whole cart on every Home focus for
+  // every signed in user, purely to draw a number. Revisit with a cached count.
   const continueAsGuest = useSessionStore((state) => state.continueAsGuest);
 
   const [gateVisible, setGateVisible] = useState(false);

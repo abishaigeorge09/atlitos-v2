@@ -23,6 +23,11 @@ export async function fetchMyGroupSessions(
   client: AtlitosClient,
   memberships: GroupMembership[],
 ): Promise<MyGroupSessionEntry[]> {
+  // useGroups is a client factory, not a React hook: it calls no hook internally
+  // and only carries the `use` prefix by convention of packages/api. Calling it
+  // from a plain async function is correct. Surfaced 2026-09-14 when the
+  // react-hooks lint glob was widened to .ts files.
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   const groups = useGroups(client);
   const byGroupId = new Map(memberships.map((m) => [m.groupId, m.group?.name ?? 'Group']));
   const groupIds = [...byGroupId.keys()];
