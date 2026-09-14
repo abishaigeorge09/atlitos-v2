@@ -2,21 +2,7 @@ import { useProfile } from '@atlitos/api';
 import { radii, spacing } from '@atlitos/theme';
 import { SPORTS, type Sport } from '@atlitos/types';
 import { router } from 'expo-router';
-import {
-  Bell,
-  ChevronRight,
-  LogIn,
-  LogOut,
-  Monitor,
-  Moon,
-  Palette,
-  Star,
-  Sun,
-  Trash2,
-  UserRoundPlus,
-  UserRoundPen,
-  Volleyball,
-} from 'lucide-react-native';
+import { Bell, ChevronRight, LogIn, LogOut, Monitor, Moon, Palette, Star, Sun, Trash2, UserRoundPen, UserRoundPlus, UserRoundX, Volleyball } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, ScrollView, Switch, View } from 'react-native';
 
@@ -387,6 +373,12 @@ export function SettingsContent() {
 
           <Section title="Account">
             <ActionRow icon={UserRoundPen} label="Edit profile" onPress={() => router.push('/profile/edit')} />
+            {/* RECONCILIATION 2026-09-14, from origin/main eca5992. A block with no
+                undo is a trap; this is the only place a person can see who they
+                blocked and reverse it. The screen is a drop in: it calls the
+                LOCAL clutch.blockedUsers() and clutch.unblockUser(), which already
+                run against blocked_users. His migrations were not taken. */}
+            <ActionRow icon={UserRoundX} label="Blocked accounts" onPress={() => router.push('/account/blocked')} />
             {meReady && !isCoach ? (
               <View style={{ borderTopWidth: 1, borderTopColor: colors.border }}>
                 <ActionRow
