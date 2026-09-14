@@ -175,6 +175,41 @@ RUN IT BEFORE EVERY QA FLOW. `EXPO_PUBLIC_SUPABASE_URL` and
 over `apps/mobile/.env`, which holds production and is the default any plain
 `npx expo run:ios` will pick up.
 
+### The two lines were reconciled on 2026-09-14. Read this before touching origin/main.
+
+Prasanth pushed 11 commits to origin/main on 7 September, branched from the main of
+29 July, because the 275 August commits were never pushed. He rebuilt several things that
+already existed here. A plain merge produced 26 conflicting files and EIGHT duplicate
+migration numbers (his 0088 to 0095 against different local files at the same numbers).
+
+Production was checked and is unchanged: 109 migrations, no delete_my_account, no
+user_blocks table. So THIS branch is what production runs, and his commits were fitted
+onto it by cherry pick on `integration/p6-reconciled`, not merged.
+
+TAKEN (in whole or part): gitignore; court earnings fix; iOS permission strings and
+privacy manifest (his duplicate expo-image-picker entry dropped because the app does call
+launchCameraAsync); content-policy.html and legal.css; the UI defect fixes minus a 150 km
+courts radius that would empty the tab for a reviewer abroad; react-hooks lint with the
+glob widened to .ts so packages/api is actually linted; his blocked accounts screen, a drop
+in onto the local clutch.blockedUsers() API; the notifications channel leak fix; his
+AppErrorBoundary, made to report to Sentry because nested inside Sentry.ErrorBoundary it
+would otherwise swallow every crash; check-release-config.sh born red against the test key
+and the eas.json env block removed; his QA reports and the 7 SEC test cases.
+
+NOT TAKEN, deliberately: every migration he wrote (all collide or re-implement functions
+production already holds in this branch's form); his edit to 0027, which is applied in
+production; his delete-account edge function and report RPCs (local 0097 and 0098 are the
+ones in production); his privacy.html and terms.html (fuller drafts, but carrying five
+unsettled REVIEW decisions and no Sentry disclosure, while the local pages are live and
+complete); his edge function edits from SEC-F1 to F11 (written against his schema, logged
+for review); a per tile thumbnail mint (the batch poster endpoint covers it); a cart badge
+that fetched the whole cart on every Home focus.
+
+FOR PRASANTH: compare docs/qa/SECURITY-REMEDIATION-2026-09-04.md against
+docs/qa/SECURITY-LOCKDOWN.md and re-apply on this base anything the local lockdown does
+not already cover. His fuller privacy and terms drafts are worth a lawyer's pass; they
+live at origin/main bd0ba6c. Branch from integration/p6-reconciled from now on.
+
 ## DISPROVEN. Read this before theorising.
 
 ### The Clutch "static" is NOT a rendering bug
