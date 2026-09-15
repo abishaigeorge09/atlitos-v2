@@ -36,15 +36,13 @@ export default function Home() {
             Atlitos Partners
           </span>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" nativeButton={false} render={<Link href="/signin" />}>
-            Sign in
-          </Button>
-          <Button nativeButton={false} render={<Link href="/signup" />}>
-            Get started
-            <ArrowRight />
-          </Button>
-        </div>
+        {/* One affordance per action: the header carries Sign in (the
+            conventional spot for a returning partner), the hero carries the
+            single Get started CTA. Repeating both pairs read as a mistake in
+            QA (2026-09-15) since the two rows sit inches apart on a phone. */}
+        <Button variant="ghost" nativeButton={false} render={<Link href="/signin" />}>
+          Sign in
+        </Button>
       </header>
 
       <main className="flex flex-1 flex-col items-center gap-16 px-6 py-20 sm:px-10">
@@ -62,9 +60,6 @@ export default function Home() {
             <Button size="lg" nativeButton={false} render={<Link href="/signup" />}>
               Get started
               <ArrowRight />
-            </Button>
-            <Button size="lg" variant="outline" nativeButton={false} render={<Link href="/signin" />}>
-              Sign in
             </Button>
           </div>
         </div>

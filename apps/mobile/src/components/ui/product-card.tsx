@@ -28,6 +28,9 @@ export interface ProductCardProps {
   wishlisted?: boolean;
   quantity?: number;
   variant?: ProductCardVariant;
+  /** `grid` only: the Add to cart button shows a spinner and ignores taps
+   * while the caller's add request is in flight. */
+  addingToCart?: boolean;
   onPress?: () => void;
   onAddToCart?: () => void;
   onToggleWishlist?: () => void;
@@ -43,6 +46,7 @@ function ProductCard({
   wishlisted,
   quantity = 1,
   variant = 'grid',
+  addingToCart = false,
   onPress,
   onAddToCart,
   onToggleWishlist,
@@ -151,7 +155,13 @@ function ProductCard({
         </View>
 
         {variant === 'grid' ? (
-          <Button variant="ghost" size="sm" className="border border-border-strong" onPress={onAddToCart}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="border border-border-strong"
+            loading={addingToCart}
+            onPress={onAddToCart}
+          >
             <ShoppingCart size={16} strokeWidth={1.75} color={colors.text} />
             <Text>Add to cart</Text>
           </Button>
