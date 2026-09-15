@@ -136,9 +136,17 @@ export default function VenueDetailsStep() {
               />
             </div>
 
-            <Button type="submit" disabled={!canContinue} className="w-fit">
-              Continue to courts
-            </Button>
+            {/* Same Back / Continue row the Courts and Photos steps use. There
+                is no earlier step, so Back leaves onboarding for the home
+                page; the draft is client side only, nothing is lost. */}
+            <div className="flex items-center gap-3">
+              <Button type="button" variant="outline" onClick={() => router.push("/")}>
+                Back
+              </Button>
+              <Button type="submit" disabled={!canContinue}>
+                Continue to courts
+              </Button>
+            </div>
           </form>
         </CardContent>
       </Card>

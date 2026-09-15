@@ -13,6 +13,7 @@ import { Avatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
+import { dobValidationError, formatDob } from '@/lib/dob';
 import { supabase } from '@/lib/supabase';
 import { uploadAvatar, uploadCover } from '@/lib/storage';
 import { useSessionStore } from '@/store/session-store';
@@ -34,23 +35,6 @@ type HandleCheck = 'idle' | 'checking' | 'available' | 'taken' | 'invalid';
  * (cover under the owner folder's cover/ prefix). Saves through
  * useProfile.updateProfile (own row only), then refreshes the session's me.
  */
-/** YYYY-MM-DD mask: digits only, dashes re-derived on every change so
- * deleting works. Moved here from the register screen when date of birth
- * came off signup. */
-function formatDob(raw: string): string {
-  const digits = raw.replace(/\D/g, '').slice(0, 8);
-  if (digits.length <= 4) return digits;
-  if (digits.length <= 6) return `${digits.slice(0, 4)}-${digits.slice(4)}`;
-  return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6)}`;
-}
-
-/** Rejects impossible dates that still match the shape, e.g. 2026-02-31. */
-function isRealDate(iso: string): boolean {
-  const time = Date.parse(`${iso}T00:00:00Z`);
-  if (Number.isNaN(time)) return false;
-  return new Date(time).toISOString().slice(0, 10) === iso;
-}
-
 export default function EditProfileScreen() {
   const colors = useThemeColors();
   const profileApi = useProfile(supabase);
@@ -164,10 +148,12 @@ export default function EditProfileScreen() {
     if (handleCheck === 'taken') return;
 
     // Date of birth is optional. Only validate when something was typed, so
-    // leaving it blank is never an error.
+    // leaving it blank is never an error. The message names the exact part
+    // that is wrong (month, day, year, future date), see lib/dob.ts.
     const dobValue = dob.trim();
-    if (dobValue.length > 0 && (!/^\d{4}-\d{2}-\d{2}$/.test(dobValue) || !isRealDate(dobValue))) {
-      setDobError('Enter your full date of birth, year first.');
+    const dobProblem = dobValue.length > 0 ? dobValidationError(dobValue) : null;
+    if (dobProblem) {
+      setDobError(dobProblem);
       return;
     }
     setDobError(null);

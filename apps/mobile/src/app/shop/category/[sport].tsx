@@ -1,13 +1,14 @@
 import { useShop, useWishlist, toApiError, type AffiliateProduct, type ShopProduct } from '@atlitos/api';
 import type { ApiError } from '@atlitos/types';
-import { spacing } from '@atlitos/theme';
+import { radii, spacing } from '@atlitos/theme';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ChevronLeft, Heart, RefreshCw, ShoppingBag, ShoppingCart, TriangleAlert } from 'lucide-react-native';
+import { Check, ChevronLeft, Heart, RefreshCw, ShoppingBag, ShoppingCart, TriangleAlert } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/organisms/EmptyState';
+import { LoginGateModal } from '@/components/organisms/LoginGateModal';
 import { Chip } from '@/components/ui/chip';
 import { ProductCard } from '@/components/ui/product-card';
 import { SearchBar } from '@/components/ui/search-bar';
@@ -36,13 +37,26 @@ type LoadState = 'loading' | 'empty' | 'populated' | 'error';
  * raw `product_variants.stock` (PHASE-4-STATUS.md D2). Default relevance order
  * is recommended rank first, then title, applied in `listProducts`.
  *
- * Guest open: nothing on this screen mutates server state. The wishlist heart
- * saves locally for a guest per FR-7/AC-B3 and never raises the login gate;
- * Add to Cart is where the gate actually lives, on the PDP.
+ * Guest open: browsing never mutates server state. The wishlist heart saves
+ * locally for a guest per FR-7/AC-B3 and never raises the login gate; the
+ * grid's Add to cart is where the gate lives (FR-7), same as the PDP.
+ *
+ * Grid Add to cart (QA 2026-09-15, "not adding the item to cart"): the
+ * button used to be a disguised link to the PDP. It now follows FR-29's
+ * wishlist rule: one buyable variant adds it at qty 1 through `add_to_cart`
+ * (server side stock revalidation, FR-9, capped never rounded up), more
+ * than one routes to the PDP where the size is chosen, none in stock says
+ * so. A notice above the grid confirms what happened and links to the cart.
  *
  * Four states per FR-31: skeleton grid, empty (the Recommended Gears rail
  * still renders if it has anything, else an empty state pointing back to the
  * catalog), populated, error with retry.
+ *
+ * The Recommended Gears rail (FR-2) only carries products that are NOT
+ * already in the grid below it. `listProducts` sorts recommended items
+ * first (FR-1), so on "All gear" the rail was a copy of the grid's first
+ * row and read as the same product listed twice (QA 2026-09-15). On a
+ * category view it still surfaces recommended gear from other categories.
  *
  * FR-33: affiliate products (Phase 9 WS4) browse alongside owned products.
  * `listAffiliateProducts` was defined but never called by any screen (QA I48),
@@ -74,6 +88,9 @@ export default function CategoryBrowseScreen() {
   const [search, setSearch] = useState('');
   const [error, setError] = useState<ApiError | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [addingId, setAddingId] = useState<string | null>(null);
+  const [cartNotice, setCartNotice] = useState<{ text: string; tone: 'ok' | 'warn' } | null>(null);
+  const [gateVisible, setGateVisible] = useState(false);
 
   const load = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -162,7 +179,67 @@ export default function CategoryBrowseScreen() {
     setRefreshing(false);
   }
 
+  // The notice is a toast, not a banner: it clears itself so a shopper who
+  // keeps browsing is not left with a stale "Added" line pinned at the top.
+  useEffect(() => {
+    if (!cartNotice) return;
+    const timer = setTimeout(() => setCartNotice(null), 4000);
+    return () => clearTimeout(timer);
+  }, [cartNotice]);
+
+  async function handleAddToCart(product: ShopProduct) {
+    // FR-7: the cart is the first thing a guest cannot do. Gate, do not
+    // silently drop the tap.
+    if (!isSignedIn) {
+      setGateVisible(true);
+      return;
+    }
+    if (addingId) return;
+
+    const buyable = product.variants.filter((variant) => variant.availableStock > 0);
+    if (buyable.length === 0) {
+      setCartNotice({ text: 'This gear is out of stock right now.', tone: 'warn' });
+      return;
+    }
+    // FR-29's rule for a one tap add: a size has to be chosen when there is
+    // more than one, and the PDP is where sizes live.
+    if (buyable.length > 1) {
+      router.push({ pathname: '/shop/product/[id]', params: { id: product.id } });
+      return;
+    }
+
+    setAddingId(product.id);
+    try {
+      const result = await shop.addToCart(buyable[0].id, 1);
+      // FR-9: the RPC caps rather than silently rounding up, and the shopper
+      // has to be told when it did.
+      setCartNotice({
+        text: result.capped
+          ? `Only ${result.availableStock} left, so your cart has ${result.qty}.`
+          : 'Added to your cart.',
+        tone: 'ok',
+      });
+      // Availability moved, so re-read it rather than trusting what this
+      // screen loaded a moment ago.
+      void load({ silent: true });
+    } catch (err) {
+      const apiError = toApiError(err);
+      setCartNotice({
+        text:
+          apiError.code === 'OUT_OF_STOCK'
+            ? 'That one just sold out.'
+            : apiError.message || 'Could not add this to your cart.',
+        tone: 'warn',
+      });
+    } finally {
+      setAddingId(null);
+    }
+  }
+
   const visible = shop.filterBySearch(products, search);
+  // Recommended minus whatever the grid already shows, see the screen doc.
+  const gridIds = new Set(products.map((product) => product.id));
+  const railItems = recommended.filter((item) => !gridIds.has(item.id));
   // FR-33's search half for affiliate rows: the same title/brand search the
   // owned grid applies, over the affiliate rail, so a search for a brand
   // Atlitos does not stock still surfaces the compare-price entry point.
@@ -246,7 +323,7 @@ export default function CategoryBrowseScreen() {
         )}
       />
 
-      {recommended.length > 0 ? <RecommendedRail items={recommended} /> : null}
+      {railItems.length > 0 ? <RecommendedRail items={railItems} /> : null}
       {visibleAffiliate.length > 0 ? <ComparePricesRail items={visibleAffiliate} /> : null}
     </View>
   );
@@ -292,6 +369,46 @@ export default function CategoryBrowseScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
+      {cartNotice ? (
+        <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.sm }}>
+          <View
+            accessibilityLiveRegion="polite"
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: spacing.sm,
+              borderRadius: radii.md,
+              backgroundColor: cartNotice.tone === 'ok' ? colors.accentTint : colors.surfaceMuted,
+              padding: spacing.md,
+            }}
+          >
+            {cartNotice.tone === 'ok' ? (
+              <Check size={16} strokeWidth={2} color={colors.accent} />
+            ) : (
+              <TriangleAlert size={16} strokeWidth={2} color={colors.textSecondary} />
+            )}
+            <Text
+              style={[
+                textStyle('caption'),
+                { color: cartNotice.tone === 'ok' ? colors.accent : colors.textSecondary, flex: 1 },
+              ]}
+            >
+              {cartNotice.text}
+            </Text>
+            {cartNotice.tone === 'ok' ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="View cart"
+                hitSlop={8}
+                onPress={() => router.push('/shop/cart')}
+              >
+                <Text style={[textStyle('label'), { color: colors.accent }]}>View cart</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      ) : null}
+
       <FlatList
         data={visible}
         key="shop-grid"
@@ -321,12 +438,15 @@ export default function CategoryBrowseScreen() {
             title={item.title}
             price={item.priceFrom}
             wishlisted={effectiveSavedIds.includes(item.id)}
+            addingToCart={addingId === item.id}
             onPress={() => router.push({ pathname: '/shop/product/[id]', params: { id: item.id } })}
-            onAddToCart={() => router.push({ pathname: '/shop/product/[id]', params: { id: item.id } })}
+            onAddToCart={() => void handleAddToCart(item)}
             onToggleWishlist={() => void handleToggleWishlist(item.id)}
           />
         )}
       />
+
+      <LoginGateModal visible={gateVisible} onClose={() => setGateVisible(false)} />
     </SafeAreaView>
   );
 }
