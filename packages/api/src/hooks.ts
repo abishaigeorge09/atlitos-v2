@@ -914,14 +914,26 @@ export function useCourts(client: AtlitosClient) {
       return (data ?? []).map(mapCourtBookingRow);
     },
 
-    /** v1 `courts.get` for a single booking (booking detail screen). */
+    /** v1 `courts.get` for a single booking (booking detail screen).
+     *
+     * Scoped by owner, not by RLS alone (CLAUDE.md: RLS is permissive-OR and
+     * is not scoping). `court_bookings` carries a partner read policy for the
+     * venue side, so an unscoped `.eq("id")` from the athlete app would return
+     * another person's booking to anyone who guessed or was handed its id.
+     * D22 (fix/d22-booking-detail), applied 2026-09-15 during the branch audit;
+     * `listMyBookings` had already been scoped, this call site was missed. */
     async getBooking(bookingId: string): Promise<CourtBooking | null> {
+      const { data: authData, error: authError } = await client.auth.getUser();
+      if (authError) throw mapAuthError(authError);
+      if (!authData.user) return null;
+
       const { data, error } = await client
         .from("court_bookings")
         .select(
           "id, court_id, user_id, booking_source, date, slot_start, slot_end, subtotal, gst, platform_fee, total, status, rating, remarks, cancellation_reason, courts ( name, sport, venues ( name, address, city ) )",
         )
         .eq("id", bookingId)
+        .eq("user_id", authData.user.id)
         .maybeSingle<CourtBookingQueryRow>();
       if (error) throw mapPostgrestError(error);
       if (!data) return null;
