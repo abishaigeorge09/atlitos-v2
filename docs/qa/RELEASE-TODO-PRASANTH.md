@@ -10,9 +10,9 @@ Status legend: [ ] not started, [~] in progress, [x] done, [!] blocked.
 | # | Task | Window | Pri | Status | What done looks like |
 |---|------|--------|-----|--------|----------------------|
 | 25 | Push the code | Sept 9 | P0 | [~] | 275 local commits are on the remote; remote is no longer five weeks behind |
-| 6 | Build a data entry path | Sept 9 to 11 | P0 | [ ] | Either admin create screens for coaches and products, or a CSV import an engineer runs. Unblocks tab 1 rows 1 to 4 (Kushlu, Amma, Amaeya data entry) |
+| 6 | Build a data entry path | Sept 9 to 11 | P0 | [~] | Either admin create screens for coaches and products, or a CSV import an engineer runs. Unblocks tab 1 rows 1 to 4 (Kushlu, Amma, Amaeya data entry) |
 | 19 | Analytics (PostHog) | Sept 9 to 11 | P2 | [x] | Decision recorded: wired, or explicitly deferred |
-| 5 | Build courts as an affiliate click out | Sept 9 to 12 | P0 | [ ] | Outbound link field on courts, entry path to fill it, click out screen modelled on the shop affiliate screen. In-app booking flow and its deep link routes hidden |
+| 5 | Build courts as an affiliate click out | Sept 9 to 12 | P0 | [~] | Outbound link field on courts, entry path to fill it, click out screen modelled on the shop affiliate screen. In-app booking flow and its deep link routes hidden |
 | 11 | Account and infra verification | Sept 9 to 13 | P0 | [ ] | Leaked password protection on; MFA on Apple, Supabase, Razorpay, GitHub; prepaid credits topped up; backup restore proven; Apple agreements current |
 | 13 | Fix bugs and polish | Sept 9 to 13 | P0 | [~] | Everything the profile days (section 2) turn up is fixed or logged in BUG-LEDGER.md |
 | 8 | Deploy what is already built | Sept 9 to 14 | P0 | [!] | 8 pending migrations applied, 2 missing edge functions deployed, each money path smoke tested |
@@ -32,6 +32,8 @@ Status legend: [ ] not started, [~] in progress, [x] done, [!] blocked.
 - **25, Push:** `integration/p6-reconciled` (2541742) and `fix/qa-round-2026-09-15` are on origin. What remains is the uncommitted UI work in the main checkout, which Prasanth commits himself when it is finished.
 - **13, Bugs:** external tester round of 2026-09-15 fixed as BUG-045 to BUG-049 (`docs/qa/BUG-LEDGER.md`), branch `fix/qa-round-2026-09-15`.
 - **10, Legal:** `/`, `/privacy`, `/terms`, `/support`, `/delete-account` return 200 on www.atlitos.com. Still open: `/support` points at support@elsheph.com, not an atlitos.com address, and `/content-policy` is 404 on the deployed site.
+- **5, Courts click out: CODE DONE** on `fix/qa-round-2026-09-15` (b81e9bb). `venues.booking_url` + `image_url` (migration `0120_venue_booking_url.sql`), Book on `<site>` on the court page, in-app booking hidden behind `COURT_IN_APP_BOOKING_ENABLED`. **Before this build ships: apply `0120`** (the app now selects the two columns). Then render check the Courts tab once one venue is imported.
+- **6, Data entry path: CODE DONE**, CSV import (the "an engineer runs" option, chosen for zero UI surface and whole file validation). `scripts/import-courts.mjs`, `scripts/import-equipment.mjs`, `scripts/import-coaches.mjs`, templates in `scripts/templates/`, guide in `docs/qa/DATA-ENTRY.md`. Dry run, validation and the production guard exercised; the write path runs for real on the first sheet (dry run, then `--apply`). Rows 1 to 4 are unblocked once 0120 is applied and `.env.local` holds the service role key.
 - **8, Deploy: BLOCKED on three reconciliation calls, checked against the live ledger (109 rows, top `0117`) on 2026-09-15.** Two unapplied sets now exist: main's renumbered `0118` to `0125` (see `docs/architecture/DEPLOY-RUNBOOK.md`) and this branch's own `0110`, `0112` to `0115`, `0118`, `0119`, which collide on number with main's `0118`/`0119`. Findings:
   - `chat_thread_previews`: main's `0124` and this branch's `0113` both create it but return different columns. The deployed app parses this branch's shape (`sender_id`, `removed_at`, name from `public_profiles`). Apply `0113`, never `0124`.
   - main's `0121` (`order_transition` audit row): body is production's plus the audit insert, so it is safe on its own, BUT the deployed `admin-order-advance` edge function still writes its own audit row, so applying it alone double-writes. Ship the RPC and the edge function change together.
@@ -45,8 +47,8 @@ Founder decisions Prasanth is waiting on (tab 1 rows 22 to 24, all Open):
 - [ ] Row 24: Apple commission on donations (Empower donations go through an Atlitos held fund, not a registered charity). Blocks task 14 and 16.
 
 Tab 1 rows 2 and 3 (Amaeya, both Blocked, P0) are the affiliate data entry for courts and equipment. They cannot start until tasks 5 and 6 above land, so they are tracked here as downstream:
-- [ ] Row 2: Add courts (affiliate links). Unblocked by task 5 and task 6.
-- [ ] Row 3: Add equipment (affiliate links). Unblocked by task 6.
+- [ ] Row 2: Add courts (affiliate links). Unblocked by task 5 and task 6: sheet `scripts/templates/courts.csv`, guide `docs/qa/DATA-ENTRY.md`, needs 0120 applied.
+- [ ] Row 3: Add equipment (affiliate links). Unblocked by task 6: sheet `scripts/templates/equipment.csv`.
 
 ## 2. Tab 2, Tech Schedule (day plan)
 
