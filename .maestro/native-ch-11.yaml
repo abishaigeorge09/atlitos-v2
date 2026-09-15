@@ -1,0 +1,70 @@
+appId: com.atlitos.app
+---
+# CH-11 (MAESTRO, player@ in a group): group thread roster + sender names.
+# Opens the seeded "Cric Squad" group thread (5 members), asserts the tappable
+# member-count row, opens the roster sheet via that row and asserts it lists the
+# correct members, then sends a message and asserts the sender name renders above
+# the bubble (group bubbles carry sender names; a 1:1 thread does not, see CH-10).
+#
+# EXPECTED-RED, blocked by BUG-014 (users RLS): a non-admin can read only their
+# OWN users row, so `listThreadMembers` drops every other member (roster shows
+# just the caller) and incoming bubbles render with no sender name. This flow
+# deliberately keeps the CORRECT acceptance (roster lists Ravi Kumar + other
+# members) so it fails honestly until BUG-014 is fixed, rather than being
+# trimmed to pass. The interaction plumbing up to the roster (thread open,
+# member-count row, sheet open, own send + own sender-name label) all works.
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "ATLITOS"
+    timeout: 30000
+# Deep-linking to /login right after a cold clearState launch occasionally
+# races the router before the route is registered and the link is dropped;
+# retry re-fires the openLink until the login screen actually mounts.
+- retry:
+    maxRetries: 3
+    commands:
+      - openLink: "atlitos://login"
+      - extendedWaitUntil:
+          visible: "Log in"
+          timeout: 12000
+- tapOn: "Email or phone input"
+- inputText: "player@atlitos.dev"
+- tapOn: "Password input"
+- inputText: "AtlitosDemo!2026"
+- tapOn:
+    text: "Log in"
+    index: 1
+- extendedWaitUntil:
+    visible: "ATLITOS"
+    timeout: 20000
+# Open the seeded group thread.
+- openLink: "atlitos://chat/95b9e6f6-379a-43c4-8541-f6d0829d64a3"
+- extendedWaitUntil:
+    visible: "Cric Squad"
+    timeout: 15000
+# Tappable member-count row under the group title. It is one accessible
+# element labeled "5 members, view group members", so match with a prefix regex.
+- assertVisible: "5 members.*"
+- takeScreenshot: /private/tmp/claude-501/-Users-abishaigeorgegosula/fba33c07-a222-4e4f-ab7d-4ba677415610/scratchpad/native-ch-11-thread
+# Open the roster sheet via the member-count row.
+- tapOn: "5 members.*"
+- extendedWaitUntil:
+    visible: "Ravi Kumar"
+    timeout: 10000
+- assertVisible: "Demo Court Partner"
+- assertVisible: "P2 Verify Athlete"
+- takeScreenshot: /private/tmp/claude-501/-Users-abishaigeorgegosula/fba33c07-a222-4e4f-ab7d-4ba677415610/scratchpad/native-ch-11-roster
+- tapOn: "Close"
+- waitForAnimationToEnd:
+    timeout: 2000
+# Sender names above bubbles: send a message and assert my name labels it.
+# Composer a11y text is "Message input Message" (label + placeholder).
+- tapOn: "Message input.*"
+- inputText: "Native e2e CH-11 group ping"
+- tapOn: "Send message"
+- extendedWaitUntil:
+    visible: "Native e2e CH-11 group ping"
+    timeout: 15000
+- assertVisible: "Demo Player"
+- takeScreenshot: /private/tmp/claude-501/-Users-abishaigeorgegosula/fba33c07-a222-4e4f-ab7d-4ba677415610/scratchpad/native-ch-11-sent

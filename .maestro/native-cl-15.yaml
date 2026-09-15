@@ -1,0 +1,59 @@
+appId: com.atlitos.app
+---
+# CL-15 (MAESTRO, player@): Clutch feed native behaviour.
+# Signs in as player@, opens the vertical Clutch feed, asserts one full-bleed
+# clip card per viewport with its engagement rail, then swipes up and asserts
+# the feed PAGES to a distinct next clip (paging snap).
+#
+# Autoplay-in-viewport is driven by ClutchPostCard's `active` prop into
+# ClipVideo (muted autoplay on the single on-screen card). Maestro cannot read
+# a video element's playback/readyState on native, so autoplay is asserted
+# structurally (the active card's video surface renders) and by evidence
+# screenshots; the actual play state is code-backed in clip-video.tsx.
+# Seed clips carry placeholder MP4 bytes, so the on-screen surface shows the
+# clip poster rather than moving frames on this sim build.
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "ATLITOS"
+    timeout: 30000
+- openLink: "atlitos://login"
+- extendedWaitUntil:
+    visible: "Log in"
+    timeout: 10000
+- tapOn: "Email or phone input"
+- inputText: "player@atlitos.dev"
+- tapOn: "Password input"
+- inputText: "AtlitosDemo!2026"
+- tapOn:
+    text: "Log in"
+    index: 1
+- extendedWaitUntil:
+    visible: "ATLITOS"
+    timeout: 20000
+# Open the Clutch feed.
+- openLink: "atlitos://clutch"
+- extendedWaitUntil:
+    visible: "Clutch"
+    timeout: 15000
+# First clip card: engagement rail present (feed variant renders Like/Comments/
+# Share). Capture the first clip's identity to prove the swipe pages away.
+- extendedWaitUntil:
+    visible: "Share"
+    timeout: 15000
+- assertVisible: "e2e CL-10 c0a6b0d6"
+- takeScreenshot: native-cl-15-clip1
+# Swipe up a full viewport height: pagingEnabled FlatList snaps to the next
+# clip. A short `direction: UP` swipe does not clear the >50% paging threshold
+# on this build, so an explicit near-full-height drag is used.
+- swipe:
+    start: "50%, 88%"
+    end: "50%, 12%"
+    duration: 300
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: native-cl-15-clip2
+# Paging snapped: the first clip's caption is gone and a clip card is still
+# on screen (rail visible), i.e. we advanced to a different clip.
+- assertNotVisible: "e2e CL-10 c0a6b0d6"
+- assertVisible: "Share"

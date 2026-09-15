@@ -1,0 +1,45 @@
+appId: com.atlitos.app
+---
+# AUTH-12 (MAESTRO, player@): native login smoke.
+# Cold start -> guest Home -> open login -> sign in as player@ -> land on Home
+# without crash, and prove the session is authenticated (Profile no longer
+# raises the guest login gate).
+#
+# Test-infra note: this flow types a SEED persona password (AtlitosDemo!2026,
+# scripts/seed-demo-users.mjs) into the local sim's login form. That is test
+# automation against a local simulator, not real-credential handling.
+- launchApp:
+    clearState: true
+# Splash silently starts a guest session and routes to the tabs (WS2).
+- extendedWaitUntil:
+    visible: "ATLITOS"
+    timeout: 30000
+# Reach the real login screen via the app's own deep-link scheme.
+- openLink: "atlitos://login"
+- extendedWaitUntil:
+    visible: "Log in"
+    timeout: 10000
+- assertVisible: "Email or phone.*"
+- tapOn: "Email or phone input"
+- inputText: "player@atlitos.dev"
+- tapOn: "Password input"
+- inputText: "AtlitosDemo!2026"
+# "Log in" is both the screen heading and the submit button; the button is the
+# second occurrence. The button sits above the keyboard so no hideKeyboard is
+# needed (hideKeyboard proved flaky on this build).
+- tapOn:
+    text: "Log in"
+    index: 1
+# afterAuth() dismisses to the origin, or replaces to the tabs Home on a cold
+# entry. Either way we should land on Home with no crash.
+- extendedWaitUntil:
+    visible: "ATLITOS"
+    timeout: 20000
+- takeScreenshot: /private/tmp/claude-501/-Users-abishaigeorgegosula/fba33c07-a222-4e4f-ab7d-4ba677415610/scratchpad/native-auth-12-home
+# Prove authenticated: the AppBar Profile avatar now opens the profile instead
+# of raising the guest login gate ("Want to hit the spotlight?").
+- tapOn: "Profile"
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertNotVisible: "Want to hit the spotlight?"
+- takeScreenshot: /private/tmp/claude-501/-Users-abishaigeorgegosula/fba33c07-a222-4e4f-ab7d-4ba677415610/scratchpad/native-auth-12-profile

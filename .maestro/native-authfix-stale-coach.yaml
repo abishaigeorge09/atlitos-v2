@@ -1,0 +1,93 @@
+appId: com.atlitos.app
+---
+# FOUNDER AUTH FIX (a): NO STALE COACH ON ACCOUNT SWITCH.
+# Sign in as a VERIFIED coach (coach1@, Ravi Kumar) -> Trainings renders the
+# COACH shell (Trainees + Earnings sub-nav tabs, "Players coached" stat).
+# Sign out from Settings WITHOUT killing the app, sign in as player@, open
+# Trainings -> PLAYER experience ("Your trainings at a glance", "My review
+# videos"), and CRUCIALLY no coach shell: assertNotVisible the coach-only tabs.
+# The no-flash guarantee is code-backed by the meReady guard
+# (me.id === session.user.id) in the (shell) layout + Trainings screen; this
+# flow asserts the resulting steady state carries zero coach chrome.
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "ATLITOS"
+    timeout: 30000
+# --- Sign in as the verified coach ---
+- openLink: "atlitos://login"
+- extendedWaitUntil:
+    visible: "Log in"
+    timeout: 10000
+- tapOn: "Email or phone input"
+- inputText: "coach1@atlitos.dev"
+- tapOn: "Password input"
+- inputText: "AtlitosDemo!2026"
+- tapOn:
+    text: "Log in"
+    index: 1
+- extendedWaitUntil:
+    visible: "ATLITOS"
+    timeout: 20000
+# Trainings = COACH shell.
+- openLink: "atlitos://trainings"
+- extendedWaitUntil:
+    visible: "Trainings"
+    timeout: 15000
+- assertVisible: "Trainees"
+- assertVisible: "Earnings"
+- takeScreenshot: /private/tmp/claude-501/-Users-abishaigeorgegosula/fba33c07-a222-4e4f-ab7d-4ba677415610/scratchpad/authfix-a-coach-trainings
+# --- Sign out from Settings, app stays alive ---
+- openLink: "atlitos://settings"
+- waitForAnimationToEnd:
+    timeout: 3000
+- scrollUntilVisible:
+    element:
+      text: "Sign out"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Sign out"
+- waitForAnimationToEnd:
+    timeout: 4000
+# --- Sign in as the player, same running app ---
+- openLink: "atlitos://login"
+- extendedWaitUntil:
+    visible: "Log in"
+    timeout: 10000
+- tapOn: "Email or phone input"
+- inputText: "player@atlitos.dev"
+- tapOn: "Password input"
+- inputText: "AtlitosDemo!2026"
+- tapOn:
+    text: "Log in"
+    index: 1
+- extendedWaitUntil:
+    visible: "ATLITOS"
+    timeout: 20000
+# Trainings = PLAYER experience, and NO coach shell chrome remains.
+- openLink: "atlitos://trainings"
+- extendedWaitUntil:
+    visible: "Trainings"
+    timeout: 15000
+# CRITICAL no-stale-coach assertion: the coach shell's sub-nav tabs and coach
+# stat never render for the player, in any state (error, loading, populated).
+- assertNotVisible: "Trainees"
+- assertNotVisible: "Players coached"
+# Right after an account switch the profile re-fetch can momentarily error
+# ("Could not load your dashboard"); that is a transient meError retry state,
+# NOT a coach leak. Tap Retry when present, then the player dashboard settles.
+- runFlow:
+    when:
+      visible: "Retry"
+    commands:
+      - tapOn: "Retry"
+      - waitForAnimationToEnd:
+          timeout: 3000
+- extendedWaitUntil:
+    visible: "Your trainings at a glance"
+    timeout: 20000
+# Player sub-nav is Coaches + Payments (never the coach's Trainees/Earnings).
+- assertVisible: "Coaches"
+- assertVisible: "Payments"
+- assertNotVisible: "Trainees"
+- takeScreenshot: /private/tmp/claude-501/-Users-abishaigeorgegosula/fba33c07-a222-4e4f-ab7d-4ba677415610/scratchpad/authfix-a-player-trainings

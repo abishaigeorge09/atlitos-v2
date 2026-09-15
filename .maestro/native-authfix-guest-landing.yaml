@@ -1,0 +1,59 @@
+appId: com.atlitos.app
+---
+# FOUNDER AUTH FIX (b): GUEST LANDS IN APP (no login wall on splash).
+# Sign in, sign out (leaves a persisted signed_out state), then COLD RELAUNCH
+# the app WITHOUT clearing storage. Splash must silently start a guest session
+# and route straight to Home (tabs), never a full-screen "Log in" wall.
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "ATLITOS"
+    timeout: 30000
+# Sign in as player so we have a real session to sign out of.
+- openLink: "atlitos://login"
+- extendedWaitUntil:
+    visible: "Log in"
+    timeout: 10000
+- tapOn: "Email or phone input"
+- inputText: "player@atlitos.dev"
+- tapOn: "Password input"
+- inputText: "AtlitosDemo!2026"
+- tapOn:
+    text: "Log in"
+    index: 1
+- extendedWaitUntil:
+    visible: "ATLITOS"
+    timeout: 20000
+# Real sign out from Settings -> persisted signed_out.
+- openLink: "atlitos://settings"
+- waitForAnimationToEnd:
+    timeout: 3000
+- scrollUntilVisible:
+    element:
+      text: "Sign out"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Sign out"
+- waitForAnimationToEnd:
+    timeout: 4000
+# COLD RELAUNCH, storage preserved (no clearState). Splash resolves the
+# persisted signed_out into a silent guest session and routes to tabs.
+- stopApp
+- launchApp
+# Lands on Home (tabs) with the ATLITOS wordmark. NO login wall: the login
+# screen chrome ("Welcome back", "Continue as guest", "Create account") must
+# not be on screen.
+- extendedWaitUntil:
+    visible: "ATLITOS"
+    timeout: 30000
+- assertNotVisible: "Welcome back"
+- assertNotVisible: "Continue as guest"
+- assertNotVisible: "Create account"
+- takeScreenshot: /private/tmp/claude-501/-Users-abishaigeorgegosula/fba33c07-a222-4e4f-ab7d-4ba677415610/scratchpad/authfix-b-guest-home
+# Prove it is a GUEST session (not a lingering signed-in one): the Profile
+# avatar raises the guest spotlight gate rather than opening a real profile.
+- tapOn: "Profile"
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible: "Want to hit the spotlight?"
+- takeScreenshot: /private/tmp/claude-501/-Users-abishaigeorgegosula/fba33c07-a222-4e4f-ab7d-4ba677415610/scratchpad/authfix-b-guest-gate

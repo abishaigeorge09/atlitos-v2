@@ -1,0 +1,56 @@
+appId: com.atlitos.app
+---
+# CH-10 (MAESTRO, player@ <-> coach1@): native 1:1 chat send/receive.
+# Opens the seeded 1:1 coaching thread with Ravi Kumar, confirms the composer
+# renders, sends a unique message, and asserts it lands as a bubble. The send
+# is a real round trip: sendMessage writes the row and the Supabase Realtime
+# INSERT echoes it back (de-duped against the optimistic row), so a message
+# that lands proves send AND receive over the same channel without crash.
+# A 1:1 thread renders no sender-name labels and no members row (that is CH-11).
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "ATLITOS"
+    timeout: 30000
+# Deep-linking to /login right after a cold clearState launch occasionally
+# races the router before the route is registered and the link is dropped;
+# retry re-fires the openLink until the login screen actually mounts.
+- retry:
+    maxRetries: 3
+    commands:
+      - openLink: "atlitos://login"
+      - extendedWaitUntil:
+          visible: "Log in"
+          timeout: 12000
+- tapOn: "Email or phone input"
+- inputText: "player@atlitos.dev"
+- tapOn: "Password input"
+- inputText: "AtlitosDemo!2026"
+- tapOn:
+    text: "Log in"
+    index: 1
+- extendedWaitUntil:
+    visible: "ATLITOS"
+    timeout: 20000
+# Open the seeded 1:1 coaching thread directly. The composer is the stable
+# anchor that the thread mounted. NOTE: the AppBar title renders the fallback
+# "Atlitos user" here rather than the coach's profile name (Ravi Kumar) because
+# the embedded other-participant users row comes back null for the player
+# (use-chat.ts:112 `other?.name ?? "Atlitos user"`, RLS on the users embed).
+# Logged as a finding in BUG-LEDGER; it does not affect 1:1 send/receive, which
+# is what CH-10 covers, so this flow anchors on the composer, not the title.
+# The composer's a11y text is "Message input Message" (label + placeholder),
+# and the send button's is "Send message"; both anchor that the thread mounted.
+- openLink: "atlitos://chat/64a05844-7be1-42cf-afbf-88d26712389b"
+- extendedWaitUntil:
+    visible: "Send message"
+    timeout: 15000
+- takeScreenshot: /private/tmp/claude-501/-Users-abishaigeorgegosula/fba33c07-a222-4e4f-ab7d-4ba677415610/scratchpad/native-ch-10-thread
+# Send a unique message and assert it lands as a bubble (send + realtime echo).
+- tapOn: "Message input.*"
+- inputText: "Native e2e CH-10 ping"
+- tapOn: "Send message"
+- extendedWaitUntil:
+    visible: "Native e2e CH-10 ping"
+    timeout: 15000
+- takeScreenshot: /private/tmp/claude-501/-Users-abishaigeorgegosula/fba33c07-a222-4e4f-ab7d-4ba677415610/scratchpad/native-ch-10-sent
