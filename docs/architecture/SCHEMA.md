@@ -275,9 +275,13 @@ Integrator TODO: apply `0082_coach_trainee_videos.sql`, deploy both functions, r
 | `description` | `text` | nullable |
 | `status` | `venue_status` | not null default `pending` |
 | `rejection_reason` | `text` | nullable |
+| `booking_url` | `text` | nullable, check `^https?://` (`0120`). Release task 5: the venue's own booking page. When set, the app opens it instead of its slot picker; while `COURT_IN_APP_BOOKING_ENABLED` is off only venues with one are listed |
+| `image_url` | `text` | nullable, check `^https?://` (`0120`). External cover photo for an imported venue, read ahead of `venue_photos` |
 | `created_at`, `updated_at` | `timestamptz` | |
 
 Indexes: `idx_venues_partner_user_id` on `partner_user_id`, `idx_venues_status_city` on `(status, city)`.
+
+Imported (affiliate) venues are written by `scripts/import-courts.mjs` under the service role with `status = 'verified'`, so they ride the existing public read policy; no client role can set `booking_url`.
 
 ### `venue_photos`
 

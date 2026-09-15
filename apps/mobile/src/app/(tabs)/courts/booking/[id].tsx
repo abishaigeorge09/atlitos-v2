@@ -2,7 +2,7 @@ import { useCourts } from '@atlitos/api';
 import { canRateCourtBooking, canTransition, COURT_BOOKING_TRANSITIONS } from '@atlitos/types';
 import type { ApiError, CourtBooking } from '@atlitos/types';
 import { radii, spacing } from '@atlitos/theme';
-import { router, useLocalSearchParams } from 'expo-router';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { CalendarClock, TriangleAlert, XCircle } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, ScrollView, View } from 'react-native';
@@ -22,6 +22,7 @@ import { SPORT_LABEL } from '@/lib/sport-display';
 import { supabase } from '@/lib/supabase';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
+import { COURT_IN_APP_BOOKING_ENABLED } from '@/lib/feature-flags';
 
 type ScreenState = 'loading' | 'populated' | 'error';
 
@@ -42,7 +43,17 @@ function todayISO(): string {
  * (`load()`), this app has no react-query cache to invalidate yet. States:
  * loading, populated, error.
  */
-export default function CourtBookingDetailScreen() {
+export default function CourtBookingDetailScreenRoute() {
+  // Release task 5: in-app booking is off, so this route only exists for a
+  // stale deep link or push. Send it back to the courts tab. Gated here,
+  // outside the screen, so the screen's own hooks never run conditionally.
+  if (!COURT_IN_APP_BOOKING_ENABLED) {
+    return <Redirect href="/(tabs)/courts" />;
+  }
+  return <CourtBookingDetailScreen />;
+}
+
+function CourtBookingDetailScreen() {
   const colors = useThemeColors();
   const courts = useCourts(supabase);
   const { id } = useLocalSearchParams<{ id: string }>();

@@ -183,6 +183,9 @@ export interface Court {
   active: boolean;
   // hydrated for list/discovery screens, mirrors CoachProfile.distanceKm
   distanceKm?: number;
+  /** Release task 5: when the venue carries an outbound booking page, the
+   * court is booked there (click out), never through the in-app slot flow. */
+  bookingUrl?: string;
 }
 
 export interface Venue {

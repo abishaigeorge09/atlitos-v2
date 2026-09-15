@@ -15,6 +15,7 @@ import { CourtCard } from '@/components/ui/court-card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
 import { usePendingAuthAction } from '@/hooks/use-pending-auth-action';
+import { COURT_IN_APP_BOOKING_ENABLED } from '@/lib/feature-flags';
 import { SPORT_LABEL } from '@/lib/sport-display';
 import { supabase } from '@/lib/supabase';
 import { useLocationStore } from '@/store/location-store';
@@ -87,7 +88,13 @@ export default function CourtsIndexScreen() {
       if (!options?.silent) setState('loading');
       setError(null);
       try {
-        const result = await courts.listCourts({ sport: sport ?? undefined, near: coords });
+        // Release task 5: while in-app booking is off, only venues with a
+        // booking page list, so every card leads somewhere bookable.
+        const result = await courts.listCourts({
+          sport: sport ?? undefined,
+          near: coords,
+          bookingUrlOnly: !COURT_IN_APP_BOOKING_ENABLED,
+        });
         // BUG-03. The header promises "courts near <city>" and the list then
         // showed every verified venue in the country sorted by distance, each
         // with a live Book button. Observed on a device located outside India:
@@ -132,14 +139,16 @@ export default function CourtsIndexScreen() {
     <View style={{ padding: spacing.lg, gap: spacing.sm }}>
       <View className="flex-row items-center justify-between">
         <Text style={[textStyle('h1'), { color: colors.text }]}>Courts</Text>
-        <Pressable
-          accessibilityRole="button"
-          className="min-h-11 flex-row items-center gap-xs rounded-pill px-md active:bg-surface-muted"
-          onPress={() => requireAuth(() => router.push('/(tabs)/courts/bookings'), () => setGateVisible(true))}
-        >
-          <CalendarClock size={18} strokeWidth={1.75} color={colors.accent} />
-          <Text className="font-sans-semibold text-sm text-accent">My bookings</Text>
-        </Pressable>
+        {COURT_IN_APP_BOOKING_ENABLED ? (
+          <Pressable
+            accessibilityRole="button"
+            className="min-h-11 flex-row items-center gap-xs rounded-pill px-md active:bg-surface-muted"
+            onPress={() => requireAuth(() => router.push('/(tabs)/courts/bookings'), () => setGateVisible(true))}
+          >
+            <CalendarClock size={18} strokeWidth={1.75} color={colors.accent} />
+            <Text className="font-sans-semibold text-sm text-accent">My bookings</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       <View className="flex-row items-center gap-xs">

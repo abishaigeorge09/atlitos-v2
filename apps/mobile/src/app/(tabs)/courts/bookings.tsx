@@ -1,7 +1,7 @@
 import { useCourts } from '@atlitos/api';
 import type { ApiError, CourtBooking } from '@atlitos/types';
 import { radii, spacing } from '@atlitos/theme';
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import { CalendarX2, TriangleAlert } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, View } from 'react-native';
@@ -17,6 +17,7 @@ import { supabase } from '@/lib/supabase';
 import { AppBar } from '@/components/ui/app-bar';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
+import { COURT_IN_APP_BOOKING_ENABLED } from '@/lib/feature-flags';
 
 type ScreenState = 'loading' | 'empty' | 'populated' | 'error';
 
@@ -27,7 +28,17 @@ type ScreenState = 'loading' | 'empty' | 'populated' | 'error';
  * `listMyBookings` to the caller's own rows. States: loading, empty
  * (no bookings yet), populated, error.
  */
-export default function CourtBookingsListScreen() {
+export default function CourtBookingsListScreenRoute() {
+  // Release task 5: in-app booking is off, so this route only exists for a
+  // stale deep link or push. Send it back to the courts tab. Gated here,
+  // outside the screen, so the screen's own hooks never run conditionally.
+  if (!COURT_IN_APP_BOOKING_ENABLED) {
+    return <Redirect href="/(tabs)/courts" />;
+  }
+  return <CourtBookingsListScreen />;
+}
+
+function CourtBookingsListScreen() {
   const colors = useThemeColors();
   const courts = useCourts(supabase);
 

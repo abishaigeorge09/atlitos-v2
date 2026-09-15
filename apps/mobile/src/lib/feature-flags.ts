@@ -45,3 +45,28 @@
  * them half wired the way they were found.
  */
 export const COACH_TRAINEE_VIDEO_REVIEW_ENABLED = false;
+
+/**
+ * In-app court booking (slot picker, pay step, booking history).
+ *
+ * OFF for the Oct 8 release, founder decision (release plan task 5): courts
+ * ship as an affiliate click out. Every browsable court carries the venue's
+ * own booking page (`venues.booking_url`, migration 0120) and the detail
+ * screen opens it in the browser instead of picking a slot.
+ *
+ * What the flag being OFF changes:
+ *
+ *   1. The courts tab lists only venues that have a booking page
+ *      (`listCourts({ bookingUrlOnly: true })`), so no court is a dead end.
+ *   2. The court detail screen hides the date and slot pickers and the
+ *      Book this slot footer; the click out card is the only action.
+ *   3. `courts/book/pay`, `courts/booking/[id]` and `courts/bookings` still
+ *      route (a stale push or deep link could reach them) but send the user
+ *      back to the courts tab instead of rendering a flow nobody can finish.
+ *   4. The My bookings entry on the courts tab is hidden.
+ *
+ * Nothing is deleted: `book-court`, the slot RPCs, BillSummary and the
+ * booking screens are all intact behind this one constant. Flip it to true
+ * and in-app booking is back exactly as it was.
+ */
+export const COURT_IN_APP_BOOKING_ENABLED = false;
