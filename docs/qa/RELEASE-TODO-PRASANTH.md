@@ -41,6 +41,35 @@ Status legend: [ ] not started, [~] in progress, [x] done, [!] blocked.
   - The 2 missing edge functions are `delete-account` (waits on `0120`/`0123`) and `notify-push-sweep` (task 9, inert until pg_net + vault secrets).
   - None of this blocks tasks 5 and 6, so those went first.
 
+### Path to both stores, checked against production on 2026-09-15
+
+Ordered by dependency. A is the reason the shipped app has errors today; nothing after it is worth doing first.
+
+**A. Make production match the app (blocks everything, needs a production write go)**
+1. Production is missing 15 of this branch's own migrations: `0098` to `0106`, `0110`, `0112` to `0115`, `0118`, `0119` (ledger top is `0117`; only `0107` to `0109`, `0116`, `0117` of the newer set landed). The shipped app calls `account_deletion_preview` + the `delete-account` edge function (0098, Apple 5.1.1(v)), `delete_my_clip` (0100) and `set_clip_comments_enabled` (0101) with no fallback, so Delete account, Delete my clip and Comments off are live errors. Apply in order, one file at a time per `docs/architecture/DEPLOY-RUNBOOK.md`, checking every `create or replace function` against the live definition first. Caveats: `0105` and the moved `0111` need pg_cron and vault secrets; `0113`/`0114` are the CONCURRENTLY split; `0115` must be read against live `0096`. Then `0120` (courts click out).
+2. Deploy `delete-account` (after 0098) and `notify-push-sweep` (after 0110, task 9 secrets).
+3. Prove Delete account end to end on a throwaway account. This is the Apple 5.1.1(v) gate and Play's account deletion requirement.
+
+**B. App code**
+4. Merge `fix/qa-round-2026-09-15` into `integration/p6-reconciled`, push.
+5. Port the uncommitted UI work on main onto the integration line. If it adds Google sign in (`SocialAuthButtons.tsx`, `lib/oauth.ts` are in that tree), Apple guideline 4.8 makes Sign in with Apple mandatory in the same release. Founder decision of 2026-08-12 was social login AFTER submission; either honour that or ship both together.
+6. Legal: `/support` still points at support@elsheph.com; needs an atlitos.com mailbox (Prasanth creates it) and a visible support link on the site; `/content-policy` is 404 on the deployed site.
+7. Razorpay live key: founder row 22, then set `EXPO_PUBLIC_RAZORPAY_KEY_ID` as an EAS production environment variable; `scripts/check-release-config.sh` must pass.
+
+**C. Data**
+8. Import courts, equipment, coaches from the sheets (`docs/qa/DATA-ENTRY.md`). Replace the flat colour seed images (BUG-06): reviewers and screenshots see them.
+9. Task 21 cleanup: 300 auth users of which 14 look like fixtures, 6 of 10 venues unverified fixtures, seed clips in the feed, a `trackb-verify` category. Inventory first (read only), delete on approval.
+
+**D. Native verification**
+10. EAS preview build, Maestro suite (baseline 13 pass, 1 real red, 1 not run), then the 188 profile scenarios (task 12) on a real device. Fix what comes back.
+
+**E. Store packs**
+- iOS (`docs/qa/APP-STORE-SUBMISSION-PACK.md`): demo account (still TO BE FILLED), age rating 12+ for UGC, privacy label already matches the manifest, 6.9 and 6.5 inch screenshots against real imagery, review notes. Row 23: recommend `supportsTablet: false` (no 12.9 inch screenshots, no iPad layout QA). Row 24: donations to individuals through an Atlitos held fund risk Apple 3.1.1 (in app purchase); founder decides before submit.
+- Android (no pack yet): Play Console listing, Data safety form mirroring the privacy manifest, IARC content rating (UGC), 512 icon, 1024x500 feature graphic, phone screenshots, account deletion URL (https://www.atlitos.com/delete-account, live), `google-service-account.json` for `eas submit`, Play App Signing. Check the developer account type: a personal account created after Nov 2023 must run a closed test with 12 testers for 14 days before production access, which alone can miss Oct 8.
+
+**F. Build and submit**
+- `eas build --profile production --platform all` (remote version source, auto increment), `eas submit`. TestFlight internal then external (Beta App Review); Play internal then closed then production. Two rejection cycles of buffer before Oct 8 means both submissions in by about Sept 26.
+
 Founder decisions Prasanth is waiting on (tab 1 rows 22 to 24, all Open):
 - [ ] Row 22: Zaakpay or Razorpay (only Razorpay is integrated). Blocks task 7.
 - [ ] Row 23: iPad support (supportsTablet true forces 12.9 inch screenshots). Blocks task 14.
