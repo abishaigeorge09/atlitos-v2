@@ -257,3 +257,47 @@ independent sequences both counting up from `0088`.
 To keep this from recurring: a migration is not done until it exists both in
 `supabase/migrations/` and in `schema_migrations`, and nothing is applied to
 the live project that is not already a committed file.
+
+## iOS build and App Store submission
+
+The store build is an EAS cloud build from `apps/mobile`, submitted to App Store Connect app `6793626237` (team `4U493SXP52`, bundle `com.atlitos.app`). Nothing here can be self served from an agent session: `eas login`, the build and the submit publish under the founder's Expo (`synthorgtech`) and Apple accounts, so the founder runs them from a terminal. Everything below is checked in the repo first so the run is mechanical.
+
+### Before the first store build, once
+
+1. `cd apps/mobile && npx eas-cli login` (Expo account that owns project `5976cc18-8fc3-4a97-9a3d-c767ad542d69`).
+2. EAS cloud builds do not read `.env` (it is gitignored). The three `EXPO_PUBLIC_*` values the app reads at build time must exist as EAS environment variables in the `production` environment, which the `production` build profile now selects explicitly (`"environment": "production"` in `eas.json`):
+
+   ```bash
+   npx eas-cli env:create --environment production --name EXPO_PUBLIC_SUPABASE_URL --value https://syzzfgaudpifwvbpycyi.supabase.co --visibility plaintext
+   npx eas-cli env:create --environment production --name EXPO_PUBLIC_SUPABASE_ANON_KEY --value <anon key> --visibility plaintext
+   npx eas-cli env:create --environment production --name EXPO_PUBLIC_RAZORPAY_KEY_ID --value <rzp_live_...> --visibility sensitive
+   ```
+
+   The Razorpay value is the live key and needs release decision row 22 (Zaakpay or Razorpay) and task 7 closed first. A build with the test key (`rzp_test_...`) is fine for TestFlight internal testing and wrong for the store: every real purchase, session, group fee and donation would fail at the payment sheet. `scripts/check-release-config.sh` (wired into `pnpm lint`) refuses any `rzp_test` or `rzp_live` literal inside `eas.json`; the key lives only in EAS.
+3. Do the same three for the `preview` environment if internal preview builds are wanted.
+
+### Every store build
+
+```bash
+cd apps/mobile
+pnpm turbo typecheck lint --filter=@atlitos/mobile   # green, or do not build
+npx eas-cli build --platform ios --profile production
+```
+
+`appVersionSource` is `remote` and the profile has `autoIncrement`, so EAS assigns the next build number itself (the `buildNumber` in `app.json` is ignored for store builds). `ios.buildReactNativeFromSource` is on for expo-blur, so expect 30 to 45 minutes. The build page prints the `.ipa` URL when it finishes.
+
+Then submit the latest build:
+
+```bash
+npx eas-cli submit --platform ios --profile production --latest
+```
+
+It lands in App Store Connect under TestFlight. Internal testers can install straight away; adding an external group triggers Beta App Review; the App Review submission for the store itself is done in App Store Connect with `docs/qa/APP-STORE-SUBMISSION-PACK.md` (listing copy, privacy labels, age rating, screenshots, review notes, demo account).
+
+### What still gates the store submission, not the build
+
+- Row 22 and task 7: the live payment key (above).
+- Row 23: iPad. `supportsTablet` is true in `app.json`, so App Store Connect demands 12.9 inch screenshots; either capture them or set it false before the build.
+- Row 24: Apple commission on Empower donations, since they go through an Atlitos held fund.
+- The review demo account in the submission pack is still `TO BE FILLED`.
+- Release task 8: migrations `0118` to `0125` are unapplied on the live project, so Messages, Blocked accounts, suspension and account deletion error on whatever build ships until they are.
