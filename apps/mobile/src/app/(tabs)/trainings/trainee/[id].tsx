@@ -25,6 +25,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/ui/avatar';
 import { AppBar } from '@/components/ui/app-bar';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PriceText } from '@/components/ui/price-text';
@@ -103,6 +104,7 @@ function paymentStatusPill(entry: TraineePaymentEntry): StatusPillStatus {
  */
 export default function CoachTraineeDetailScreen() {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
   const groups = useGroups(supabase);
   const { id } = useLocalSearchParams<{ id: string }>();
 
@@ -279,7 +281,7 @@ export default function CoachTraineeDetailScreen() {
           </ScrollView>
 
           {tab === 'overview' ? (
-            <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }}>
+            <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: navInset + spacing.xl }}>
               <View
                 style={{
                   borderRadius: radii.xl,
@@ -345,7 +347,7 @@ export default function CoachTraineeDetailScreen() {
                 <FlatList
                   data={visibleSessions}
                   keyExtractor={(item) => item.id}
-                  contentContainerStyle={{ padding: spacing.lg, paddingTop: 0, gap: spacing.md }}
+                  contentContainerStyle={{ padding: spacing.lg, paddingTop: 0, gap: spacing.md, paddingBottom: navInset + spacing.xl }}
                   renderItem={({ item }) => (
                     <View
                       style={{
@@ -389,7 +391,7 @@ export default function CoachTraineeDetailScreen() {
               <FlatList
                 data={payments}
                 keyExtractor={(item) => `${item.kind}-${item.id}`}
-                contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}
+                contentContainerStyle={{ padding: spacing.lg, gap: spacing.md, paddingBottom: navInset + spacing.xl }}
                 renderItem={({ item }) => (
                   <View
                     style={{
@@ -429,7 +431,7 @@ export default function CoachTraineeDetailScreen() {
                 <FlatList
                   data={notes}
                   keyExtractor={(item) => item.id}
-                  contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}
+                  contentContainerStyle={{ padding: spacing.lg, gap: spacing.md, paddingBottom: navInset + spacing.xl }}
                   renderItem={({ item }) => (
                     <Pressable
                       onLongPress={() => void handleDeleteNote(item.id)}
@@ -498,7 +500,7 @@ export default function CoachTraineeDetailScreen() {
             backgroundColor: colors.bg,
           }}
         >
-          <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+          <SafeAreaView style={{ flex: 1 }} edges={['top']}>
             <View
               style={{
                 flexDirection: 'row',
@@ -519,7 +521,9 @@ export default function CoachTraineeDetailScreen() {
               <View style={{ width: 24 }} />
             </View>
 
-            <View style={{ flex: 1, padding: spacing.lg, gap: spacing.lg }}>
+            {/* Save note is pinned, so it clears the floating bar (the inset
+                carries the bottom safe area the SafeAreaView no longer adds). */}
+            <View style={{ flex: 1, padding: spacing.lg, gap: spacing.lg, paddingBottom: navInset + spacing.lg }}>
               <Input
                 type="multiline"
                 autoFocus

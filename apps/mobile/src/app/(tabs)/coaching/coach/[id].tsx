@@ -21,6 +21,7 @@ import { LoginGateModal } from '@/components/organisms/LoginGateModal';
 import { TextField } from '@/components/organisms/_shared';
 import { Avatar } from '@/components/ui/avatar';
 import { AppBar } from '@/components/ui/app-bar';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -67,6 +68,7 @@ function addDaysISO(iso: string, days: number): string {
  */
 export default function CoachProfileScreen() {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
   const coaching = useCoaching(supabase);
   const groups = useGroups(supabase);
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -451,7 +453,7 @@ export default function CoachProfileScreen() {
         ) : null}
       </ScrollView>
 
-      <View style={{ padding: spacing.lg, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.bg }}>
+      <View style={{ padding: spacing.lg, paddingBottom: navInset + spacing.lg, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.bg }}>
         <Button disabled={!canBook} onPress={handleContinue}>
           <Text style={{ color: colors.inkOnAccent }}>
             {canBook ? `Continue, ${formatINR(sessionType!.price)}` : 'Choose a type, date, and time'}

@@ -6,7 +6,7 @@
 // per the same "UI green is not proof" discipline as the other money specs.
 
 import { callFunction } from "../../helpers/money.mjs";
-import { personaSession } from "../../helpers/persona.mjs";
+import { ATLITOS_PASSWORD, personaSession } from "../../helpers/persona.mjs";
 import { serviceClient } from "../../helpers/sql.mjs";
 import { expect, test } from "../../fixtures";
 
@@ -29,7 +29,7 @@ test.describe("AD: admin UI gates @money", () => {
   test("AD-01 admin@ signs in to the verification queue; player@ is rejected with no role hint @smoke", async ({ page, consoleGuard }) => {
     await page.goto("/login");
     await page.getByLabel("Email").fill("admin@atlitos.dev");
-    await page.getByLabel("Password").fill("AtlitosDemo!2026");
+    await page.getByLabel("Password").fill(ATLITOS_PASSWORD);
     await page.getByRole("button", { name: "Sign in" }).click();
     await expect(page).toHaveURL(/\/verification/, { timeout: 15_000 });
 
@@ -41,7 +41,7 @@ test.describe("AD: admin UI gates @money", () => {
     const page2 = await context2.newPage();
     await page2.goto("/login");
     await page2.getByLabel("Email").fill("player@atlitos.dev");
-    await page2.getByLabel("Password").fill("AtlitosDemo!2026");
+    await page2.getByLabel("Password").fill(ATLITOS_PASSWORD);
     await page2.getByRole("button", { name: "Sign in" }).click();
     await expect(page2.getByText("This account does not have admin access.")).toBeVisible({ timeout: 15_000 });
     await expect(page2).toHaveURL(/\/login/);
@@ -70,7 +70,7 @@ test.describe("AD: admin UI gates @money", () => {
 
     await page.goto("/login");
     await page.getByLabel("Email").fill("admin@atlitos.dev");
-    await page.getByLabel("Password").fill("AtlitosDemo!2026");
+    await page.getByLabel("Password").fill(ATLITOS_PASSWORD);
     await page.getByRole("button", { name: "Sign in" }).click();
     await expect(page).toHaveURL(/\/verification/, { timeout: 15_000 });
 
@@ -131,7 +131,7 @@ test.describe("AD: admin UI gates @money", () => {
 
     await page.goto("/login");
     await page.getByLabel("Email").fill("admin@atlitos.dev");
-    await page.getByLabel("Password").fill("AtlitosDemo!2026");
+    await page.getByLabel("Password").fill(ATLITOS_PASSWORD);
     await page.getByRole("button", { name: "Sign in" }).click();
     await expect(page).toHaveURL(/\/verification/, { timeout: 15_000 });
 
@@ -200,7 +200,7 @@ test.describe("AD: admin UI gates @money", () => {
     // UI signal: no refund control anywhere on the Order Detail screen.
     await page.goto("/login");
     await page.getByLabel("Email").fill("admin@atlitos.dev");
-    await page.getByLabel("Password").fill("AtlitosDemo!2026");
+    await page.getByLabel("Password").fill(ATLITOS_PASSWORD);
     await page.getByRole("button", { name: "Sign in" }).click();
     await expect(page).toHaveURL(/\/verification/, { timeout: 15_000 });
     await page.goto("/orders");
@@ -231,7 +231,7 @@ test.describe("AD: admin UI gates @money", () => {
   test("AD-06 MISSING: no User Detail route and no suspend/reinstate action exist @money", async ({ page }) => {
     await page.goto("/login");
     await page.getByLabel("Email").fill("admin@atlitos.dev");
-    await page.getByLabel("Password").fill("AtlitosDemo!2026");
+    await page.getByLabel("Password").fill(ATLITOS_PASSWORD);
     await page.getByRole("button", { name: "Sign in" }).click();
     await expect(page).toHaveURL(/\/verification/, { timeout: 15_000 });
 

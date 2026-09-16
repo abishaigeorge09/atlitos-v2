@@ -14,6 +14,7 @@ import { EmptyState } from '@/components/organisms/EmptyState';
 import { AppBar } from '@/components/ui/app-bar';
 import { useClipPosters } from '@/hooks/use-clip-posters';
 import { Avatar } from '@/components/ui/avatar';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { StatusPill, type Status } from '@/components/ui/status-pill';
 import { Text } from '@/components/ui/text';
@@ -64,6 +65,7 @@ type ProfileTab = 'posts' | 'liked' | 'saved';
  */
 export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {}) {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
   const clutch = useClutch(supabase);
   const status = useSessionStore((state) => state.status);
   const myId = useSessionStore((state) => state.me?.id ?? null);
@@ -383,6 +385,58 @@ export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {
         : 'Clips you save show up here. Tap the bookmark on any clip to keep it.';
   const EmptyIcon = tab === 'posts' ? LayoutGrid : tab === 'liked' ? Heart : Bookmark;
 
+  if (tab === 'follows') {
+    const rows = segment === 'following' ? following : followers;
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
+        {topBar}
+        <FlatList
+          key="follows"
+          data={rows}
+          keyExtractor={(item) => item.id}
+          ListHeaderComponent={header}
+          refreshControl={refreshControl}
+          contentContainerStyle={{ paddingBottom: navInset + spacing.xl }}
+          ListEmptyComponent={
+            <View style={{ padding: spacing.xl, alignItems: 'center', gap: spacing.sm }}>
+              <Users size={40} color={colors.textTertiary} strokeWidth={1.75} />
+              <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
+                {segment === 'following'
+                  ? 'You are not following anyone yet.'
+                  : 'No followers yet. Post clips to grow your channel.'}
+              </Text>
+            </View>
+          }
+          renderItem={({ item }) => (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={item.name}
+              onPress={() =>
+                router.push({ pathname: '/(tabs)/clutch/creator/[id]', params: { id: item.id } })
+              }
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: spacing.md,
+                paddingHorizontal: spacing.lg,
+                paddingVertical: spacing.sm,
+              }}
+            >
+              <Avatar uri={item.avatarUrl ?? undefined} name={item.name} size={40} />
+              <View style={{ flex: 1, gap: spacing.xs }}>
+                <Text style={[textStyle('label'), { color: colors.text }]}>{item.name}</Text>
+                {item.handle ? (
+                  <Text style={[textStyle('numericSm'), { color: colors.textSecondary }]}>@{item.handle}</Text>
+                ) : null}
+              </View>
+            </Pressable>
+          )}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  const gridClips = tab === 'posts' ? clips : liked;
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       {topBar}
@@ -392,7 +446,7 @@ export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {
         keyExtractor={(item) => item.id}
         numColumns={3}
         columnWrapperStyle={{ gap: spacing.xs }}
-        contentContainerStyle={{ gap: spacing.xs, paddingBottom: spacing.xl }}
+        contentContainerStyle={{ gap: spacing.xs, paddingBottom: navInset + spacing.xl }}
         ListHeaderComponent={header}
         refreshControl={refreshControl}
         onEndReached={() => void loadMore()}

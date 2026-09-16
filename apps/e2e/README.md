@@ -51,6 +51,12 @@ regenerated every run). One state file authenticates all four surfaces: it
 carries the supabase-js localStorage entry for athlete-web and admin, and the
 `@supabase/ssr` cookie encoding for portal-court and portal-life.
 
+Both demo passwords come from `scripts/lib/demo-credentials.mjs`, the one place
+in the repo that holds them. They default to the current values and are
+overridden by `ATLITOS_DEMO_PASSWORD` and `EMPOWER_DEMO_PASSWORD` when those are
+set in the environment, so a rotation needs no change here. That module also
+documents the rotation procedure.
+
 | persona | email |
 | --- | --- |
 | player | player@atlitos.dev |
@@ -91,6 +97,8 @@ passing setup.
   (auto-fails any test with uncaught console errors, small allowlist);
   `index.ts` merges all three.
 - `helpers/sql.mjs` — guarded service-role client, `assertIsolation`.
+- `helpers/persona.mjs` — memoized persona logins for specs that call edge
+  functions and RPCs directly; re-exports the two demo passwords.
 - `seed/reset.mjs` — thin, memoized wrappers around the root
   `scripts/seed-*.mjs`; guarded by the same test-DB check.
 - `specs/smoke/health.spec.ts` — proof of life: every surface returns 200 and

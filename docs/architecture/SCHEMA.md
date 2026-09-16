@@ -2,6 +2,8 @@
 
 Source of truth for every table in the Supabase Postgres schema. One domain per migration file under `supabase/migrations/`, in the order listed here (later domains reference earlier ones by foreign key). Column names are final; RLS policies live in `RLS.md`, edge function and RPC names are cross-referenced from `API-MAPPING.md` and `PAYMENTS.md`.
 
+> Applying any of this to the live project: read [`DEPLOY-RUNBOOK.md`](./DEPLOY-RUNBOOK.md) first. The repo and the live ledger use different version schemes, `supabase db push` is unsafe here, and the runbook carries the old to new migration number mapping.
+
 ## Conventions
 
 - Primary keys: `id uuid primary key default gen_random_uuid()` unless the table's identity is a foreign key to `auth.users` (then `id uuid primary key references auth.users(id)`).
@@ -1473,6 +1475,7 @@ The read path is `get_coach_wallet_balance()` and `get_my_transactions(kind?, li
 `ledger_entries` is insert-only and every economic event writes a balanced group (see the worked example above). This gives three properties the product requires: a coach's or partner's balance is always `sum(credits) - sum(debits)` computed live, never a value that can drift from reality; a refund or a payout failure is a new reversing group, never a mutation of history, so `audit_log` and `ledger_entries` together form a complete replayable record; and every screen that shows money (`Earnings`, `My Impact`, admin's `Order Detail` refund panel) reads the same table through a different filter, so there is exactly one place a money bug could live.
 
 ## LAUNCH Phase 3 scale hardening (Track A, migrations 0090-0094)
+## Security remediation, 2026-09-04 (0118 to 0121, formerly 0088 to 0091)
 
 The launch program's Phase 3 (1000-concurrent readiness) adds one enum value,
 two columns, four tables, and a set of service-role functions. No existing
@@ -1541,6 +1544,24 @@ table's ownership or money semantics change; every addition is additive.
   EXECUTE revoked from all client roles.
 
 ## Account deletion (migration `0098`)
+**`payment_intents.finalized_at timestamptz` (`0109`, SEC-F2).** A second axis beside `status`. `captured` means the money moved; `finalized_at` means the domain handler that owed work for that charge completed. The gate in `_shared/finalize-payment.ts` flips `created -> captured` before dispatching, so a downstream failure used to leave a captured charge whose booking, order, donation, membership or ledger group never landed, and every retry returned `already_processed`. `captured` + `finalized_at is null` now means "money moved, work owed", and the gate re-enters the domain handler for exactly that state. Backfilled to `updated_at` for every row already at or past `captured`, without which the entire live history would read as work-owed on deploy.
+
+| Function | Grant | What it does |
+|---|---|---|
+| `payment_finalization_backlog(p_grace interval)` | `service_role` only | Captured intents with no `finalized_at` older than `p_grace`, each with a `has_ledger_group` flag separating "work missing" from "marker missing". Read-only: repair lives in the edge-function handlers, which own the Razorpay and ledger-leg logic, and duplicating that in SQL would mean two implementations of the same money arithmetic. |
+| `is_active_user()` (`0120`, SEC-F4) | `anon, authenticated, service_role` | False only when the caller's `users.status` is `suspended`. A live read rather than a JWT claim, so a suspension takes effect on the next request instead of the next token refresh. |
+| `admin_suspend_user(p_user_id, p_reason)` (`0120`) | `authenticated` (admin checked inside), `service_role` | PRD-04 FR-35..FR-38. Status change, `audit_log` row and member notification in ONE transaction. Reason required, idempotent on an already-suspended user, refuses self-suspension. |
+| `admin_reinstate_user(p_user_id, p_reason)` (`0120`) | `authenticated` (admin checked inside), `service_role` | Lifts a suspension and clears `suspended_reason`, same atomicity. |
+
+`expire_stale_holds()` (`0109`) gains a fifth arm, `payments_unfinalized` / `payments_unfinalized_without_ledger`. It counts rather than repairs, for the reason above; a non-zero value is an alert condition, not a routine one.
+
+`order_transition()` (`0121`, SEC-F5) now writes its `audit_log` row inside the same transaction as the status change and the `order_timeline` row, reading the prior status under the row lock rather than letting the caller reconstruct it. Signature, grants, machine and error strings are unchanged.
+
+`custom_access_token_hook` (`0120`) refuses to mint claims for a suspended user (a returned `error` object denies sign-in and refresh) and injects `app_metadata.user_status` beside `roles`. It needs `supabase_auth_admin` to hold `select` on `public.users`, granted in the same migration; without that the status lookup silently returns null for every user, the exact failure `0017` fixed for roles.
+
+## 0122 to 0125 (release hardening, 2026-09-07, formerly 0092 to 0095)
+
+### `user_blocks` (0097, table `blocked_users`)
 
 Apple App Store Guideline 5.1.1(v) and the Google Play account deletion policy:
 an account created inside the app must be deletable from inside the app. The
@@ -1563,6 +1584,7 @@ a fixture with three captured payment intents produced:
 | `ledger_entries` | 8 | 8 |
 | `ledger_entries` with a NULL `payment_intent_id` | 0 | **8** |
 | sum(debits) - sum(credits) | 0.00 | 0.00 |
+### `users.deleted_at` (0098)
 
 The last two rows are the point: the ledger stayed perfectly balanced through a
 total loss of traceability, so "the ledger balances" is a necessary but wholly
@@ -1577,6 +1599,7 @@ means here, and it is why the coach's session history, the court partner's
 future booking and the other party's chat thread all still read correctly.
 
 ### Table by table
+### `rate_limit_counters` (0125)
 
 **Deleted** (the user's own data, no second party depends on it): `addresses`,
 `athlete_sports`, `cart_items`, `clip_likes`, `clip_saves`, `clips`,
@@ -1597,6 +1620,7 @@ future booking and the other party's chat thread all still read correctly.
 | `donations` | `donor_display_name` scrubbed. No amount, status, intent link or ledger row is touched |
 | `upa_applications` | `status` moved to `deactivated` so the story stops being listed |
 | `blocked_users` | Rows where the deleting user is the blocked party are kept, they belong to the other user's list |
+### `chat_thread_previews(uuid[])` (0113)
 
 **Retained untouched** (financial, legal, or another party's record):
 `payment_intents`, `ledger_entries`, `refunds`, `transfers`, `payout_accounts`,

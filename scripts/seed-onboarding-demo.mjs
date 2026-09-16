@@ -49,6 +49,7 @@
 // seed_p2.sql already are.
 
 import { createClient } from '@supabase/supabase-js';
+import { ATLITOS_PASSWORD } from './lib/demo-credentials.mjs';
 
 import { assertWritableTarget } from './lib/guard-target.mjs';
 const SUPABASE_URL = process.env.SUPABASE_URL ?? 'https://syzzfgaudpifwvbpycyi.supabase.co';
@@ -64,7 +65,7 @@ if (!ANON_KEY) {
   process.exit(1);
 }
 
-const DEMO_PASSWORD = 'AtlitosDemo!2026'; // matches scripts/seed-demo-users.mjs
+const DEMO_PASSWORD = ATLITOS_PASSWORD;
 const PARTNER_EMAIL = 'partner@atlitos.dev';
 const ADMIN_EMAIL = 'admin@atlitos.dev';
 const DEMO_VENUE_NAME = 'Onboarding Demo Turf';

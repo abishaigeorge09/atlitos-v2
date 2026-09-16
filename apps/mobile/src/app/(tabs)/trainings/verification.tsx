@@ -9,6 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CoachVerificationStatus, type CoachVerificationTone } from '@/components/organisms/CoachVerificationStatus';
 import { AppBar } from '@/components/ui/app-bar';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
@@ -28,6 +29,7 @@ type ScreenState = 'loading' | 'populated' | 'error';
  */
 export default function CoachVerificationScreen() {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
   const verification = useCoachVerification(supabase);
 
   const [state, setState] = useState<ScreenState>('loading');
@@ -57,7 +59,7 @@ export default function CoachVerificationScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       <AppBar variant="backTitle" title="Coach verification" onPressBack={() => router.back()} />
 
-      <ScrollView contentContainerStyle={{ padding: spacing.lg, flexGrow: 1 }}>
+      <ScrollView contentContainerStyle={{ padding: spacing.lg, flexGrow: 1, paddingBottom: navInset + spacing.xl }}>
         {state === 'loading' ? (
           <View style={{ gap: spacing.md }}>
             <Skeleton shape="circle" width={80} height={80} />

@@ -3,6 +3,13 @@
 # card renders with the seeded Cric Squad. Ephemeral verification flow, not
 # part of the tracked regression suite.
 appId: com.atlitos.app
+# Demo password, read from the shell environment when set. The literal is
+# only the default for an unconfigured checkout. Maestro cannot import the
+# JavaScript source of truth, so at rotation time either export
+# ATLITOS_DEMO_PASSWORD (nothing here changes) or edit this default.
+# Full procedure: scripts/lib/demo-credentials.mjs
+env:
+  ATLITOS_DEMO_PASSWORD: "AtlitosDemo!2026"
 ---
 - launchApp
 - runFlow:
@@ -17,7 +24,7 @@ appId: com.atlitos.app
 - tapOn: "Email or phone input"
 - inputText: "coach1@atlitos.dev"
 - tapOn: "Password input"
-- inputText: "AtlitosDemo!2026"
+- inputText: "${ATLITOS_DEMO_PASSWORD}"
 - tapOn:
     text: "Log in"
     index: 1

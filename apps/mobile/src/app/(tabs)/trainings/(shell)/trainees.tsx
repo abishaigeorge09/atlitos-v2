@@ -14,6 +14,7 @@ import { FlatList, Pressable, RefreshControl, View } from 'react-native';
 
 import { SessionFilterChips, type SessionFilterKey } from '@/components/organisms/trainings/SessionFilterChips';
 import { Avatar } from '@/components/ui/avatar';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
@@ -51,6 +52,7 @@ function todayISO(): string {
  */
 export default function CoachTraineesScreen() {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
   const trainees = useCoachTrainees(supabase);
   const groups = useGroups(supabase);
 
@@ -181,7 +183,7 @@ export default function CoachTraineesScreen() {
           <FlatList
             data={items}
             keyExtractor={(item) => item.key}
-            contentContainerStyle={{ padding: spacing.lg, gap: spacing.md, flexGrow: 1 }}
+            contentContainerStyle={{ padding: spacing.lg, gap: spacing.md, flexGrow: 1, paddingBottom: navInset + spacing.xl }}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} />}
             ListEmptyComponent={
               <View

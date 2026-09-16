@@ -5,6 +5,7 @@ import { EllipsisVertical, Film, TriangleAlert, UserPlus, Users } from 'lucide-r
 import { ActivityIndicator, FlatList, Pressable, View } from 'react-native';
 
 import { ClutchPostCard } from '@/components/molecules/ClutchPostCard';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusPill, type Status } from '@/components/ui/status-pill';
@@ -100,6 +101,7 @@ export function ClutchProfileView({
   onOpenClipMenu,
 }: ClutchProfileViewProps) {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
 
   if (state === 'loading') {
     // SPEC Section 9: "every screen ships 4 states: loading skeleton, never
@@ -151,7 +153,7 @@ export function ClutchProfileView({
       keyExtractor={(item) => item.id}
       numColumns={3}
       columnWrapperStyle={{ gap: spacing.xs }}
-      contentContainerStyle={{ gap: spacing.xs, paddingBottom: spacing.xl }}
+      contentContainerStyle={{ gap: spacing.xs, paddingBottom: navInset + spacing.xl }}
       // Keyset continuation for the 24 clip page. `onEndReached` can fire more
       // than once per scroll, so the guard against a duplicate page request
       // lives in the caller's `loadMore` (the same shape CoachBrowseList uses)

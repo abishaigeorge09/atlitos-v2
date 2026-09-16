@@ -13,6 +13,7 @@
 // that belt is checked separately by reading the app code.
 
 import { readFileSync } from 'node:fs';
+import { ATLITOS_PASSWORD } from './lib/demo-credentials.mjs';
 
 function readEnvFile(path) {
   const out = {};
@@ -26,7 +27,7 @@ function readEnvFile(path) {
 const env = readEnvFile('apps/mobile/.env');
 const URL_BASE = env.EXPO_PUBLIC_SUPABASE_URL;
 const ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-const PASSWORD = 'AtlitosDemo!2026';
+const PASSWORD = ATLITOS_PASSWORD;
 
 async function signIn(email) {
   const res = await fetch(`${URL_BASE}/auth/v1/token?grant_type=password`, {

@@ -3,6 +3,7 @@
 // Runs against the LIVE project syzzfgaudpifwvbpycyi with REAL player/admin JWTs.
 // Never types credentials interactively; uses the documented fixture password.
 import { readFileSync } from 'node:fs';
+import { ATLITOS_PASSWORD } from './lib/demo-credentials.mjs';
 
 const ROOT = '.';
 function readEnvFile(p) {
@@ -16,7 +17,7 @@ function readEnvFile(p) {
 const env = readEnvFile(`${ROOT}/apps/mobile/.env`);
 const URL = env.EXPO_PUBLIC_SUPABASE_URL;
 const ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-const PASSWORD = 'AtlitosDemo!2026';
+const PASSWORD = ATLITOS_PASSWORD;
 
 // Fixtures
 const DRILL_GATE = '660e8400-e29b-41d4-a716-446655440002'; // Backfoot pull shot, cricket, xp 100

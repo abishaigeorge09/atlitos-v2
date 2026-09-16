@@ -4,6 +4,7 @@
 // Track B's item, so this is a fresh, independent witness.
 import { createHmac } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { ATLITOS_PASSWORD } from './lib/demo-credentials.mjs';
 
 function readEnvFile(path) {
   const out = {};
@@ -18,7 +19,7 @@ const fnEnv = readEnvFile('supabase/.env');
 const SUPABASE_URL = mobileEnv.EXPO_PUBLIC_SUPABASE_URL;
 const ANON_KEY = mobileEnv.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 const KEY_SECRET = fnEnv.RAZORPAY_KEY_SECRET;
-const PASSWORD = 'AtlitosDemo!2026';
+const PASSWORD = ATLITOS_PASSWORD;
 
 const UPA = '4f7616f4-f43f-4dd9-b2cb-f166ec268081';
 const ITEM_GROUND = '976221c9-aa02-4b0b-aacf-49ffee60d7f1'; // open, cost 3000, funded 2000

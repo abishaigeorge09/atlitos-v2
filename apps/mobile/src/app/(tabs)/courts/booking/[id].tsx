@@ -13,6 +13,7 @@ import { CalendarPicker } from '@/components/molecules/CalendarPicker';
 import { SlotPicker } from '@/components/molecules/SlotPicker';
 import { RateReviewForm } from '@/components/organisms/RateReviewForm';
 import { AppBar } from '@/components/ui/app-bar';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusPill } from '@/components/ui/status-pill';
@@ -44,6 +45,7 @@ function todayISO(): string {
  */
 export default function CourtBookingDetailScreen() {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
   const courts = useCourts(supabase);
   const { id } = useLocalSearchParams<{ id: string }>();
 
@@ -195,7 +197,7 @@ export default function CourtBookingDetailScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       <AppBar variant="backTitle" title="Booking" onPressBack={() => router.back()} />
 
-      <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing['4xl'] }}>
+      <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: navInset + spacing.xl }}>
         <View
           style={{
             borderRadius: radii.xl,

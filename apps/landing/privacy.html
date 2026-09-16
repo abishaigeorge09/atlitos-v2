@@ -1,139 +1,283 @@
 <!doctype html>
-<!-- ATLITOS privacy policy. Static page, reuses styles.css tokens. Content reflects the
-     data the app actually collects (verified against the codebase); no invented claims.
-     Controller: ELSHEPH SYSTEMS INDIA PRIVATE LIMITED. Contact: support@elsheph.com.
-     Store listings link here: https://atlitos-landing.vercel.app/privacy -->
+<!-- ATLITOS privacy policy.
+     DERIVED FROM THE CODE, not from a template. Every category below traces to
+     a real column, bucket or third party call in the atlitos-v2 repository:
+     the users/addresses/clips/chat_messages tables, the clips, avatars,
+     coach-certificates and upa-evidence storage buckets, the Razorpay and
+     Anthropic calls in supabase/functions, and delete_my_account() in
+     migration 0093.
+
+     NOT LEGAL ADVICE. This states accurately what the software does so a
+     lawyer can review it cheaply. Two decisions are marked REVIEW below and
+     must be settled by a person before this is published. -->
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Privacy Policy, Atlitos</title>
-  <meta name="description" content="How Atlitos collects, uses, and protects your data." />
+  <title>Privacy policy, Atlitos</title>
+  <meta name="description" content="What Atlitos collects, why, who receives it, how long we keep it, and how to delete everything." />
   <meta name="theme-color" content="#FBF7F1" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css" />
-  <style>
-    .legal-wrap { max-width: 760px; margin: 0 auto; padding: 32px 20px 96px; }
-    .legal-head { display: flex; align-items: center; justify-content: space-between; padding: 18px 0 28px; }
-    .legal-head .wordmark { font-family: var(--font-display); font-weight: 900; font-size: 1.5rem; color: var(--ink); text-decoration: none; }
-    .legal-head a.back { font-family: var(--font-mono); font-size: .8rem; color: var(--ink-secondary); text-decoration: none; border: 1px solid var(--border-strong); border-radius: 999px; padding: 8px 14px; }
-    .legal-wrap h1 { font-family: var(--font-display); font-weight: 900; font-size: clamp(2rem, 5vw, 2.75rem); line-height: 1.05; margin: 8px 0 6px; }
-    .legal-wrap .eff { font-family: var(--font-mono); font-size: .8rem; color: var(--ink-tertiary); margin-bottom: 28px; }
-    .legal-wrap h2 { font-family: var(--font-display); font-weight: 700; font-size: 1.3rem; margin: 34px 0 10px; }
-    .legal-wrap h3 { font-size: 1.02rem; font-weight: 700; margin: 20px 0 6px; }
-    .legal-wrap p, .legal-wrap li { color: var(--ink-secondary); line-height: 1.6; }
-    .legal-wrap p { margin: 10px 0; }
-    .legal-wrap ul { margin: 8px 0 8px 20px; }
-    .legal-wrap li { margin: 6px 0; }
-    .legal-wrap strong { color: var(--ink); }
-    .legal-wrap a { color: var(--ember-pressed); }
-    .legal-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; margin: 20px 0; }
-    .legal-foot { border-top: 1px solid var(--border); margin-top: 40px; padding-top: 20px; font-family: var(--font-mono); font-size: .78rem; color: var(--ink-tertiary); }
-  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet" />
+  <link rel="icon" type="image/png" href="img/favicon.png" />
+  <link rel="stylesheet" href="legal.css" />
 </head>
 <body>
-  <div class="legal-wrap">
-    <div class="legal-head">
-      <a class="wordmark" href="/">Atlitos</a>
-      <a class="back" href="/">Back to home</a>
-    </div>
+<a class="skip-link" href="#main">Skip to content</a>
 
-    <h1>Privacy Policy</h1>
-    <p class="eff">Effective 7 August 2026</p>
-
-    <p>This policy explains what information the Atlitos mobile app and website ("Atlitos", "we", "us") collect, how we use it, and the choices you have. Atlitos is operated by <strong>ELSHEPH SYSTEMS INDIA PRIVATE LIMITED</strong>. If you do not agree with this policy, please do not use Atlitos.</p>
-
-    <h2>Information we collect</h2>
-    <p>We collect only what the app needs to work. The categories below reflect the features you choose to use.</p>
-
-    <h3>Account and profile</h3>
-    <ul>
-      <li>Your email address and password, used to create and secure your account.</li>
-      <li>Your name and mobile number, which we ask for when you create an account. The number is used to reach you about a booking or a session, and is passed to our payment provider to prefill checkout.</li>
-      <li>Profile details you provide: sports you play, city and state, a profile photo if you upload one, and your date of birth if you choose to add it.</li>
-    </ul>
-
-    <h3>Payments</h3>
-    <ul>
-      <li>Payments for court bookings, coaching, shop orders, and donations are processed by our payment provider, <strong>Razorpay</strong>. We do not receive or store your full card or bank details.</li>
-      <li>We store transaction records (amount, status, and the related booking, session, order, or donation) so we can show your history, issue refunds, and keep required financial records.</li>
-      <li>If you are a coach or partner, we store payout account references needed to pay you.</li>
-    </ul>
-
-    <h3>Location</h3>
-    <ul>
-      <li>With your permission, we use your device location to find and sort sports courts near you. You can deny or revoke this permission in your device settings; the rest of the app still works.</li>
-    </ul>
-
-    <h3>Camera, photos, and microphone</h3>
-    <ul>
-      <li>With your permission, we access your camera, photo library, and microphone so you can capture and upload clips ("Clutch") and profile photos. Clips are video with audio.</li>
-    </ul>
-
-    <h3>Content you create</h3>
-    <ul>
-      <li>Clips, comments, chat messages, and posts you submit. Chat message content is stored so conversations are available to you and the people you message.</li>
-    </ul>
-
-    <h3>Commerce</h3>
-    <ul>
-      <li>Shipping addresses and order history when you purchase from the in-app shop.</li>
-    </ul>
-
-    <h3>Notifications and device</h3>
-    <ul>
-      <li>A push notification token, if you enable notifications, so we can alert you about bookings, messages, and funding activity. You can turn notifications off in your device settings.</li>
-      <li>Your notification and personalization preferences.</li>
-    </ul>
-
-    <h2>How we use your information</h2>
-    <ul>
-      <li>To operate core features: bookings, coaching, the shop, Clutch, chat, and donations.</li>
-      <li>To process payments and refunds through Razorpay and to keep financial records.</li>
-      <li>To send notifications you have opted into.</li>
-      <li>To keep the community safe: to review reports, act on blocked users, and moderate content.</li>
-      <li>To maintain, secure, and improve the service, and to comply with applicable law.</li>
-    </ul>
-
-    <h2>Who we share it with</h2>
-    <p>We do not sell your personal information. We share data only with service providers that help us run Atlitos, and only as needed:</p>
-    <ul>
-      <li><strong>Supabase</strong>, our database, authentication, storage, and hosting provider.</li>
-      <li><strong>Razorpay</strong>, our payment processor.</li>
-      <li><strong>Expo</strong>, to deliver push notifications.</li>
-      <li><strong>Anthropic</strong>, when AI-assisted search is enabled, to interpret your search query. Search queries may be processed by this provider; do not include sensitive personal details in search.</li>
-      <li><strong>Sentry</strong>, to record crashes and performance diagnostics so we can fix faults. This includes device and app details and the network address the report came from. We do not attach your account to these reports.</li>
-      <li>Authorities or others when required by law, or to protect the rights, safety, and property of our users and Atlitos.</li>
-    </ul>
-
-    <h2>Data retention</h2>
-    <p>We keep your account and content while your account is active. Financial and transaction records are retained for as long as required by applicable law and tax rules, even after account deletion. When you ask us to delete your account, we remove your personal data on the timeline described on our <a href="/delete-account">account deletion page</a>, except records we must keep by law.</p>
-
-    <h2>Your choices and rights</h2>
-    <ul>
-      <li><strong>Access and correction:</strong> you can view and edit most profile information in the app.</li>
-      <li><strong>Deletion:</strong> you can request deletion of your account and associated data. See our <a href="/delete-account">account deletion page</a>.</li>
-      <li><strong>Permissions:</strong> you can grant or revoke location, camera, photo, microphone, and notification access at any time in your device settings.</li>
-    </ul>
-
-    <h2>Security</h2>
-    <p>We use reasonable technical and organizational measures to protect your data, including access controls at the database level, encryption of data in transit, and short-lived, signed access to private media. No method of transmission or storage is completely secure, so we cannot guarantee absolute security.</p>
-
-    <h2>Children</h2>
-    <p>Atlitos is not directed to children under 13, and we do not knowingly collect personal information from children under 13. If you believe a child has provided us data, contact us and we will delete it.</p>
-
-    <h2>Changes to this policy</h2>
-    <p>We may update this policy from time to time. We will change the effective date above and, where appropriate, notify you in the app.</p>
-
-    <h2>Contact us</h2>
-    <div class="legal-card">
-      <p style="margin:4px 0;"><strong>ELSHEPH SYSTEMS INDIA PRIVATE LIMITED</strong></p>
-      <p style="margin:4px 0;">Email: <a href="mailto:support@elsheph.com">support@elsheph.com</a></p>
-    </div>
-
-    <div class="legal-foot">Atlitos, operated by ELSHEPH SYSTEMS INDIA PRIVATE LIMITED. See also our <a href="/delete-account">account deletion</a> page.</div>
+<header class="legal-header">
+  <div class="inner">
+    <a class="wordmark" href="/">Atlitos</a>
+    <nav aria-label="Legal">
+      <a href="/privacy" aria-current="page">Privacy</a>
+      <a href="/terms">Terms</a>
+      <a href="/content-policy">Content policy</a>
+    </nav>
   </div>
+</header>
+
+<main id="main">
+  <h1>Privacy policy</h1>
+  <p class="updated">Last updated 7 September 2026</p>
+
+  <p class="lede">
+    This explains what Atlitos collects, why we collect it, who else receives it,
+    how long we keep it, and how you delete it. It is written to match what the
+    app actually does.
+  </p>
+
+  <div class="callout">
+    <p><strong>The short version.</strong> We collect what the app needs to work:
+    your profile, what you book, what you buy, what you post, and who you talk to.
+    We do not sell your data. We do not track you across other apps or websites,
+    and we carry no advertising or analytics software. You can delete your account
+    from inside the app at any time.</p>
+  </div>
+
+  <h2>Who we are</h2>
+  <p>
+    Atlitos is operated by Synth Sports. For any privacy question, or to raise a
+    grievance under India's Digital Personal Data Protection Act, write to
+    <a href="mailto:founder@synthsports.co">founder@synthsports.co</a>. We
+    respond to data requests within 30 days.
+  </p>
+
+  <h2>What we collect, and why</h2>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Category</th><th>What it is</th><th>Why we need it</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Account</td>
+          <td>Name, phone number, email address if you sign in with one, date of birth, city and state, the sports you play, profile photo, display name</td>
+          <td>To create your account, show your profile, and show you courts and coaches near you</td>
+        </tr>
+        <tr>
+          <td>Content you post</td>
+          <td>Videos and captions you upload, comments, likes, who you follow</td>
+          <td>To show your posts to other members, which is the point of posting them</td>
+        </tr>
+        <tr>
+          <td>Messages</td>
+          <td>Chat messages between you and coaches, and in group chats</td>
+          <td>To deliver your messages. We do not read them except when investigating a report</td>
+        </tr>
+        <tr>
+          <td>Bookings and sessions</td>
+          <td>Courts you book, coaching sessions you request or attend, group memberships, attendance</td>
+          <td>To run the booking, tell the coach or venue, and show you your history</td>
+        </tr>
+        <tr>
+          <td>Orders and delivery</td>
+          <td>Delivery addresses, order contents, order status</td>
+          <td>To ship what you ordered and let you track it</td>
+        </tr>
+        <tr>
+          <td>Payments</td>
+          <td>Amount, currency, status, and the payment reference from our payment provider</td>
+          <td>To take payment and keep the financial record we are legally required to keep</td>
+        </tr>
+        <tr>
+          <td>Location</td>
+          <td>Approximate device location, only while the app is open and only if you allow it</td>
+          <td>To sort courts by distance from you. We never collect location in the background</td>
+        </tr>
+        <tr>
+          <td>Photos and files</td>
+          <td>Only the specific files you choose: a video, a profile picture, a coaching certificate, or evidence for an Atlitos Life application</td>
+          <td>We read your photo library only when you pick a file. We never scan it</td>
+        </tr>
+        <tr>
+          <td>Coach verification</td>
+          <td>Certificates and qualification documents you submit</td>
+          <td>To verify coaches, so athletes can trust who they are training with</td>
+        </tr>
+        <tr>
+          <td>Atlitos Life applications</td>
+          <td>Your application, what you need, and supporting documents</td>
+          <td>To verify the application and let supporters fund it</td>
+        </tr>
+        <tr>
+          <td>Notifications</td>
+          <td>A device token for push notifications</td>
+          <td>To send you booking and message alerts. Turn them off in Settings</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>What we never collect</h3>
+  <p>
+    We do not collect your card number, CVV, UPI PIN or bank credentials. Those go
+    directly to our payment provider and never reach our servers. We carry no
+    advertising software, no analytics software, and no cross app tracking, so
+    there is nothing to opt out of.
+  </p>
+
+  <h2>Who else receives your data</h2>
+  <p>These are the only third parties that receive any of it, and only the parts they need.</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Who</th><th>What they receive</th><th>What for</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Supabase</td>
+          <td>Everything listed above. They host our database, sign in system and file storage</td>
+          <td>Running the service. They process it on our instructions only</td>
+        </tr>
+        <tr>
+          <td>Razorpay</td>
+          <td>Your name, phone number and the amount, at the moment you pay</td>
+          <td>Taking payment. They are the ones who see your card or UPI details, not us</td>
+        </tr>
+        <tr>
+          <td>Anthropic</td>
+          <td>Only the words you type into search, when smart search is switched on</td>
+          <td>Understanding what you searched for. It is not used to train their models</td>
+        </tr>
+        <tr>
+          <td>Expo and Vercel</td>
+          <td>App delivery and web hosting. No profile data</td>
+          <td>Getting the app and website to your device</td>
+        </tr>
+        <tr>
+          <td>Sentry</td>
+          <td>Crash and performance reports: device and app details and the network address the report came from. Your account is not attached</td>
+          <td>Finding and fixing faults</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>
+    We do not sell your personal data, and we do not share it for anyone else's
+    advertising.
+  </p>
+
+  <h2>How long we keep it, and what deletion actually does</h2>
+
+  <p>
+    You can delete your account at any time: <strong>Settings, then Account, then
+    Delete account.</strong> It takes two confirmations and cannot be undone.
+  </p>
+
+  <p>When you delete your account, we remove:</p>
+  <ul>
+    <li>your profile, photo, phone number, date of birth and location</li>
+    <li>every video, caption, comment and like you posted</li>
+    <li>who you follow and who follows you</li>
+    <li>your chat messages</li>
+    <li>your saved addresses, cart and wishlists</li>
+    <li>your notifications and push tokens</li>
+    <li>your coaching certificates and any Atlitos Life application and documents</li>
+    <li>your training progress</li>
+  </ul>
+
+  <div class="callout">
+    <p><strong>What we keep, and why.</strong> We keep the record of orders,
+    payments and donations. Indian tax and accounting law requires us to retain
+    transaction records, and our financial books have to balance. Those records
+    stay attached to an anonymous entry rather than to you: your name, phone
+    number and other details are erased from them. They identify a transaction,
+    not a person.</p>
+    <p>We also keep reports you filed about other members. Otherwise anyone could
+    erase the evidence against an account by deleting their own.</p>
+  </div>
+
+  <p>
+    While your account is open, we keep your data for as long as you use Atlitos.
+    Your sign in identity is disabled immediately on deletion and the email address
+    is released, so it can be used for a new account later.
+  </p>
+
+  <h2>Your rights</h2>
+  <p>Under India's Digital Personal Data Protection Act you can:</p>
+  <ul>
+    <li><strong>See what we hold about you.</strong> Ask us and we will send it.</li>
+    <li><strong>Correct it.</strong> Most of it you can edit yourself in the app.</li>
+    <li><strong>Delete it.</strong> Use Delete account in the app, or ask us.</li>
+    <li><strong>Withdraw consent.</strong> Turn off location or notifications in your device settings at any time. The rest of the app keeps working.</li>
+    <li><strong>Complain.</strong> Write to us first at <a href="mailto:founder@synthsports.co">founder@synthsports.co</a>. You may also complain to the Data Protection Board of India.</li>
+  </ul>
+
+  <h2>Age</h2>
+  <p>
+    <!-- REVIEW: this is the single most consequential open decision on this page.
+         Youth sports strongly implies members under 18, and the DPDP Act places
+         significantly stricter obligations on processing a child's data,
+         including verifiable parental consent. Setting 18 is the conservative
+         default. If under 18s are meant to use Atlitos, this section and the
+         signup flow both have to change, and retrofitting an age gate after
+         launch means removing existing accounts. Settle this before publishing. -->
+    You must be at least 18 to create an Atlitos account. Atlitos is not directed
+    at children, and we do not knowingly collect data from anyone under 18. If you
+    believe a child has created an account, write to us and we will remove it.
+  </p>
+
+  <h2>Security</h2>
+  <p>
+    Data is encrypted in transit and at rest. Access to your rows is enforced by
+    the database itself, not only by the app, so another member cannot read your
+    data by changing an identifier in a request. Private files, including your
+    videos and any verification documents, are served through short lived signed
+    links rather than public addresses.
+  </p>
+  <p>
+    No system is perfect. If a breach affects you we will tell you and the
+    authorities as the law requires.
+  </p>
+
+  <h2>Where your data is processed</h2>
+  <p>
+    <!-- REVIEW: confirm the Supabase project region and Razorpay's processing
+         location before publishing, and name them here. DPDP allows cross border
+         transfer except to restricted countries, but the policy should be
+         specific rather than vague. -->
+    Our database and files are hosted by Supabase. Payments are processed by
+    Razorpay in India. Some processing may take place outside India, protected by
+    contractual safeguards with each provider.
+  </p>
+
+  <h2>Changes</h2>
+  <p>
+    If we change this policy we will update the date at the top, and tell you in
+    the app if the change is significant.
+  </p>
+
+  <footer class="legal-footer">
+    <p>
+      <a href="/">Atlitos home</a> &nbsp; <a href="/terms">Terms</a> &nbsp;
+      <a href="/content-policy">Content policy</a> &nbsp;
+      <a href="mailto:founder@synthsports.co">founder@synthsports.co</a>
+    </p>
+  </footer>
+</main>
 </body>
 </html>

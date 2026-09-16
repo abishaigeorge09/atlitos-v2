@@ -27,6 +27,7 @@
 // ignoreDuplicates, matching public.user_roles' UNIQUE(user_id, role).
 
 import { createClient } from '@supabase/supabase-js';
+import { ATLITOS_PASSWORD } from './lib/demo-credentials.mjs';
 
 import { assertWritableTarget } from './lib/guard-target.mjs';
 const SUPABASE_URL = process.env.SUPABASE_URL ?? 'https://syzzfgaudpifwvbpycyi.supabase.co';
@@ -49,7 +50,7 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
 // Fixed demo password. This is test-mode fixture data (same posture as the
 // Razorpay TEST key elsewhere in this repo), not a production credential;
 // do not reuse for any real account.
-const DEMO_PASSWORD = 'AtlitosDemo!2026';
+const DEMO_PASSWORD = ATLITOS_PASSWORD;
 
 // Every account also receives the default 'player' role automatically, from
 // the on_auth_user_created trigger (0001_identity.sql / 0008's
@@ -60,6 +61,15 @@ const DEMO_PASSWORD = 'AtlitosDemo!2026';
 // simply also happen to hold 'player'.
 const DEMO_USERS = [
   { email: 'player@atlitos.dev', name: 'Demo Player', roles: [] },
+  // Second athlete. Created out of band during Phase 2 verification and used
+  // ever since as the "other user" in every isolation probe
+  // (verify-rls-matrix, verify-commerce-rls, verify-groups-probes,
+  // verify-oversell-probe) and as a group member in seed-groups-demo.mjs, but
+  // it was never listed here, so it had no seed provenance and a fresh
+  // environment could not reproduce it. Listing it fixes that; the account
+  // already exists on the live project, where ensureUser() finds it by email
+  // and leaves it untouched (2026-09-12 auth and deployment audit).
+  { email: 'p2-verify-athlete@atlitos.dev', name: 'P2 Verify Athlete', roles: [] },
   { email: 'partner@atlitos.dev', name: 'Demo Court Partner', roles: ['court_partner'] },
   { email: 'admin@atlitos.dev', name: 'Demo Admin', roles: ['admin'] },
   // Distinct display names (BUG-002): two verified demo coaches previously

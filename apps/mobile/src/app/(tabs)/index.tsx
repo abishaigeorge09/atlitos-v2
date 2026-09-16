@@ -15,6 +15,7 @@ import { LocationRow } from '@/components/organisms/home/LocationRow';
 import { PromoCarousel } from '@/components/organisms/home/PromoCarousel';
 import { RecentlyViewedRail } from '@/components/organisms/home/RecentlyViewedRail';
 import { AppBar } from '@/components/ui/app-bar';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Text } from '@/components/ui/text';
@@ -37,6 +38,7 @@ import { useThemeColors } from '@/theme/use-theme-colors';
  */
 export default function HomeScreen() {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
   const status = useSessionStore((state) => state.status);
   const me = useSessionStore((state) => state.me);
   const requiresAuthGate = status !== 'signed_in';
@@ -142,7 +144,7 @@ export default function HomeScreen() {
       />
 
       <ScrollView
-        contentContainerStyle={{ padding: spacing.lg, gap: spacing.xl, paddingBottom: spacing['4xl'] }}
+        contentContainerStyle={{ padding: spacing.lg, gap: spacing.xl, paddingBottom: navInset + spacing.xl }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
         }

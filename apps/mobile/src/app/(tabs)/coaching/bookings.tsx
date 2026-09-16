@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { PriceText } from '@/components/ui/price-text';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -72,6 +73,7 @@ function byMostRecent(a: BookingRow, b: BookingRow): number {
  */
 export default function CoachingBookingsListScreen() {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
   const coaching = useCoaching(supabase);
   const groups = useGroups(supabase);
 
@@ -201,7 +203,7 @@ export default function CoachingBookingsListScreen() {
         <FlatList
           data={rows}
           keyExtractor={(row) => (row.kind === 'session' ? row.session.id : row.entry.session.id)}
-          contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}
+          contentContainerStyle={{ padding: spacing.lg, gap: spacing.md, paddingBottom: navInset + spacing.xl }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} />}
           ListHeaderComponent={
             <View style={{ gap: spacing.md, paddingBottom: spacing.md }}>

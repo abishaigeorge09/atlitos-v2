@@ -1,5 +1,6 @@
 import { chromium } from 'playwright';
 import fs from 'node:fs';
+import { ATLITOS_PASSWORD } from './lib/demo-credentials.mjs';
 
 // Session is minted by SCRIPT with the documented fixture password, the same
 // way scripts/verify-commerce-rls.mjs does it, and injected into localStorage.
@@ -11,7 +12,7 @@ for (const line of fs.readFileSync('apps/mobile/.env', 'utf8').split('\n')) {
 }
 const URL_BASE = env.EXPO_PUBLIC_SUPABASE_URL;
 const ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-const PASSWORD = 'AtlitosDemo!2026';
+const PASSWORD = ATLITOS_PASSWORD;
 
 const res = await fetch(`${URL_BASE}/auth/v1/token?grant_type=password`, {
   method: 'POST',

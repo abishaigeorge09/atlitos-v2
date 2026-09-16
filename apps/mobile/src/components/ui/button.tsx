@@ -17,7 +17,8 @@ import { ActivityIndicator, Pressable } from 'react-native';
  * spec's "Accept(primary)+Decline(ghost-danger)" pair pattern without
  * growing the variant enum further.
  *
- * radius.sm on every size (the design language's locked CTA radius).
+ * radius.pill on every size (see radii.ts: the CTA radius moved sm -> pill
+ * on 2026-09-10 to match the approved login reference).
  * Heights: lg=48 (h-12, the locked mobile primary tap target), md=44 (h-11,
  * meets the 44pt minimum touch target directly), sm=40 (h-10, the design
  * language's compact height) with hitSlop padding the effective target back
@@ -27,7 +28,7 @@ import { ActivityIndicator, Pressable } from 'react-native';
  * state-changing variants, not for secondary/ghost/text (non-committal
  * actions), per the task's "haptics light impact on primary actions" rule.
  */
-const buttonVariants = cva('flex-row items-center justify-center gap-sm rounded-sm', {
+const buttonVariants = cva('flex-row items-center justify-center gap-sm rounded-pill', {
   variants: {
     variant: {
       primary: 'bg-accent active:bg-accent-pressed',
@@ -45,7 +46,7 @@ const buttonVariants = cva('flex-row items-center justify-center gap-sm rounded-
   defaultVariants: { variant: 'primary', size: 'lg' },
 });
 
-const buttonTextVariants = cva('text-center font-sans-semibold text-base', {
+const buttonTextVariants = cva('text-center font-sans-semibold text-button', {
   variants: {
     variant: {
       primary: 'text-ink-on-accent',

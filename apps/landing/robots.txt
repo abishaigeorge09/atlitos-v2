@@ -1,0 +1,11 @@
+# Atlitos marketing site. Public pages are open to crawlers.
+User-agent: *
+Allow: /
+
+# Internal build notes and scratch pages that ship with the static output.
+Disallow: /nav-options
+Disallow: /nav-options.html
+Disallow: /LANDING-NOTES.md
+Disallow: /ASSET-PROMPTS.md
+
+Sitemap: https://www.atlitos.com/sitemap.xml

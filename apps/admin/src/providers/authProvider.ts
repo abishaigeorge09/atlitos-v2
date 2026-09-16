@@ -1,6 +1,24 @@
-import type { AuthProvider } from "@refinedev/core";
+import type { AuthActionResponse, AuthProvider } from "@refinedev/core";
 
 import { supabaseClient } from "./supabaseClient";
+
+// PRD-04 FR-1: every failed sign in returns this one message, whether the
+// credential was wrong or the credential was valid but holds no admin role.
+// Distinguishable copy would turn this screen into an oracle: anyone with the
+// admin URL could confirm that an email plus password pair is a real Atlitos
+// account, and learn its role. The login screen renders this exact string for
+// every failure, so keep it the single source of that copy.
+export const LOGIN_ERROR_MESSAGE = "Sign in failed. Check the email and password and try again.";
+
+function loginFailure(): AuthActionResponse {
+  return {
+    success: false,
+    error: {
+      name: "LoginError",
+      message: LOGIN_ERROR_MESSAGE,
+    },
+  };
+}
 
 // PRD-04 FR-1/FR-2/FR-3: only a user holding the admin role in user_roles
 // may sign in to apps/admin, every read/write is scoped by the signed in
@@ -33,13 +51,9 @@ export const authProvider: AuthProvider = {
     const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
 
     if (error || !data?.user) {
-      return {
-        success: false,
-        error: {
-          name: "LoginError",
-          message: error?.message ?? "Sign in failed",
-        },
-      };
+      // The Supabase error is deliberately dropped rather than surfaced: its
+      // text distinguishes an unknown email from a wrong password.
+      return loginFailure();
     }
 
     const isAdmin = await hasAdminRole(data.user.id);
@@ -49,14 +63,15 @@ export const authProvider: AuthProvider = {
       // Sign out immediately so no session, cached or otherwise, persists
       // for a non-admin account (FR-1: any non-admin credentials are
       // rejected with a generic authentication error at login).
-      await supabaseClient.auth.signOut();
-      return {
-        success: false,
-        error: {
-          name: "AccessDenied",
-          message: "This account does not have admin access.",
-        },
-      };
+      //
+      // Scope is pinned to local on every signOut in this provider. The
+      // auth-js default is global, which revokes every GoTrue session that
+      // user holds across the athlete app, the court portal and the UPA
+      // portal, so an admin console sign out would silently sign the person
+      // out of the products too. Local drops only the session this app
+      // minted, which is all we ever want to end here.
+      await supabaseClient.auth.signOut({ scope: "local" });
+      return loginFailure();
     }
 
     return {
@@ -65,7 +80,7 @@ export const authProvider: AuthProvider = {
     };
   },
   logout: async () => {
-    await supabaseClient.auth.signOut();
+    await supabaseClient.auth.signOut({ scope: "local" });
     return {
       success: true,
       redirectTo: "/login",
@@ -87,13 +102,16 @@ export const authProvider: AuthProvider = {
     const isAdmin = await hasAdminRole(data.session.user.id);
 
     if (!isAdmin) {
-      await supabaseClient.auth.signOut();
+      await supabaseClient.auth.signOut({ scope: "local" });
       return {
         authenticated: false,
         redirectTo: "/login",
         logout: true,
+        // Internal name only. This branch fires for an already authenticated
+        // admin whose role was revoked, never at the login screen, so it
+        // cannot leak anything to someone probing the login form.
         error: {
-          name: "AccessDenied",
+          name: "SessionRevoked",
           message: "This account no longer has admin access.",
         },
       };

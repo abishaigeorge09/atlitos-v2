@@ -23,6 +23,10 @@ import { expect, test as setup } from "@playwright/test";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  ATLITOS_PASSWORD,
+  EMPOWER_PASSWORD,
+} from "../../scripts/lib/demo-credentials.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(HERE, "..", "..");
@@ -31,9 +35,6 @@ const STATE_DIR = join(HERE, "state");
 const PROJECT_REF = "syzzfgaudpifwvbpycyi";
 const SUPABASE_URL =
   process.env.SUPABASE_URL ?? `https://${PROJECT_REF}.supabase.co`;
-
-const ATLITOS_PASSWORD = "AtlitosDemo!2026";
-const EMPOWER_PASSWORD = "EmpowerDemo!2026";
 
 // The 9 demo personas. File-safe names map 1:1 to state/<name>.json and to
 // the `persona` option in fixtures/auth.ts.

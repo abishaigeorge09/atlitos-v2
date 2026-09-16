@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/ui/avatar';
 import { AppBar } from '@/components/ui/app-bar';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { PriceText } from '@/components/ui/price-text';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -80,6 +81,7 @@ function AttributeRow({ label, children }: { label: string; children: ReactNode 
  */
 export default function GroupProfileScreen() {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
   const groups = useGroups(supabase);
   const { id } = useLocalSearchParams<{ id: string }>();
 
@@ -254,7 +256,7 @@ export default function GroupProfileScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing['4xl'] }}
+        contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: navInset + spacing.xl }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} />}
       >
         {tab === 'overview' ? (

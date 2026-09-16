@@ -37,6 +37,7 @@ import { ConfirmSheet } from '@/components/organisms/ConfirmSheet';
 import { LoginGateModal } from '@/components/organisms/LoginGateModal';
 import { ModerationSheet, type ModerationTarget } from '@/components/organisms/moderation/ModerationSheet';
 import { Avatar } from '@/components/ui/avatar';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
 import { usePendingAuthAction } from '@/hooks/use-pending-auth-action';
@@ -89,6 +90,7 @@ function timeAgo(iso: string): string {
  */
 export default function ClutchPostViewerScreen() {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
   const { id } = useLocalSearchParams<{ id: string }>();
   const clutch = useClutch(supabase);
   const requiresAuthGate = useSessionStore((state) => state.status !== 'signed_in');
@@ -798,8 +800,13 @@ function ClipPage({
       </SafeAreaView>
 
       {/* Right action rail: like, comment, share, save, report/block or
-          owner options. */}
-      <SafeAreaView style={{ position: 'absolute', bottom: 0, right: 0 }} edges={['bottom']} pointerEvents="box-none">
+          owner options. Offset by the nav inset (which already carries the
+          bottom safe area) so the rail sits above the floating bar. */}
+      <SafeAreaView
+        style={{ position: 'absolute', bottom: navInset, right: 0 }}
+        edges={[]}
+        pointerEvents="box-none"
+      >
         <View style={{ alignItems: 'center', gap: spacing.lg, paddingHorizontal: spacing.md, paddingBottom: spacing.lg }}>
           <Pressable
             onPress={onLike}
@@ -870,8 +877,12 @@ function ClipPage({
         </View>
       </SafeAreaView>
 
-      {/* Bottom-left caption + bottom-right mute toggle. */}
-      <SafeAreaView style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }} edges={['bottom']} pointerEvents="box-none">
+      {/* Bottom-left caption + bottom-right mute toggle, above the bar. */}
+      <SafeAreaView
+        style={{ position: 'absolute', bottom: navInset, left: 0, right: 0 }}
+        edges={[]}
+        pointerEvents="box-none"
+      >
         <View
           style={{
             flexDirection: 'row',

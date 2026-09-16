@@ -21,9 +21,75 @@
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { colors, radii, spacing, toCssVars, type ColorPalette } from "@atlitos/theme";
+import {
+  colors,
+  fontSize,
+  radii,
+  rnFontFamily,
+  spacing,
+  toCssVars,
+  type ColorPalette,
+} from "@atlitos/theme";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
+
+/**
+ * Tailwind font-family utilities, derived from `rnFontFamily` so the face is
+ * only ever named in packages/theme. These were hand written here once and
+ * silently kept saying Inter after the theme moved to Urbanist, which is
+ * exactly the drift the generator exists to prevent.
+ */
+function fontFamilyBlock(): string {
+  const { sans, mono } = rnFontFamily;
+  const entries: Array<[string, string]> = [
+    ["sans", sans.regular],
+    ["sans-medium", sans.medium],
+    ["sans-semibold", sans.semibold],
+    ["sans-bold", sans.bold],
+    ["mono", mono.medium],
+    ["mono-semibold", mono.semibold],
+  ];
+  return entries
+    .map(([key, family]) => `        ${JSON.stringify(key)}: ["${family}"],`)
+    .join("\n");
+}
+
+/**
+ * Theme-only `text-*` sizes.
+ *
+ * KNOWN CONFLICT, deliberately not resolved here. The theme scale and
+ * Tailwind's built-in scale share key names and disagree on values: theme
+ * `base` is 13 where Tailwind's is 16, theme `sm` is 12 where Tailwind's is
+ * 14, theme `lg` is 16 where Tailwind's is 18. So a component styled with
+ * `className="text-base"` and one styled with `textStyle('body')` render at
+ * different sizes for what reads like the same token.
+ *
+ * Emitting the whole theme scale would collapse that, but it also silently
+ * reduces every existing `text-*` in the app: 55 `text-sm` from 14 to 12, 16
+ * `text-base` from 16 to 13, and so on across ~130 call sites, none of which
+ * can be eyeballed in the same pass. So only keys Tailwind does NOT define
+ * are emitted, which adds new utilities without moving any existing one.
+ * Unifying the colliding keys is a separate change that needs its own visual
+ * pass over every screen.
+ */
+const TAILWIND_OWN_SIZE_KEYS = new Set([
+  "xs",
+  "sm",
+  "base",
+  "lg",
+  "xl",
+  "2xl",
+  "3xl",
+  "4xl",
+  "5xl",
+]);
+
+function fontSizeBlock(): string {
+  return Object.entries(fontSize)
+    .filter(([key]) => !TAILWIND_OWN_SIZE_KEYS.has(key))
+    .map(([key, px]) => `        ${JSON.stringify(key)}: "${px}px",`)
+    .join("\n");
+}
 
 function colorVarBlock(palette: ColorPalette): string {
   const vars = toCssVars(palette, "color");
@@ -220,12 +286,10 @@ ${radiiBlock()}
         hairline: hairlineWidth(),
       },
       fontFamily: {
-        sans: ["Inter_400Regular"],
-        "sans-medium": ["Inter_500Medium"],
-        "sans-semibold": ["Inter_600SemiBold"],
-        "sans-bold": ["Inter_700Bold"],
-        mono: ["JetBrainsMono_500Medium"],
-        "mono-semibold": ["JetBrainsMono_600SemiBold"],
+${fontFamilyBlock()}
+      },
+      fontSize: {
+${fontSizeBlock()}
       },
     },
   },

@@ -240,6 +240,19 @@ The one sanctioned exception is the modal backdrop idiom (`ConfirmSheet`, `Login
 
 Reference implementation: `apps/mobile/src/components/molecules/ClutchPostCard.tsx` (feed variant). The invariant to check in review: no `Pressable` is an ancestor of another `Pressable` in the same card.
 
+## The floating nav: nothing pinned sits under it
+
+The bottom nav (`apps/mobile/src/components/ui/bottom-nav.tsx`) is a glass pill that is **absolutely positioned** over every screen in the `(tabs)` group. It takes no layout height on purpose, so pages run full bleed and scroll under the glass instead of stopping at a dead strip of background. The cost is that the bar covers whatever is beneath it, and a control that cannot scroll away (a sticky CTA, a chat composer, the caption and action rail on a full bleed clip, the last row of a list) ends up under the pill. That happened on the coach profile, the court detail, both pay screens, the group join and renew footers, the Post viewer, the feed and every tab list at once, so it is a rule now.
+
+Every screen rendered inside `(tabs)`, and every organism that can be rendered there, reads `useNavBarInset()` from `bottom-nav.tsx` and applies it in one of two ways:
+
+1. **Scrollables** pad their content: `contentContainerStyle={{ ..., paddingBottom: navInset + spacing.xl }}`. The page still runs under the glass; the final row can be scrolled clear of it.
+2. **Pinned controls** pad or offset by it so the bar stays at the bottom and the control sits above it: a footer gets `paddingBottom: navInset + spacing.lg` on top of its own padding, an absolutely positioned overlay gets `bottom: navInset`, a composer pads by it only while the keyboard is down (`useKeyboardShown()` in `src/lib/use-keyboard-shown.ts`), because with the keyboard up the bar is behind the keys and the padding would only open a gap.
+
+The value is `NAV_BAR_INSET` (72, the pill's full layout height plus its top gutter, documented in the component) plus the same bottom safe area the bar pads with. It is provided by `(tabs)/_layout.tsx` and reads **0 outside the tabs**, so a shared component (the profile screen, `ClutchProfileView`, `ChatThreadList`) adds it unconditionally and is correct on both a tab and a pushed route. Never hand a screen `insets.bottom` on top of it; the inset already carries the safe area. A `SafeAreaView` that used `edges={['bottom']}` for a pinned control drops that edge when it adopts the inset.
+
+Reference implementations: `(tabs)/coaching/coach/[id].tsx` (pinned footer), `(tabs)/chat/[id].tsx` (keyboard aware composer), `(tabs)/clutch/post/[id].tsx` (absolute overlays), `components/molecules/ClutchPostCard.tsx` (`bottomInset` prop, passed only by the full screen feed).
+
 ## Voice and copy rules
 
 - No emojis, anywhere, ever, including in placeholder copy, commit-adjacent user-facing strings, and empty states. Use a lucide icon instead.

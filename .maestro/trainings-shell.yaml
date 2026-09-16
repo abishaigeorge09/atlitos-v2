@@ -1,5 +1,3 @@
-appId: com.atlitos.app
----
 # KNOWN LOCAL GAP, 2026-08-14: this flow needs a PAYMENTS dataset the local seed
 # does not provide. It passes against production and fails locally, which makes
 # it a HARNESS finding, not a product one.
@@ -50,6 +48,15 @@ appId: com.atlitos.app
 # instead (".*Ravi Kumar, 2026-.*"), which does not require re-editing
 # every time the clock advances past whatever date was hardcoded.
 
+appId: com.atlitos.app
+# Demo password, read from the shell environment when set. The literal is
+# only the default for an unconfigured checkout. Maestro cannot import the
+# JavaScript source of truth, so at rotation time either export
+# ATLITOS_DEMO_PASSWORD (nothing here changes) or edit this default.
+# Full procedure: scripts/lib/demo-credentials.mjs
+env:
+  ATLITOS_DEMO_PASSWORD: "AtlitosDemo!2026"
+---
 # ---------- Athlete: player@atlitos.dev ----------
 # Fresh app process per run: three account switches in one long lived dev
 # process can flake the profile refresh, which is not what this flow is
@@ -108,7 +115,7 @@ appId: com.atlitos.app
 - tapOn: "Email or phone input"
 - inputText: "player@atlitos.dev"
 - tapOn: "Password input"
-- inputText: "AtlitosDemo!2026"
+- inputText: "${ATLITOS_DEMO_PASSWORD}"
 - tapOn:
     text: "Log in"
     index: 1
@@ -319,7 +326,7 @@ appId: com.atlitos.app
 - tapOn: "Email or phone input"
 - inputText: "coach1@atlitos.dev"
 - tapOn: "Password input"
-- inputText: "AtlitosDemo!2026"
+- inputText: "${ATLITOS_DEMO_PASSWORD}"
 - tapOn:
     text: "Log in"
     index: 1

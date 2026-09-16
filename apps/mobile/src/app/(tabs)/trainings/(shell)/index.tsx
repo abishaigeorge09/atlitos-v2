@@ -16,6 +16,7 @@ import { MySportsCard } from '@/components/organisms/trainings/MySportsCard';
 import { PlayerSessionRequests } from '@/components/organisms/trainings/PlayerSessionRequests';
 import { PlayerStatsGrid } from '@/components/organisms/trainings/PlayerStatsGrid';
 import { PlayerUpcomingSessions } from '@/components/organisms/trainings/PlayerUpcomingSessions';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { SessionCard } from '@/components/ui/session-card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -86,6 +87,7 @@ function bySoonest(a: Session, b: Session): number {
  */
 export default function TrainingsScreen() {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
   const coachSessions = useCoachSessions(supabase);
   const verification = useCoachVerification(supabase);
   const coaching = useCoaching(supabase);
@@ -312,7 +314,7 @@ export default function TrainingsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <ScrollView
-        contentContainerStyle={{ flexGrow: 1, padding: spacing.lg, gap: spacing.lg }}
+        contentContainerStyle={{ flexGrow: 1, padding: spacing.lg, gap: spacing.lg, paddingBottom: navInset + spacing.xl }}
         refreshControl={
           isVerifiedCoach || isPlayer ? (
             <RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} />

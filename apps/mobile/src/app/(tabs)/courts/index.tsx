@@ -10,6 +10,7 @@ import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
 import { LocationStatusRow } from '@/components/molecules/LocationStatusRow';
 import { LoginGateModal } from '@/components/organisms/LoginGateModal';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { CourtCard } from '@/components/ui/court-card';
@@ -55,6 +56,7 @@ const IMPLAUSIBLE_DISTANCE_KM = 3000;
  */
 export default function CourtsIndexScreen() {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
   const courts = useCourts(supabase);
   const requiresAuthGate = useSessionStore((state) => state.status !== 'signed_in');
   const profileCity = useSessionStore((state) => state.me?.city ?? null);
@@ -256,7 +258,7 @@ export default function CourtsIndexScreen() {
           data={items}
           keyExtractor={(item) => item.id}
           ListHeaderComponent={header}
-          contentContainerStyle={{ gap: spacing.lg, paddingBottom: spacing.lg }}
+          contentContainerStyle={{ gap: spacing.lg, paddingBottom: navInset + spacing.xl }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} />}
           renderItem={({ item }) => (
             <CourtCard

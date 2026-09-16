@@ -427,6 +427,7 @@ Every migration was proven not to change any role's visible-row set, using two r
 The launch program's Phase 3 (1000-concurrent readiness) touches RLS in three
 places. The permissive-OR rule above governs all of it: no merge folds an owner
 disjunct into an anon-reachable expression.
+**Suspension as a restrictive layer (`0120`, SEC-F4).** `users.status` existed from `0001` and `0065` stopped a member editing it, but nothing ever READ it: a suspended account kept booking, paying and posting. Enforcement is now layered, because no single layer covers everything. The access-token hook denies a token (widest, bounded by the access-token TTL). `getAuthenticatedUser()` refuses on the spot, which closes every edge function immediately. And for the tables a client writes directly through PostgREST, `0120` adds a RESTRICTIVE insert policy, `<table>_active_user_only`, calling `is_active_user()`:
 
 ### 0090 / 0091 — P1-4 initplan + duplicate-permissive consolidation
 
@@ -728,3 +729,7 @@ before and after any deletion. Every cross-user name/avatar read must go through
 `public_profiles`. Through that view a deleted author correctly resolves to
 `name = 'Deleted user'`, `avatar_url = null`, which is exactly the tombstone
 behaviour the retained rows depend on.
+`is_active_user()` now returns false for `status = 'suspended'` OR
+`deleted_at is not null`, so the twelve RESTRICTIVE insert policies from 0120
+cover deletion with no new policy. `custom_access_token_hook` refuses the token,
+and `getAuthenticatedUser` refuses on the next edge request.

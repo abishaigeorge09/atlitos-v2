@@ -9,6 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BillSummary } from '@/components/molecules/BillSummary';
 import { AppBar } from '@/components/ui/app-bar';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
@@ -52,6 +53,7 @@ const RAZORPAY_KEY_ID = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID ?? '';
  */
 export default function BookCourtPayScreen() {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
   const courts = useCourts(supabase);
   const me = useSessionStore((state) => state.me);
   const requiresAuthGate = useSessionStore((state) => state.status !== 'signed_in');
@@ -167,7 +169,7 @@ export default function BookCourtPayScreen() {
   if (state === 'confirmed' && booking) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-        <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.xl, flexGrow: 1, justifyContent: 'center' }}>
+        <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.xl, flexGrow: 1, justifyContent: 'center', paddingBottom: navInset + spacing.lg }}>
           <View style={{ alignItems: 'center', gap: spacing.md }}>
             <View
               style={{
@@ -279,7 +281,7 @@ export default function BookCourtPayScreen() {
         ) : null}
       </ScrollView>
 
-      <View style={{ padding: spacing.lg, borderTopWidth: 1, borderTopColor: colors.border, gap: spacing.xs }}>
+      <View style={{ padding: spacing.lg, paddingBottom: navInset + spacing.lg, borderTopWidth: 1, borderTopColor: colors.border, gap: spacing.xs }}>
         {payLoading || state === 'paying' ? (
           <Text style={[textStyle('caption'), { color: colors.textSecondary, textAlign: 'center' }]}>
             Preparing secure checkout. This can take a few seconds.

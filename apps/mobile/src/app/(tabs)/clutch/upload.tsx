@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { LoginGateModal } from '@/components/organisms/LoginGateModal';
 import { AppBar } from '@/components/ui/app-bar';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { Text } from '@/components/ui/text';
@@ -43,6 +44,7 @@ type UploadState = 'idle' | 'uploading' | 'done' | 'error';
  */
 export default function ClutchUploadScreen() {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
   const clutch = useClutch(supabase);
   const requiresAuthGate = useSessionStore((state) => state.status !== 'signed_in');
   const params = useLocalSearchParams<{ retryClipId?: string; retryCaption?: string; retrySport?: string }>();
@@ -196,7 +198,7 @@ export default function ClutchUploadScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       <AppBar variant="backTitle" title="Post a clip" onPressBack={() => router.back()} />
-      <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }}>
+      <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: navInset + spacing.xl }}>
         {retryClipId ? (
           <View className="flex-row items-center gap-sm rounded-md bg-info-tint p-md">
             <Upload size={18} strokeWidth={1.75} color={colors.info} />

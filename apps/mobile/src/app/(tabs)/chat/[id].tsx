@@ -11,6 +11,8 @@ import { GroupMembersSheet } from '@/components/organisms/chat/GroupMembersSheet
 import { EmptyState } from '@/components/organisms/EmptyState';
 import { ModerationSheet, type ModerationTarget } from '@/components/organisms/moderation/ModerationSheet';
 import { AppBar } from '@/components/ui/app-bar';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
+import { useKeyboardShown } from '@/lib/use-keyboard-shown';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
 import { supabase } from '@/lib/supabase';
@@ -48,6 +50,8 @@ interface DisplayMessage extends ChatMessage {
  */
 export default function ChatThreadScreen() {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
+  const keyboardShown = useKeyboardShown();
   const chat = useChat(supabase);
   const { id } = useLocalSearchParams<{ id: string }>();
   const me = useSessionStore((state) => state.me);
@@ -217,7 +221,7 @@ export default function ChatThreadScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top', 'bottom']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       <AppBar variant="backTitle" title={headerTitle} onPressBack={() => router.back()} />
 
       {thread?.isGroup ? (
@@ -295,7 +299,14 @@ export default function ChatThreadScreen() {
             />
           )}
 
-          <View className="flex-row items-end gap-sm border-t border-border bg-bg px-lg py-md">
+          {/* Pinned composer. It cannot scroll out from under the floating nav,
+              so it pads for the bar while the keyboard is down; with the
+              keyboard up the bar is behind the keys and the padding would
+              only open a gap. */}
+          <View
+            className="flex-row items-end gap-sm border-t border-border bg-bg px-lg py-md"
+            style={{ paddingBottom: keyboardShown ? spacing.md : navInset + spacing.md }}
+          >
             <TextInput
               value={draft}
               onChangeText={setDraft}

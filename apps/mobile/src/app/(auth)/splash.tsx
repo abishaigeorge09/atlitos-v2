@@ -1,4 +1,4 @@
-import { spacing, spring } from '@atlitos/theme';
+import { duration, easing, spacing, spring } from '@atlitos/theme';
 import type { ApiError } from '@atlitos/types';
 import { router } from 'expo-router';
 import { useEffect, useRef } from 'react';
@@ -6,15 +6,15 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
   useAnimatedStyle,
-  useReducedMotion,
   useSharedValue,
-  withDelay,
+  withSequence,
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AuthScene } from '@/components/organisms/auth/AuthScene';
+import splashMark from '../../../assets/images/splash-icon.png';
+
 import { useSessionStore } from '@/store/session-store';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
@@ -76,9 +76,9 @@ import { useThemeColors } from '@/theme/use-theme-colors';
  *     by the tabs layout) carries the non-blocking notice and the manual
  *     retry. Nothing is silently swallowed; it is just no longer a door.
  *
- * Visual: the wordmark and tagline spring in over the shared AuthScene
- * aurora, so even the loading moment feels alive. All routing logic below is
- * unchanged.
+ * Visual: `SplashMark` renders the same asset the native splash draws, at
+ * the same width, so the native to JS handoff has no visible jump. All
+ * routing logic below is unchanged.
  */
 export default function SplashScreen() {
   const colors = useThemeColors();
@@ -94,28 +94,6 @@ export default function SplashScreen() {
   // rather than looping, so no unbounded retry here either.
   const guestAttempted = useRef(false);
 
-  // Wordmark spring entrance.
-  const reduced = useReducedMotion();
-  const scale = useSharedValue(reduced ? 1 : 0.8);
-  const opacity = useSharedValue(reduced ? 1 : 0);
-
-  useEffect(() => {
-    if (reduced) return;
-    opacity.value = withTiming(1, { duration: 360, easing: Easing.out(Easing.cubic) });
-    scale.value = withSpring(1, spring.standard);
-  }, [reduced, opacity, scale]);
-
-  const taglineOpacity = useSharedValue(reduced ? 1 : 0);
-  useEffect(() => {
-    if (reduced) return;
-    taglineOpacity.value = withDelay(220, withTiming(1, { duration: 420, easing: Easing.out(Easing.cubic) }));
-  }, [reduced, taglineOpacity]);
-
-  const wordmarkStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [{ scale: scale.value }],
-  }));
-  const taglineStyle = useAnimatedStyle(() => ({ opacity: taglineOpacity.value }));
 
   useEffect(() => {
     if (!hydrated) return;
@@ -161,21 +139,66 @@ export default function SplashScreen() {
   const showSpinner = !hydrated || (status === 'signed_in' && meLoading) || status === 'signed_out';
 
   return (
-    <AuthScene>
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.content}>
-          <Animated.View style={wordmarkStyle}>
-            <Text style={[textStyle('overline'), styles.eyebrow, { color: colors.accent }]}>Your game, one app</Text>
-            <Text style={[textStyle('display'), styles.wordmark, { color: colors.text }]}>Atlitos</Text>
-          </Animated.View>
-          <Animated.Text style={[textStyle('body'), styles.tagline, taglineStyle, { color: colors.textSecondary }]}>
-            Train, play and follow the game, all in one place.
-          </Animated.Text>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
+      <View style={styles.content}>
+        <SplashMark />
+        <Text style={[textStyle('body'), styles.tagline, { color: colors.textSecondary }]}>
+          Train, play and follow the game, all in one place.
+        </Text>
 
-          {showSpinner ? <ActivityIndicator color={colors.accent} style={styles.spinner} /> : null}
-        </View>
-      </SafeAreaView>
-    </AuthScene>
+        {showSpinner ? <ActivityIndicator color={colors.accent} style={styles.spinner} /> : null}
+      </View>
+    </SafeAreaView>
+  );
+}
+
+/**
+ * The mark that carries the launch.
+ *
+ * The native splash (expo-splash-screen, app.json) draws
+ * `assets/images/splash-icon.png` at `imageWidth: 120` centred on the same
+ * `#141414` this screen paints. This renders the SAME asset at the SAME
+ * width in the SAME place, so when the native layer hides there is no jump
+ * to cut through: the mark is already sitting exactly where it was. It then
+ * settles into place with a spring, which is the only motion the user sees.
+ *
+ * Previously this spot held a text wordmark, so launch went logo -> text,
+ * a visible swap of two different things.
+ */
+function SplashMark() {
+  // Matches app.json's expo-splash-screen `imageWidth`. If that changes,
+  // change this with it or the handoff visibly jumps.
+  const NATIVE_SPLASH_IMAGE_WIDTH = 220;
+  // splash-icon.png is the cropped lockup, 1024x606.
+  const SPLASH_MARK_ASPECT = 1024 / 606;
+  const scale = useSharedValue(1);
+  const opacity = useSharedValue(1);
+
+  useEffect(() => {
+    // Overshoot then settle. Starts at 1 (the native splash's size) so the
+    // first frame is identical to what was already on screen.
+    scale.value = withSequence(
+      withTiming(1.08, { duration: duration.base, easing: Easing.bezier(...easing.decelerate) }),
+      withSpring(1, spring.standard),
+    );
+    opacity.value = withTiming(1, { duration: duration.fast });
+  }, [opacity, scale]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
+  }));
+
+  return (
+    <Animated.Image
+      source={splashMark}
+      accessibilityLabel="Atlitos"
+      resizeMode="contain"
+      style={[
+        { width: NATIVE_SPLASH_IMAGE_WIDTH, aspectRatio: SPLASH_MARK_ASPECT },
+        animatedStyle,
+      ]}
+    />
   );
 }
 
@@ -188,8 +211,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     gap: spacing.lg,
   },
-  eyebrow: { textAlign: 'center', marginBottom: spacing.sm },
-  wordmark: { textAlign: 'center', fontSize: 56, lineHeight: 60 },
   tagline: { textAlign: 'center', maxWidth: 300 },
   spinner: { marginTop: spacing.lg },
 });

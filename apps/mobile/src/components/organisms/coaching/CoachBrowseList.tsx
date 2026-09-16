@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, RefreshControl, ScrollView, View } from 'react-native';
 
 import { LocationStatusRow } from '@/components/molecules/LocationStatusRow';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { CoachCard } from '@/components/ui/coach-card';
@@ -92,6 +93,7 @@ export interface CoachBrowseListProps {
  */
 export function CoachBrowseList({ onOpenCoach, header, onRefresh }: CoachBrowseListProps) {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
   const coaching = useCoaching(supabase);
 
   const city = useLocationStore((state) => state.city);
@@ -296,7 +298,7 @@ export function CoachBrowseList({ onOpenCoach, header, onRefresh }: CoachBrowseL
       // `visibleLength` is read from, which is what makes virtualization and
       // `onEndReached` mean anything at all. See the P0-3 note above.
       style={{ flex: 1 }}
-      contentContainerStyle={{ padding: spacing.lg, gap: spacing.md, paddingBottom: spacing['4xl'] }}
+      contentContainerStyle={{ padding: spacing.lg, gap: spacing.md, paddingBottom: navInset + spacing['4xl'] }}
       refreshControl={refreshControl}
       // Bounded render window. Without these the list still virtualizes, but
       // RN's default `windowSize` of 21 keeps roughly 21 viewports of coach

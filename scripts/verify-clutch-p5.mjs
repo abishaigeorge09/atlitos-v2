@@ -11,10 +11,11 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
+import { ATLITOS_PASSWORD } from "./lib/demo-credentials.mjs";
 
 const URL = "https://syzzfgaudpifwvbpycyi.supabase.co";
 const ANON = "sb_publishable_w81GxOVCX2UVNoQ9NAGTaA_u2kuT29O";
-const PW = "AtlitosDemo!2026";
+const PW = ATLITOS_PASSWORD;
 const PLAYER = "player@atlitos.dev";   // athlete/uploader, id 58756043-...
 const ADMIN = "admin@atlitos.dev";     // admin, id d247e386-...
 const OTHER = "coach2@atlitos.dev";    // non-owner non-admin, id 883b6f5d-...

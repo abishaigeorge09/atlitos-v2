@@ -333,7 +333,7 @@ the grid tile always has the freshness and retailer count fields the hit itself 
 
 | v1 fn | v1 route | v2 lane | Function / RPC | Note |
 |---|---|---|---|---|
-| `feed` | GET `/clutch/feed` | PostgREST | `clips` select, `status = 'published'`, keyset pagination on `created_at` | RLS public read restricted to `published`; owner can additionally read their own clip in any status |
+| `feed` | GET `/clutch/feed` | PostgREST | `clips` select, `status = 'published'`, keyset pagination on `created_at` | RLS public read restricted to `published`; owner can additionally read their own clip in any status. `Clip.ownerAvatarUrl` is `public_profiles.avatar_url` from the same embed (`CLIP_FEED_SELECT`), passed through only when it is an absolute http URL, for the post header and the reels overlay; `Clip` carries no playback URL (minted per card by `playbackUrl`) and no hydrated top comment |
 | `get` | GET `/clutch/:id` | PostgREST | `clips` select single | same RLS |
 | `comments` | GET `/clutch/:id/comments` | PostgREST | `clip_comments` select, keyset pagination | RLS public read |
 | `addComment` | POST `/clutch/:id/comments` | PostgREST | `clip_comments` insert | RLS requires a non-anonymous `auth.uid()`, guest insert rejected, mapped to `403 GUEST` |
@@ -550,6 +550,13 @@ argument and gets the default page.
 | `useCourts().listMyBookings()` | no args, no owner filter, unbounded | `listMyBookings(limit = 50)`, plus an explicit `.eq("user_id", auth.uid())` |
 | `useEmpower().listUpas()` | no args, unbounded, one RPC per row | `listUpas(limit = 48)`, one batched balance RPC |
 | `useNotifications().list()` | no args, unbounded | `list(limit = 50)` |
+| moderation | `useClutch().report(entityType, entityId, reason)` | Inserts `reports`. `reporter_id` comes from the session, never an argument. Reason capped at 500 chars. |
+| moderation | `useClutch().blockUser(userId)` | Upsert into `user_blocks`, idempotent. The subtraction is RLS (0097, table `blocked_users`), not this call. |
+| moderation | `useClutch().unblockUser(userId)` | |
+| moderation | `useClutch().blockedUserIds()` | Owner scoped read for an unblock list. UI not yet built. |
+| account | `useProfile().deleteAccount()` | Invokes the `delete-account` edge function. Caller MUST sign out immediately after. |
+| search | `POST ai-search` | Now rate limited to 30 requests per 60s per user AND per IP, enforced before the two Anthropic calls. Returns `429 RATE_LIMITED` with a `Retry-After` header. |
+| chat | `useChat().threads()` | Previews now come from `chat_thread_previews` (0113) instead of a client-side fold over every message. |
 
 ### Behaviour changes
 

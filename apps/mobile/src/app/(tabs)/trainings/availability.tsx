@@ -9,6 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { TextField } from '@/components/organisms/_shared';
 import { AppBar } from '@/components/ui/app-bar';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
@@ -39,6 +40,7 @@ const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
  */
 export default function CoachAvailabilityScreen() {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
   const availability = useCoachAvailability(supabase);
 
   const [state, setState] = useState<ScreenState>('loading');
@@ -138,7 +140,7 @@ export default function CoachAvailabilityScreen() {
           </Button>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing['4xl'] }}>
+        <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: navInset + spacing.xl }}>
           <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
             Athletes can only book within these windows. Changes apply to future bookings only.
           </Text>

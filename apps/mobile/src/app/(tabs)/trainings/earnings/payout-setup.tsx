@@ -8,6 +8,7 @@ import { Linking, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppBar } from '@/components/ui/app-bar';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
@@ -52,6 +53,7 @@ const STATUS_COPY: Record<PayoutAccountState['status'], { title: string; body: s
  */
 export default function CoachPayoutSetupScreen() {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
   const coachEarnings = useCoachEarnings(supabase);
 
   const [state, setState] = useState<ScreenState>('loading');
@@ -101,7 +103,7 @@ export default function CoachPayoutSetupScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       <AppBar variant="backTitle" title="Payout account" onPressBack={() => router.back()} />
 
-      <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, flexGrow: 1 }}>
+      <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, flexGrow: 1, paddingBottom: navInset + spacing.xl }}>
         {state === 'loading' ? (
           <View style={{ gap: spacing.md }}>
             <Skeleton shape="circle" width={80} height={80} />

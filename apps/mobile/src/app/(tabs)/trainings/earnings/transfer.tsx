@@ -10,6 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { TextField } from '@/components/organisms/_shared';
 import { BillSummary } from '@/components/molecules/BillSummary';
 import { AppBar } from '@/components/ui/app-bar';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
@@ -33,6 +34,7 @@ type ScreenState = 'loading' | 'populated' | 'error';
  */
 export default function CoachTransferScreen() {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
   const coachEarnings = useCoachEarnings(supabase);
 
   const [state, setState] = useState<ScreenState>('loading');
@@ -100,7 +102,7 @@ export default function CoachTransferScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       <AppBar variant="backTitle" title="Transfer" onPressBack={() => router.back()} />
 
-      <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, flexGrow: 1 }}>
+      <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, flexGrow: 1, paddingBottom: navInset + spacing.xl }}>
         {state === 'loading' ? (
           <View style={{ gap: spacing.md }}>
             <Skeleton shape="line" width="50%" />

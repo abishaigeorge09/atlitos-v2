@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/ui/avatar';
 import { AppBar } from '@/components/ui/app-bar';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusPill } from '@/components/ui/status-pill';
@@ -53,6 +54,7 @@ function slotDurationLabel(from: string, to: string): string {
  */
 export default function GroupSessionDetailScreen() {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
   const groups = useGroups(supabase);
   const { id } = useLocalSearchParams<{ id: string }>();
 
@@ -189,7 +191,7 @@ export default function GroupSessionDetailScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       <AppBar variant="backTitle" title="Group session" onPressBack={() => router.back()} />
 
-      <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing['4xl'] }}>
+      <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: navInset + spacing.xl }}>
         <View
           style={{
             borderRadius: radii.xl,

@@ -9,6 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SessionFilterChips, type SessionFilterKey } from '@/components/organisms/trainings/SessionFilterChips';
 import { AppBar } from '@/components/ui/app-bar';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { SessionCard } from '@/components/ui/session-card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -33,6 +34,7 @@ type ScreenState = 'loading' | 'empty' | 'populated' | 'error';
  */
 export default function CoachRequestsScreen() {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
   const coachSessions = useCoachSessions(supabase);
 
   const [state, setState] = useState<ScreenState>('loading');
@@ -141,7 +143,7 @@ export default function CoachRequestsScreen() {
             return true;
           })}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ padding: spacing.lg, gap: spacing.md, flexGrow: 1 }}
+          contentContainerStyle={{ padding: spacing.lg, gap: spacing.md, flexGrow: 1, paddingBottom: navInset + spacing.xl }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} />}
           ListEmptyComponent={
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing.lg }}>

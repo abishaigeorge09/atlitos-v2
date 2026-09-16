@@ -1677,10 +1677,10 @@ function makeClutchApi(client: AtlitosClient) {
     /**
      * App Store guideline 1.2: a member must be able to block another member.
      *
-     * The subtraction itself is a RESTRICTIVE RLS policy (0092), not a filter
-     * applied here, so blocked content disappears from every read including
-     * ones written later that forget about blocking. This call only records
-     * the block.
+     * Records the block in `blocked_users` (0097), the same table
+     * `useModeration().blockUser` writes. The subtraction is the explicit
+     * `getBlockedUserIds` filter on feed, comment and chat reads (RLS is a
+     * floor, not scoping). This call only records the block.
      */
     async blockUser(userId: string): Promise<void> {
       const { data: authData } = await client.auth.getUser();
@@ -1691,7 +1691,7 @@ function makeClutchApi(client: AtlitosClient) {
         throw { code: "VALIDATION", message: "You cannot block yourself." };
       }
       const { error } = await db
-        .from("user_blocks")
+        .from("blocked_users")
         // Idempotent: blocking twice is not an error the member should see.
         .upsert(
           { blocker_id: authData.user.id, blocked_id: userId },
@@ -1704,7 +1704,7 @@ function makeClutchApi(client: AtlitosClient) {
       const { data: authData } = await client.auth.getUser();
       if (!authData.user) return;
       const { error } = await db
-        .from("user_blocks")
+        .from("blocked_users")
         .delete()
         .eq("blocker_id", authData.user.id)
         .eq("blocked_id", userId);
@@ -1717,10 +1717,9 @@ function makeClutchApi(client: AtlitosClient) {
      * that is the ONLY cross-user read surface for `users`; reading `users`
      * directly returns nothing for anyone but yourself.
      *
-     * A blocked account's own clips are hidden by the RESTRICTIVE policy, but
-     * `public_profiles` is not filtered by it, which is what makes an unblock
-     * list possible at all: you can still see the name of the person you chose
-     * to stop seeing.
+     * `public_profiles` is not filtered by the block, which is what makes an
+     * unblock list possible at all: you can still see the name of the person
+     * you chose to stop seeing.
      */
     async blockedUsers(): Promise<Array<{ id: string; name: string }>> {
       const ids = await this.blockedUserIds();
@@ -1738,13 +1737,13 @@ function makeClutchApi(client: AtlitosClient) {
     },
 
     /** Ids the caller has blocked, for rendering an unblock list in settings.
-     * Owner-scoped explicitly on top of `user_blocks_select_own` (CLAUDE.md:
+     * Owner-scoped explicitly on top of `blocked_users_select_own` (CLAUDE.md:
      * RLS is a floor, not scoping). */
     async blockedUserIds(): Promise<string[]> {
       const { data: authData } = await client.auth.getUser();
       if (!authData.user) return [];
       const { data, error } = await db
-        .from("user_blocks")
+        .from("blocked_users")
         .select("blocked_id")
         .eq("blocker_id", authData.user.id)
         .returns<{ blocked_id: string }[]>();

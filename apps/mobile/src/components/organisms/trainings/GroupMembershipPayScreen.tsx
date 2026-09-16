@@ -10,6 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BillSummary } from '@/components/molecules/BillSummary';
 import { AppBar } from '@/components/ui/app-bar';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
@@ -61,6 +62,7 @@ export function GroupMembershipPayScreen({
   payingDescription,
 }: GroupMembershipPayScreenProps) {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
   const groups = useGroups(supabase);
   const me = useSessionStore((state) => state.me);
   const requiresAuthGate = useSessionStore((state) => state.status !== 'signed_in');
@@ -177,7 +179,7 @@ export function GroupMembershipPayScreen({
   if (state === 'confirmed' && reserved) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-        <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.xl, flexGrow: 1, justifyContent: 'center' }}>
+        <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.xl, flexGrow: 1, justifyContent: 'center', paddingBottom: navInset + spacing.lg }}>
           <View style={{ alignItems: 'center', gap: spacing.md }}>
             <View
               style={{
@@ -270,7 +272,7 @@ export function GroupMembershipPayScreen({
         ) : null}
       </ScrollView>
 
-      <View style={{ padding: spacing.lg, borderTopWidth: 1, borderTopColor: colors.border }}>
+      <View style={{ padding: spacing.lg, paddingBottom: navInset + spacing.lg, borderTopWidth: 1, borderTopColor: colors.border }}>
         <Button loading={payLoading || state === 'paying'} disabled={!reserved} onPress={() => void handlePay()}>
           <Text style={{ color: colors.inkOnAccent }}>
             Pay{reserved ? ' ' : ''}
