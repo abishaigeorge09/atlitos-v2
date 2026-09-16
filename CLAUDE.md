@@ -11,7 +11,8 @@ Before touching anything, read in this order:
 2. The relevant PRD(s) in `docs/prd/` for whatever surface you are touching (PRD-01 athlete, PRD-02 coach, PRD-03 court partner, PRD-04 admin, PRD-05 UPA life, PRD-06 sponsor, PRD-07 shopper). The PRD is the ceiling on scope, not a suggestion. If a feature is not traceable to a `PRD-0X FR-y`, it does not belong in this phase.
 3. The current `docs/phases/PHASE-N-STATUS.md` for whatever phase is active. It tells you what is already done, what is in flight, and what handoff notes the previous phase left.
 4. `docs/design/TASTE.md` and `docs/design/DESIGN-LANGUAGE.md` for anything touching UI.
-5. `docs/agents/workflows.md` if you are unsure what role you are playing in the current phase (planner, builder, integrator, biased approver, phase-close) or how to hand off to the next agent.
+5. `docs/BRANCHING.md` before you create a branch or merge one. Six rules. `main` is canonical, everyone branches from it, migrations take their number at merge time. Two histories that never met cost a day on 2026-09-14.
+6. `docs/agents/workflows.md` if you are unsure what role you are playing in the current phase (planner, builder, integrator, biased approver, phase-close) or how to hand off to the next agent.
 
 Agents are spun up fresh per phase and have no memory beyond what is written in this repo. If something is not written down here, it does not exist for the next agent. Write it down.
 
