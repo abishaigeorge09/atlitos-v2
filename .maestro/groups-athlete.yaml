@@ -9,6 +9,13 @@
 # Squad thread; that is additive content, not a state transition, so
 # there is nothing to reset afterward.
 appId: com.atlitos.app
+# Demo password, read from the shell environment when set. The literal is
+# only the default for an unconfigured checkout. Maestro cannot import the
+# JavaScript source of truth, so at rotation time either export
+# ATLITOS_DEMO_PASSWORD (nothing here changes) or edit this default.
+# Full procedure: scripts/lib/demo-credentials.mjs
+env:
+  ATLITOS_DEMO_PASSWORD: "AtlitosDemo!2026"
 ---
 # Fresh app state every run, see groups-coach.yaml for why.
 - launchApp:
@@ -25,7 +32,7 @@ appId: com.atlitos.app
 - tapOn: "Email or phone input"
 - inputText: "player@atlitos.dev"
 - tapOn: "Password input"
-- inputText: "AtlitosDemo!2026"
+- inputText: "${ATLITOS_DEMO_PASSWORD}"
 - tapOn:
     text: "Log in"
     index: 1

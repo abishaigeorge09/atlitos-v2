@@ -1,10 +1,11 @@
 // TRACK F: RLS client-write refusals + non-vacuous isolation, via real authenticated
 // JWTs against PostgREST. No service role. Asserts two donor ids DIFFER first (AT-62).
 import { readFileSync } from 'node:fs';
+import { ATLITOS_PASSWORD } from './lib/demo-credentials.mjs';
 function readEnvFile(p){const o={};for(const l of readFileSync(p,'utf8').split('\n')){const m=l.match(/^([A-Z0-9_]+)=(.*)$/);if(m)o[m[1]]=m[2].trim();}return o;}
 const env = readEnvFile('apps/mobile/.env');
 const URL = env.EXPO_PUBLIC_SUPABASE_URL, ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-const PW = 'AtlitosDemo!2026';
+const PW = ATLITOS_PASSWORD;
 const UPA_VERIFIED = '4f7616f4-f43f-4dd9-b2cb-f166ec268081';
 const ITEM = '976221c9-aa02-4b0b-aacf-49ffee60d7f1';
 

@@ -392,7 +392,7 @@ Every migration was proven not to change any role's visible-row set, using two r
 
 ## Security remediation, 2026-09-04
 
-**Suspension as a restrictive layer (`0090`, SEC-F4).** `users.status` existed from `0001` and `0065` stopped a member editing it, but nothing ever READ it: a suspended account kept booking, paying and posting. Enforcement is now layered, because no single layer covers everything. The access-token hook denies a token (widest, bounded by the access-token TTL). `getAuthenticatedUser()` refuses on the spot, which closes every edge function immediately. And for the tables a client writes directly through PostgREST, `0090` adds a RESTRICTIVE insert policy, `<table>_active_user_only`, calling `is_active_user()`:
+**Suspension as a restrictive layer (`0120`, SEC-F4).** `users.status` existed from `0001` and `0065` stopped a member editing it, but nothing ever READ it: a suspended account kept booking, paying and posting. Enforcement is now layered, because no single layer covers everything. The access-token hook denies a token (widest, bounded by the access-token TTL). `getAuthenticatedUser()` refuses on the spot, which closes every edge function immediately. And for the tables a client writes directly through PostgREST, `0120` adds a RESTRICTIVE insert policy, `<table>_active_user_only`, calling `is_active_user()`:
 
 `clips, clip_comments, reports, chat_threads, chat_messages, gratitude_posts, upa_evidence, upa_wishlist_items, coach_trainee_notes, coach_trainee_videos, verification_requests, addresses`.
 
@@ -431,6 +431,6 @@ RESTRICTIVE to PERMISSIVE) fails that assertion.
 ## Account deletion (0093)
 
 `is_active_user()` now returns false for `status = 'suspended'` OR
-`deleted_at is not null`, so the twelve RESTRICTIVE insert policies from 0090
+`deleted_at is not null`, so the twelve RESTRICTIVE insert policies from 0120
 cover deletion with no new policy. `custom_access_token_hook` refuses the token,
 and `getAuthenticatedUser` refuses on the next edge request.

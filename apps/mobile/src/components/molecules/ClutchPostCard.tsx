@@ -46,6 +46,10 @@ export interface ClutchPostCardProps {
    * Absent on surfaces showing the viewer's OWN clips, where reporting
    * yourself is not a thing. */
   onReportOrBlock?: () => void;
+  /** Extra clearance under the caption block and the action rail, in points.
+   * The full screen feed passes the floating nav's inset so neither can sit
+   * under the pill; the Home preview, whose card scrolls, passes nothing. */
+  bottomInset?: number;
 }
 
 function timeAgo(iso: string): string {
@@ -69,6 +73,7 @@ export function ClutchPostCard({
   onShare,
   onOpen,
   onReportOrBlock,
+  bottomInset = 0,
 }: ClutchPostCardProps) {
   const colors = useThemeColors();
 
@@ -162,7 +167,7 @@ export function ClutchPostCard({
 
       {/* 4. Caption block. box-none so empty space falls through to overlay
           (3); the inner "View all comments" Pressable still captures taps. */}
-      <View className="absolute inset-x-0 bottom-0 gap-xs p-md" style={{ pointerEvents: 'box-none', right: spacing['6xl'] }}>
+      <View className="absolute inset-x-0 gap-xs p-md" style={{ pointerEvents: 'box-none', right: spacing['6xl'], bottom: bottomInset }}>
         <View className="flex-row items-center gap-sm">
           <Text className="font-sans-semibold text-text-inverse">{clip.channel}</Text>
           <Text className="font-mono text-xs text-text-inverse opacity-80">{timeAgo(clip.createdAt)}</Text>
@@ -185,7 +190,7 @@ export function ClutchPostCard({
       </View>
 
       {/* 5. Action rail. box-none wrapper; each action is its own Pressable. */}
-      <View className="absolute bottom-md right-md items-center gap-lg" style={{ pointerEvents: 'box-none' }}>
+      <View className="absolute right-md items-center gap-lg" style={{ pointerEvents: 'box-none', bottom: spacing.md + bottomInset }}>
         <Pressable
           onPress={handleLike}
           accessibilityRole="button"

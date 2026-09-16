@@ -189,4 +189,4 @@ mintSignedClipUrl(supabase, objectPath, requiredPrefix)  // prefix is REQUIRED
 
 `stream-webhook` applies the same predicate at the write, so a poisoned value never reaches the column either. One shared predicate, two enforcement points.
 
-**Both halves need the edge functions REDEPLOYED to take effect in production.** `0089` closes the `coach_trainee_videos` policy, but the mint guards are function code.
+**Both halves need the edge functions REDEPLOYED to take effect in production.** `0119` closes the `coach_trainee_videos` policy, but the mint guards are function code.

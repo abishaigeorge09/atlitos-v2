@@ -86,6 +86,7 @@
 //   SUPABASE_URL       — optional, defaults to the project URL below.
 
 import { createClient } from "@supabase/supabase-js";
+import { ATLITOS_PASSWORD } from "./lib/demo-credentials.mjs";
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? "https://syzzfgaudpifwvbpycyi.supabase.co";
 const ANON_KEY = process.env.SUPABASE_ANON_KEY;
@@ -98,7 +99,7 @@ if (!ANON_KEY) {
   process.exit(1);
 }
 
-const DEMO_PASSWORD = "AtlitosDemo!2026"; // matches scripts/seed-demo-users.mjs
+const DEMO_PASSWORD = ATLITOS_PASSWORD;
 const PLAYER_EMAIL = "player@atlitos.dev"; // user A, thread participant
 const COACH1_EMAIL = "coach1@atlitos.dev"; // user B, thread participant
 const COACH2_EMAIL = "coach2@atlitos.dev"; // user C, NOT a participant in A/B's thread

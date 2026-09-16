@@ -247,13 +247,20 @@ comment on function public.general_fund_account_ref() is
 -- ============================================================================
 -- Storage buckets (RLS.md Storage table; policies land in 0049).
 --   upa-evidence     PRIVATE, owner + admin read, never public (PRD-05 FR-3).
---   upa-photos       public read (the UPA profile photo).
+--   upa-photos       PRIVATE. The UPA profile photo is visible only while its
+--                    application is verified, so reads are mediated by the
+--                    storage.objects policy (0116) and served through a signed
+--                    URL. A public bucket cannot express that condition: the
+--                    /object/public/ path bypasses RLS entirely, which is the
+--                    leak 0117 closed on the live project. Created private here
+--                    so a fresh or restored environment starts where production
+--                    ended up rather than reopening it.
 --   gratitude-photos public read (the gratitude post photo).
 -- ============================================================================
 
 insert into storage.buckets (id, name, public)
 values
   ('upa-evidence', 'upa-evidence', false),
-  ('upa-photos', 'upa-photos', true),
+  ('upa-photos', 'upa-photos', false),
   ('gratitude-photos', 'gratitude-photos', true)
 on conflict (id) do nothing;

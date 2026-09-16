@@ -17,11 +17,12 @@
 import { createHmac } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
+import { ATLITOS_PASSWORD } from "./lib/demo-credentials.mjs";
 
 const PROJECT_REF = "syzzfgaudpifwvbpycyi";
 const SUPABASE_URL = `https://${PROJECT_REF}.supabase.co`;
 const ANON_KEY = "sb_publishable_w81GxOVCX2UVNoQ9NAGTaA_u2kuT29O";
-const PASSWORD = "AtlitosDemo!2026";
+const PASSWORD = ATLITOS_PASSWORD;
 const SESSION_TYPE_ID = "d11093c3-ef7f-42e0-ad7b-f93c10c5d422"; // coach1 "Batting Basics", 1000, 60min
 
 function readEnvFile(path) {

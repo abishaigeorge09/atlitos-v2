@@ -32,6 +32,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ClipVideo } from '@/components/molecules/clip-video';
 import { LoginGateModal } from '@/components/organisms/LoginGateModal';
 import { Avatar } from '@/components/ui/avatar';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
 import { supabase } from '@/lib/supabase';
@@ -67,6 +68,7 @@ function timeAgo(iso: string): string {
  */
 export default function ClutchPostDetailScreen() {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
   const { id } = useLocalSearchParams<{ id: string }>();
   const clutch = useClutch(supabase);
   const requiresAuthGate = useSessionStore((state) => state.status !== 'signed_in');
@@ -291,10 +293,12 @@ export default function ClutchPostDetailScreen() {
         </Pressable>
       </SafeAreaView>
 
-      {/* Right action rail: like, comment, share. */}
+      {/* Right action rail: like, comment, share. Offset by the nav inset
+          (which already carries the bottom safe area) so the rail sits above
+          the floating bar instead of under it. */}
       <SafeAreaView
-        style={{ position: 'absolute', bottom: 0, right: 0 }}
-        edges={['bottom']}
+        style={{ position: 'absolute', bottom: navInset, right: 0 }}
+        edges={[]}
         pointerEvents="box-none"
       >
         <View style={{ alignItems: 'center', gap: spacing.lg, paddingHorizontal: spacing.md, paddingBottom: spacing.lg }}>
@@ -336,10 +340,10 @@ export default function ClutchPostDetailScreen() {
         </View>
       </SafeAreaView>
 
-      {/* Bottom-left caption + bottom-right mute toggle. */}
+      {/* Bottom-left caption + bottom-right mute toggle, above the bar. */}
       <SafeAreaView
-        style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}
-        edges={['bottom']}
+        style={{ position: 'absolute', bottom: navInset, left: 0, right: 0 }}
+        edges={[]}
         pointerEvents="box-none"
       >
         <View

@@ -19,3 +19,7 @@ supabase/.temp/
 markitdown/
 output/
 tmp/
+
+# Design source files and machine local dev config stay out of the repo
+apps/mobile/assets/brand/*.fig
+.claude/launch.json

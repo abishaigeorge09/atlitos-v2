@@ -96,3 +96,62 @@ either migration; it documents why the two new transitions are separate,
 narrowly-granted RPCs rather than two more branches on the existing
 (`authenticated`-granted) `court_booking_transition`, and why the enum
 addition and its consumers had to be split across two migration files.
+
+## Vendored production source (audit 2026-09-12)
+
+Three functions were running in production with no source anywhere in this
+repo, so nobody could review, diff, or safely redeploy them. Their deployed
+source has been pulled back from project `syzzfgaudpifwvbpycyi` and committed
+verbatim:
+
+| Function | Deployed version | verify_jwt | Vendored to |
+|---|---|---|---|
+| `admin-order-refund` | 3 (2026-08-07) | on | `admin-order-refund/index.ts` |
+| `admin-user-suspend` | 3 (2026-08-07) | on | `admin-user-suspend/index.ts` |
+| `get-clip-playback-urls` | 3 (2026-08-07) | OFF | `get-clip-playback-urls/index.ts` |
+
+`get-clip-playback-urls` is a thin delegate to `handlePlaybackRequest` in
+`get-clip-playback-url/handler.ts`. That module and its sibling
+`get-clip-playback-url/mint.ts` were also missing from the repo and are
+vendored alongside, at the paths the deployed import specifiers expect.
+
+These five files are a byte-for-byte copy of what production runs. Treat any
+edit to them as a production behaviour change, not a cleanup: they were
+committed so that a future deploy is a reviewed diff instead of a surprise.
+
+### Redeploy blockers (do not deploy these three until resolved)
+
+`_shared/` has moved on by about a month since these functions were deployed,
+so the repo can no longer reproduce them:
+
+- `_shared/rate-limit.ts` was rewritten for SEC-F9. The deployed API
+  (`takeRateLimitToken`, `getClientIp`, `rateLimitedResponse`, fail open) no
+  longer exists; the repo now exports `enforceRateLimit` / `callerIp` and fails
+  closed. `deno check get-clip-playback-urls/index.ts` fails on this today.
+- `_shared/clip-access.ts`'s `mintSignedClipUrl` gained a required third
+  `requiredPrefix` argument. The vendored `handler.ts` calls it with two.
+- `_shared/sentry.ts` exists in every deployed bundle and does not exist in
+  this repo. The repo's `_shared/http.ts` no longer imports it, so this is
+  benign for a redeploy, but it means production is running error reporting
+  that has no source here.
+- `_shared/http.ts` now redacts the message on any status 500 and above behind
+  a correlation id. `admin-user-suspend`'s deliberately detailed
+  "row changed but the GoTrue ban failed" message would stop reaching the
+  caller on a redeploy.
+- `_shared/supabase.ts`'s `assertNotSuspended` now selects `deleted_at` from
+  `users` under the service role and throws `INTERNAL` (500) if the read
+  errors. `users.deleted_at` does not exist in production, so redeploying any
+  function that calls `getAuthenticatedUser` would 500 on every authenticated
+  request until `0123_account_deletion.sql` is applied.
+- The deployed `get-clip-playback-url` (version 6) is the refactored
+  `handler.ts` delegate. The `get-clip-playback-url/index.ts` in this repo is
+  the older self-contained single-clip version and was left untouched; it is
+  also stale against production.
+
+### In-app account deletion has no live endpoint
+
+`delete-account/` exists here but is not deployed, and neither of the two
+things it needs is in production: `delete_my_account()` is absent and
+`users.deleted_at` is absent (`0123_account_deletion.sql` is unapplied).
+Account deletion is therefore unavailable in the shipped app, which is an App
+Store guideline 5.1.1(v) compliance gap, not just a missing feature.

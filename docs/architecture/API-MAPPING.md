@@ -251,7 +251,7 @@ Client wiring lives in `apps/portal-court/src/lib/onboarding.ts`, one typed modu
 
 | v1 fn | v1 route | v2 lane | Function / RPC | Note |
 |---|---|---|---|---|
-| `feed` | GET `/clutch/feed` | PostgREST | `clips` select, `status = 'published'`, keyset pagination on `created_at` | RLS public read restricted to `published`; owner can additionally read their own clip in any status |
+| `feed` | GET `/clutch/feed` | PostgREST | `clips` select, `status = 'published'`, keyset pagination on `created_at` | RLS public read restricted to `published`; owner can additionally read their own clip in any status. `Clip.ownerAvatarUrl` is `public_profiles.avatar_url` from the same embed (`CLIP_FEED_SELECT`), passed through only when it is an absolute http URL, for the post header and the reels overlay; `Clip` carries no playback URL (minted per card by `playbackUrl`) and no hydrated top comment |
 | `get` | GET `/clutch/:id` | PostgREST | `clips` select single | same RLS |
 | `comments` | GET `/clutch/:id/comments` | PostgREST | `clip_comments` select, keyset pagination | RLS public read |
 | `addComment` | POST `/clutch/:id/comments` | PostgREST | `clip_comments` insert | RLS requires a non-anonymous `auth.uid()`, guest insert rejected, mapped to `403 GUEST` |
@@ -360,12 +360,12 @@ PLAN.md's edge function roster includes several functions v1 never had a mock fo
 | Surface | Call | Notes |
 |---|---|---|
 | moderation | `useClutch().report(entityType, entityId, reason)` | Inserts `reports`. `reporter_id` comes from the session, never an argument. Reason capped at 500 chars. |
-| moderation | `useClutch().blockUser(userId)` | Upsert into `user_blocks`, idempotent. The subtraction is RLS (0092), not this call. |
+| moderation | `useClutch().blockUser(userId)` | Upsert into `user_blocks`, idempotent. The subtraction is RLS (0122), not this call. |
 | moderation | `useClutch().unblockUser(userId)` | |
 | moderation | `useClutch().blockedUserIds()` | Owner scoped read for an unblock list. UI not yet built. |
 | account | `useProfile().deleteAccount()` | Invokes the `delete-account` edge function. Caller MUST sign out immediately after. |
 | search | `POST ai-search` | Now rate limited to 30 requests per 60s per user AND per IP, enforced before the two Anthropic calls. Returns `429 RATE_LIMITED` with a `Retry-After` header. |
-| chat | `useChat().threads()` | Previews now come from `chat_thread_previews` (0094) instead of a client-side fold over every message. |
+| chat | `useChat().threads()` | Previews now come from `chat_thread_previews` (0124) instead of a client-side fold over every message. |
 
 New error codes: `ACCOUNT_DELETED` (403), and `RATE_LIMITED` (429) is now
 actually raised. `AppError` carries an optional `retryAfterSeconds` that

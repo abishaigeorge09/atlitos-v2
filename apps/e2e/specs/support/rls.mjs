@@ -18,11 +18,12 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertTestDb, PROJECT_REF } from "../../helpers/sql.mjs";
+import { ATLITOS_PASSWORD } from "../../../../scripts/lib/demo-credentials.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(HERE, "..", "..", "..", "..");
 
-export const DEMO_PASSWORD = "AtlitosDemo!2026";
+export const DEMO_PASSWORD = ATLITOS_PASSWORD;
 
 /** The 6 Atlitos-password personas this partition's specs use. Emails only;
  * auth.setup.ts already proved these log in (state/_auth-report.json). */

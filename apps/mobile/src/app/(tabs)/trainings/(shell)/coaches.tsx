@@ -8,6 +8,7 @@ import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 
 import { CoachBrowseList } from '@/components/organisms/coaching/CoachBrowseList';
 import { EmptyState } from '@/components/organisms/EmptyState';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
 import { supabase } from '@/lib/supabase';
@@ -48,6 +49,7 @@ function todayISO(): string {
  */
 export default function PlayerCoachesScreen() {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
   const coaching = useCoaching(supabase);
 
   const [state, setState] = useState<ScreenState>('loading');
@@ -138,7 +140,7 @@ export default function PlayerCoachesScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <ScrollView
-        contentContainerStyle={{ paddingBottom: spacing['4xl'] }}
+        contentContainerStyle={{ paddingBottom: navInset + spacing.xl }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} />}
       >
         <CoachBrowseList

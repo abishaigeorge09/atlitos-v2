@@ -22,6 +22,7 @@
 
 import { createHmac } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { ATLITOS_PASSWORD } from './lib/demo-credentials.mjs';
 
 function readEnvFile(path) {
   const out = {};
@@ -37,7 +38,7 @@ const fnEnv = readEnvFile('supabase/.env');
 const SUPABASE_URL = mobileEnv.EXPO_PUBLIC_SUPABASE_URL;
 const ANON_KEY = mobileEnv.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 const KEY_SECRET = fnEnv.RAZORPAY_KEY_SECRET;
-const PASSWORD = 'AtlitosDemo!2026';
+const PASSWORD = ATLITOS_PASSWORD;
 
 const COACH = 'coach1@atlitos.dev';
 const MEMBERS = ['player@atlitos.dev', 'p2-verify-athlete@atlitos.dev', 'partner@atlitos.dev'];

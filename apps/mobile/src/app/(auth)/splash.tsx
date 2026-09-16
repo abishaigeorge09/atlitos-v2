@@ -1,8 +1,18 @@
-import { spacing } from '@atlitos/theme';
+import { duration, easing, spacing, spring } from '@atlitos/theme';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import splashMark from '../../../assets/images/splash-icon.png';
 
 import { Button } from '@/components/ui/button';
 import { friendlyAuthMessage } from '@/lib/auth-copy';
@@ -93,7 +103,7 @@ export default function SplashScreen() {
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
       <View style={styles.content}>
-        <Text style={[textStyle('display'), styles.wordmark, { color: colors.text }]}>Atlitos</Text>
+        <SplashMark />
         <Text style={[textStyle('body'), styles.tagline, { color: colors.textSecondary }]}>
           Train, play and follow the game, all in one place.
         </Text>
@@ -138,6 +148,56 @@ export default function SplashScreen() {
   );
 }
 
+/**
+ * The mark that carries the launch.
+ *
+ * The native splash (expo-splash-screen, app.json) draws
+ * `assets/images/splash-icon.png` at `imageWidth: 120` centred on the same
+ * `#141414` this screen paints. This renders the SAME asset at the SAME
+ * width in the SAME place, so when the native layer hides there is no jump
+ * to cut through: the mark is already sitting exactly where it was. It then
+ * settles into place with a spring, which is the only motion the user sees.
+ *
+ * Previously this spot held a text wordmark, so launch went logo -> text,
+ * a visible swap of two different things.
+ */
+function SplashMark() {
+  // Matches app.json's expo-splash-screen `imageWidth`. If that changes,
+  // change this with it or the handoff visibly jumps.
+  const NATIVE_SPLASH_IMAGE_WIDTH = 220;
+  // splash-icon.png is the cropped lockup, 1024x606.
+  const SPLASH_MARK_ASPECT = 1024 / 606;
+  const scale = useSharedValue(1);
+  const opacity = useSharedValue(1);
+
+  useEffect(() => {
+    // Overshoot then settle. Starts at 1 (the native splash's size) so the
+    // first frame is identical to what was already on screen.
+    scale.value = withSequence(
+      withTiming(1.08, { duration: duration.base, easing: Easing.bezier(...easing.decelerate) }),
+      withSpring(1, spring.standard),
+    );
+    opacity.value = withTiming(1, { duration: duration.fast });
+  }, [opacity, scale]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
+  }));
+
+  return (
+    <Animated.Image
+      source={splashMark}
+      accessibilityLabel="Atlitos"
+      resizeMode="contain"
+      style={[
+        { width: NATIVE_SPLASH_IMAGE_WIDTH, aspectRatio: SPLASH_MARK_ASPECT },
+        animatedStyle,
+      ]}
+    />
+  );
+}
+
 const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   content: {
@@ -147,7 +207,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     gap: spacing.lg,
   },
-  wordmark: { textAlign: 'center' },
   tagline: { textAlign: 'center', maxWidth: 300 },
   spinner: { marginTop: spacing.lg },
   actions: { width: '100%', maxWidth: 320, gap: spacing.sm, marginTop: spacing.lg },

@@ -38,7 +38,7 @@
 // attempts those three sign-ins (so it self-heals the moment someone fixes
 // the seed) but does not fail the run when they are unavailable: BLOCKED_
 // prefixed notes are printed and those specific persona-owned assertions are
-// skipped. Everything else runs on already-working AtlitosDemo!2026
+// skipped. Everything else runs on already-working Atlitos-password
 // accounts, several of which turn out to double as real UPA owners because
 // supabase/seed/seed_p6_empower_fixtures.sql's id-resolution falls back to
 // coach1@/coach2@atlitos.dev when the upa.* email does not resolve:
@@ -63,6 +63,7 @@
 
 import { createHmac } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { ATLITOS_PASSWORD, EMPOWER_PASSWORD } from './lib/demo-credentials.mjs';
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? 'https://syzzfgaudpifwvbpycyi.supabase.co';
 const ANON_KEY = process.env.SUPABASE_ANON_KEY;
@@ -90,8 +91,8 @@ function readEnvFile(path) {
 const fnEnv = readEnvFile('supabase/.env');
 const RAZORPAY_KEY_SECRET = fnEnv.RAZORPAY_KEY_SECRET;
 
-const AT_PW = 'AtlitosDemo!2026';
-const EM_PW = 'EmpowerDemo!2026';
+const AT_PW = ATLITOS_PASSWORD;
+const EM_PW = EMPOWER_PASSWORD;
 
 // ---------------------------------------------------------------- transport
 async function signIn(email, password) {

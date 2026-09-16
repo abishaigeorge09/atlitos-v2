@@ -336,7 +336,7 @@ The read path for those sums shipped in AT-44 as two `security definer` RPCs, `g
 
 Nothing in this document introduces a second balance representation. `payment_intents.status` tracks one charge's lifecycle for UI polling and idempotency; `ledger_entries` is the only place a rupee amount is attributed to an account and summed. Every number this document's flows eventually surface to a user, coach earnings, court partner net payable, a donor's total given, the empower hub's aggregate raised, is a `sum(amount) FILTER (WHERE direction=...) GROUP BY account_type, account_ref` query against `ledger_entries`, exactly as specified in `SCHEMA.md`.
 
-## Capture finalization is retryable (SEC-F2, `0088`, 2026-09-04)
+## Capture finalization is retryable (SEC-F2, `0118`, 2026-09-04)
 
 The capture gate in `_shared/finalize-payment.ts` flips `payment_intents` `created -> captured` in a single guarded UPDATE and only then dispatches to the domain handler. That ordering is correct for concurrency, and was wrong for failure: if the handler threw after the flip, the intent was already `captured`, so every later delivery of that capture (Razorpay's webhook retries, the client's `verify-payment` fallback) matched zero rows and returned `already_processed` without re-entering the handler. A transient failure therefore left real captured money with no confirmed booking, no order, no activated membership, no recorded donation, or no balanced ledger group, permanently.
 

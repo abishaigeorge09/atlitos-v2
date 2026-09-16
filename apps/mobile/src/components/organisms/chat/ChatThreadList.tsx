@@ -8,6 +8,7 @@ import { FlatList, Pressable, RefreshControl, View } from 'react-native';
 import { LoginGateModal } from '@/components/organisms/LoginGateModal';
 import { EmptyState } from '@/components/organisms/EmptyState';
 import { Avatar } from '@/components/ui/avatar';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
 import { supabase } from '@/lib/supabase';
@@ -45,6 +46,7 @@ export interface ChatThreadListProps {
  */
 export function ChatThreadList({ onOpenThread, title }: ChatThreadListProps) {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
   const chat = useChat(supabase);
   const requiresAuthGate = useSessionStore((state) => state.status !== 'signed_in');
   const [gateVisible, setGateVisible] = useState(false);
@@ -184,7 +186,7 @@ export function ChatThreadList({ onOpenThread, title }: ChatThreadListProps) {
           keyExtractor={(item) => item.id}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} />}
           ItemSeparatorComponent={() => <View style={{ height: spacing.md }} />}
-          contentContainerStyle={{ paddingBottom: spacing['3xl'] }}
+          contentContainerStyle={{ paddingBottom: navInset + spacing.xl }}
           renderItem={({ item }) => <ThreadRow thread={item} onPress={() => onOpenThread(item.id)} />}
         />
       )}

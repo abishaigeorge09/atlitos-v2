@@ -8,6 +8,7 @@ import { RefreshControl, ScrollView, View } from 'react-native';
 
 import { EmptyState } from '@/components/organisms/EmptyState';
 import { EarningsHeader } from '@/components/organisms/EarningsHeader';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -53,6 +54,7 @@ function groupByMonth(transactions: Transaction[]): { month: string; label: stri
  */
 export default function CoachEarningsScreen() {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
   const earnings = useCoachEarnings(supabase);
 
   const [state, setState] = useState<ScreenState>('loading');
@@ -117,7 +119,7 @@ export default function CoachEarningsScreen() {
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing['4xl'] }}
+          contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: navInset + spacing.xl }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} />}
         >
           {balance ? (

@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { PriceText } from '@/components/ui/price-text';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -29,6 +30,7 @@ type ScreenState = 'loading' | 'empty' | 'populated' | 'error';
  */
 export default function CourtBookingsListScreen() {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
   const courts = useCourts(supabase);
 
   const [state, setState] = useState<ScreenState>('loading');
@@ -108,7 +110,7 @@ export default function CourtBookingsListScreen() {
         <FlatList
           data={items}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}
+          contentContainerStyle={{ padding: spacing.lg, gap: spacing.md, paddingBottom: navInset + spacing.xl }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} />}
           renderItem={({ item }) => (
             <Pressable

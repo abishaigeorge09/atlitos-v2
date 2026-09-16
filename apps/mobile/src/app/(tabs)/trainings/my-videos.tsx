@@ -5,11 +5,12 @@ import { router } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { Film, TriangleAlert, X } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
-import { Modal, Pressable, View } from 'react-native';
+import { Modal, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/organisms/EmptyState';
 import { AppBar } from '@/components/ui/app-bar';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
@@ -29,6 +30,7 @@ type ScreenState = 'loading' | 'empty' | 'populated' | 'error';
  */
 export default function MyTraineeVideosScreen() {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
   const videos = useMyTraineeVideos(supabase);
 
   const [state, setState] = useState<ScreenState>('loading');
@@ -106,7 +108,7 @@ export default function MyTraineeVideosScreen() {
           body="Videos your coach posts to review your training will show up here."
         />
       ) : (
-        <View style={{ padding: spacing.lg, gap: spacing.sm }}>
+        <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.sm, paddingBottom: navInset + spacing.xl }}>
           {playbackError ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
               <TriangleAlert size={16} color={colors.danger} strokeWidth={1.75} />
@@ -152,7 +154,7 @@ export default function MyTraineeVideosScreen() {
               </View>
             </Pressable>
           ))}
-        </View>
+        </ScrollView>
       )}
 
       <Modal visible={playbackUrl != null} animationType="slide" onRequestClose={closePlayback}>

@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
 import { EmptyState } from '@/components/organisms/EmptyState';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
@@ -71,6 +72,7 @@ export default function TrainingsAnalyticsScreen() {
 
 function CoachAnalyticsScreen() {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
   const analytics = useCoachAnalytics(supabase);
 
   const [state, setState] = useState<ScreenState>('loading');
@@ -130,7 +132,7 @@ function CoachAnalyticsScreen() {
           />
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.xl, paddingBottom: spacing['4xl'] }}>
+        <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.xl, paddingBottom: navInset + spacing.xl }}>
           {months.map((month) => (
             <View
               key={month.month}
@@ -208,6 +210,7 @@ function timeToMinutes(time: string): number {
  */
 function PlayerAnalyticsScreen() {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
   const coaching = useCoaching(supabase);
   const learn = useLearn(supabase);
 
@@ -290,7 +293,7 @@ function PlayerAnalyticsScreen() {
           />
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing['4xl'] }}>
+        <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: navInset + spacing.xl }}>
           <View style={{ flexDirection: 'row', gap: spacing.sm }}>
             <StatTile label="Sessions held" value={totalHeld} />
             <StatTile label="Hours trained" value={totalHours} />

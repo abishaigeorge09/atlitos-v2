@@ -13,6 +13,7 @@
 //   SUPABASE_URL               — optional, defaults to the project's URL below.
 
 import { createClient } from '@supabase/supabase-js';
+import { EMPOWER_PASSWORD } from './lib/demo-credentials.mjs';
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? 'https://syzzfgaudpifwvbpycyi.supabase.co';
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -28,7 +29,7 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
-const DEMO_PASSWORD = 'EmpowerDemo!2026';
+const DEMO_PASSWORD = EMPOWER_PASSWORD;
 
 const UPA_USERS = [
   { email: 'upa.verified@atlitos.dev', name: 'Priya Cricket', sport: 'cricket', region: 'Mumbai' },

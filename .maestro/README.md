@@ -13,6 +13,22 @@ maestro test .maestro/<flow>.yaml       # one flow
 maestro test .maestro/                  # whole suite
 ```
 
+The five flows that sign in (`groups-athlete`, `groups-coach`,
+`integrator-coach-trainees`, `trainings-coach-browse`, `trainings-shell`) read
+the demo password from `ATLITOS_DEMO_PASSWORD`. Maestro injects shell
+environment variables into a flow's parameters, so exporting it is enough:
+
+```sh
+export ATLITOS_DEMO_PASSWORD='...'
+```
+
+Each of those flows carries the current password as a default in its own `env:`
+block, so an unconfigured checkout still runs. The single source of truth for
+every other consumer is `scripts/lib/demo-credentials.mjs`, which also holds the
+rotation procedure. Maestro cannot import JavaScript, so if you ever change the
+committed defaults rather than exporting the variable, those five `env:` blocks
+are the five places to edit.
+
 The app must already be installed and running its dev bundle
 (`npx expo start --port 8081` in `apps/mobile`). `config.yaml` pins the
 `appId` (`com.atlitos.app`).

@@ -47,10 +47,10 @@ const Input = forwardRef<TextInput, InputProps>(function Input(
       ) : null}
       <View
         className={cn(
-          'flex-row items-center rounded-sm bg-surface-muted px-md',
+          'flex-row items-center rounded-md bg-transparent px-md',
           borderWidthClass,
           borderColorClass,
-          isMultiline ? 'min-h-24 items-start py-md' : 'h-11',
+          isMultiline ? 'min-h-24 items-start py-md' : 'h-12',
         )}
       >
         <TextInput

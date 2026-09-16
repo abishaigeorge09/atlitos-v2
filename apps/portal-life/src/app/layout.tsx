@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Urbanist, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
 import { ThemeProvider } from "@/components/theme-provider";
 
-// Inter for UI text, JetBrains Mono for every numeric readout and the
+// Urbanist for UI text, JetBrains Mono for every numeric readout and the
 // overline label, per docs/design/DESIGN-LANGUAGE.md Typography section.
-const inter = Inter({
+const urbanist = Urbanist({
   variable: "--font-sans",
   subsets: ["latin"],
 });
@@ -29,7 +29,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      className={`${urbanist.variable} ${jetbrainsMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col">

@@ -51,10 +51,10 @@ export default function RootLayout() {
   // the Vercel upload. See docs/design/DESIGN-LANGUAGE.md for the token
   // names these map to (`packages/theme` `rnFontFamily`).
   const [fontsLoaded, fontError] = useFonts({
-    Inter_400Regular: require('../../assets/fonts/Inter_400Regular.ttf'),
-    Inter_500Medium: require('../../assets/fonts/Inter_500Medium.ttf'),
-    Inter_600SemiBold: require('../../assets/fonts/Inter_600SemiBold.ttf'),
-    Inter_700Bold: require('../../assets/fonts/Inter_700Bold.ttf'),
+    Urbanist_400Regular: require('../../assets/fonts/Urbanist_400Regular.ttf'),
+    Urbanist_500Medium: require('../../assets/fonts/Urbanist_500Medium.ttf'),
+    Urbanist_600SemiBold: require('../../assets/fonts/Urbanist_600SemiBold.ttf'),
+    Urbanist_700Bold: require('../../assets/fonts/Urbanist_700Bold.ttf'),
     JetBrainsMono_500Medium: require('../../assets/fonts/JetBrainsMono_500Medium.ttf'),
     JetBrainsMono_600SemiBold: require('../../assets/fonts/JetBrainsMono_600SemiBold.ttf'),
   });

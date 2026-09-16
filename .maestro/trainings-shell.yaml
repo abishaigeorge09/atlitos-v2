@@ -14,6 +14,13 @@
 # via the atlitos://login deep link. Unlike the guest suite this flow signs
 # in, but it still writes no server state (taps only lists, tabs, back).
 appId: com.atlitos.app
+# Demo password, read from the shell environment when set. The literal is
+# only the default for an unconfigured checkout. Maestro cannot import the
+# JavaScript source of truth, so at rotation time either export
+# ATLITOS_DEMO_PASSWORD (nothing here changes) or edit this default.
+# Full procedure: scripts/lib/demo-credentials.mjs
+env:
+  ATLITOS_DEMO_PASSWORD: "AtlitosDemo!2026"
 ---
 # ---------- Athlete: player@atlitos.dev ----------
 # Fresh app process per run: three account switches in one long lived dev
@@ -73,7 +80,7 @@ appId: com.atlitos.app
 - tapOn: "Email or phone input"
 - inputText: "player@atlitos.dev"
 - tapOn: "Password input"
-- inputText: "AtlitosDemo!2026"
+- inputText: "${ATLITOS_DEMO_PASSWORD}"
 - tapOn:
     text: "Log in"
     index: 1
@@ -263,7 +270,7 @@ appId: com.atlitos.app
 - tapOn: "Email or phone input"
 - inputText: "coach1@atlitos.dev"
 - tapOn: "Password input"
-- inputText: "AtlitosDemo!2026"
+- inputText: "${ATLITOS_DEMO_PASSWORD}"
 - tapOn:
     text: "Log in"
     index: 1

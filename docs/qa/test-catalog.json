@@ -1249,7 +1249,7 @@
   },
   {
     "id": "SEC-03",
-    "surface": "supabase/migrations/0089 (RLS)",
+    "surface": "supabase/migrations/0119 (RLS)",
     "persona": "coach1@ vs a non-trainee",
     "lane": "SQL",
     "priority": "P0",
@@ -1261,11 +1261,11 @@
     "persona": "coach1@",
     "lane": "SQL",
     "priority": "P0",
-    "expected": "A coach_trainee_videos row seeded (service role) with a storage_path outside coach-videos/{coach_id}/{player_id}/ does not mint a signed URL: the mint re-derives the prefix and refuses 403. Covers rows written before 0089, which a policy change cannot retract."
+    "expected": "A coach_trainee_videos row seeded (service role) with a storage_path outside coach-videos/{coach_id}/{player_id}/ does not mint a signed URL: the mint re-derives the prefix and refuses 403. Covers rows written before 0119, which a policy change cannot retract."
   },
   {
     "id": "SEC-05",
-    "surface": "supabase/migrations/0088 + _shared/finalize-payment.ts",
+    "surface": "supabase/migrations/0118 + _shared/finalize-payment.ts",
     "persona": "n/a",
     "lane": "SQL",
     "priority": "P0",
@@ -1273,7 +1273,7 @@
   },
   {
     "id": "SEC-06",
-    "surface": "supabase/migrations/0090 + _shared/supabase.ts",
+    "surface": "supabase/migrations/0120 + _shared/supabase.ts",
     "persona": "throwaway account + admin@",
     "lane": "SQL",
     "priority": "P0",
@@ -1281,7 +1281,7 @@
   },
   {
     "id": "SEC-07",
-    "surface": "supabase/migrations/0091",
+    "surface": "supabase/migrations/0121",
     "persona": "admin@",
     "lane": "SQL",
     "priority": "P1",

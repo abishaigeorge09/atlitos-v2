@@ -13,6 +13,7 @@
 // rows. Modeled on the proven scripts/verify-f-donation.mjs.
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { ATLITOS_PASSWORD, EMPOWER_PASSWORD } from "./lib/demo-credentials.mjs";
 
 function readEnvFile(path) {
   const out = {};
@@ -32,10 +33,10 @@ const UPA = "f0000000-0000-0000-0000-000000000001"; // upa.verified@ own UPA
 const ITEM_GROUND = "a1000000-0000-0000-0000-000000000002"; // open, cost 3000
 const ITEM_CRICKET = "a1000000-0000-0000-0000-000000000001"; // open, cost 5000
 
-// Try donor@ first (EmpowerDemo!2026), fall back to player@ (AtlitosDemo!2026).
+// Try donor@ first (Empower password), fall back to player@ (Atlitos password).
 const DONORS = [
-  { email: "donor@atlitos.dev", password: "EmpowerDemo!2026" },
-  { email: "player@atlitos.dev", password: "AtlitosDemo!2026" },
+  { email: "donor@atlitos.dev", password: EMPOWER_PASSWORD },
+  { email: "player@atlitos.dev", password: ATLITOS_PASSWORD },
 ];
 
 async function signIn(email, password) {

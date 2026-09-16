@@ -5,6 +5,7 @@
 // record_donation_from_draft transaction and the real ledger write all run.
 import { createHmac } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { ATLITOS_PASSWORD } from './lib/demo-credentials.mjs';
 
 const ROOT = '.';
 function readEnvFile(path) {
@@ -20,7 +21,7 @@ const fnEnv = readEnvFile(`${ROOT}/supabase/.env`);
 const SUPABASE_URL = mobileEnv.EXPO_PUBLIC_SUPABASE_URL;
 const ANON_KEY = mobileEnv.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 const KEY_SECRET = fnEnv.RAZORPAY_KEY_SECRET;
-const PASSWORD = 'AtlitosDemo!2026';
+const PASSWORD = ATLITOS_PASSWORD;
 
 const UPA = '4f7616f4-f43f-4dd9-b2cb-f166ec268081';
 const ITEM_A = '2a1c55e4-0bff-437a-a456-e69f44dfd227'; // cost 5000, funded 0

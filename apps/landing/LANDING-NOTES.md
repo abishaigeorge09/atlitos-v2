@@ -114,3 +114,100 @@ Page story, top to bottom:
 4. Newsletter is a mailto stopgap; real capture needs an endpoint decision.
 5. Options gallery `/nav-options.html` and stale hero photos (hero-stadium, basketball,
    badminton, used by the gallery and as film era leftovers) are kept deliberately.
+
+## Deploy and headers (2026-09-12 audit follow up)
+
+### The production site is NOT built from this branch
+
+`www.atlitos.com` is served from `origin/worktree-atlitos-landing-pixel-match`, not from
+`main`. Proof: the live `styles.css` is md5 identical (`47c7cc36fd4808024999ecb8a22ad381`)
+to that branch's copy, and differs from `main`'s. That branch forked at `1199955`, carries
+16 landing commits `main` does not have (the COLD OPEN kinetic hero, GSAP 3.13 plus Lenis,
+self hosted variable fonts under `fonts/`, the `motion/` ES module system), and is missing
+the one landing commit `main` does have, `bd0ba6c` (privacy, terms, content policy).
+
+That single fact explains both headline audit findings:
+
+- `/content-policy` returns 404 because the deployed branch has no legal pages at all.
+- The homepage has no legal links for the same reason.
+
+Neither is a defect in `main`. `main` has `content-policy.html` tracked and committed, and
+`index.html` links `/privacy`, `/terms`, `/content-policy` in the footer. Both remotes have
+`main` at the same sha as the local checkout, so nothing is unpushed. The gap is a branch
+that was never reconciled.
+
+The deployed branch's `vercel.json` is also only `{"outputDirectory": "."}`, with no
+`cleanUrls`. Even if the legal pages were merged in, the extensionless URLs would 404 until
+`cleanUrls` lands there too.
+
+**Whoever reconciles these branches owns the fix.** Everything below lives on `main` and
+reaches production only after that merge, or after the Vercel project is repointed.
+
+### What changed on main
+
+- `vercel.json` gained a `headers` block on `/(.*)`: HSTS with `includeSubDomains` and
+  `preload`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy:
+  strict-origin-when-cross-origin`, and a `Permissions-Policy` that denies camera,
+  microphone, geolocation and payment (none are used).
+- CSP ships in two parts on purpose. The enforcing `Content-Security-Policy` carries only
+  the structural directives that cannot break a resource load: `base-uri`, `object-src`,
+  `frame-ancestors`, `form-action`, `upgrade-insecure-requests`. The full resource policy
+  ships as `Content-Security-Policy-Report-Only` so it can be watched in DevTools before it
+  is promoted. To promote it, rename the report only key to `Content-Security-Policy`,
+  fold the structural directives in, and drop the old entry.
+- The report only policy is a deliberate superset of both builds: `style-src` and
+  `font-src` allow the Google Fonts origins `main` still uses, while `img-src 'self' data:`
+  covers the deployed branch's inline SVG grain texture. Everything else on both builds is
+  same origin.
+- `script-src` pins the one inline bootstrap script by hash. Both builds use the identical
+  line, `document.documentElement.classList.add("js");`, so the hash
+  `sha256-WZRJfWvsnNCPcxzZwvyhovnZGqhZaC+8gPGPRbx6wTk=` covers both. If that line is ever
+  edited the hash must be recomputed, otherwise the page silently falls back to the no JS
+  path.
+- `robots.txt` and `sitemap.xml` are new. The sitemap lists only the four public pages on
+  the canonical `www.atlitos.com` origin in `cleanUrls` form. No app, portal or admin URL
+  appears in either file, and none should ever be added.
+- `robots.txt` disallows `/nav-options`, `/LANDING-NOTES.md` and `/ASSET-PROMPTS.md`.
+  These are internal build notes and a scratch gallery that ship inside the static output
+  directory and are publicly fetchable. `LANDING-NOTES.md` in particular names the Vercel
+  project. Robots is advisory only. If they should be genuinely unreachable they need to be
+  moved out of the output directory.
+- `vercel.json` rewrites `/favicon.ico` to `/img/favicon.png`, so the bare favicon request
+  stops 404ing without adding a binary. This only works once `img/favicon.png` is git
+  added. It is currently untracked, which is why the icon has never deployed.
+
+### Horizontal overflow: measured, not a defect
+
+The audit reported roughly 55px of sideways scroll at a 390px viewport. Measured on `main`
+with headless Chromium at 320, 360, 375, 390, 414, 430, 480, 540, 640, 768, 834 and 1024px
+across all four pages, scrolling the full page height at each width: `scrollWidth` equals
+the viewport width every time, and no element escapes a clipping ancestor.
+
+On the live site the 445px reading reproduces, but it is transient. The offender is
+`.diff-row` mid tween, at `matrix(0.99961, -0.0279216, 0.0279216, 0.99961, -70, 0)`: the
+GSAP entry animation slides each row in from 70px off axis with a slight rotate, and 342px
+of row plus 70px of offset plus rotation slop lands at 445. Once the tween settles,
+`scrollWidth` returns to 390. `window.scrollTo(9999, 0)` leaves `scrollX` at 0, and both
+`documentElement.scrollLeft` and `body.scrollLeft` stay 0, so the page cannot actually be
+scrolled sideways. The deployed branch's `html { overflow-x: clip }` is holding, and its
+author already left a comment explaining why `clip` and never `hidden`.
+
+No CSS change was made. There is nothing to paper over.
+
+One alignment worth folding in at merge time: `main` still uses `body { overflow-x: hidden }`,
+the weaker pattern. The deployed branch's `html { overflow-x: clip }` is the better rule and
+should win.
+
+### Contact addresses, unresolved
+
+The site uses `founder@synthsports.co` in 15 places (`index.html` at lines 68, 422, 559,
+573, 586, 601; `privacy.html` at 62, 222, 273; `terms.html` at 47, 158, 165;
+`content-policy.html` at 103, 111, 119). This exposes the parent entity rather than an
+Atlitos address, and App Store guideline 1.2 wants a monitored support contact.
+
+`support@elsheph.com` is NOT on the site. It appears once in the repo, in
+`docs/qa/APP-STORE-SUBMISSION-PACK.md` line 130, describing the App Store Connect record.
+
+Nothing was changed. No `@atlitos.com` address exists anywhere in this repo, and inventing
+one would ship a dead mailto. A real mailbox has to be provisioned first, then swapped into
+all 15 sites plus the App Store Connect record.

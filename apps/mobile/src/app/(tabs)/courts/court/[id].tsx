@@ -12,6 +12,7 @@ import { CalendarPicker } from '@/components/molecules/CalendarPicker';
 import { SlotPicker } from '@/components/molecules/SlotPicker';
 import { LoginGateModal } from '@/components/organisms/LoginGateModal';
 import { AppBar } from '@/components/ui/app-bar';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { PriceText } from '@/components/ui/price-text';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -44,6 +45,7 @@ function todayISO(): string {
  */
 export default function CourtDetailScreen() {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
   const courts = useCourts(supabase);
   const { id } = useLocalSearchParams<{ id: string }>();
   const requiresAuthGate = useSessionStore((state) => state.status !== 'signed_in');
@@ -247,7 +249,7 @@ export default function CourtDetailScreen() {
         </View>
       </ScrollView>
 
-      <View style={{ padding: spacing.lg, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.bg }}>
+      <View style={{ padding: spacing.lg, paddingBottom: navInset + spacing.lg, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.bg }}>
         <Button disabled={!selectedSlot} onPress={handleBook}>
           <Text style={{ color: colors.inkOnAccent }}>{selectedSlot ? 'Book this slot' : 'Select a time to book'}</Text>
         </Button>

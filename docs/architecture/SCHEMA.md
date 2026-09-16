@@ -2,6 +2,8 @@
 
 Source of truth for every table in the Supabase Postgres schema. One domain per migration file under `supabase/migrations/`, in the order listed here (later domains reference earlier ones by foreign key). Column names are final; RLS policies live in `RLS.md`, edge function and RPC names are cross-referenced from `API-MAPPING.md` and `PAYMENTS.md`.
 
+> Applying any of this to the live project: read [`DEPLOY-RUNBOOK.md`](./DEPLOY-RUNBOOK.md) first. The repo and the live ledger use different version schemes, `supabase db push` is unsafe here, and the runbook carries the old to new migration number mapping.
+
 ## Conventions
 
 - Primary keys: `id uuid primary key default gen_random_uuid()` unless the table's identity is a foreign key to `auth.users` (then `id uuid primary key references auth.users(id)`).
@@ -1285,28 +1287,28 @@ The read path is `get_coach_wallet_balance()` and `get_my_transactions(kind?, li
 
 `ledger_entries` is insert-only and every economic event writes a balanced group (see the worked example above). This gives three properties the product requires: a coach's or partner's balance is always `sum(credits) - sum(debits)` computed live, never a value that can drift from reality; a refund or a payout failure is a new reversing group, never a mutation of history, so `audit_log` and `ledger_entries` together form a complete replayable record; and every screen that shows money (`Earnings`, `My Impact`, admin's `Order Detail` refund panel) reads the same table through a different filter, so there is exactly one place a money bug could live.
 
-## Security remediation, 2026-09-04 (0088-0091)
+## Security remediation, 2026-09-04 (0118 to 0121, formerly 0088 to 0091)
 
 Four migrations closing the SQL half of the 2026-09-04 security audit. All four are proven by `scripts/verify-security-fixes.sql`, which `./scripts/verify-migrations-local.sh` replays against a scratch Postgres with no credentials.
 
-**`payment_intents.finalized_at timestamptz` (`0088`, SEC-F2).** A second axis beside `status`. `captured` means the money moved; `finalized_at` means the domain handler that owed work for that charge completed. The gate in `_shared/finalize-payment.ts` flips `created -> captured` before dispatching, so a downstream failure used to leave a captured charge whose booking, order, donation, membership or ledger group never landed, and every retry returned `already_processed`. `captured` + `finalized_at is null` now means "money moved, work owed", and the gate re-enters the domain handler for exactly that state. Backfilled to `updated_at` for every row already at or past `captured`, without which the entire live history would read as work-owed on deploy.
+**`payment_intents.finalized_at timestamptz` (`0118`, SEC-F2).** A second axis beside `status`. `captured` means the money moved; `finalized_at` means the domain handler that owed work for that charge completed. The gate in `_shared/finalize-payment.ts` flips `created -> captured` before dispatching, so a downstream failure used to leave a captured charge whose booking, order, donation, membership or ledger group never landed, and every retry returned `already_processed`. `captured` + `finalized_at is null` now means "money moved, work owed", and the gate re-enters the domain handler for exactly that state. Backfilled to `updated_at` for every row already at or past `captured`, without which the entire live history would read as work-owed on deploy.
 
 | Function | Grant | What it does |
 |---|---|---|
 | `payment_finalization_backlog(p_grace interval)` | `service_role` only | Captured intents with no `finalized_at` older than `p_grace`, each with a `has_ledger_group` flag separating "work missing" from "marker missing". Read-only: repair lives in the edge-function handlers, which own the Razorpay and ledger-leg logic, and duplicating that in SQL would mean two implementations of the same money arithmetic. |
-| `is_active_user()` (`0090`, SEC-F4) | `anon, authenticated, service_role` | False only when the caller's `users.status` is `suspended`. A live read rather than a JWT claim, so a suspension takes effect on the next request instead of the next token refresh. |
-| `admin_suspend_user(p_user_id, p_reason)` (`0090`) | `authenticated` (admin checked inside), `service_role` | PRD-04 FR-35..FR-38. Status change, `audit_log` row and member notification in ONE transaction. Reason required, idempotent on an already-suspended user, refuses self-suspension. |
-| `admin_reinstate_user(p_user_id, p_reason)` (`0090`) | `authenticated` (admin checked inside), `service_role` | Lifts a suspension and clears `suspended_reason`, same atomicity. |
+| `is_active_user()` (`0120`, SEC-F4) | `anon, authenticated, service_role` | False only when the caller's `users.status` is `suspended`. A live read rather than a JWT claim, so a suspension takes effect on the next request instead of the next token refresh. |
+| `admin_suspend_user(p_user_id, p_reason)` (`0120`) | `authenticated` (admin checked inside), `service_role` | PRD-04 FR-35..FR-38. Status change, `audit_log` row and member notification in ONE transaction. Reason required, idempotent on an already-suspended user, refuses self-suspension. |
+| `admin_reinstate_user(p_user_id, p_reason)` (`0120`) | `authenticated` (admin checked inside), `service_role` | Lifts a suspension and clears `suspended_reason`, same atomicity. |
 
-`expire_stale_holds()` (`0088`) gains a fifth arm, `payments_unfinalized` / `payments_unfinalized_without_ledger`. It counts rather than repairs, for the reason above; a non-zero value is an alert condition, not a routine one.
+`expire_stale_holds()` (`0118`) gains a fifth arm, `payments_unfinalized` / `payments_unfinalized_without_ledger`. It counts rather than repairs, for the reason above; a non-zero value is an alert condition, not a routine one.
 
-`order_transition()` (`0091`, SEC-F5) now writes its `audit_log` row inside the same transaction as the status change and the `order_timeline` row, reading the prior status under the row lock rather than letting the caller reconstruct it. Signature, grants, machine and error strings are unchanged.
+`order_transition()` (`0121`, SEC-F5) now writes its `audit_log` row inside the same transaction as the status change and the `order_timeline` row, reading the prior status under the row lock rather than letting the caller reconstruct it. Signature, grants, machine and error strings are unchanged.
 
-`custom_access_token_hook` (`0090`) refuses to mint claims for a suspended user (a returned `error` object denies sign-in and refresh) and injects `app_metadata.user_status` beside `roles`. It needs `supabase_auth_admin` to hold `select` on `public.users`, granted in the same migration; without that the status lookup silently returns null for every user, the exact failure `0017` fixed for roles.
+`custom_access_token_hook` (`0120`) refuses to mint claims for a suspended user (a returned `error` object denies sign-in and refresh) and injects `app_metadata.user_status` beside `roles`. It needs `supabase_auth_admin` to hold `select` on `public.users`, granted in the same migration; without that the status lookup silently returns null for every user, the exact failure `0017` fixed for roles.
 
-## 0092 to 0095 (release hardening, 2026-09-07)
+## 0122 to 0125 (release hardening, 2026-09-07, formerly 0092 to 0095)
 
-### `user_blocks` (0092)
+### `user_blocks` (0122)
 
 | Column | Type | Notes |
 |---|---|---|
@@ -1322,7 +1324,7 @@ Blocking is one directional and invisible to the blocked member. The
 subtraction is enforced by RESTRICTIVE policies on `clips` and `clip_comments`
 (see RLS.md), not by a client filter, so a read written later cannot forget it.
 
-### `users.deleted_at` (0093)
+### `users.deleted_at` (0123)
 
 Nullable timestamptz. Non-null means the member exercised their deletion right.
 Personal data is purged and the row anonymized in place; money-bearing rows are
@@ -1333,7 +1335,7 @@ action and `payment_intents.user_id` cascades, which would orphan every
 `delete_my_account()` (SECURITY DEFINER, `authenticated`) takes no arguments and
 targets `auth.uid()` only. Idempotent.
 
-### `rate_limit_counters` (0095)
+### `rate_limit_counters` (0125)
 
 | Column | Type | Notes |
 |---|---|---|
@@ -1347,7 +1349,7 @@ statement so concurrent callers cannot both take the last slot.
 `prune_rate_limit_counters()` runs from the existing `expire_stale_holds()`
 sweep, which now also returns `rate_limit_rows_pruned`.
 
-### `chat_thread_previews(uuid[])` (0094)
+### `chat_thread_previews(uuid[])` (0124)
 
 SECURITY INVOKER SQL function returning one latest message per thread via
 `distinct on (thread_id)` over the existing `idx_chat_messages_thread_id`.

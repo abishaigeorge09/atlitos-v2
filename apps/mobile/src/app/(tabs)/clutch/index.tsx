@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ClutchPostCard } from '@/components/molecules/ClutchPostCard';
 import { EmptyState } from '@/components/organisms/EmptyState';
 import { LoginGateModal } from '@/components/organisms/LoginGateModal';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
 import { supabase } from '@/lib/supabase';
@@ -48,6 +49,7 @@ const REPORT_REASONS = [
  */
 export default function ClutchFeedScreen() {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
   const insets = useSafeAreaInsets();
   const clutch = useClutch(supabase);
   const requiresAuthGate = useSessionStore((state) => state.status !== 'signed_in');
@@ -327,6 +329,7 @@ export default function ClutchFeedScreen() {
                 onLike={() => void handleLike(item)}
                 onShare={() => requireAuth(() => openDetail(item.id))}
                 onReportOrBlock={() => openReportOrBlock(item)}
+                bottomInset={navInset}
               />
             </View>
           )}

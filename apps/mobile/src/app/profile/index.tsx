@@ -19,6 +19,7 @@ import { EmptyState } from '@/components/organisms/EmptyState';
 import { WishlistGrid } from '@/components/organisms/WishlistGrid';
 import { AppBar } from '@/components/ui/app-bar';
 import { Avatar } from '@/components/ui/avatar';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { StatusPill, type Status } from '@/components/ui/status-pill';
 import { Text } from '@/components/ui/text';
@@ -57,6 +58,7 @@ type FollowSegment = 'following' | 'followers';
  */
 export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {}) {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
   const clutch = useClutch(supabase);
   const wishlist = useWishlist(supabase);
   const status = useSessionStore((state) => state.status);
@@ -373,7 +375,7 @@ export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {
           keyExtractor={(item) => item.id}
           ListHeaderComponent={header}
           refreshControl={refreshControl}
-          contentContainerStyle={{ paddingBottom: spacing.xl }}
+          contentContainerStyle={{ paddingBottom: navInset + spacing.xl }}
           ListEmptyComponent={
             <View style={{ padding: spacing.xl, alignItems: 'center', gap: spacing.sm }}>
               <Users size={40} color={colors.textTertiary} strokeWidth={1.75} />
@@ -423,7 +425,7 @@ export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {
         keyExtractor={(item) => item.id}
         numColumns={3}
         columnWrapperStyle={{ gap: spacing.xs }}
-        contentContainerStyle={{ gap: spacing.xs, paddingBottom: spacing.xl }}
+        contentContainerStyle={{ gap: spacing.xs, paddingBottom: navInset + spacing.xl }}
         ListHeaderComponent={header}
         refreshControl={refreshControl}
         ListEmptyComponent={

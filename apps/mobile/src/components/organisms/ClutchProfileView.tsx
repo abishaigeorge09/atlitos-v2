@@ -5,6 +5,7 @@ import { Film, TriangleAlert, UserPlus, Users } from 'lucide-react-native';
 import { ActivityIndicator, FlatList, View } from 'react-native';
 
 import { ClutchPostCard } from '@/components/molecules/ClutchPostCard';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { StatusPill, type Status } from '@/components/ui/status-pill';
 import { Text } from '@/components/ui/text';
@@ -66,6 +67,7 @@ export function ClutchProfileView({
   onUpload,
 }: ClutchProfileViewProps) {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
 
   if (state === 'loading') {
     return (
@@ -96,7 +98,7 @@ export function ClutchProfileView({
       keyExtractor={(item) => item.id}
       numColumns={3}
       columnWrapperStyle={{ gap: spacing.xs }}
-      contentContainerStyle={{ gap: spacing.xs, paddingBottom: spacing.xl }}
+      contentContainerStyle={{ gap: spacing.xs, paddingBottom: navInset + spacing.xl }}
       ListHeaderComponent={
         <View style={{ padding: spacing.lg, gap: spacing.lg }}>
           <View className="flex-row items-center gap-lg">

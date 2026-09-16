@@ -13,6 +13,7 @@ import { CalendarPicker } from '@/components/molecules/CalendarPicker';
 import { SlotPicker } from '@/components/molecules/SlotPicker';
 import { RateReviewForm } from '@/components/organisms/RateReviewForm';
 import { AppBar } from '@/components/ui/app-bar';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusPill } from '@/components/ui/status-pill';
@@ -63,6 +64,7 @@ function addDaysISO(iso: string, days: number): string {
  */
 export default function SessionDetailScreen() {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
   const coaching = useCoaching(supabase);
   const { id } = useLocalSearchParams<{ id: string }>();
 
@@ -301,7 +303,7 @@ export default function SessionDetailScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       <AppBar variant="backTitle" title="Session" onPressBack={() => router.back()} />
 
-      <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing['4xl'] }}>
+      <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: navInset + spacing.xl }}>
         <View
           style={{
             borderRadius: radii.xl,

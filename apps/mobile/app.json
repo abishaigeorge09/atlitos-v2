@@ -8,9 +8,10 @@
     "scheme": "atlitos",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon",
       "supportsTablet": true,
       "bundleIdentifier": "com.atlitos.app",
+      "buildNumber": "9",
+      "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSPhotoLibraryUsageDescription": "Atlitos needs your photo library so you can pick a video for Clutch, set a profile picture, and attach your coaching certificates.",
@@ -125,7 +126,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#FBF7F1",
+        "backgroundColor": "#141414",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -145,9 +146,9 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#FBF7F1",
+          "backgroundColor": "#141414",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 120
+          "imageWidth": 220
         }
       ],
       [
@@ -169,6 +170,15 @@
           "photosPermission": "Atlitos needs your photo library so you can pick a video for Clutch, set a profile picture, and attach your coaching certificates.",
           "cameraPermission": false,
           "microphonePermission": false
+        }
+      ],
+      "expo-web-browser",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "buildReactNativeFromSource": true
+          }
         }
       ]
     ],

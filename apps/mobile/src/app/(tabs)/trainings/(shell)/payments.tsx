@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 
 import { EmptyState } from '@/components/organisms/EmptyState';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { PriceText } from '@/components/ui/price-text';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatTile } from '@/components/ui/stat-tile';
@@ -34,6 +35,7 @@ type ScreenState = 'loading' | 'populated' | 'error';
  */
 export default function PlayerPaymentsScreen() {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
   const coaching = useCoaching(supabase);
 
   const [state, setState] = useState<ScreenState>('loading');
@@ -113,7 +115,7 @@ export default function PlayerPaymentsScreen() {
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={{ padding: spacing.lg, gap: spacing.md, paddingBottom: spacing['4xl'] }}
+          contentContainerStyle={{ padding: spacing.lg, gap: spacing.md, paddingBottom: navInset + spacing.xl }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} />}
         >
           <View style={{ flexDirection: 'row', gap: spacing.sm }}>

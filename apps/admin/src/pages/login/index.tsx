@@ -3,35 +3,28 @@ import { LayoutGrid, ShieldAlert } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
 import { Button } from "../../components/ui";
+import { LOGIN_ERROR_MESSAGE } from "../../providers/authProvider";
 
 // PRD-04 3.1 Login: email/password sign in against Supabase Auth, no self
-// registration, no guest mode. States: form, submitting, error (invalid
-// credentials, not an admin). The "not an admin" case is distinguished from
-// a plain bad credential (authProvider.login returns error.name
-// "AccessDenied" vs "LoginError") so this screen can show the right copy.
+// registration, no guest mode. States: form, submitting, error. Every failure
+// renders the same message from the same constant, so a bad credential and a
+// valid credential without the admin role are indistinguishable here (FR-1).
+// Do not branch this screen on the error name.
 export function LoginPage() {
   const { mutate: login, isPending: isLoading } = useLogin<{ email: string; password: string }>();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [accessDenied, setAccessDenied] = useState(false);
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setErrorMessage(null);
-    setAccessDenied(false);
 
     login(
       { email, password },
       {
-        onError: (error) => {
-          const name = (error as { name?: string })?.name;
-          setAccessDenied(name === "AccessDenied");
-          setErrorMessage(
-            name === "AccessDenied"
-              ? "This account does not have admin access."
-              : "Sign in failed. Check the email and password and try again.",
-          );
+        onError: () => {
+          setErrorMessage(LOGIN_ERROR_MESSAGE);
         },
       },
     );
@@ -130,8 +123,8 @@ export function LoginPage() {
                 gap: "var(--space-sm)",
                 padding: "var(--space-sm) var(--space-md)",
                 borderRadius: "var(--radius-sm)",
-                backgroundColor: accessDenied ? "var(--color-warning-tint)" : "var(--color-danger-tint)",
-                color: accessDenied ? "var(--color-warning)" : "var(--color-danger)",
+                backgroundColor: "var(--color-danger-tint)",
+                color: "var(--color-danger)",
                 fontSize: 13,
               }}
             >

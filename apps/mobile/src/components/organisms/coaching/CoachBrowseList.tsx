@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { FlatList, RefreshControl, View } from 'react-native';
 
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { CoachCard } from '@/components/ui/coach-card';
@@ -55,6 +56,7 @@ export interface CoachBrowseListProps {
  */
 export function CoachBrowseList({ onOpenCoach, header, scrollEnabled = true }: CoachBrowseListProps) {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
   const coaching = useCoaching(supabase);
 
   const locationStatus = useLocationStore((state) => state.status);
@@ -190,7 +192,7 @@ export function CoachBrowseList({ onOpenCoach, header, scrollEnabled = true }: C
       ListHeaderComponent={listHeader}
       scrollEnabled={scrollEnabled}
       style={scrollEnabled ? { flex: 1 } : undefined}
-      contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}
+      contentContainerStyle={{ padding: spacing.lg, gap: spacing.md, paddingBottom: navInset + spacing.xl }}
       refreshControl={
         scrollEnabled ? <RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} /> : undefined
       }

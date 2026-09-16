@@ -12,6 +12,7 @@ import { TextField } from '@/components/organisms/_shared';
 import { CalendarPicker } from '@/components/molecules/CalendarPicker';
 import { SlotPicker } from '@/components/molecules/SlotPicker';
 import { AppBar } from '@/components/ui/app-bar';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { PriceText } from '@/components/ui/price-text';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -49,6 +50,7 @@ function todayISO(): string {
  */
 export default function CoachSessionDetailScreen() {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
   const coachSessions = useCoachSessions(supabase);
   const coaching = useCoaching(supabase);
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -210,7 +212,7 @@ export default function CoachSessionDetailScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       <AppBar variant="backTitle" title="Session" onPressBack={() => router.back()} />
 
-      <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing['4xl'] }}>
+      <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: navInset + spacing.xl }}>
         <View
           style={{
             borderRadius: radii.xl,

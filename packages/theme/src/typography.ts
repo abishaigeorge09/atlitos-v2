@@ -4,14 +4,18 @@
  * packages/ui-native (RN Text) and packages/ui-web (CSS) resolve these tokens
  * to their own platform primitives.
  *
- * Inter for UI text. JetBrains Mono for every numeric readout (prices,
+ * Urbanist for UI text. JetBrains Mono for every numeric readout (prices,
  * scores, timers, XP, distances), always with tabular figures, and for the
  * uppercase mono "eyebrow" overline label.
+ *
+ * CHANGED(2026-09-10): sans moved Inter -> Urbanist per the founder's brand
+ * direction. Mono is unchanged: the numeric-readout rule in CLAUDE.md is
+ * independent of the UI face.
  */
 
 /** CSS/RN-agnostic base family names. Web reads these directly as font-family. */
 export const fontFamily = {
-  sans: "Inter",
+  sans: "Urbanist",
   mono: "JetBrainsMono",
 } as const;
 
@@ -35,11 +39,11 @@ export type FontWeightToken = keyof typeof fontWeight;
  */
 export const rnFontFamily = {
   sans: {
-    regular: "Inter_400Regular",
-    medium: "Inter_500Medium",
-    semibold: "Inter_600SemiBold",
-    bold: "Inter_700Bold",
-    extrabold: "Inter_800ExtraBold",
+    regular: "Urbanist_400Regular",
+    medium: "Urbanist_500Medium",
+    semibold: "Urbanist_600SemiBold",
+    bold: "Urbanist_700Bold",
+    extrabold: "Urbanist_800ExtraBold",
   },
   mono: {
     regular: "JetBrainsMono_400Regular",
@@ -55,6 +59,19 @@ export const fontSize = {
   base: 13,
   md: 15,
   callout: 15,
+  /**
+   * CTA labels. Added 2026-09-10.
+   *
+   * Labels were rendering at `base` (13), a form-label size, inside a 52pt
+   * pill, while Apple's native sign-in button drew its own label at 18.3pt
+   * measured on the same screen. Apple exposes no font prop: its label is a
+   * fixed fraction (~0.354) of the button height, so the only way to move it
+   * is to move the height. 44pt height lands it on this size, and 44pt is
+   * also the iOS minimum tappable target, so it is the floor. Changing this
+   * value alone will NOT move Apple's button; the height in
+   * SocialAuthButtons.tsx has to change with it.
+   */
+  button: 15,
   lg: 16,
   xl: 20,
   "2xl": 24,
@@ -92,6 +109,8 @@ export const textVariants = {
   h3: { fontFamily: "sans", fontWeight: "semibold", fontSize: fontSize.xl, lineHeight: 26, letterSpacing: -0.2 },
   body: { fontFamily: "sans", fontWeight: "regular", fontSize: fontSize.lg, lineHeight: 24 },
   callout: { fontFamily: "sans", fontWeight: "regular", fontSize: fontSize.callout, lineHeight: 22 },
+  /** CTA labels. Sized to sit level with Apple's native sign-in button. */
+  button: { fontFamily: "sans", fontWeight: "semibold", fontSize: fontSize.button, lineHeight: 22 },
   label: { fontFamily: "sans", fontWeight: "semibold", fontSize: fontSize.base, lineHeight: 18, letterSpacing: 0.1 },
   caption: { fontFamily: "sans", fontWeight: "regular", fontSize: fontSize.sm, lineHeight: 16 },
   overline: {
