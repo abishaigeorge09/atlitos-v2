@@ -323,3 +323,10 @@ should run the `--dry-run` pass, confirm the row count and IDs look like the
 old test messages remain visible in the affected chat threads on
 atlitos-app.vercel.app; the self-teardown fix already merged stops the count
 from growing further.
+
+## 2026-09-17
+
+- **`packages/types/src/db/database.types.ts` is stale.** Generated with older CLI options; it lacks `account_deletions` and other tables, so it is hand-patched (0120 added `venues.booking_url` by hand). Regenerate with `supabase gen types typescript --local` in its own commit and diff the consumers. Owner: Prasanth.
+- **Courts affiliate click-out not built.** `venues.booking_url` exists and admins can enter it (0120), but the mobile court detail still shows the in-app slot picker. `COURT_SELECT` in `packages/api/src/hooks.ts` needs the column and the detail screen needs the button. Owner: next mobile session; on the launch tracker.
+- **GitHub repo is public.** Product code and internal docs are world-readable. Make private. Owner: Abishai.
+- **EAS production environment is empty.** After 85d5da6 removed the hardcoded block, a production build has no Supabase URL until the four `EXPO_PUBLIC_*` variables exist on EAS. Owner: Abishai.
