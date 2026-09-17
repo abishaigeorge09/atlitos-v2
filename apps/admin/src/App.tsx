@@ -16,6 +16,9 @@ import { DrillCreate } from "./pages/drills/create";
 import { DrillShow } from "./pages/drills/show";
 import { DrillsList } from "./pages/drills/list";
 import { FeeConfigList } from "./pages/fee-config/list";
+import { GearCreate } from "./pages/gear/create";
+import { GearShow } from "./pages/gear/show";
+import { GearList } from "./pages/gear/list";
 import { LoginPage } from "./pages/login";
 import { ModerationList } from "./pages/moderation/list";
 import { ModerationShow } from "./pages/moderation/show";
@@ -27,6 +30,7 @@ import { ProductShow } from "./pages/products/show";
 import { ProductsList } from "./pages/products/list";
 import { UserShow } from "./pages/users/show";
 import { UsersList } from "./pages/users/list";
+import { VenueCreate } from "./pages/venues/create";
 import { VenueShow } from "./pages/venues/show";
 import { VenuesList } from "./pages/venues/list";
 import { VerificationList } from "./pages/verification/list";
@@ -67,6 +71,7 @@ export function App() {
           {
             name: "venues",
             list: "/venues",
+            create: "/venues/create",
             show: "/venues/show/:id",
             meta: { label: "Venues" },
           },
@@ -75,6 +80,13 @@ export function App() {
             list: "/products",
             show: "/products/show/:id",
             meta: { label: "Catalog" },
+          },
+          {
+            name: "affiliate_products",
+            list: "/gear",
+            create: "/gear/create",
+            show: "/gear/show/:id",
+            meta: { label: "Gear" },
           },
           {
             name: "orders",
@@ -139,9 +151,13 @@ export function App() {
             <Route path="/verification" element={<VerificationList />} />
             <Route path="/verification/show/:id" element={<VerificationShow />} />
             <Route path="/venues" element={<VenuesList />} />
+            <Route path="/venues/create" element={<VenueCreate />} />
             <Route path="/venues/show/:id" element={<VenueShow />} />
             <Route path="/products" element={<ProductsList />} />
             <Route path="/products/show/:id" element={<ProductShow />} />
+            <Route path="/gear" element={<GearList />} />
+            <Route path="/gear/create" element={<GearCreate />} />
+            <Route path="/gear/show/:id" element={<GearShow />} />
             <Route path="/orders" element={<OrdersList />} />
             <Route path="/orders/show/:id" element={<OrderShow />} />
             <Route path="/drills" element={<DrillsList />} />

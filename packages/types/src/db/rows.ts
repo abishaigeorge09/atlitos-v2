@@ -180,6 +180,8 @@ export interface VenueRow {
   description: string | null;
   status: VenueStatus;
   rejection_reason: string | null;
+  /** External booking link (affiliate model for courts, 0120). */
+  booking_url: string | null;
   created_at: ISODateTime;
   updated_at: ISODateTime;
 }
@@ -767,4 +769,34 @@ export interface SupportTicketRow {
   resolution_note: string | null;
   resolved_at: ISODateTime | null;
   created_at: ISODateTime;
+}
+
+// ---- affiliate marketplace (0086, admin writes 0120) --------------------
+
+export interface AffiliateProductRow {
+  id: UUID;
+  title: string;
+  brand: string | null;
+  sport: Sport | null;
+  category_id: UUID | null;
+  skill_level: string | null;
+  age_range: string | null;
+  description: string | null;
+  image_url: string | null;
+  active: boolean;
+  created_at: ISODateTime;
+  updated_at: ISODateTime;
+}
+
+export interface ProductOfferRow {
+  id: UUID;
+  affiliate_product_id: UUID;
+  retailer: string;
+  price: number;
+  currency: string;
+  affiliate_url: string;
+  in_stock: boolean;
+  last_checked_at: ISODateTime;
+  created_at: ISODateTime;
+  updated_at: ISODateTime;
 }

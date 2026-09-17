@@ -275,7 +275,10 @@ Integrator TODO: apply `0082_coach_trainee_videos.sql`, deploy both functions, r
 | `description` | `text` | nullable |
 | `status` | `venue_status` | not null default `pending` |
 | `rejection_reason` | `text` | nullable |
+| `booking_url` | `text` | nullable. External booking link (affiliate model for courts, `0120`); when set the app sends the athlete there instead of the in-app slot picker |
 | `created_at`, `updated_at` | `timestamptz` | |
+
+Admin-entered venues (`admin_create_venue`, `0120`) are owned by the entering admin (`partner_user_id = auth.uid()`) and inserted as `verified` with their courts in one transaction.
 
 Indexes: `idx_venues_partner_user_id` on `partner_user_id`, `idx_venues_status_city` on `(status, city)`.
 
