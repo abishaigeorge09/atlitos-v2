@@ -10,6 +10,8 @@ import { Divider } from '@/components/ui/divider';
 import { Input } from '@/components/ui/input';
 import { OTPInput } from '@/components/ui/otp-input';
 import { PriceText } from '@/components/ui/price-text';
+import { GearResultCard } from '@/components/ui/gear-result-card';
+import { OfferRow } from '@/components/ui/offer-row';
 import { ProductCard } from '@/components/ui/product-card';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -338,6 +340,53 @@ export default function KitchenSink() {
         <Label>ProductCard</Label>
         <View className="mb-lg" style={{ width: 180 }}>
           <ProductCard title="Pro grip pickleball paddle" price={4999} originalPrice={6499} variant="grid" />
+        </View>
+
+        <SectionHeading title="Shop search (DIRECTION-SHOP.md)" />
+        <Label>GearResultCard, full and sparse</Label>
+        <View className="mb-lg flex-row gap-md">
+          <View style={{ flex: 1 }}>
+            <GearResultCard
+              imageUri="https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=400"
+              brand="Yonex"
+              title="Yonex Astrox 100 ZZ Badminton Racket"
+              fromPrice={18500}
+              storeCount={3}
+              checkedHoursAgo={2}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <GearResultCard title="Cricket bat, Kashmir willow, size 5" fromPrice={null} storeCount={1} checkedHoursAgo={216} />
+          </View>
+        </View>
+
+        <Label>GearResultCard, a grid of six</Label>
+        <View className="mb-lg flex-row flex-wrap gap-md">
+          {[
+            ['Yonex', 'Yonex Nanoflare 1000 Play', 3700, 2, 5],
+            ['Babolat', 'Babolat Pure Drive 2026', 14500, 2, 6],
+            ['SG', 'SG Cobra Gold Kashmir Willow Bat', 2299, 3, 1],
+            ['Nike', 'Nike Mercurial Vapor 16 Academy', 5995, 4, 12],
+            ['Li-Ning', 'Li-Ning Axforce 80 Racket', 9450, 1, 30],
+            ['Wilson', 'Wilson US Open Tennis Balls, 3 pack', 599, 3, 2],
+          ].map(([brand, title, price, stores, hours]) => (
+            <View key={String(title)} style={{ width: '47%' }}>
+              <GearResultCard
+                brand={String(brand)}
+                title={String(title)}
+                fromPrice={Number(price)}
+                storeCount={Number(stores)}
+                checkedHoursAgo={Number(hours)}
+              />
+            </View>
+          ))}
+        </View>
+
+        <Label>OfferRow, cheapest, other, out of stock</Label>
+        <View className="mb-lg gap-sm">
+          <OfferRow retailer="Tennis Hub" price={14500} inStock cheapest checkedHoursAgo={6} />
+          <OfferRow retailer="Amazon.in" price={15499} inStock checkedHoursAgo={6} previousPrice={15999} />
+          <OfferRow retailer="Decathlon" price={13990} inStock={false} checkedHoursAgo={288} />
         </View>
 
         <Text className="mt-2xl text-xs text-text-tertiary">
