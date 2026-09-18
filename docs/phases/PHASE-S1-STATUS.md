@@ -72,7 +72,7 @@ Re-derived by the integrator from a clean `supabase db reset` on 2026-09-18 (scr
 | AC-11-6, AC-11-7 | `verify-gear-search-rls.mjs` 17/17, exit 0 | step 5 |
 | AC-11-5, FR-53 | `verify-owned-shop-flag.mjs` 9/9 with `supabase functions serve` up; checkout returns 403 `OWNED_SHOP_DISABLED` | re-run after step 5 (first run hit 503 because the runtime was down) |
 | FR-43, AC-11-7 | `verify-gear-embed.mjs` 10/10: embed writes, anon 401, bad key leaves null and keyword path still finds it | step 5 |
-| AC-11-1, FR-42 | `verify-search-hybrid.mjs` (b) broaden line with zero Babolat hits, (c) over budget gives `mode: keyword`, `vector: false`, (d) `vector: true` | step 5 |
+| AC-11-1, FR-42 | `verify-search-hybrid.mjs` (b) broaden line with zero Babolat hits, (c) over budget gives `mode: keyword`, `vector: false`, (d) `vector: true`. The brand and price hard match itself is unchanged code, still covered by the pre-existing `scripts/verify-ai-search.ts` tests A, D, E. The 1.5 s p95 clause is NOT measured until S4 against the production catalog. | step 5 |
 | AC-11-2 | **STUB**: top 3 contains a beginner or junior badminton racket under the deterministic embedder; PASS requires `VOYAGE_API_KEY` (founder) | step 5 |
 | Gate | `pnpm turbo typecheck lint` 20/20 | step 6 |
 

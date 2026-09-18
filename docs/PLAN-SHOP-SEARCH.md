@@ -59,9 +59,10 @@ tile; the store glyph is the one accent; no stars, no delivery lines.
 
 ### Phase S1: substrate
 
-- **Delivers:** the four migrations from ADR-011 D7 applied locally and replaying clean;
-  `gear-embed`; hybrid ranking in `ai-search`; `app_config` with the flag; RLS and grants;
-  all six `verify-*.mjs` scripts exist and are born red then green.
+- **Delivers:** the two S1 migrations from ADR-011 D7 (vectors, app_config) applied locally
+  and replaying clean; `gear-embed`; hybrid ranking in `ai-search`; `app_config` with the flag;
+  RLS and grants; the four S1 `verify-*.mjs` scripts exist and are born red then green (the
+  ingest and health scripts belong to S2).
 - **Gate:** `scripts/verify-search-hybrid.mjs`, `verify-gear-embed.mjs`,
   `verify-owned-shop-flag.mjs` and `verify-gear-search-rls.mjs` all pass against the local
   stack, and `supabase db reset` replays every migration. AC-11-1, AC-11-2, AC-11-5,

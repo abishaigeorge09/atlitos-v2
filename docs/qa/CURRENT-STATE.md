@@ -786,3 +786,13 @@ that fixed the edge function 401 also broke the native toolchain.
   SEVEN text nodes, all simulator status bar. `assertVisible` on a comment row
   cannot pass however correct the render. Prove that sheet with screenshots. The
   same fact is a real accessibility defect worth fixing.
+
+## Environment trap, 2026-09-18: the shop verify scripts manage `supabase functions serve` themselves
+
+`scripts/verify-gear-embed.mjs` and `scripts/verify-search-hybrid.mjs` start and stop their own
+`supabase functions serve` (they need to flip `VOYAGE_API_KEY` between phases) and force-remove the
+`supabase_edge_runtime_atlitos` container on the way out. Two consequences: never have a manual
+`functions serve` running when you start them, and run `verify-owned-shop-flag.mjs` (which expects a
+serve already up) BEFORE them or serve again afterwards. A `supabase db reset` also wipes the demo
+users those scripts sign in as; run `scripts/seed-demo-users.mjs` after every reset. The `XXXX_`
+migrations are skipped by `db reset` until they are numbered; apply them with psql after the reset.
