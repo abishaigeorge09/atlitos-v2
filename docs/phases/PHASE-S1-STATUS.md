@@ -1,10 +1,10 @@
 # Phase S1 status: shop search substrate
 
-Status: IN FLIGHT
+Status: AWAITING APPROVAL
 Opened: 2026-09-17   Closed:
 
 Plan: `docs/PLAN-SHOP-SEARCH.md`. Architecture: `docs/architecture/ADR-011-shop-search-ingest-health.md`.
-Branch: `integration/shop-search`. Track branches `integration/shop-search-s1a`, `integration/shop-search-s1b`.
+Branch: `integration/shop-search`. Track branches `worktree-agent-abe97105e2af71925` (A), `worktree-agent-ad9432ebd7261ee09` (B), merged with --no-ff at de0f3a6 and 506eb12.
 
 ## Gate
 
@@ -61,15 +61,34 @@ everything else in parallel. Integration: A merges first, then B rebases on it.
 
 ## Evidence
 
+Re-derived by the integrator from a clean `supabase db reset` on 2026-09-18 (script
+`~/.claude/jobs/8ea01d2a/tmp/s1-gate.sh`, log `s1-gate.log`), not taken from the builders' reports.
+
 | Claim | Proof | Where |
 |---|---|---|
+| 120 base migrations replay clean | `supabase db reset` exit 0 | s1-gate.log step 1 |
+| Both `XXXX_` migrations apply on top | psql `-v ON_ERROR_STOP=1`, both "applied" | step 2 |
+| Security invariants | 10 of 10 PASS including new `embedding-column-grant` and `db-dual-policy-drift` (list fixed, 8942b28) | step 4, re-run after fix |
+| AC-11-6, AC-11-7 | `verify-gear-search-rls.mjs` 17/17, exit 0 | step 5 |
+| AC-11-5, FR-53 | `verify-owned-shop-flag.mjs` 9/9 with `supabase functions serve` up; checkout returns 403 `OWNED_SHOP_DISABLED` | re-run after step 5 (first run hit 503 because the runtime was down) |
+| FR-43, AC-11-7 | `verify-gear-embed.mjs` 10/10: embed writes, anon 401, bad key leaves null and keyword path still finds it | step 5 |
+| AC-11-1, FR-42 | `verify-search-hybrid.mjs` (b) broaden line with zero Babolat hits, (c) over budget gives `mode: keyword`, `vector: false`, (d) `vector: true` | step 5 |
+| AC-11-2 | **STUB**: top 3 contains a beginner or junior badminton racket under the deterministic embedder; PASS requires `VOYAGE_API_KEY` (founder) | step 5 |
+| Gate | `pnpm turbo typecheck lint` 20/20 | step 6 |
 
 ## Deviations from plan
+
+- `app_config` built as `(key, value jsonb, public)` rather than the ADR's `enabled boolean`; ADR updated (86f253f).
+- `ai-search` keeps `mode` meaning "did Claude run"; the vector path is reported by the new `vector` field, so no existing caller's reading of `mode` changes.
+- `supabase db reset` cannot replay `XXXX_` files; they get numbers when `main` is reconciled and are psql-applied after every reset until then.
+- Builders were dispatched twice: the builder agent's own worktree isolation cut from stale `main`; fixed by a `git reset --hard integration/shop-search` step 0.
 
 ## Open defects
 
 | Defect | Severity | Deferred to | Ticket |
 |---|---|---|---|
+| AC-11-2 unproven with real embeddings | P1 | founder sets `VOYAGE_API_KEY`, then re-run `verify-search-hybrid.mjs` before S4 | tracker |
+| `supabase/functions/.env.local` for local serving must be created by hand (`VOYAGE_STUB=1`); the sandbox cannot write `.env*` | P3 | docs/qa/CURRENT-STATE.md environment traps | none |
 
 ## Handoff notes for the next planner
 
