@@ -31,7 +31,7 @@ appId: com.atlitos.app
           timeout: 3000
 
 # Try deep link to shop.
-- openDeepLink: "atlitos://shop"
+- openLink: "atlitos://shop"
 - waitForAnimationToEnd:
     timeout: 2000
 
@@ -45,33 +45,24 @@ appId: com.atlitos.app
 - waitForAnimationToEnd:
     timeout: 1000
 
-# Type the test query.
-- typeText: "light racket for a 12 year old starting badminton"
+# Type the test query, then prove it is IN the field. The first version of
+# this flow passed while the field dropped every character after the first,
+# because the default grid also has a gear-tile-0. Never assert the grid
+# alone.
+- inputText: "light racket for a 12 year old starting badminton"
+- assertVisible:
+    text: "light racket for a 12 year old starting badminton"
+- hideKeyboard
 - waitForAnimationToEnd:
-    timeout: 3000
+    timeout: 4000
+- assertVisible:
+    text: "light racket for a 12 year old starting badminton"
 
-# Assert a gear tile loads (the grid component with test ID gear-tile-0).
+# The top tile must be a badminton racket, not whatever the catalogue lists first.
 - assertVisible:
     id: gear-tile-0
-
-# Assert that the tile contains "Badminton" or "Racket" text (positive proof
-# that the query was honored and a relevant result appeared).
-- runFlow:
-    when:
-      visible:
-        text: "Badminton"
-    commands:
-      - assertVisible:
-          text: "Badminton"
-
-# Also check for "Racket" as alternative text.
-- runFlow:
-    when:
-      notVisible:
-        text: "Badminton"
-    commands:
-      - assertVisible:
-          text: "Racket"
+- assertVisible:
+    text: ".*(Badminton|badminton).*(Racket|racket).*"
 
 # Now tap the tennis sport chip to filter by sport and assert the grid updates.
 - tapOn:
@@ -89,7 +80,7 @@ appId: com.atlitos.app
     id: shop-search-input
 - waitForAnimationToEnd:
     timeout: 500
-- clearText
+- eraseText
 
 - waitForAnimationToEnd:
     timeout: 1000

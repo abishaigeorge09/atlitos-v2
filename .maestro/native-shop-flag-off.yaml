@@ -24,7 +24,7 @@ appId: com.atlitos.app
           timeout: 3000
 
 # Deep link to /shop and assert the search input is visible.
-- openDeepLink: "atlitos://shop"
+- openLink: "atlitos://shop"
 - waitForAnimationToEnd:
     timeout: 2000
 
@@ -38,7 +38,7 @@ appId: com.atlitos.app
 # Now deep link to /shop/cart and assert the redirect back to /shop.
 # When the flag is off, the cart route should redirect to /shop, so
 # the search input should be visible again.
-- openDeepLink: "atlitos://shop/cart"
+- openLink: "atlitos://shop/cart"
 - waitForAnimationToEnd:
     timeout: 2000
 
@@ -46,7 +46,7 @@ appId: com.atlitos.app
     id: shop-search-input
 
 # Deep link to /shop/orders and assert the same redirect behavior.
-- openDeepLink: "atlitos://shop/orders"
+- openLink: "atlitos://shop/orders"
 - waitForAnimationToEnd:
     timeout: 2000
 

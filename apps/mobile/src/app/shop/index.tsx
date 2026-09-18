@@ -273,49 +273,11 @@ export default function ShopScreen() {
     </View>
   );
 
-  if (state === 'loading') {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-        <ShopHeaderBar ownedEnabled={ownedEnabled} />
-        <View style={{ padding: spacing.lg, gap: spacing.lg }}>
-          <Skeleton shape="line" height={44} />
-          <View className="flex-row gap-md">
-            <Skeleton shape="card" height={220} className="flex-1" />
-            <Skeleton shape="card" height={220} className="flex-1" />
-          </View>
-          <View className="flex-row gap-md">
-            <Skeleton shape="card" height={220} className="flex-1" />
-            <Skeleton shape="card" height={220} className="flex-1" />
-          </View>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (state === 'error') {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-        <ShopHeaderBar ownedEnabled={ownedEnabled} />
-        <View style={{ flex: 1, padding: spacing.lg, justifyContent: 'center', alignItems: 'center', gap: spacing.md }}>
-          <TriangleAlert size={40} color={colors.danger} strokeWidth={1.75} />
-          <Text style={[textStyle('h3'), { color: colors.text, textAlign: 'center' }]}>Couldn't load gear</Text>
-          <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
-            {error?.message ?? 'Something went wrong. Please try again.'}
-          </Text>
-          <Button variant="secondary" onPress={() => void runLoad()}>
-            <RefreshCw size={16} strokeWidth={1.75} color={colors.text} />
-            <Text style={{ color: colors.text }}>Retry</Text>
-          </Button>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       <ShopHeaderBar ownedEnabled={ownedEnabled} />
       <FlatList
-        data={items}
+        data={state === 'loading' ? [] : items}
         key="shop-grid"
         numColumns={2}
         keyExtractor={(item) => `${item.kind}:${item.product.id}`}
@@ -323,6 +285,35 @@ export default function ShopScreen() {
         columnWrapperStyle={{ gap: spacing.md, paddingHorizontal: spacing.lg }}
         contentContainerStyle={{ gap: spacing.md, paddingBottom: spacing['3xl'] }}
         ListEmptyComponent={
+          // The list, and with it the search field, stays mounted through every
+          // state. An early return for loading unmounted the TextInput 400 ms
+          // after the first keystroke and dropped every character after it
+          // (found on the Release build, 2026-09-18). Loading and error render
+          // here, inside the list, never as a replacement tree.
+          state === 'loading' ? (
+            <View testID="shop-loading" style={{ paddingHorizontal: spacing.lg, gap: spacing.lg }}>
+              <View className="flex-row gap-md">
+                <Skeleton shape="card" height={220} className="flex-1" />
+                <Skeleton shape="card" height={220} className="flex-1" />
+              </View>
+              <View className="flex-row gap-md">
+                <Skeleton shape="card" height={220} className="flex-1" />
+                <Skeleton shape="card" height={220} className="flex-1" />
+              </View>
+            </View>
+          ) : state === 'error' ? (
+            <View testID="shop-error" style={{ padding: spacing.lg, justifyContent: 'center', alignItems: 'center', gap: spacing.md }}>
+              <TriangleAlert size={40} color={colors.danger} strokeWidth={1.75} />
+              <Text style={[textStyle('h3'), { color: colors.text, textAlign: 'center' }]}>Couldn't load gear</Text>
+              <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
+                {error?.message ?? 'Something went wrong. Please try again.'}
+              </Text>
+              <Button variant="secondary" onPress={() => void runLoad()}>
+                <RefreshCw size={16} strokeWidth={1.75} color={colors.text} />
+                <Text style={{ color: colors.text }}>Retry</Text>
+              </Button>
+            </View>
+          ) : (
           <View testID="shop-empty" style={{ gap: spacing.md }}>
             <EmptyState
               icon={ShoppingBag}
@@ -348,6 +339,7 @@ export default function ShopScreen() {
               </View>
             ) : null}
           </View>
+          )
         }
         renderItem={({ item, index }) => (
           <View testID={`gear-tile-${index}`} style={{ flex: 1 }}>

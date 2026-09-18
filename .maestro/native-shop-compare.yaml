@@ -25,7 +25,7 @@ appId: com.atlitos.app
           timeout: 3000
 
 # Deep link directly to the shop.
-- openDeepLink: "atlitos://shop"
+- openLink: "atlitos://shop"
 - waitForAnimationToEnd:
     timeout: 2000
 
@@ -50,8 +50,20 @@ appId: com.atlitos.app
     id: compare-cheapest
 
 # Assert the commission disclosure text is visible on the screen.
+# The disclosure sits under the offer rows; scroll it into view first.
+- scrollUntilVisible:
+    element:
+      text: ".*commission.*"
+    direction: DOWN
+    timeout: 8000
 - assertVisible:
-    text: "commission"
+    text: ".*commission.*"
+# Back to the top so the first buy control is on screen for the click-out.
+- scrollUntilVisible:
+    element:
+      id: compare-buy-0
+    direction: UP
+    timeout: 8000
 
 - waitForAnimationToEnd:
     timeout: 1000
