@@ -21,20 +21,29 @@ export interface OfferRowProps {
   price: number;
   inStock: boolean;
   cheapest?: boolean;
-  checkedHoursAgo: number;
+  /** `null` for an offer never nightly-checked yet (Phase S3, FR-41/FR-48);
+   * renders "not checked yet" via `freshnessLabel`. */
+  checkedHoursAgo: number | null;
   /** Set when the nightly recheck saw a drop; rendered struck through beside the price. */
   previousPrice?: number | null;
   onBuy?: () => void;
   /** Direction B: body-sized price in ink, the word Cheapest as the one accent. */
   dense?: boolean;
+  /** The row's own testID, e.g. `compare-offer-<index>` (Phase S3, Track H). */
+  testID?: string;
+  /** The buy pressable's testID, e.g. `compare-buy-<index>` (Phase S3, Track H). */
+  buyTestID?: string;
+  /** The "Cheapest" word's own testID, e.g. `compare-cheapest` (Phase S3, Track H). */
+  cheapestTestID?: string;
 }
 
-function OfferRow({ retailer, price, inStock, cheapest = false, checkedHoursAgo, previousPrice, onBuy, dense = false }: OfferRowProps) {
+function OfferRow({ retailer, price, inStock, cheapest = false, checkedHoursAgo, previousPrice, onBuy, dense = false, testID, buyTestID, cheapestTestID }: OfferRowProps) {
   const colors = useThemeColors();
   const priceColor = !inStock ? colors.textTertiary : cheapest && !dense ? colors.accent : colors.text;
 
   return (
     <View
+      testID={testID}
       style={{ backgroundColor: colors.card, borderColor: cheapest && inStock && !dense ? colors.borderStrong : colors.border, borderWidth: 1, opacity: inStock ? 1 : 0.6 }}
       className={dense ? 'flex-row items-center gap-md rounded-lg px-md py-sm' : 'flex-row items-center gap-md rounded-xl p-md'}
     >
@@ -44,7 +53,7 @@ function OfferRow({ retailer, price, inStock, cheapest = false, checkedHoursAgo,
             {retailer}
           </Text>
           {dense && cheapest && inStock ? (
-            <Text className="font-sans-semibold text-sm" style={{ color: colors.accent }}>
+            <Text testID={cheapestTestID} className="font-sans-semibold text-sm" style={{ color: colors.accent }}>
               Cheapest
             </Text>
           ) : null}
@@ -70,6 +79,7 @@ function OfferRow({ retailer, price, inStock, cheapest = false, checkedHoursAgo,
         </View>
         {inStock ? (
           <Pressable
+            testID={buyTestID}
             onPress={onBuy}
             accessibilityRole="link"
             accessibilityLabel={`Buy on ${retailer}`}
