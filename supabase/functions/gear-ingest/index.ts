@@ -35,7 +35,7 @@ import { jsonResponse, withErrorHandling } from "../_shared/http.ts";
 import { AppError, appErrorFromPostgrestMessage } from "../_shared/app-error.ts";
 import { serviceRoleClient, userScopedClient } from "../_shared/supabase.ts";
 import { captureEdgeError } from "../_shared/sentry.ts";
-import { fetchPage, FETCH_TIMEOUT_MS, MAX_RESPONSE_BYTES } from "../_shared/fetch-page.ts";
+import { fetchPage, FETCH_TIMEOUT_MS, MAX_RESPONSE_BYTES, guardedFetch, hostMatchesPattern, checkTarget } from "../_shared/fetch-page.ts";
 import { extractProduct, type ProductDraft, type RetailerExtractorMap } from "../_shared/extract-product.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -156,7 +156,7 @@ async function matchRetailer(svc: AnySupabaseClient, url: string): Promise<Retai
     throw new AppError("INTERNAL", `Failed to load retailer programmes: ${error.message}`, 500);
   }
   for (const row of (data ?? []) as RetailerProgrammeRow[]) {
-    if ((row.url_patterns ?? []).some((pattern) => hostname.includes(pattern.toLowerCase()))) {
+    if ((row.url_patterns ?? []).some((pattern) => hostMatchesPattern(hostname, pattern))) {
       return row;
     }
   }
@@ -178,10 +178,16 @@ async function handleFetch(svc: AnySupabaseClient, url: string) {
   const programme = await matchRetailer(svc, url);
   const warnings: string[] = [];
   if (!programme) {
-    warnings.push("No retailer programme matched this host. Extraction relies on JSON-LD or Open Graph only.");
+    // Red team 2026-09-18: the programme match GATES the fetch. Without it the
+    // server would fetch any host an admin pasted (CWE-918).
+    throw new AppError(
+      "UNSUPPORTED_RETAILER",
+      "This host is not a supported retailer. Add it to retailer_programmes first, or enter the product by hand.",
+      422,
+    );
   }
 
-  const page = await fetchPage(url);
+  const page = await fetchPage(url, programme.url_patterns ?? []);
   if (page.blocked) {
     throw new AppError(
       programme ? "ROBOTS_DISALLOWED" : "UNSUPPORTED_RETAILER",
@@ -250,7 +256,16 @@ async function copyProductImage(
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     try {
-      res = await fetch(imageUrl, { headers: { "User-Agent": USER_AGENT }, signal: controller.signal });
+      // Retailer images live on CDNs that rarely share the retailer's host, so
+      // the image is not pinned to the programme's url_patterns; it still goes
+      // through the full target guard (public http(s) host, no IP literals, no
+      // internal names, DNS checked, redirects re-checked hop by hop).
+      const out = await guardedFetch(imageUrl, { headers: { "User-Agent": USER_AGENT }, signal: controller.signal });
+      if ("reason" in out) {
+        await captureEdgeError(new Error(`image target refused: ${out.reason}`), { fn: "gear-ingest", stage: "image-guard", imageUrl });
+        return null;
+      }
+      res = out.res;
     } finally {
       clearTimeout(timer);
     }
@@ -317,7 +332,21 @@ async function handleSave(req: Request, svc: AnySupabaseClient, body: SaveBody) 
   }
 
   const programme = await matchRetailer(svc, body.url);
-  const retailerKey = programme?.key ?? "unmatched";
+  if (!programme) {
+    throw new AppError("UNSUPPORTED_RETAILER", "This host is not a supported retailer.", 422);
+  }
+  const retailerKey = programme.key;
+
+  // The canonical URL the offer will be re-fetched from every night must sit
+  // on the same programme as the page it came from; a page can otherwise
+  // point the nightly sweep anywhere through its own <link rel=canonical>.
+  if (body.draft.canonicalUrl) {
+    let canonicalHost = "";
+    try { canonicalHost = new URL(body.draft.canonicalUrl).hostname; } catch { canonicalHost = ""; }
+    if (!canonicalHost || !(programme.url_patterns ?? []).some((p) => hostMatchesPattern(canonicalHost, p))) {
+      body.draft.canonicalUrl = body.url;
+    }
+  }
 
   const copied = await copyProductImage(svc, body.draft.imageUrl, retailerKey);
 

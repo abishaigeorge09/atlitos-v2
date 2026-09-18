@@ -151,7 +151,8 @@ function writeServeEnvFile() {
   // VOYAGE_STUB is unrelated to gear-recheck (embeddings never run on this
   // path); set for parity with the rest of the stack's local convention and
   // so nothing here could ever attempt a real Voyage call by accident.
-  writeFileSync(envPath, 'VOYAGE_STUB=1\n');
+  // FETCH_ALLOW_HOSTS is the local escape hatch for the fixture host; the deployed functions never set it.
+  writeFileSync(envPath, 'VOYAGE_STUB=1\nFETCH_ALLOW_HOSTS=host.docker.internal\n');
   return envPath;
 }
 

@@ -33,6 +33,123 @@ const USER_AGENT = "AtlitosBot/1.0 (+https://atlitos.com/bot)";
 export const FETCH_TIMEOUT_MS = 10_000;
 export const MAX_RESPONSE_BYTES = 5 * 1024 * 1024; // 5 MB
 
+// ---------------------------------------------------------------------------
+// Target guard (red team 2026-09-18, CWE-918). Every outbound request this
+// module makes, page, robots.txt, image, and every redirect hop, passes
+// through `checkTarget` first. The rules:
+//   * http or https only;
+//   * no IP literals, no localhost, no *.local / *.internal / *.localhost,
+//     no docker service names, so a pasted URL can never reach the metadata
+//     service, kong, the database, or anything else inside the network;
+//   * when the caller names allowed hosts (a retailer programme's
+//     url_patterns), the hostname must equal one of them or be a subdomain of
+//     one: `amazon.in.evil.com` and `evil.com/amazon.in` do not match;
+//   * the hostname's resolved addresses must all be public; a name that
+//     resolves into a private, loopback or link-local range is refused
+//     (DNS rebinding is narrowed, not eliminated: the resolve and the fetch
+//     are two lookups; a retailer allowlist is the real fence);
+//   * redirects are followed by hand, at most MAX_REDIRECTS, and every
+//     Location is re-checked with the same rules and the same allowlist.
+// `FETCH_ALLOW_HOSTS` (comma separated) is an explicit local escape hatch the
+// verify scripts set for their fixture host (host.docker.internal). It is
+// never set on the deployed functions.
+// ---------------------------------------------------------------------------
+export const MAX_REDIRECTS = 5;
+
+function explicitlyAllowedHosts(): Set<string> {
+  const raw = Deno.env.get("FETCH_ALLOW_HOSTS") ?? "";
+  return new Set(raw.split(",").map((h) => h.trim().toLowerCase()).filter(Boolean));
+}
+
+/** Exact host or a subdomain of the pattern; never a substring match. */
+export function hostMatchesPattern(hostname: string, pattern: string): boolean {
+  const h = hostname.toLowerCase().replace(/\.$/, "");
+  const p = pattern.toLowerCase().replace(/^\*\./, "").replace(/\.$/, "");
+  return h === p || h.endsWith("." + p);
+}
+
+const IPV4 = /^\d{1,3}(\.\d{1,3}){3}$/;
+
+function isPrivateIPv4(ip: string): boolean {
+  const [a, b] = ip.split(".").map(Number);
+  return (
+    a === 10 || a === 127 || a === 0 ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 169 && b === 254) ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    a >= 224
+  );
+}
+
+function isPrivateIPv6(ip: string): boolean {
+  const v = ip.toLowerCase();
+  return v === "::1" || v === "::" || v.startsWith("fc") || v.startsWith("fd") || v.startsWith("fe80") || v.startsWith("::ffff:");
+}
+
+function isForbiddenName(hostname: string): boolean {
+  const h = hostname.toLowerCase();
+  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal") || h.endsWith(".arpa")) return true;
+  if (!h.includes(".")) return true; // bare docker service names: kong, supabase_db, db
+  return false;
+}
+
+async function resolvesToPublic(hostname: string): Promise<boolean> {
+  const resolve = (Deno as unknown as { resolveDns?: (h: string, t: "A" | "AAAA") => Promise<string[]> }).resolveDns;
+  if (!resolve) return true; // runtime without DNS access: name rules above still apply
+  let addrs: string[] = [];
+  try { addrs = addrs.concat(await resolve(hostname, "A")); } catch { /* no A */ }
+  try { addrs = addrs.concat(await resolve(hostname, "AAAA")); } catch { /* no AAAA */ }
+  if (addrs.length === 0) return false;
+  return addrs.every((ip) => (IPV4.test(ip) ? !isPrivateIPv4(ip) : !isPrivateIPv6(ip)));
+}
+
+/**
+ * Returns null when the URL may be fetched, otherwise the reason it may not.
+ * `allowedHosts` are retailer programme url_patterns; when given, the host
+ * must match one of them.
+ */
+export async function checkTarget(url: URL, allowedHosts?: string[]): Promise<string | null> {
+  if (url.protocol !== "http:" && url.protocol !== "https:") return "Only http/https URLs are supported.";
+  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (explicitlyAllowedHosts().has(host)) return null;
+  if (IPV4.test(host) || host.includes(":")) return "IP address targets are not allowed.";
+  if (isForbiddenName(host)) return "Internal hostnames are not allowed.";
+  if (allowedHosts && allowedHosts.length > 0 && !allowedHosts.some((p) => hostMatchesPattern(host, p))) {
+    return "This host is not a supported retailer.";
+  }
+  if (!(await resolvesToPublic(host))) return "This host does not resolve to a public address.";
+  return null;
+}
+
+/**
+ * fetch with redirects followed by hand so every hop is re-checked. Returns
+ * the final Response or a reason string when a hop is refused.
+ */
+export async function guardedFetch(
+  url: string,
+  init: RequestInit,
+  allowedHosts?: string[],
+): Promise<{ res: Response; finalUrl: string } | { reason: string }> {
+  let current = url;
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    let parsed: URL;
+    try { parsed = new URL(current); } catch { return { reason: "Invalid URL." }; }
+    const refused = await checkTarget(parsed, allowedHosts);
+    if (refused) return { reason: refused };
+    const res = await fetch(current, { ...init, redirect: "manual" });
+    if (res.status >= 300 && res.status < 400) {
+      const location = res.headers.get("location");
+      try { await res.body?.cancel(); } catch { /* best effort */ }
+      if (!location) return { reason: `Redirect without a location (HTTP ${res.status}).` };
+      current = new URL(location, current).toString();
+      continue;
+    }
+    return { res, finalUrl: current };
+  }
+  return { reason: `Too many redirects (more than ${MAX_REDIRECTS}).` };
+}
+
 export interface FetchPageResult {
   /** HTTP status of the product page fetch. 0 when the page was never fetched (blocked, invalid URL, network error, timeout). */
   status: number;
@@ -113,16 +230,14 @@ export function isPathDisallowed(robotsTxt: string, path: string): boolean {
   });
 }
 
-async function readRobotsTxt(origin: string): Promise<string> {
+async function readRobotsTxt(origin: string, allowedHosts?: string[]): Promise<string> {
   try {
     const { signal, cancel } = withTimeout(FETCH_TIMEOUT_MS);
-    const res = await fetch(`${origin}/robots.txt`, {
-      headers: { "User-Agent": USER_AGENT },
-      signal,
-    });
+    const out = await guardedFetch(`${origin}/robots.txt`, { headers: { "User-Agent": USER_AGENT }, signal }, allowedHosts);
     cancel();
-    if (!res.ok) return "";
-    return await res.text();
+    if ("reason" in out) return "";
+    if (!out.res.ok) return "";
+    return await out.res.text();
   } catch {
     // Missing or unreadable robots.txt is not a disallow (see file header).
     return "";
@@ -136,26 +251,34 @@ async function readRobotsTxt(origin: string): Promise<string> {
  * every outcome into their own readable refusal or health-check outcome
  * without a try/catch of their own.
  */
-export async function fetchPage(url: string): Promise<FetchPageResult> {
+export async function fetchPage(url: string, allowedHosts?: string[]): Promise<FetchPageResult> {
   let parsed: URL;
   try {
     parsed = new URL(url);
   } catch {
     return { status: 0, finalUrl: url, html: "", blocked: true, reason: "Invalid URL." };
   }
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    return { status: 0, finalUrl: url, html: "", blocked: true, reason: "Only http/https URLs are supported." };
+  const refused = await checkTarget(parsed, allowedHosts);
+  if (refused) {
+    return { status: 0, finalUrl: url, html: "", blocked: true, reason: refused };
   }
 
-  const robotsTxt = await readRobotsTxt(parsed.origin);
+  const robotsTxt = await readRobotsTxt(parsed.origin, allowedHosts);
   if (robotsTxt && isPathDisallowed(robotsTxt, parsed.pathname)) {
     return { status: 0, finalUrl: url, html: "", blocked: true, reason: "robots.txt disallows this path." };
   }
 
   const { signal, cancel } = withTimeout(FETCH_TIMEOUT_MS);
   let res: Response;
+  let finalUrl = url;
   try {
-    res = await fetch(url, { headers: { "User-Agent": USER_AGENT }, signal, redirect: "follow" });
+    const out = await guardedFetch(url, { headers: { "User-Agent": USER_AGENT }, signal }, allowedHosts);
+    if ("reason" in out) {
+      cancel();
+      return { status: 0, finalUrl: url, html: "", blocked: true, reason: out.reason };
+    }
+    res = out.res;
+    finalUrl = out.finalUrl;
   } catch (err) {
     cancel();
     const timedOut = err instanceof Error && err.name === "AbortError";
@@ -176,7 +299,7 @@ export async function fetchPage(url: string): Promise<FetchPageResult> {
     } catch {
       // best effort
     }
-    return { status: res.status, finalUrl: res.url || url, html: "", blocked: true, reason: "Response exceeds the 5MB cap." };
+    return { status: res.status, finalUrl: res.url || finalUrl, html: "", blocked: true, reason: "Response exceeds the 5MB cap." };
   }
 
   const reader = res.body?.getReader();
@@ -207,8 +330,8 @@ export async function fetchPage(url: string): Promise<FetchPageResult> {
   cancel();
 
   if (oversize) {
-    return { status: res.status, finalUrl: res.url || url, html: "", blocked: true, reason: "Response exceeds the 5MB cap." };
+    return { status: res.status, finalUrl: res.url || finalUrl, html: "", blocked: true, reason: "Response exceeds the 5MB cap." };
   }
 
-  return { status: res.status, finalUrl: res.url || url, html, blocked: false };
+  return { status: res.status, finalUrl: res.url || finalUrl, html, blocked: false };
 }

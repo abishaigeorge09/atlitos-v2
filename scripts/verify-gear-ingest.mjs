@@ -162,7 +162,8 @@ let serveProc = null;
 function writeServeEnvFile() {
   const scratchDir = process.env.ATLITOS_SCRATCH_DIR ?? os.tmpdir();
   const envPath = path.join(scratchDir, `atlitos-gear-ingest-${randomUUID()}.env`);
-  writeFileSync(envPath, `GEAR_INGEST_PUBLIC_URL=${SUPABASE_URL}\n`);
+  // FETCH_ALLOW_HOSTS is the local escape hatch for the fixture host; the deployed functions never set it.
+  writeFileSync(envPath, `GEAR_INGEST_PUBLIC_URL=${SUPABASE_URL}\nFETCH_ALLOW_HOSTS=host.docker.internal\n`);
   return envPath;
 }
 

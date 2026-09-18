@@ -87,6 +87,7 @@ interface OfferRow {
 
 interface RetailerProgrammeRow {
   key: string;
+  url_patterns: string[] | null;
   extractor: RetailerExtractorMap | null;
   fetch_policy: { maxPerMinute?: number } | null;
 }
@@ -208,7 +209,7 @@ async function loadProgrammes(
   if (retailerKeys.length === 0) return map;
   const { data, error } = await svc
     .from("retailer_programmes")
-    .select("key, extractor, fetch_policy")
+    .select("key, url_patterns, extractor, fetch_policy")
     .in("key", retailerKeys);
   if (error) throw new AppError("INTERNAL", `Failed to load retailer_programmes: ${error.message}`, 500);
   for (const row of (data ?? []) as RetailerProgrammeRow[]) {
@@ -257,11 +258,13 @@ function isTransientFailureStatus(status: number): boolean {
   return status === 0 || status === 403 || status === 429 || status >= 500;
 }
 
-async function fetchWithRetry(url: string): Promise<FetchPageResult> {
-  const first = await fetchPage(url);
+class TargetRefused extends Error {}
+
+async function fetchWithRetry(url: string, allowedHosts: string[]): Promise<FetchPageResult> {
+  const first = await fetchPage(url, allowedHosts);
   if (first.blocked) return first;
   if (!isTransientFailureStatus(first.status)) return first;
-  return await fetchPage(url);
+  return await fetchPage(url, allowedHosts);
 }
 
 // ---------------------------------------------------------------------------
@@ -410,7 +413,13 @@ async function processOffer(
   let aiSuggestion: AiSuggestion | null = null;
 
   try {
-    const page = await fetchWithRetry(url);
+    // Red team 2026-09-18: a stored URL is only ever re-fetched against the
+    // hosts of the programme it belongs to; an offer with no programme is a
+    // `blocked` outcome, never a fetch (CWE-918).
+    if (!programme || !(programme.url_patterns ?? []).length) {
+      throw new TargetRefused("No retailer programme for this offer; not fetched.");
+    }
+    const page = await fetchWithRetry(url, programme.url_patterns ?? []);
     httpStatus = page.status > 0 ? page.status : null;
 
     if (page.blocked) {
