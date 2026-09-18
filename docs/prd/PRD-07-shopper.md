@@ -457,6 +457,10 @@ pages stay reachable for the team. Flipping the flag is a config change, not a d
     offers store the canonical URL and the tag template is empty.
 12. Fetching retailer pages server side is against some retailers' terms. Acceptable for
     launch volume (hundreds of products, one fetch a night)? The alternative is manual
-    only until PA-API approval.
+    only until PA-API approval. **Decided 2026-09-17: yes, fetch.** Blocked fetches are
+    recorded as `blocked`, never shown as a price; each retailer moves to its official
+    API as its programme approves.
 13. Image rights: copying a retailer's product image into our Storage is standard affiliate
     practice but not universally licensed. Proceed, with takedown on request?
+    **Decided 2026-09-17: copy, with takedown on request.** A takedown contact goes on
+    the privacy page.
