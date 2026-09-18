@@ -1,7 +1,7 @@
 # Phase S2 status: ingest and health
 
-Status: AWAITING APPROVAL
-Opened: 2026-09-18   Closed:
+Status: APPROVED
+Opened: 2026-09-18   Closed: 2026-09-18
 
 Plan: `docs/PLAN-SHOP-SEARCH.md` Phase S2. Architecture: `docs/architecture/ADR-011-shop-search-ingest-health.md` D3, D4, D6.
 Previous phase: `PHASE-S1-STATUS.md` (read its handoff notes first). Branch: `integration/shop-search`.
@@ -15,7 +15,7 @@ Founder decisions in force: PRD-07 Q12 yes (fetch retailer pages server side), Q
 > going from ok to gone to delisted. Screenshots in `docs/qa/evidence/shop-search/`. AC-11-3,
 > AC-11-4 proven.
 
-**Verdict:** pending.
+**Verdict:** APPROVE cycle 1, 2026-09-18. Approver re-ran ingest, health, fetch-guard (14/14), invariants 11/11, turbo 20/20 forced uncached, deno check; redirect-to-loopback probe refused at the hop with the guard reason and no body; canonical pinning and programme-less refusal confirmed by reading; zero direct table writes under apps/. One advisory (guard refusals labelled ROBOTS_DISALLOWED) fixed after the verdict as BLOCKED_TARGET.
 
 ## The hard decision
 
@@ -137,4 +137,28 @@ the catalogue, fork PRs cannot read the workflow secrets, spend guard covers Voy
 
 ## Handoff notes for the next planner
 
-_Written at close._
+- **What you inherit that works:** `gear-ingest` fetch and save (programme-gated, guarded, image
+  copied to `product-images`, catalogue written under the admin's JWT), `gear-recheck` (outcomes,
+  7-strike auto-delist, AI suggestion path, nightly workflow file), `retailer_programmes` with three
+  seeds and EMPTY tag templates, `product_fetch_log`, health columns on both catalogue tables, the
+  admin Add-from-a-link, Catalog health and offer outcome surfaces, three verify scripts and two
+  new invariants.
+- **Traps this phase hit:** builder worktrees still need `git reset --hard integration/shop-search`
+  first; the edge runtime cannot reach the host loopback, fixtures bind 0.0.0.0 and are addressed as
+  `host.docker.internal`, which the fetch guard refuses unless `FETCH_ALLOW_HOSTS` names it; the
+  edge runtime sees `SUPABASE_URL=http://kong:8000`, so public Storage URLs need
+  `GEAR_INGEST_PUBLIC_URL` locally; a manual `functions serve` must be fully down (container gone)
+  before the self-managing verify scripts start; contract drift between tracks shows up only on the
+  integrated tree (save response shape, outcome enum), so walk it before calling a phase done.
+- **Contracts you must not break:** every outbound request goes through `checkTarget` and
+  `guardedFetch`; the programme match gates the page fetch; `canonical_url` stays on the
+  programme's hosts; `last_check_outcome` has five values, `unparsed` lives on the log only; only
+  `gone` and `blocked` count as strikes; auto-delist rows have `actor_id null`; no client writes to
+  any catalogue or health table.
+- **For S3 (the shop screens):** `GearResultTile` (direction C) and `OfferRow dense` are in the
+  kitchen sink; `image_url` may now be our bucket or a retailer URL (older rows); `retailer_key`
+  and `last_checked_at` on offers feed the store line and freshness; `shop.owned_enabled` is read
+  from `app_config` (public row) to hide the owned routes.
+- **What the founder still owes:** `VOYAGE_API_KEY`; affiliate tags; the two workflow secrets; one
+  real Amazon.in paste in production admin after S4 deploys; `main` reconciled so the four `XXXX_`
+  migrations can take numbers.

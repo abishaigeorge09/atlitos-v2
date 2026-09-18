@@ -189,8 +189,11 @@ async function handleFetch(svc: AnySupabaseClient, url: string) {
 
   const page = await fetchPage(url, programme.url_patterns ?? []);
   if (page.blocked) {
+    // robots.txt is the only "blocked" the retailer chose; every other reason
+    // comes from the outbound target guard and gets its own code.
+    const robots = (page.reason ?? "").includes("robots.txt");
     throw new AppError(
-      programme ? "ROBOTS_DISALLOWED" : "UNSUPPORTED_RETAILER",
+      robots ? "ROBOTS_DISALLOWED" : "BLOCKED_TARGET",
       page.reason ?? "Could not read a product from this page.",
       422,
     );
