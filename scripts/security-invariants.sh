@@ -567,6 +567,55 @@ Set the connection string, or pass --offline and accept the recorded gap."
 fi
 
 # --------------------------------------------------------------------------
+# CHECK embedding-column-grant  (SQL)
+#
+# ADR-011 D6 / AC-11-6, AC-11-7: `affiliate_products.embedding` is excluded
+# from every client select via a column-level grant, not a table-level one
+# and not a separate view. Column-level grants are easy to widen back
+# accidentally (a future `grant select on affiliate_products to anon`
+# re-adds every column, embedding included), which is exactly why this is a
+# standing CI invariant and not a one-time proof (ADR-011, Consequences).
+#
+# Read-only: one SELECT against information_schema.column_privileges. Uses
+# the same connection as the checks above.
+# --------------------------------------------------------------------------
+EMBEDDING_GRANT_SQL="select grantee || ' has ' || privilege_type || ' on affiliate_products.embedding'
+from information_schema.column_privileges
+where table_schema = 'public' and table_name = 'affiliate_products'
+  and column_name = 'embedding'
+  and grantee in ('anon', 'authenticated')
+order by 1;"
+
+if [ -n "$DB_URL" ] && command -v psql >/dev/null 2>&1; then
+  if leaked=$(psql "$DB_URL" -At -c "$EMBEDDING_GRANT_SQL" 2>"$TMP/embgrant.err"); then
+    if [ -n "$leaked" ]; then
+      fail embedding-column-grant "anon or authenticated can select affiliate_products.embedding" "$leaked
+
+Embedding writes happen only through gear-embed under the service role, and
+the column must never be readable by a client (AC-11-7). Narrow the grant:
+  revoke select on public.affiliate_products from anon, authenticated;
+  grant select (<every column except embedding>) on public.affiliate_products
+    to anon, authenticated;
+See ADR-011 D6, supabase/migrations/*_gear_search_vectors.sql."
+    else
+      pass embedding-column-grant "anon and authenticated cannot select affiliate_products.embedding"
+    fi
+  else
+    fail embedding-column-grant "could not query the live catalog" "$(cat "$TMP/embgrant.err")"
+  fi
+elif [ "$OFFLINE" = 1 ]; then
+  echo "NOT RUN  embedding-column-grant"
+  echo "         No ATLITOS_DB_URL/SUPABASE_DB_URL or no psql, and --offline was passed."
+  echo "         This check has no static equivalent: a column grant leaves no trace"
+  echo "         in the tree to grep for. Recorded in docs/DEBT.md."
+  echo
+else
+  fail embedding-column-grant "the embedding column grant check could not run" "No ATLITOS_DB_URL or SUPABASE_DB_URL is set, or psql is not on PATH.
+A check that should apply but cannot run is a failure, not a skip.
+Set the connection string, or pass --offline and accept the recorded gap."
+fi
+
+# --------------------------------------------------------------------------
 echo "--------------------------------------------------------------"
 if [ "$FAILED" -gt 0 ]; then
   echo "security-invariants: $FAILED of $CHECKS_RUN checks FAILED."

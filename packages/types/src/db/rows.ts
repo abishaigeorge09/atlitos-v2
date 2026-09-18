@@ -800,3 +800,21 @@ export interface ProductOfferRow {
   created_at: ISODateTime;
   updated_at: ISODateTime;
 }
+
+// ---- shop search: vectors, query cache, owned shop flag (Phase S1) -------
+// See docs/architecture/ADR-011-shop-search-ingest-health.md D1, D5, D6 and
+// PRD-07 section 11 (FR-40, FR-43, FR-53).
+
+/**
+ * `affiliate_products.embedding` is excluded from every client select via a
+ * column-level grant (AC-11-6, AC-11-7), so `AffiliateProductRow` above
+ * intentionally has no `embedding` field: no client-side type should carry
+ * a column no client can ever read.
+ */
+
+export interface AppConfigRow {
+  key: string;
+  value: unknown;
+  public: boolean;
+  updated_at: ISODateTime;
+}

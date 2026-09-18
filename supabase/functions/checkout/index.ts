@@ -247,6 +247,34 @@ Deno.serve((req) =>
     const supabase = serviceRoleClient();
 
     // ------------------------------------------------------------------
+    // 0. The owned shop flag (PRD-07 FR-53, ADR-011 D5, Phase S1 AC-11-5).
+    //    Read BEFORE any pricing or address lookup, so a stale client cannot
+    //    buy while the flag is off. `get_app_config` returns null both when
+    //    the row is missing and when it is not public; either way this
+    //    refuses rather than assuming enabled, fail closed by design.
+    // ------------------------------------------------------------------
+    const { data: ownedEnabled, error: configError } = await supabase.rpc(
+      "get_app_config",
+      { p_key: "shop.owned_enabled" },
+    );
+
+    if (configError) {
+      throw new AppError(
+        "INTERNAL",
+        `Failed to read shop.owned_enabled: ${configError.message}`,
+        500,
+      );
+    }
+
+    if (ownedEnabled !== true) {
+      throw new AppError(
+        "OWNED_SHOP_DISABLED",
+        "The Atlitos store is not open yet.",
+        403,
+      );
+    }
+
+    // ------------------------------------------------------------------
     // 1. The address, scoped to the caller. See the header.
     // ------------------------------------------------------------------
     const { data: address, error: addressError } = await supabase

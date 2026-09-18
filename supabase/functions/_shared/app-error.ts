@@ -122,4 +122,7 @@ const STATUS_BY_CODE: Record<string, number> = {
   // (the item's state refused a second sponsor, resolvable by picking another).
   MIN_AMOUNT: 422,
   ITEM_FUNDED: 409,
+  // Phase S1 (PRD-07 FR-53, ADR-011 D5). `checkout` refuses before any
+  // pricing when `app_config.shop.owned_enabled` is not true.
+  OWNED_SHOP_DISABLED: 403,
 };

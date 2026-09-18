@@ -641,6 +641,47 @@ Constraints: `UNIQUE(affiliate_product_id, retailer)` (one offer per retailer pe
 
 **No `orders`, no `stock_reservations`, no payment for affiliate items.** An affiliate purchase happens on the retailer's site; Atlitos runs no charge and holds no stock for these rows. Agentic auto-ordering (a background worker placing the retailer order in app) is a FUTURE epic with its own constraints, explicitly out of scope now, documented in `docs/prd/PRD-agentic-ordering.md`.
 
+### Shop search: vectors, query cache, owned shop flag (Phase S1, PRD-07 section 11, FR-40, FR-43, FR-53)
+
+`docs/architecture/ADR-011-shop-search-ingest-health.md` D1, D2, D5, D6. Extension `vector`, installed `with schema extensions`.
+
+`affiliate_products` gains one column:
+
+| Column | Type | Constraints |
+|---|---|---|
+| `embedding` | `extensions.vector(1024)` | nullable. `embedding IS NULL` IS the pending-embed queue (D2), not a separate flag column. Written only by `gear-embed` under `service_role` (AC-11-7); never in any client select (column-level grant, see RLS.md) |
+
+Indexed by `idx_affiliate_products_embedding_hnsw`, `using hnsw (embedding extensions.vector_cosine_ops)`. A missing/not-yet-built index leaves `match_affiliate_products` correct via a sequential scan, only slower.
+
+`match_affiliate_products(query_embedding extensions.vector(1024), match_threshold float, match_count int) returns table(id uuid, similarity float)`: `security definer`, `stable`, `service_role` execute only (revoked from `anon`/`authenticated`/`public`). Returns `active` products whose cosine similarity to the query clears `match_threshold`, nearest first. Called from inside `ai-search` (Track B) and the `gear-embed` sweep, never directly by a client.
+
+### `query_embedding_cache`
+
+Caches Voyage query embeddings, keyed by `sha256(lower(trim(query)))`, so `ai-search` bounds Voyage cost the way `ai_spend_daily` already bounds Claude cost. TTL (10 minutes) is enforced by the caller, not a column here.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `query_hash` | `text` | PK |
+| `embedding` | `extensions.vector(1024)` | not null |
+| `created_at` | `timestamptz` | not null default `now()` |
+
+`service_role` only: RLS enabled with zero policies (fail closed, the `stock_reservations` shape), and all grants revoked from `anon`/`authenticated`/`public`.
+
+### `app_config`
+
+A small generic key/value/public config table (PRD-07 FR-53). `shop.owned_enabled` is its first row, seeded `false` at launch: hides cart, checkout, orders and every owned product from the consumer app and from search until flipped, which is a config change, not a deploy.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `key` | `text` | PK |
+| `value` | `jsonb` | not null |
+| `public` | `boolean` | not null default `false` |
+| `updated_at` | `timestamptz` | not null default `now()`, via `set_updated_at()` |
+
+Rows with `public = true` are readable by `anon`/`authenticated` (`app_config_select_public`); every other row is invisible to both. `get_app_config(p_key)` (`security definer`, `stable`) is a convenience RPC returning the value for a public row, or null. The only write path is `admin_set_app_config(p_key, p_value)` (`security definer`, `has_role('admin')` checked inside, one `audit_log` row per call with `action = 'app_config.set'`). `audit_log.entity_id` is `uuid not null` (`0003`) while `app_config.key` is text, so the audit row's `entity_id` is a deterministic uuid derived from the key (`'00000000-0000-0000-0000-' || right(md5(key), 12)`), so one key's history always groups under the same `entity_id`.
+
+`checkout` reads `shop.owned_enabled` via `get_app_config` under the service client before any pricing, and refuses `OWNED_SHOP_DISABLED` (403) when it is not `true` (AC-11-5).
+
 Seeded by `scripts/seed-affiliate-catalog.mjs` (8 products, 17 offers across four retailers), including a Babolat racket offered under 2000 at one retailer and higher at another for the WS3 price-comparison proof.
 
 ## The commerce bill is a third pricing shape (PHASE-4-STATUS.md D1)
