@@ -3,7 +3,7 @@
 Single source of truth for PRD-07 section 11. Anything not written here did not happen.
 The product-wide plan stays `docs/PLAN.md`; this is the plan for one feature, STANDARD tier.
 
-Status: DRAFT, awaiting founder approval (Gate 2)
+Status: APPROVED at Gate 2 on 2026-09-17 ("Approve, start S1 now"). Gate 1 approved the same day on direction C.
 
 ## Context
 
@@ -31,8 +31,8 @@ check and those checks are the phase gates below.
 | 6 | Admin "Add from a link" on `/gear/create`, review then save via 0120 RPCs | FR-44, FR-45 | admin |
 | 7 | `gear-recheck` nightly sweep, outcomes, 7-strike auto-delist, AI suggestion | FR-48, FR-51, FR-52, AC-11-4 | edge + db |
 | 8 | Admin Catalog health `/gear/health`, Gear list health columns, Re-check now | FR-49, FR-50 | admin |
-| 9 | Shop home rebuilt as search first, `GearResultCard` grid, chips | FR-40, FR-41 | mobile |
-| 10 | Compare screen: `OfferRow` with freshness and strikethrough, our image | FR-41, FR-46 | mobile |
+| 9 | Shop home rebuilt as search first, `GearResultTile` (direction C) grid, chips | FR-40, FR-41 | mobile |
+| 10 | Compare screen: `OfferRow dense` with freshness and strikethrough, our image | FR-41, FR-46 | mobile |
 | 11 | `app_config` + `shop.owned_enabled`, mobile and `checkout` honour it | FR-53, AC-11-5 | db + edge + mobile |
 | 12 | RLS, grants, column-level grant on `embedding`, security invariant | AC-11-6, AC-11-7 | db + scripts |
 
@@ -49,10 +49,11 @@ delivery terms, and never shows a retailer count that is not the live count of o
 
 ## Design direction
 
-ux-critic APPROVE 2026-09-17 on the second pass; founder's Gate 1 response pending in
+Gate 1 APPROVED 2026-09-17 on direction C (Amazon card) after A and B were rejected; see
 `docs/design/DIRECTION-SHOP.md`. Tokens: `packages/theme`. Kitchen sink: `/kitchen`, section
-"Shop search". Locked: the price is the only accent on shop surfaces; three type sizes on
-a card, four on compare; one radius; mono for numbers only; no stars, no delivery lines.
+"Shop search, direction C". Locked: flat white photo tiles with no corners or border; brand,
+title, 18px mono price in ink, store line, freshness, in that order; three type sizes on a
+tile; the store glyph is the one accent; no stars, no delivery lines.
 
 ## Phases
 
@@ -101,7 +102,7 @@ D starts after C's helper lands. E is disjoint (`apps/admin/`).
 
 ### Phase S3: the shop
 
-- **Delivers:** Shop home as search first with the `GearResultCard` grid and chips; compare
+- **Delivers:** Shop home as search first with the `GearResultTile` grid and chips; compare
   screen with `OfferRow`, freshness and our image; owned shop hidden by the flag; Maestro
   flows for search, compare, click-out and the flag.
 - **Gate:** on the iPhone 16 Pro Max Release build pinned to local
