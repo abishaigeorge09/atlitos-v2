@@ -1,0 +1,35 @@
+<!doctype html>
+<!--
+  ATLITOS v2 — scripts/fixtures/gear/product-json-ld.html
+  Phase S2 Track C. A static JSON-LD Product fixture served by
+  verify-gear-ingest.mjs's own local http server, NEVER a live retailer
+  (ADR-011 D3 Confirmation). __ORIGIN__ is replaced with the fixture
+  server's actual http://127.0.0.1:<port> at serve time.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Verify Gear Ingest JSON-LD Fixture Racket</title>
+  <link rel="canonical" href="__ORIGIN__/product/json-ld" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org/",
+    "@type": "Product",
+    "name": "Verify Gear Ingest JSON-LD Fixture Racket",
+    "brand": { "@type": "Brand", "name": "FixtureBrand" },
+    "description": "A fixture badminton racket for verify-gear-ingest.mjs, safe to delete.",
+    "image": "__ORIGIN__/images/racket.jpg",
+    "offers": {
+      "@type": "Offer",
+      "price": "1999.00",
+      "priceCurrency": "INR",
+      "availability": "https://schema.org/InStock"
+    }
+  }
+  </script>
+</head>
+<body>
+  <h1 class="product-title">Verify Gear Ingest JSON-LD Fixture Racket</h1>
+  <p class="price">Rs. 1999.00</p>
+</body>
+</html>

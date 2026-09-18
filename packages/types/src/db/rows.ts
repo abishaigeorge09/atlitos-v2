@@ -786,6 +786,16 @@ export interface AffiliateProductRow {
   active: boolean;
   created_at: ISODateTime;
   updated_at: ISODateTime;
+  /** Phase S2, ADR-011 D3. The retailer's own image URL, kept for re-fetch. Never rendered directly. */
+  source_image_url: string | null;
+  /** Phase S2, ADR-011 D3. Storage path of our own copy under product-images/<retailer_key>/<hash>.<ext>, written only by gear-ingest's save action. */
+  image_path: string | null;
+  /** Phase S2, ADR-011 D4. Free-text health summary the Catalog health page derives; written by gear-recheck. */
+  health_status: string | null;
+  /** Phase S2, ADR-011 D4. When gear-recheck last evaluated this product's overall health. */
+  health_checked_at: ISODateTime | null;
+  /** Phase S2, FR-51, AC-11-4. Set only by system_auto_delist_affiliate_product. Null for an admin-initiated delist. */
+  auto_delisted_at: ISODateTime | null;
 }
 
 export interface ProductOfferRow {
@@ -799,6 +809,56 @@ export interface ProductOfferRow {
   last_checked_at: ISODateTime;
   created_at: ISODateTime;
   updated_at: ISODateTime;
+  /** Phase S2, ADR-011 D3. The retailer's canonical product URL, distinct from affiliate_url (which carries the, currently empty, affiliate tag). */
+  canonical_url: string | null;
+  /** Phase S2, ADR-011 D3. Which retailer_programmes row produced this offer. Null for a manual entry with no matching programme. */
+  retailer_key: string | null;
+  /** Phase S2, ADR-011 D4. Only gone/blocked count toward consecutive_failures; every other outcome resets it. */
+  last_check_outcome: 'ok' | 'price_changed' | 'out_of_stock' | 'gone' | 'blocked' | null;
+  consecutive_failures: number;
+  last_price_change_at: ISODateTime | null;
+}
+
+// ---- ingest and health: retailer config, fetch log (Phase S2) -----------
+// See docs/architecture/ADR-011-shop-search-ingest-health.md D3, D4, D6 and
+// PRD-07 section 11 (FR-44 to FR-52). Both tables are admin-read only
+// (has_role('admin')), no anon/authenticated grant at all: operational
+// config and an operational log, not shopper-facing content.
+
+export interface RetailerExtractorMap {
+  title?: string;
+  brand?: string;
+  price?: string;
+  currency?: string;
+  image?: string;
+  description?: string;
+  inStock?: string;
+}
+
+export interface RetailerProgrammeRow {
+  key: string;
+  display_name: string;
+  url_patterns: string[];
+  /** Empty until a real affiliate programme is approved (open question 11). Never fabricated. */
+  affiliate_tag_template: string | null;
+  extractor: RetailerExtractorMap | null;
+  fetch_policy: { maxPerMinute: number } & Record<string, unknown>;
+  active: boolean;
+}
+
+export type ProductFetchOutcome = 'ok' | 'price_changed' | 'out_of_stock' | 'gone' | 'blocked' | 'unparsed';
+
+export interface ProductFetchLogRow {
+  id: UUID;
+  offer_id: UUID;
+  fetched_at: ISODateTime;
+  outcome: ProductFetchOutcome;
+  http_status: number | null;
+  price_seen: number | null;
+  in_stock_seen: boolean | null;
+  notes: string | null;
+  /** FR-52. Claude's read of a 200 that no extraction strategy could parse. Never applied automatically. */
+  ai_suggestion: Record<string, unknown> | null;
 }
 
 // ---- shop search: vectors, query cache, owned shop flag (Phase S1) -------
