@@ -636,12 +636,22 @@ Deno.serve((req) =>
 
     const qualified = scored.filter((h) => honesty.qualified.has(candidateKey(h)));
 
-    // A vector-only hit (recalled purely via similarity, no keyword overlap)
-    // gets an honest rankReason naming why it is here, rather than whatever
-    // scoreCandidates's keyword-blind fallback ("Relevant") would say.
+    // A vector-only hit (recalled purely via similarity, ZERO keyword hits on
+    // its own text) gets an honest rankReason naming why it is here, rather
+    // than whatever scoreCandidates's keyword-blind fallback ("Relevant")
+    // would say. Membership in `affiliateProducts` is NOT the right test
+    // here: that fetch returns every active affiliate row up to its limit
+    // regardless of keyword content (filtering happens later, at scoring/
+    // honesty), so a product can be present there and still have zero
+    // keyword overlap with THIS query. Re-derive the real signal instead:
+    // does intent have keywords, and does this candidate's own text miss
+    // every one of them, while it still cleared the vector floor.
+    const textByKey = new Map(candidates.map((c) => [candidateKey(c), c.text]));
     for (const hit of qualified) {
       const key = candidateKey(hit);
-      if (similarityByKey.has(key) && !affiliateProducts.some((c) => candidateKey(c) === key)) {
+      const text = textByKey.get(key) ?? "";
+      const hasKeywordHit = intent.keywords.length > 0 && intent.keywords.some((k) => text.includes(k));
+      if (similarityByKey.has(key) && (intent.keywords.length === 0 || !hasKeywordHit)) {
         hit.rankReason = "similar to your query";
       }
     }
