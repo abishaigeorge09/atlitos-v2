@@ -1,0 +1,48 @@
+name: Gear nightly sweep
+
+# Phase S2 Track D (PRD-07 FR-48; ADR-011 D4). Interim trigger for
+# gear-recheck and gear-embed's nightly backfill sweep: pg_cron + pg_net is
+# off today (the exact gap supabase/deploy/notification_push_sweep_schedule.sql
+# already lives in), so a scheduled GitHub Actions workflow curling the
+# functions with a service-role secret is what runs this until pg_net is
+# enabled. Once it is, this moves into
+# supabase/deploy/gear_nightly_schedule.sql following that file's exact
+# guarded template, and this workflow is deleted. Tracked in docs/DEBT.md.
+#
+# 21:30 UTC = 03:00 IST, a low-traffic hour for the shop.
+#
+# Both curls fail the job on a non-2xx response (curl --fail), so a broken
+# secret or a 5xx from either function shows up as a failed run rather than
+# a silently green one that swept nothing.
+
+on:
+  schedule:
+    - cron: "30 21 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: gear-nightly
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    name: Recheck catalogue health and backfill embeddings
+    runs-on: ubuntu-latest
+    steps:
+      - name: Recheck catalogue health (gear-recheck)
+        run: |
+          curl --fail --show-error --silent \
+            --request POST \
+            --url "${{ secrets.SUPABASE_FUNCTIONS_URL }}/gear-recheck" \
+            --header "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            --header "Content-Type: application/json" \
+            --data '{"sweep": true}'
+
+      - name: Backfill missing embeddings (gear-embed)
+        run: |
+          curl --fail --show-error --silent \
+            --request POST \
+            --url "${{ secrets.SUPABASE_FUNCTIONS_URL }}/gear-embed" \
+            --header "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            --header "Content-Type: application/json" \
+            --data '{"sweep": true, "limit": 200}'
