@@ -68,8 +68,15 @@ async function callRpc<T>(fn: string, args: Record<string, unknown>): Promise<T>
 }
 
 export const gearApi = {
-  upsertProduct: (input: GearInput) =>
-    callRpc<AffiliateProductRow>("admin_upsert_affiliate_product", {
+  // Phase S1 Track B (PRD-07 FR-43; ADR-011 D2). After a create or edit, kick
+  // off (never block on) the embedding write: `gear-embed` is the ONE place
+  // `affiliate_products.embedding` is written (AC-11-7), always under its own
+  // service role, and this call carries only the id. Failure is ignored here
+  // on purpose: an embedding gap self-heals through the nightly sweep
+  // (`{ sweep: true }`), and a shopper still finds the product through the
+  // deterministic keyword path with a null embedding (FR-43).
+  upsertProduct: async (input: GearInput) => {
+    const product = await callRpc<AffiliateProductRow>("admin_upsert_affiliate_product", {
       p_id: input.id ?? null,
       p_title: input.title,
       p_brand: input.brand,
@@ -79,7 +86,10 @@ export const gearApi = {
       p_age_range: input.ageRange,
       p_description: input.description,
       p_image_url: input.imageUrl,
-    }),
+    });
+    void supabaseClient.functions.invoke("gear-embed", { body: { productId: product.id } }).catch(() => {});
+    return product;
+  },
 
   setProductActive: (id: string, active: boolean) =>
     callRpc<AffiliateProductRow>("admin_set_affiliate_product_active", { p_id: id, p_active: active }),

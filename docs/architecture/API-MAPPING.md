@@ -69,6 +69,20 @@ Response `{ query, parsedIntent, results: SearchHit[], mode: "llm" | "keyword" }
 
 **Track E (athletes + clips extension).** Not yet redeployed; the integrator deploys `ai-search` via the Supabase MCP before this is live. Client side (`apps/mobile/src/app/home/search.tsx`, `SearchResults.tsx`) already routes `athlete` hits to `/home/upa/[id]` and `clip` hits to `/(tabs)/clutch/post/[id]`.
 
+### `ai-search`, hybrid vector recall extension (Phase S1 Track B, PRD-07 FR-40/FR-42, ADR-011 D1)
+
+Contract shape is otherwise unchanged (same request, same `SearchHit`); the response gains one field: `vector: boolean`, reporting whether the vector recall path actually ran for THIS request (spend gate allowed it AND the recall call itself succeeded), not whether it added a hit. `mode` keeps its pre-existing meaning ("did Claude actually parse/rerank this request"): it is decoupled from `vector`, so a request can be `mode: "keyword", vector: true` (no Anthropic key configured, Voyage ran fine) or `mode: "keyword", vector: false` (over budget or a Voyage failure), etc.
+
+After the deterministic candidates load and before scoring, when the CT-2/CT-3 gate (extended to also cover Voyage, one shared `ai_spend_daily` ledger) allows it: the query is embedded (`_shared/embeddings.ts`, cached in `query_embedding_cache` by `sha256(lower(trim(query)))`, 10 minute TTL, service role only), then `match_affiliate_products(embedding, VECTOR_SIMILARITY_FLOOR = 0.75, 20)` recalls candidate ids, hydrated through the same `fetchAffiliateProducts` path and ADDED to the candidate set (never re-scored or removed, ADR-011 D1). A candidate recalled purely by similarity (zero keyword hits) still clears `passesHardConstraints`' relevance floor once its cosine similarity clears `VECTOR_SIMILARITY_FLOOR`; brand and price hard constraints are untouched. Its `rankReason` becomes `"similar to your query"`.
+
+Over budget or on ANY Voyage failure (bad key, timeout, non-2xx): the vector step is skipped, `vector: false`, never an error (same fail-safe posture as the existing LLM gate). Scoped to `entityType: "gear"` only, over `affiliate_products` only (ADR-011's own non-goal excludes the owned catalogue from vector search).
+
+### `gear-embed`, as built (Phase S1 Track B, PRD-07 FR-43, ADR-011 D2)
+
+`POST { productId: string }` (one row) or `POST { sweep: true, limit?: number }` (every row where `embedding is null`, capped at `limit`, default 200). Auth: a service-role bearer token, OR an authenticated caller holding the `admin` role (checked through their OWN JWT, the same `requireAdmin` pattern `admin-order-advance` uses); anon and any non-admin authenticated caller are refused with 401/403. Never called by `ai-search` (component boundary) and never on a read path.
+
+Response `{ embedded: number; failed: number; mode: "voyage" | "stub" }`. Document text is `title, brand, sport, skill_level, age_range, description` (present fields only) joined with spaces, embedded via `_shared/embeddings.ts`, written to `affiliate_products.embedding` under the service role. On a per-row failure (empty document text, or a real Voyage error) the column is left `null`, the failure is reported to Sentry (`captureEdgeError`), and the row is counted in `failed`; the function itself never 500s for a single row's failure inside a sweep. Called by `apps/admin/src/pages/gear/api.ts`'s `upsertProduct` right after `admin_upsert_affiliate_product` resolves (fire-and-forget, failure ignored client side), and by the nightly backfill sweep (not yet wired to a scheduler in S1, see PHASE-S1-STATUS.md).
+
 ## coaches
 
 | v1 fn | v1 route | v2 lane | Function / RPC | Note |

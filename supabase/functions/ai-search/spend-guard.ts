@@ -116,6 +116,19 @@ export function estimateUsd(inputTokens: number, outputTokens: number): number {
 }
 
 /**
+ * Phase S1 Track B (PRD-07 FR-40; ADR-011 D1). One named constant for a
+ * single Voyage embedding call's cost, informational the same way the Claude
+ * per-token rates above are: a conservative flat estimate for a short query
+ * string against `voyage-3`, not Voyage's own invoice. `ai-search` records
+ * this once per REAL Voyage call (never for a cache hit, never for the
+ * offline stub), into the SAME `ai_spend_daily` ledger `estimateUsd`/Claude
+ * feeds, so one shared daily budget covers both AI spends, per D1's "gates
+ * the Voyage call with the same per-user throttle and daily budget it gates
+ * Claude with".
+ */
+export const VOYAGE_COST_PER_CALL_USD = 0.00006; // ~$0.06 / 1K queries at voyage-3 list pricing, rounded up.
+
+/**
  * Record one LLM call's spend against today's meter. Never throws: a failure
  * to record is logged, not surfaced, because the call it is billing for
  * already happened and a search response must not fail on bookkeeping.
@@ -127,6 +140,28 @@ export async function recordAiSpend(
 ): Promise<void> {
   if (inputTokens <= 0 && outputTokens <= 0) return;
   const estUsd = estimateUsd(inputTokens, outputTokens);
+  await recordEstUsd(serviceClient, inputTokens, outputTokens, estUsd);
+}
+
+/**
+ * Records a Voyage embedding call's flat cost (VOYAGE_COST_PER_CALL_USD).
+ * Voyage bills per token, not per named input/output split the way Claude's
+ * usage block does, so this carries 0/0 token counts into the SAME ledger row
+ * `record_ai_spend` maintains; `recordAiSpend` above short-circuits on
+ * zero/zero token counts (a Claude call with no usage block truly spent
+ * nothing), so a Voyage call needs its own entry point rather than reusing
+ * that guard.
+ */
+export async function recordVoyageSpend(serviceClient: AnySupabaseClient): Promise<void> {
+  await recordEstUsd(serviceClient, 0, 0, VOYAGE_COST_PER_CALL_USD);
+}
+
+async function recordEstUsd(
+  serviceClient: AnySupabaseClient,
+  inputTokens: number,
+  outputTokens: number,
+  estUsd: number,
+): Promise<void> {
   try {
     const { error } = await serviceClient.rpc("record_ai_spend", {
       p_input_tokens: inputTokens,

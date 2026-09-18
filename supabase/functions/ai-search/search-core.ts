@@ -342,9 +342,21 @@ export function scoreCandidates(candidates: Candidate[], intent: ParsedIntent): 
 // treated as too weak to show as a real recommendation.
 export const CONFIDENCE_FLOOR = 0.3;
 
+// Phase S1 Track B (PRD-07 FR-40, FR-42; ADR-011 D1). A candidate recalled
+// only through `match_affiliate_products` (no keyword hit at all) still
+// counts as relevant for the honesty gate once its cosine similarity clears
+// this floor. Brand and price hard constraints are untouched: a vector hit
+// still has to be the right brand and under the price ceiling like any other
+// candidate (D1: "Brand/price hard constraints are untouched").
+export const VECTOR_SIMILARITY_FLOOR = 0.75;
+
 function key(c: { entityType: EntityType; entityId: string }): string {
   return `${c.entityType}:${c.entityId}`;
 }
+
+/** Public alias of the "type:id" key shape, so `index.ts` can build a
+ * similarity map keyed exactly the way `evaluateHonesty` looks it up. */
+export const candidateKey = key;
 
 function plural(noun: string): string {
   return /s$/.test(noun) ? noun : `${noun}s`;
@@ -357,11 +369,17 @@ function cap(s: string): string {
 // A candidate clears the HARD constraints when: it carries any brand the query
 // named, it is within any stated price ceiling (priceless rows are not price
 // constrained), and, when the query has content keywords, it matches at least
-// one (the relevance floor).
-function passesHardConstraints(c: Candidate, intent: ParsedIntent): boolean {
+// one (the relevance floor) OR its vector similarity (when it has one) clears
+// VECTOR_SIMILARITY_FLOOR (ADR-011 D1, AC-11-2: "no brand in the query"
+// queries can still qualify with zero keyword hits). Exported so `index.ts`
+// can apply the same rule to candidates added purely through
+// `match_affiliate_products` recall.
+export function passesHardConstraints(c: Candidate, intent: ParsedIntent, vectorSimilarity?: number): boolean {
   if (intent.brand && !c.text.includes(intent.brand)) return false;
   if (intent.priceMax !== undefined && typeof c.price === "number" && c.price > intent.priceMax) return false;
-  if (intent.keywords.length > 0 && !intent.keywords.some((k) => c.text.includes(k))) return false;
+  if (intent.keywords.length > 0 && !intent.keywords.some((k) => c.text.includes(k))) {
+    if (vectorSimilarity === undefined || vectorSimilarity < VECTOR_SIMILARITY_FLOOR) return false;
+  }
   return true;
 }
 
@@ -376,8 +394,13 @@ export interface HonestyResult {
  * from the most removable constraint the query actually carried, never a
  * generic "try another search".
  */
-export function evaluateHonesty(candidates: Candidate[], scored: ScoredHit[], intent: ParsedIntent): HonestyResult {
-  const qualifying = candidates.filter((c) => passesHardConstraints(c, intent));
+export function evaluateHonesty(
+  candidates: Candidate[],
+  scored: ScoredHit[],
+  intent: ParsedIntent,
+  similarityByKey?: Map<string, number>,
+): HonestyResult {
+  const qualifying = candidates.filter((c) => passesHardConstraints(c, intent, similarityByKey?.get(key(c))));
   const qualifiedKeys = new Set(qualifying.map(key));
 
   if (qualifying.length > 0) {
