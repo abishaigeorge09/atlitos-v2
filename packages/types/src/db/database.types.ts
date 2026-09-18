@@ -71,37 +71,52 @@ export type Database = {
         Row: {
           affiliate_product_id: string
           affiliate_url: string
+          canonical_url: string | null
+          consecutive_failures: number
           created_at: string
           currency: string
           id: string
           in_stock: boolean
+          last_check_outcome: string | null
           last_checked_at: string
+          last_price_change_at: string | null
           price: number
           retailer: string
+          retailer_key: string | null
           updated_at: string
         }
         Insert: {
           affiliate_product_id: string
           affiliate_url: string
+          canonical_url?: string | null
+          consecutive_failures?: number
           created_at?: string
           currency?: string
           id?: string
           in_stock?: boolean
+          last_check_outcome?: string | null
           last_checked_at?: string
+          last_price_change_at?: string | null
           price: number
           retailer: string
+          retailer_key?: string | null
           updated_at?: string
         }
         Update: {
           affiliate_product_id?: string
           affiliate_url?: string
+          canonical_url?: string | null
+          consecutive_failures?: number
           created_at?: string
           currency?: string
           id?: string
           in_stock?: boolean
+          last_check_outcome?: string | null
           last_checked_at?: string
+          last_price_change_at?: string | null
           price?: number
           retailer?: string
+          retailer_key?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -112,7 +127,35 @@ export type Database = {
             referencedRelation: "affiliate_products"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "product_offers_retailer_key_fkey"
+            columns: ["retailer_key"]
+            isOneToOne: false
+            referencedRelation: "retailer_programmes"
+            referencedColumns: ["key"]
+          },
         ]
+      }
+      app_config: {
+        Row: {
+          key: string
+          public: boolean
+          updated_at: string
+          value: Json
+        }
+        Insert: {
+          key: string
+          public?: boolean
+          updated_at?: string
+          value: Json
+        }
+        Update: {
+          key?: string
+          public?: boolean
+          updated_at?: string
+          value?: Json
+        }
+        Relationships: []
       }
       addresses: {
         Row: {
