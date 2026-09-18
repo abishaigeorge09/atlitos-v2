@@ -3,25 +3,31 @@
 One page. Every screen the PRD-07 section 11 work touches, what reaches it, what it holds,
 and the main task path from a cold start. Agree this before any screen is built.
 
+**Correction, Phase S3 (PHASE-S3-STATUS.md hard decision 1):** the app has no shop tab, and
+adding one two weeks before submission moves every tab. `/shop` (reached from Home's
+categories row and Recently viewed, not a tab) is the search-first screen itself, not a
+redirect to a category browse. `/shop/category/[sport]` is kept only as a redirect to
+`/shop?sport=<sport>`, for old links and Home's `CategoriesRow`.
+
 ## Consumer app (`apps/mobile`)
 
 | Screen | Route | Reached from | Contains |
 |---|---|---|---|
-| Shop | `/(tabs)/shop` | tab bar | AI search field (focused on tap, not on open), sport chips, price ceiling chip, result grid of `GearResultCard`. Empty query: recent products. No category page. |
-| Compare | `/shop/affiliate/[id]` | a result card, a search hit from Home search | Image, brand, title, attributes, description, `OfferRow` list cheapest first, "Purchase completes on the retailer, Atlitos may earn a commission" line. |
+| Shop | `/shop` | Home's categories row, Home's Recently viewed "See all", old `/shop/category/[sport]` links | AI search field, sport chips, one cycling price ceiling chip, result grid of `GearResultTile` (direction C). Empty query: the catalogue, newest first. Category browse is a filter on this same grid, not a separate page. |
+| Compare | `/shop/affiliate/[id]` | a result tile, a search hit from Home search | Image, brand, title, attributes, description, `OfferRow` list cheapest first, "Purchase completes on the retailer, Atlitos may earn a commission" line. |
 | Retailer | external browser | "Buy on X" on an `OfferRow` | The retailer's page, via the stored affiliate URL. Leaves the app. |
 | Home search | existing `SearchBar variant="ai"` on Home | Home | Unchanged; affiliate hits route to Compare as today. |
 
-Removed from navigation while `shop.owned_enabled = false`: `/shop/cart`, `/shop/checkout`,
-`/shop/orders`, `/shop/order/[id]`, `/shop/product/[id]`, `/shop/category/[sport]`. The
-routes stay in the bundle; the tab, the cart icon and the wishlist heart are not rendered,
-and a deep link to them redirects to `/shop`.
+Removed from navigation while `shop.owned_enabled = false`: `/shop/cart`, `/shop/checkout/*`,
+`/shop/orders*`, `/shop/order/*`, `/shop/order-success`, `/shop/product/*`. The routes stay in
+the bundle; the cart icon and the wishlist heart are not rendered on `/shop`, and a deep link
+to any of them redirects to `/shop` (enforced once, in `shop/_layout.tsx`).
 
 ### Main task path, cold start
 
-Open app, tap Shop, type "light racket for a 12 year old starting badminton", tap a card,
-read three prices, tap "Buy on Tennis Hub", buy on Tennis Hub. Four taps, one typed query,
-no account required.
+Open app, tap a sport circle on Home (or Shop from Recently viewed), type "light racket for
+a 12 year old starting badminton", tap a tile, read three prices, tap "Buy on Tennis Hub",
+buy on Tennis Hub. Four taps, one typed query, no account required.
 
 ## Admin (`apps/admin`)
 
