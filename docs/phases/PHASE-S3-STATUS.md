@@ -1,6 +1,6 @@
 # Phase S3 status: the shop
 
-Status: IN FLIGHT
+Status: AWAITING APPROVAL (founder gate)
 Opened: 2026-09-18   Closed:
 
 Plan: `docs/PLAN-SHOP-SEARCH.md` Phase S3. Design: `docs/design/DIRECTION-SHOP.md` direction C (approved),
@@ -80,15 +80,43 @@ then the integrator builds Release, runs the flows, screenshots, and the founder
 
 ## Evidence
 
+Integrated: F at c9a0bda (with H), G at 0f786c3; fix f453b87. Gate `pnpm turbo typecheck lint` 20/20 on
+the integrated tree.
+
 | Claim | Proof | Where |
 |---|---|---|
+| Release build, bundle embedded, target local | `Build Succeeded`; `main.jsbundle` present; `assert-build-target.sh` "PASS: local build" (production ref absent, 127.0.0.1:54321 present) | /tmp/build-s3b.log |
+| Seeded catalogue | `seed-shop-search.mjs`: 12 products, 30 offers; 20 of 20 products embedded (stub) | local DB |
+| `native-shop-flag-off.yaml` | 11 steps COMPLETED, 0 FAILED: `shop-cart-button` absent, `/shop/cart` and `/shop/orders` deep links land on `/shop` | device run |
+| `native-shop-search.yaml` | 21 steps COMPLETED, 0 FAILED: the full query asserted IN the field, top tile matches `.*badminton.*racket.*`, tennis chip refilters | device run |
+| `native-shop-compare.yaml` | 15 steps COMPLETED, 0 FAILED: offer rows, `compare-cheapest`, disclosure found by scrolling, click-out leaves the screen | device run |
+| The founder's cold-start path | Query typed, badminton racket tile tapped, prices read, Buy tapped, browser opened (the compare flow) | `s3-ios-results-*.png`, `s3-ios-compare-*.png` |
+| Light and dark | six device screenshots: results, empty state with the server's broaden line, compare | `docs/qa/evidence/shop-search/s3-ios-*.png` |
+| Web renders per track | `s3-web-shop-*.png` (F), `s3-web-compare-*.png` (G) with DOM checks (cart button absent from DOM, `compare-cheapest` once, no buy control on the out-of-stock row) | same folder |
+
+**Bug found by the device walk, fixed before the gate:** every keystroke after the first was lost
+on native. The screen returned a separate skeleton tree while loading, unmounting the FlatList and
+the search field in its header. Both web captures and the first version of the search flow missed it
+(the default grid also has a `gear-tile-0`). Fixed by rendering loading and error inside the list;
+the flow now asserts the query text itself.
 
 ## Deviations from plan
+
+- No shop tab; `/shop` is the screen (hard decision 1). IA-SHOP.md corrected.
+- No strikethrough price (hard decision 2); `previous_price` is not stored.
+- `ai-search` is called with `entityTypes: ['gear']`; there is no `'product'` entity type.
+- The security red team was not re-run for S3: the diff is client reads and screens; the S1+S2
+  scan covered every server path S3 calls. `useAppConfig` reads only `public = true` rows.
+- Track H's flows used commands this Maestro CLI lacks (`openDeepLink`, `typeText`, `clearText`);
+  corrected at integration.
 
 ## Open defects
 
 | Defect | Severity | Deferred to | Ticket |
 |---|---|---|---|
+| Seed brands render lowercase ("yonex", "puma") because the seed stores them so; real ingest keeps the retailer's casing | P3 | seed script cosmetic, H | none |
+| `last_checked_at` is NOT NULL so "not checked yet" has no seed row to render | P3 | if the column is ever relaxed | none |
+| Android not walked (no Pixel run) | P2 | S4 or the native QA lane before submission | tracker |
 
 ## Handoff notes for the next planner
 
