@@ -796,3 +796,10 @@ that fixed the edge function 401 also broke the native toolchain.
 serve already up) BEFORE them or serve again afterwards. A `supabase db reset` also wipes the demo
 users those scripts sign in as; run `scripts/seed-demo-users.mjs` after every reset. The `XXXX_`
 migrations are skipped by `db reset` until they are numbered; apply them with psql after the reset.
+
+**Fetch guard and the fixture host (2026-09-18).** `_shared/fetch-page.ts` refuses internal
+hostnames, and `host.docker.internal` ends in `.internal`. Any manual run of `gear-ingest` or
+`gear-recheck` against the local fixture server needs `FETCH_ALLOW_HOSTS=host.docker.internal` in the
+`supabase functions serve` env file. The verify scripts write it themselves; the walkthrough
+(`docs/qa/evidence/shop-search/walkthrough-s2.mjs`) and any hand-driven session need it added.
+The deployed functions never set it.

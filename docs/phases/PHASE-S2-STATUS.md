@@ -98,6 +98,27 @@ Automated gate re-derived from a clean reset on 2026-09-18 (`~/.claude/jobs/8ea0
 | **Browser half of the gate, integrated tree** | admin@atlitos.dev in Playwright: Fetch leaves row count 0; Save lands on `/gear/show/<id>`; `image_url` = `http://127.0.0.1:54321/storage/v1/object/public/product-images/walkthrough_fixture/24147f79f3061e6b.jpg`, GET 200 image/jpeg; Catalog health shows ok; fixture switched to 404, counter at 6, one Re-check now click: `active=false`, `health_status=gone`, `auto_delisted_at` set, one `audit_log` row `affiliate_product.auto_delist` with `actor_id null`; Delisted filter shows it | `docs/qa/evidence/shop-search/s2-01..05.png`, `walkthrough-s2.mjs` |
 | Track E's own captures (health states, AI suggestion card) | 8 PNGs from seeded states | `docs/qa/evidence/shop-search/0*.png` |
 
+## DoD audit (dod-auditor, 2026-09-18, independent)
+
+MISSING FEATURE list: none. 15 verified, 0 not verified, 1 unverifiable (a line-by-line docs
+cross-check). Reproduced the browser walkthrough itself: image on our bucket 200, recheck to
+`active=false` with a null-actor audit row. Raw statuses: anon 401 on `product_fetch_log` and
+`retailer_programmes`; non-admin 200 with zero rows (RLS filters, admin sees 3); anon and
+non-admin cannot execute `system_auto_delist_affiliate_product`; anon upload to `product-images`
+refused, public read 200; the nine-argument 0120 call still works. Gap it found: the fixture host
+needs `FETCH_ALLOW_HOSTS`, now documented in CURRENT-STATE.md and the walkthrough header.
+
+## Security red team (claude-security researcher, 2026-09-18, on the S1+S2 diff)
+
+Findings: P1 SSRF, the fetcher accepted any host and followed redirects blindly, and the stored
+canonical URL would repeat it nightly; P1 the image copy validated nothing; P3 substring host
+matching. Fixed in fbb4974 by a separate agent (this integrator): single outbound guard, programme
+gate, canonical pinning, recheck refusal without a programme. `scripts/verify-gear-fetch-guard.mjs`
+14 of 14, born red against the pre-fix code (7 real requests to internal targets). Negatives the
+red team confirmed: no `dangerouslySetInnerHTML`, `javascript:` hrefs impossible past the RPC
+check, SVG cannot reach the bucket, no traversal in the storage path, service role never writes
+the catalogue, fork PRs cannot read the workflow secrets, spend guard covers Voyage.
+
 ## Deviations from plan
 
 - `product_offers.last_check_outcome` has five values; `unparsed` exists only on `product_fetch_log.outcome` (ADR D4 wording). The PLAN's contract line listed six for the offer; corrected in code (4e650a7).

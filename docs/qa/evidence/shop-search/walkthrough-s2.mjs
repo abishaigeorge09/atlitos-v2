@@ -1,4 +1,7 @@
 // Phase S2 gate, browser half, on the INTEGRATED tree. Local stack only.
+// Needs: admin dev server on :5199, and `supabase functions serve --env-file <f>` where f has
+// VOYAGE_STUB=1, GEAR_INGEST_PUBLIC_URL=http://127.0.0.1:54321, FETCH_ALLOW_HOSTS=host.docker.internal
+// (the fetch guard refuses .internal hosts otherwise; production never sets FETCH_ALLOW_HOSTS).
 import { chromium } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 import http from "node:http";
