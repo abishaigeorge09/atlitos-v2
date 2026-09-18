@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { OTPInput } from '@/components/ui/otp-input';
 import { PriceText } from '@/components/ui/price-text';
 import { GearResultCard } from '@/components/ui/gear-result-card';
+import { GearResultTile } from '@/components/ui/gear-result-tile';
 import { OfferRow } from '@/components/ui/offer-row';
 import { ProductCard } from '@/components/ui/product-card';
 import { SearchBar } from '@/components/ui/search-bar';
@@ -342,7 +343,7 @@ export default function KitchenSink() {
           <ProductCard title="Pro grip pickleball paddle" price={4999} originalPrice={6499} variant="grid" />
         </View>
 
-        <SectionHeading title="Shop search (DIRECTION-SHOP.md)" />
+        <SectionHeading title="Shop search, direction A (rejected 17 Sep)" />
         <Label>GearResultCard, full and sparse</Label>
         <View className="mb-lg flex-row gap-md">
           <View style={{ flex: 1 }}>
@@ -382,7 +383,40 @@ export default function KitchenSink() {
           ))}
         </View>
 
-        <Label>OfferRow, cheapest, other, out of stock</Label>
+        <SectionHeading title="Shop search, direction C (Amazon)" />
+        <Label>GearResultTile, a grid of six, full and sparse</Label>
+        <View className="mb-lg flex-row flex-wrap" style={{ columnGap: 8, rowGap: 24 }}>
+          {[
+            ['https://m.media-amazon.com/images/I/71fbmu0JIeL._AC_UL320_.jpg', 'Yonex', 'Astrox 100 ZZ Badminton Racket, 4U G5, unstrung', 18500, 'Amazon.in', 3, null, 2],
+            ['https://m.media-amazon.com/images/I/61q4BY4GqXL._AC_UL320_.jpg', 'Babolat', 'Pure Drive 2026 Tennis Racket, unstrung', 14500, 'Tennis Hub', 2, 15999, 6],
+            [null, 'SG', 'Cobra Gold Kashmir Willow Cricket Bat, size 5', 2299, 'Flipkart', 3, null, 1],
+            [null, 'Nike', 'Mercurial Vapor 16 Academy Football Boots', 5995, 'Decathlon', 4, 6495, 12],
+            [null, null, 'Cricket bat, Kashmir willow, size 5', null, null, 1, null, 216],
+            [null, 'Wilson', 'US Open Tennis Balls, pack of 3', 599, 'Amazon.in', 1, null, 2],
+          ].map(([img, brand, title, price, retailer, stores, prev, hours]) => (
+            <View key={String(title)} style={{ width: '48.5%' }}>
+              <GearResultTile
+                imageUri={img as string | null}
+                brand={brand as string | null}
+                title={String(title)}
+                fromPrice={price as number | null}
+                retailer={retailer as string | null}
+                storeCount={Number(stores)}
+                previousPrice={prev as number | null}
+                checkedHoursAgo={Number(hours)}
+              />
+            </View>
+          ))}
+        </View>
+
+        <Label>OfferRow dense, cheapest, other, out of stock</Label>
+        <View className="mb-lg gap-sm">
+          <OfferRow dense retailer="Tennis Hub" price={14500} inStock cheapest checkedHoursAgo={6} />
+          <OfferRow dense retailer="Amazon.in" price={15499} inStock checkedHoursAgo={6} previousPrice={15999} />
+          <OfferRow dense retailer="Decathlon" price={13990} inStock={false} checkedHoursAgo={288} />
+        </View>
+
+        <Label>OfferRow direction A, cheapest, other, out of stock</Label>
         <View className="mb-lg gap-sm">
           <OfferRow retailer="Tennis Hub" price={14500} inStock cheapest checkedHoursAgo={6} />
           <OfferRow retailer="Amazon.in" price={15499} inStock checkedHoursAgo={6} previousPrice={15999} />

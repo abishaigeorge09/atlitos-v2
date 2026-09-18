@@ -25,21 +25,30 @@ export interface OfferRowProps {
   /** Set when the nightly recheck saw a drop; rendered struck through beside the price. */
   previousPrice?: number | null;
   onBuy?: () => void;
+  /** Direction B: body-sized price in ink, the word Cheapest as the one accent. */
+  dense?: boolean;
 }
 
-function OfferRow({ retailer, price, inStock, cheapest = false, checkedHoursAgo, previousPrice, onBuy }: OfferRowProps) {
+function OfferRow({ retailer, price, inStock, cheapest = false, checkedHoursAgo, previousPrice, onBuy, dense = false }: OfferRowProps) {
   const colors = useThemeColors();
-  const priceColor = !inStock ? colors.textTertiary : cheapest ? colors.accent : colors.text;
+  const priceColor = !inStock ? colors.textTertiary : cheapest && !dense ? colors.accent : colors.text;
 
   return (
     <View
-      style={{ backgroundColor: colors.card, borderColor: cheapest && inStock ? colors.borderStrong : colors.border, borderWidth: 1, opacity: inStock ? 1 : 0.6 }}
-      className="flex-row items-center gap-md rounded-xl p-md"
+      style={{ backgroundColor: colors.card, borderColor: cheapest && inStock && !dense ? colors.borderStrong : colors.border, borderWidth: 1, opacity: inStock ? 1 : 0.6 }}
+      className={dense ? 'flex-row items-center gap-md rounded-lg px-md py-sm' : 'flex-row items-center gap-md rounded-xl p-md'}
     >
       <View className="flex-1 gap-2xs">
-        <Text className="font-sans-semibold text-sm" style={{ color: colors.text }}>
-          {retailer}
-        </Text>
+        <View className="flex-row items-center gap-xs">
+          <Text className={dense ? 'font-sans-semibold text-base' : 'font-sans-semibold text-sm'} style={{ color: colors.text }}>
+            {retailer}
+          </Text>
+          {dense && cheapest && inStock ? (
+            <Text className="font-sans-semibold text-sm" style={{ color: colors.accent }}>
+              Cheapest
+            </Text>
+          ) : null}
+        </View>
         <Text className="text-xs" style={{ color: inStock ? colors.success : colors.warning }}>
           {inStock ? 'In stock' : 'Out of stock'}
           <Text className="text-xs" style={{ color: colors.textTertiary }}>
@@ -55,7 +64,9 @@ function OfferRow({ retailer, price, inStock, cheapest = false, checkedHoursAgo,
               {formatINR(previousPrice)}
             </Text>
           ) : null}
-          <Text style={[textStyle('numericLg'), { color: priceColor }]}>{formatINR(price)}</Text>
+          <Text style={[textStyle(dense ? 'numericSm' : 'numericLg'), { color: priceColor, fontWeight: dense ? '600' : undefined }]}>
+            {formatINR(price)}
+          </Text>
         </View>
         {inStock ? (
           <Pressable
