@@ -45,6 +45,12 @@
 // only grants (CT-2, CT-3), and none of them touch a data table this function
 // searches. Response gains `"mode": "llm" | "keyword"`, naming which path the
 // gate actually took.
+//
+// Phase S1 Track B (PRD-07 FR-40, FR-42; ADR-011 D1) extends the SAME gate to
+// also cover a Voyage query-embedding call and `match_affiliate_products`
+// recall (see `recallByVector` below); the response additionally gains
+// `"vector": boolean`. `mode` keeps its pre-existing meaning ("did Claude
+// actually parse/rerank"), so an existing caller sees no contract change.
 
 import { handleCorsPreflight } from "../_shared/cors.ts";
 import { jsonResponse, withErrorHandling } from "../_shared/http.ts";
@@ -543,15 +549,24 @@ Deno.serve((req) =>
     const svc = serviceRoleClient();
 
     // The CT-2/CT-3 gate decides ONCE per request whether ANY paid AI call
-    // below may run (Claude's intent parse/rerank, and now Voyage's query
+    // below MAY run (Claude's intent parse/rerank, and now Voyage's query
     // embedding, D1: "gates the Voyage call with the same per-user throttle
-    // and daily budget it gates Claude with"). `useLlm` additionally requires
-    // the Anthropic key to actually be configured; `useVector` has no such
-    // extra requirement, since `embedTexts` degrades to the offline stub on
-    // its own when no Voyage key is present.
+    // and daily budget it gates Claude with"). `spendAllowed` is that raw
+    // gate outcome. `useLlm` additionally requires the Anthropic key to
+    // actually be configured; `useVector` has no such extra requirement,
+    // since `embedTexts` degrades to the offline stub on its own when no
+    // Voyage key is present. The response's own `mode` field keeps its
+    // PRE-EXISTING meaning ("did Claude actually parse/rerank this request"),
+    // reported as `useLlm` below, not the raw spend gate: a Voyage-only
+    // request with no Anthropic key configured must still report
+    // `mode: "keyword"`, exactly as it did before this phase, so an existing
+    // caller reading `mode` sees no contract change (ADR-011: "ai-search's
+    // external contract is unchanged").
     const gate = await evaluateAiSearchGate(svc, userId);
-    const useLlm = gate.mode === "llm" && llmEnabled();
-    const useVector = gate.mode === "llm";
+    const spendAllowed = gate.mode === "llm";
+    const useLlm = spendAllowed && llmEnabled();
+    const useVector = spendAllowed;
+    const reportedMode = useLlm ? "llm" : "keyword";
 
     // Deterministic parse is always the baseline. When the gate allows it,
     // refine it with Claude's structured parse (guarded: falls back on any
@@ -614,7 +629,7 @@ Deno.serve((req) =>
     const honesty = evaluateHonesty(candidates, scored, intent, similarityByKey);
     if (honesty.broaden) {
       return jsonResponse(
-        { query: body.query, parsedIntent: intent, results: [], broaden: honesty.broaden, mode: gate.mode, vector },
+        { query: body.query, parsedIntent: intent, results: [], broaden: honesty.broaden, mode: reportedMode, vector },
         200,
       );
     }
@@ -644,7 +659,7 @@ Deno.serve((req) =>
     }
 
     return jsonResponse(
-      { query: body.query, parsedIntent: intent, results: results.slice(0, body.limit), mode: gate.mode, vector },
+      { query: body.query, parsedIntent: intent, results: results.slice(0, body.limit), mode: reportedMode, vector },
       200,
     );
   })
