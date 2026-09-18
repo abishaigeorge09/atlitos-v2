@@ -29,6 +29,10 @@
 # to a non-application role (supabase_auth_admin and friends) are excluded,
 # because no client token ever carries them.
 #
+# 2026-09-18: account_deletions added after the reconciliation landed the
+# account-deletion migration (own row + admin SELECT). No client reads it today.
+#
+account_deletions
 clip_comments
 clips
 coach_availability_windows
