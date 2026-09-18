@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowLeft, Eye, EyeOff, ExternalLink, Save, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Eye, EyeOff, ExternalLink, RefreshCw, Save, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
@@ -7,13 +7,17 @@ import { Mono } from "../../components/mono";
 import {
   fetchCategories,
   fetchGearItem,
+  fetchLatestSuggestions,
   gearApi,
+  recheckProduct,
   type CategoryOption,
   type CommerceError,
+  type FetchLogSuggestion,
   type GearInput,
   type GearWithOffers,
 } from "./api";
 import { EMPTY_OFFER, GearForm, OfferRow, offerDraftToInput, offerDraftValid, type OfferDraft } from "./form";
+import { outcomeLabel, outcomeTone, relativeDays } from "./format";
 
 // Edit one gear item, list or delist it, and manage its retailer lines. Every
 // mutation is a 0120 admin RPC with its own audit_log row. Adding a retailer
@@ -45,9 +49,11 @@ export function GearShow() {
   const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [state, setState] = useState<LoadState>("loading");
   const [busy, setBusy] = useState(false);
+  const [recheckingOffer, setRecheckingOffer] = useState(false);
   const [error, setError] = useState<string | null>(searchParams.get("error"));
   const [notice, setNotice] = useState<string | null>(null);
   const [draft, setDraft] = useState<OfferDraft>({ ...EMPTY_OFFER });
+  const [suggestion, setSuggestion] = useState<FetchLogSuggestion | null>(null);
 
   async function load() {
     if (!id) return;
@@ -60,6 +66,9 @@ export function GearShow() {
       }
       setItem(row);
       setState("ready");
+      fetchLatestSuggestions(id)
+        .then(setSuggestion)
+        .catch(() => setSuggestion(null));
     } catch {
       setState("error");
     }
@@ -69,6 +78,20 @@ export function GearShow() {
     void load();
     fetchCategories().then(setCategories).catch(() => setCategories([]));
   }, [id]);
+
+  async function runRecheck() {
+    if (!id) return;
+    setRecheckingOffer(true);
+    setError(null);
+    try {
+      await recheckProduct(id);
+      await load();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setRecheckingOffer(false);
+    }
+  }
 
   async function run(action: () => Promise<unknown>, successNotice: string) {
     setBusy(true);
@@ -168,7 +191,13 @@ export function GearShow() {
       </Card>
 
       <Card>
-        <p style={{ ...label, marginBottom: "var(--space-md)" }}>Retailers, cheapest first</p>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-md)" }}>
+          <p style={{ ...label, margin: 0 }}>Retailers, cheapest first</p>
+          <Button variant="secondary" disabled={recheckingOffer} onClick={runRecheck}>
+            <RefreshCw size={16} strokeWidth={1.75} />
+            {recheckingOffer ? "Checking" : "Re-check now"}
+          </Button>
+        </div>
         {current.offers.length === 0 ? (
           <p style={{ fontSize: 14, color: "var(--color-text-secondary)", margin: "0 0 var(--space-md)" }}>
             No retailer yet. Shoppers cannot buy this item until one is added.
@@ -184,6 +213,12 @@ export function GearShow() {
                   </td>
                   <td style={{ padding: "var(--space-sm) var(--space-md)" }}>
                     <Badge tone={offer.in_stock ? "success" : "warning"}>{offer.in_stock ? "in stock" : "out of stock"}</Badge>
+                  </td>
+                  <td style={{ padding: "var(--space-sm) var(--space-md)" }}>
+                    <Badge tone={outcomeTone(offer.last_check_outcome)}>{outcomeLabel(offer.last_check_outcome)}</Badge>
+                  </td>
+                  <td style={{ padding: "var(--space-sm) var(--space-md)", fontSize: 13, color: "var(--color-text-secondary)" }}>
+                    {relativeDays(offer.last_checked_at)}
                   </td>
                   <td style={{ padding: "var(--space-sm) var(--space-md)", fontSize: 13 }}>
                     <a href={offer.affiliate_url} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-xs)", color: "var(--color-accent)" }}>
@@ -216,6 +251,25 @@ export function GearShow() {
           </Button>
         </div>
       </Card>
+
+      {suggestion ? (
+        <Card>
+          <p style={{ ...label, marginBottom: "var(--space-md)", display: "flex", alignItems: "center", gap: "var(--space-xs)" }}>
+            <Sparkles size={14} strokeWidth={1.75} />
+            AI suggestion
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-xs)", marginBottom: "var(--space-md)" }}>
+            {Object.entries(suggestion.suggestion).map(([key, value]) => (
+              <p key={key} style={{ fontSize: 14, margin: 0 }}>
+                <span style={{ fontWeight: 600, textTransform: "capitalize" }}>{key.replace(/([A-Z])/g, " $1").trim()}</span>: {String(value)}
+              </p>
+            ))}
+          </div>
+          <p style={{ fontSize: 13, color: "var(--color-text-secondary)", margin: 0 }}>
+            Fetched {relativeDays(suggestion.fetchedAt)}. Suggestion only, nothing was changed.
+          </p>
+        </Card>
+      ) : null}
 
       <Card>
         <p style={{ ...label, marginBottom: "var(--space-md)" }}>Product</p>

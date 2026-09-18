@@ -5,7 +5,8 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { Badge, Button, Card, EmptyState } from "../../components/ui";
 import { Mono } from "../../components/mono";
-import { fetchGear, type GearListFilters, type GearWithOffers } from "./api";
+import { fetchGear, worstOutcomeOf, type GearListFilters, type GearWithOffers } from "./api";
+import { outcomeLabel, outcomeTone, relativeDays } from "./format";
 
 // The affiliate gear catalog: every item with brand, sport, retailer count and
 // cheapest in stock price. This admin list is the ONE surface that sees
@@ -127,7 +128,7 @@ export function GearList() {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ textAlign: "left", borderBottom: "1px solid var(--color-border)" }}>
-                {["Title", "Brand", "Sport", "Retailers", "From", "State"].map((heading) => (
+                {["Title", "Brand", "Sport", "Retailers", "From", "Health", "Last checked", "State"].map((heading) => (
                   <th
                     key={heading}
                     style={{
@@ -160,6 +161,10 @@ export function GearList() {
                       <Mono>{item.offers.length}</Mono>
                     </td>
                     <td style={cell}>{from === null ? <span style={{ color: "var(--color-text-tertiary)" }}>none in stock</span> : <Mono>INR {from.toLocaleString("en-IN")}</Mono>}</td>
+                    <td style={cell}>
+                      <Badge tone={outcomeTone(worstOutcomeOf(item.offers))}>{outcomeLabel(worstOutcomeOf(item.offers))}</Badge>
+                    </td>
+                    <td style={cell}>{relativeDays(item.health_checked_at)}</td>
                     <td style={cell}>
                       <Badge tone={item.active ? "success" : "neutral"}>{item.active ? "listed" : "delisted"}</Badge>
                     </td>

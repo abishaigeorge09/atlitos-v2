@@ -17,6 +17,7 @@ import { DrillShow } from "./pages/drills/show";
 import { DrillsList } from "./pages/drills/list";
 import { FeeConfigList } from "./pages/fee-config/list";
 import { GearCreate } from "./pages/gear/create";
+import { GearHealth } from "./pages/gear/health";
 import { GearShow } from "./pages/gear/show";
 import { GearList } from "./pages/gear/list";
 import { LoginPage } from "./pages/login";
@@ -157,6 +158,7 @@ export function App() {
             <Route path="/products/show/:id" element={<ProductShow />} />
             <Route path="/gear" element={<GearList />} />
             <Route path="/gear/create" element={<GearCreate />} />
+            <Route path="/gear/health" element={<GearHealth />} />
             <Route path="/gear/show/:id" element={<GearShow />} />
             <Route path="/orders" element={<OrdersList />} />
             <Route path="/orders/show/:id" element={<OrderShow />} />
