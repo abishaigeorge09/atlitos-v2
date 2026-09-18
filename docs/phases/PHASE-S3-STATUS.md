@@ -1,7 +1,7 @@
 # Phase S3 status: the shop
 
-Status: AWAITING APPROVAL (founder gate)
-Opened: 2026-09-18   Closed:
+Status: APPROVED
+Opened: 2026-09-18   Closed: 2026-09-18
 
 Plan: `docs/PLAN-SHOP-SEARCH.md` Phase S3. Design: `docs/design/DIRECTION-SHOP.md` direction C (approved),
 `docs/design/IA-SHOP.md`. Previous phase: `PHASE-S2-STATUS.md` (read its handoff first). Branch: `integration/shop-search`.
@@ -14,7 +14,7 @@ Plan: `docs/PLAN-SHOP-SEARCH.md` Phase S3. Design: `docs/design/DIRECTION-SHOP.m
 > `native-shop-compare.yaml`, `native-shop-flag-off.yaml` green with `--udid`. Light and dark
 > screenshots in `docs/qa/evidence/shop-search/`.
 
-**Gate type:** founder gate. **Verdict:** pending.
+**Gate type:** founder gate. **Verdict:** APPROVE, founder, 2026-09-18 ("Approve S3"), on the six device screenshots and the three green flows.
 
 ## The hard decisions
 
@@ -118,6 +118,22 @@ the flow now asserts the query text itself.
 | `last_checked_at` is NOT NULL so "not checked yet" has no seed row to render | P3 | if the column is ever relaxed | none |
 | Android not walked (no Pixel run) | P2 | S4 or the native QA lane before submission | tracker |
 
-## Handoff notes for the next planner
+## Handoff notes for the next planner (S4, ship)
 
-_Written at close._
+- **What you inherit that works:** `/shop` search-first with the direction C grid; the compare screen;
+  the owned shop hidden by `shop.owned_enabled`; `useAppConfig`; three Maestro flows that assert the
+  query and the destination; `seed-shop-search.mjs` for any local run.
+- **Traps this phase hit:** an early-return loading tree unmounts inputs inside a FlatList header; web
+  captures cannot catch keystroke loss (Playwright fills in one shot); this Maestro CLI uses
+  `openLink`, `inputText`, `eraseText`, and matches text as a whole (use `.*word.*`); the Expo web
+  dev server serves stale bundles after edits (`--clear` each time).
+- **Contracts you must not break:** the search field stays mounted through every state; the price on a
+  tile is `cheapest.price` from live offers; `compare-buy-<i>` exists only on in-stock rows; the cart
+  button never renders while the flag is false.
+- **For S4:** production needs the four `XXXX_` migrations numbered and applied in order (vectors,
+  app_config, ingest_health, images_bucket), the four functions deployed (`gear-embed`, `gear-ingest`,
+  `gear-recheck`, `ai-search`), `VOYAGE_API_KEY` set, the `product-images` bucket created by its
+  migration, the two workflow secrets, then the admin and app web redeployed from one reconciled
+  `main`. The flag row seeds `false`. One real Amazon.in paste by a person after deploy is the last
+  open S2 defect.
+- **What the founder still owes:** everything in the S4 list above; the affiliate tags; the Android walk.
