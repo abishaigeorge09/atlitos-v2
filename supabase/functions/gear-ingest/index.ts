@@ -217,6 +217,27 @@ async function handleFetch(svc: AnySupabaseClient, url: string) {
 // failure or absence, so a missing/broken image never blocks the save
 // (FR-46: "a product with no image shows the house placeholder").
 // ---------------------------------------------------------------------------
+/**
+ * `serviceRoleClient()`'s `SUPABASE_URL` is the URL the edge runtime
+ * reaches Storage/PostgREST THROUGH, which under `supabase functions serve`
+ * locally is the docker-internal `http://kong:8000`, never something an
+ * external client (the admin app, a shopper's phone) could resolve. In
+ * production `SUPABASE_URL` already IS the public project URL, so this is a
+ * local-only correction: when `GEAR_INGEST_PUBLIC_URL` is set (verify scripts
+ * set it to the host-reachable `http://127.0.0.1:54321`), the internal base
+ * in `getPublicUrl`'s result is swapped for it; otherwise the URL is
+ * returned unchanged, exactly what production needs.
+ */
+function publicStorageUrl(svc: AnySupabaseClient, path: string): string {
+  const { data } = svc.storage.from(BUCKET).getPublicUrl(path);
+  const internalBase = Deno.env.get("SUPABASE_URL");
+  const externalBase = Deno.env.get("GEAR_INGEST_PUBLIC_URL");
+  if (internalBase && externalBase && externalBase !== internalBase) {
+    return data.publicUrl.replace(internalBase, externalBase);
+  }
+  return data.publicUrl;
+}
+
 async function copyProductImage(
   svc: AnySupabaseClient,
   imageUrl: string | null,
@@ -274,8 +295,7 @@ async function copyProductImage(
     }
   }
 
-  const { data: publicUrlData } = svc.storage.from(BUCKET).getPublicUrl(path);
-  return { imagePath: path, publicUrl: publicUrlData.publicUrl };
+  return { imagePath: path, publicUrl: publicStorageUrl(svc, path) };
 }
 
 /** ADR-011 D3/FR-45: the affiliate tag is applied here, never typed by hand. Every seeded programme's template is empty today (open question 11), so this is a no-op until one is supplied. */
