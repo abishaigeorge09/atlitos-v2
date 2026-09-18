@@ -1,6 +1,6 @@
 # Phase S2 status: ingest and health
 
-Status: IN FLIGHT
+Status: AWAITING APPROVAL
 Opened: 2026-09-18   Closed:
 
 Plan: `docs/PLAN-SHOP-SEARCH.md` Phase S2. Architecture: `docs/architecture/ADR-011-shop-search-ingest-health.md` D3, D4, D6.
@@ -82,15 +82,37 @@ Integration: C, then D, then E.
 
 ## Evidence
 
+Integrated at e1c35de (C), 544519b (D), 23e3e37 (E); fixes e91119c (checkout deno casts, pre-existing),
+4e650a7 (offer outcome type), ef37184 (save response shape, found by the browser walk).
+Automated gate re-derived from a clean reset on 2026-09-18 (`~/.claude/jobs/8ea01d2a/tmp/s2-gate.sh`, log `s2-gate.log`).
+
 | Claim | Proof | Where |
 |---|---|---|
+| 120 base migrations + four `XXXX_` apply clean | reset exit 0, four "applied" | s2-gate.log 1, 2 |
+| Invariants incl. `embedding-column-grant`, `auto-delist-actor-null` | 11 of 11 PASS | step 4 |
+| S1 scripts still green | rls 17, embed 10, hybrid 10 (STUB), flag 9/9 | step 5, 5b |
+| AC-11-3 (fixture) | `verify-gear-ingest.mjs` 19 PASS, 0 FAIL | step 5 |
+| AC-11-4 | `verify-gear-health.mjs` 29 PASS, 0 FAIL | step 5 |
+| `deno check` whole functions tree | Check on gear-ingest, gear-recheck, gear-embed, ai-search, checkout | after e91119c |
+| Gate | `pnpm turbo typecheck lint` 20/20 | after 4e650a7 |
+| **Browser half of the gate, integrated tree** | admin@atlitos.dev in Playwright: Fetch leaves row count 0; Save lands on `/gear/show/<id>`; `image_url` = `http://127.0.0.1:54321/storage/v1/object/public/product-images/walkthrough_fixture/24147f79f3061e6b.jpg`, GET 200 image/jpeg; Catalog health shows ok; fixture switched to 404, counter at 6, one Re-check now click: `active=false`, `health_status=gone`, `auto_delisted_at` set, one `audit_log` row `affiliate_product.auto_delist` with `actor_id null`; Delisted filter shows it | `docs/qa/evidence/shop-search/s2-01..05.png`, `walkthrough-s2.mjs` |
+| Track E's own captures (health states, AI suggestion card) | 8 PNGs from seeded states | `docs/qa/evidence/shop-search/0*.png` |
 
 ## Deviations from plan
+
+- `product_offers.last_check_outcome` has five values; `unparsed` exists only on `product_fetch_log.outcome` (ADR D4 wording). The PLAN's contract line listed six for the offer; corrected in code (4e650a7).
+- `gear-ingest` save returns the contract fields AND the full rows (ef37184).
+- The FR-52 AI suggestion is proven only on the "no key, stays null, no error" path; a populated suggestion needs `ANTHROPIC_API_KEY` in the function secrets (production has it).
+- The GitHub Actions nightly workflow is unexecuted until the branch reaches GitHub and the two repo secrets exist.
+- Security red team runs once on the S1+S2 diff (below), not per phase.
 
 ## Open defects
 
 | Defect | Severity | Deferred to | Ticket |
 |---|---|---|---|
+| No live retailer ever fetched (fixtures only); a real Amazon.in page must be tried once by a person before S4 | P1 | S4 ship gate, founder pastes one real URL in production admin after deploy | tracker |
+| Nightly workflow needs `SUPABASE_FUNCTIONS_URL` and `SUPABASE_SERVICE_ROLE_KEY` repo secrets | P1 | S4, founder sets secrets | tracker |
+| `retailer_programmes.affiliate_tag_template` empty for all three seeds | P1 | founder's affiliate approvals | docs/ops/AFFILIATE-APPLICATIONS.md |
 
 ## Handoff notes for the next planner
 
