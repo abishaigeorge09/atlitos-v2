@@ -9,9 +9,10 @@ import { useThemeColors } from '@/theme/use-theme-colors';
 
 /**
  * Home's categories row (PRD-01 3.2): one circular tappable icon per
- * `SPORTS` enum value, each routing to that sport's category browse
- * (`/shop/category/[sport]`). Horizontal scroll so the row survives a sport
- * list longer than one screen width without wrapping.
+ * `SPORTS` enum value, each routing to `/shop` with that sport pre-selected
+ * (Phase S3, PHASE-S3-STATUS.md hard decision 1: `/shop` is the shop now,
+ * `/shop/category/[sport]` only redirects there). Horizontal scroll so the
+ * row survives a sport list longer than one screen width without wrapping.
  *
  * The pressed state feedback lives on the Pressable's render function, NOT
  * as an `active:` class on the circle View. nativewind implements `active:`
@@ -34,7 +35,7 @@ export function CategoriesRow() {
             key={sport}
             accessibilityRole="button"
             accessibilityLabel={SPORT_LABEL[sport]}
-            onPress={() => router.push({ pathname: '/shop/category/[sport]', params: { sport } })}
+            onPress={() => router.push({ pathname: '/shop', params: { sport } })}
             className="items-center gap-xs"
           >
             {({ pressed }) => (

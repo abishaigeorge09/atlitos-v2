@@ -299,6 +299,29 @@ Client wiring lives in `apps/portal-court/src/lib/onboarding.ts`, one typed modu
 | RPC | `release_expired_stock_reservations()` | `service_role` | Abandonment sweep, the commerce arm AT-26 calls. Not scheduled by `0033` |
 | RPC | `order_transition(p_order_id, p_to_status, p_actor_id, p_note, p_location)` | `service_role` | The whole order machine. Raises `INVALID_TRANSITION` on any skip or illegal edge, writes one `order_timeline` row in the same transaction. `service_role` only per AT-61's rule, so `admin-order-advance` is the sole path and the shopper app never writes a transition (FR-24) |
 
+### affiliate marketplace, client reads (0086 WS4, extended Phase S3 Track F)
+
+`packages/api/src/use-shop.ts`'s `listAffiliateProducts`/`getAffiliateProduct`, the client
+side of the `/shop` grid and the `/shop/affiliate/[id]` compare screen.
+
+| Lane | Name | Callable by | Note |
+|---|---|---|---|
+| PostgREST | `listAffiliateProducts({ sport?, query? })` | `anon`, `authenticated` | `affiliate_products` select joined `product_offers` (adds `retailer_key`), `.eq("active", true)` explicit (mirrors the public browse policy per CLAUDE.md's scoping rule), ordered `created_at desc`, limit 60. Backs `/shop`'s empty-query grid (PHASE-S3-STATUS.md hard decision 3: the catalogue, newest first, never price sorted here). A typed query on `/shop` does not call this; it goes through `search.aiSearch` below instead |
+| PostgREST | `getAffiliateProduct(id)` | `anon`, `authenticated` | Same select, single row. Backs `/shop/affiliate/[id]` and hydrates a typed `/shop` query's `affiliate:`-prefixed hits (below) |
+| — (mapping only) | `AffiliateProduct.cheapest` | n/a | Client-derived, not a new column: the head of `offers` after the existing cheapest-in-stock-first sort (`{ price, retailer, lastCheckedAt }`, null when every offer is out of stock). `retailerCount` is `offers.length`. Both feed `GearResultTile` directly (FR-40, FR-41) |
+
+`/shop`'s typed query path calls `useSearch(client).search({ query, entityTypes: ["gear"], sport, priceMax })`
+(the existing `ai-search` contract above, unchanged), then hydrates each `SearchHit` through
+`getAffiliateProduct` (an `affiliate:`-prefixed `entityId`) or `getProduct` (an owned one, only
+rendered while `shop.owned_enabled` is true) rather than trusting the hit's own lean shape, so
+the grid tile always has the freshness and retailer count fields the hit itself does not carry.
+
+## config
+
+| v1 fn | v1 route | v2 lane | Function / RPC | Note |
+|---|---|---|---|---|
+| `useAppConfig(client).get(key)` / `.getBoolean(key, fallback)` | n/a (no v1 equivalent) | PostgREST | `app_config` select, explicit `.eq("public", true)` | New, Phase S3 Track F, PRD-07 FR-53. Reads `app_config`'s `value` column for a public row only; never throws (a read failure or a missing/non-public key resolves to `undefined`/`fallback`). 5 minute in-memory cache per key. The only consumer today is `shop.owned_enabled` (`shop/index.tsx`, `shop/_layout.tsx`'s owned-route redirect, `RecentlyViewedRail`), read once per mount rather than once per app start as IA-SHOP.md's phrasing suggested, since a hook has no "app start" hook of its own. The only write path is `admin_set_app_config` (`XXXX_app_config_owned_shop_flag.sql`), admin only, audited; no client write exists for this table |
+
 ## wishlist (gear)
 
 | v1 fn | v1 route | v2 lane | Function / RPC | Note |
