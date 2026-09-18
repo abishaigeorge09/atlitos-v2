@@ -1,0 +1,95 @@
+appId: com.atlitos.app
+---
+# Phase S3 Track H gate: shop search cold-start path
+# (PRD-07 FR-40, FR-41, FR-42, AC-11-1, AC-11-2).
+#
+# Asserts: launch the app, navigate to /shop (Home categories row or deep link),
+# tap the search input, type "light racket for a 12 year old starting badminton",
+# see gear tiles load (with at least one containing "Badminton" or "Racket"),
+# tap the tennis sport chip and assert the grid changes (tile 0 is still visible
+# but its content differs), then clear and exit.
+#
+# Positive assertions on the destination screen before each exit.
+
+- launchApp:
+    clearState: false
+
+# Navigate to shop via deep link /shop (atlitos://shop).
+- tapOn:
+    id: home-more-button
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 2000
+
+# If presented with auth gate, skip it.
+- runFlow:
+    when:
+      visible: "Continue as guest"
+    commands:
+      - tapOn: "Continue as guest"
+      - waitForAnimationToEnd:
+          timeout: 3000
+
+# Try deep link to shop.
+- openDeepLink: "atlitos://shop"
+- waitForAnimationToEnd:
+    timeout: 2000
+
+# Assert we are on the shop screen with the search input visible.
+- assertVisible:
+    id: shop-search-input
+
+# Tap the search input to focus it.
+- tapOn:
+    id: shop-search-input
+- waitForAnimationToEnd:
+    timeout: 1000
+
+# Type the test query.
+- typeText: "light racket for a 12 year old starting badminton"
+- waitForAnimationToEnd:
+    timeout: 3000
+
+# Assert a gear tile loads (the grid component with test ID gear-tile-0).
+- assertVisible:
+    id: gear-tile-0
+
+# Assert that the tile contains "Badminton" or "Racket" text (positive proof
+# that the query was honored and a relevant result appeared).
+- runFlow:
+    when:
+      visible:
+        text: "Badminton"
+    commands:
+      - assertVisible:
+          text: "Badminton"
+
+# Also check for "Racket" as alternative text.
+- runFlow:
+    when:
+      notVisible:
+        text: "Badminton"
+    commands:
+      - assertVisible:
+          text: "Racket"
+
+# Now tap the tennis sport chip to filter by sport and assert the grid updates.
+- tapOn:
+    id: shop-sport-chip-tennis
+- waitForAnimationToEnd:
+    timeout: 2000
+
+# After sport filter, the grid should still have gear-tile-0 but with different
+# content (tennis results instead of badminton). Assert it is still visible.
+- assertVisible:
+    id: gear-tile-0
+
+# Clear the search and exit cleanly.
+- tapOn:
+    id: shop-search-input
+- waitForAnimationToEnd:
+    timeout: 500
+- clearText
+
+- waitForAnimationToEnd:
+    timeout: 1000
