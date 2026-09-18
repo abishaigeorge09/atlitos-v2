@@ -179,12 +179,14 @@ New table, seeded `key='shop.owned_enabled'`, `enabled=false`, `public=true`:
 
 ```sql
 create table public.app_config (
-  key text primary key, enabled boolean not null default false, public boolean not null default false
+  key text primary key, value jsonb not null, public boolean not null default false, updated_at timestamptz
 );
 ```
 
 RLS: `for select to anon, authenticated using (public = true)`, same shape as `promo_banners`.
-Write only via new audited `admin_set_app_config(p_key, p_enabled)`.
+Write only via new audited `admin_set_app_config(p_key, p_value jsonb)`; read of public rows via
+`get_app_config(p_key)`. (Built as a generic key/value in Phase S1 so a second flag needs no
+schema change; the ADR originally said `enabled boolean`.)
 
 Alternatives: `EXPO_PUBLIC_SHOP_OWNED_ENABLED` is inlined at Expo BUILD time, flipping it needs
 a rebuild and store resubmission, contradicting FR-53's "a config change, not a deploy,"
@@ -332,7 +334,7 @@ POST /gear-recheck { sweep: true } | { productId: string }
 admin_upsert_affiliate_product(..., p_image_path text default null, p_source_image_url text default null)
 admin_upsert_product_offer(..., p_canonical_url text default null, p_retailer_key text default null)
 system_auto_delist_affiliate_product(p_id uuid, p_reason text)  -- service_role execute only
-admin_set_app_config(p_key text, p_enabled boolean)             -- admin JWT
+admin_set_app_config(p_key text, p_value jsonb)                 -- admin JWT
 ```
 
 `ai-search`'s external contract is unchanged: same request/response shape, `mode` still
