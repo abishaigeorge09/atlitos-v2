@@ -684,6 +684,84 @@ Rows with `public = true` are readable by `anon`/`authenticated` (`app_config_se
 
 Seeded by `scripts/seed-affiliate-catalog.mjs` (8 products, 17 offers across four retailers), including a Babolat racket offered under 2000 at one retailer and higher at another for the WS3 price-comparison proof.
 
+### Ingest and health (Phase S2, PRD-07 FR-44 to FR-52, `XXXX_gear_ingest_health.sql`, `XXXX_product_images_bucket.sql`)
+
+`docs/architecture/ADR-011-shop-search-ingest-health.md` D3 (ingest), D4 (health), D6 (RLS). Extends `affiliate_products`/`product_offers` (0086) and the `admin_upsert_affiliate_product`/`admin_upsert_product_offer` RPCs (0120) rather than replacing either.
+
+`affiliate_products` gains five columns:
+
+| Column | Type | Constraints |
+|---|---|---|
+| `source_image_url` | `text` | nullable, the retailer's own image URL, kept for re-fetch |
+| `image_path` | `text` | nullable, Storage path of our own copy: `product-images/<retailer_key>/<sha256-16>.<ext>` |
+| `health_status` | `text` | nullable, free text the Catalog health page (FR-49) derives and displays; no `CHECK` constraint, so `gear-recheck`'s own vocabulary is not locked into a schema change per new state |
+| `health_checked_at` | `timestamptz` | nullable, when `gear-recheck` last evaluated this product's overall health |
+| `auto_delisted_at` | `timestamptz` | nullable, set only by `system_auto_delist_affiliate_product` (FR-51) |
+
+All five are public-safe the same way `title`/`brand`/`image_url` already are; the column-level grant from Phase S1's `XXXX_gear_search_vectors.sql` (which excludes only `embedding`) is re-asserted with these five columns added.
+
+`product_offers` gains five columns:
+
+| Column | Type | Constraints |
+|---|---|---|
+| `canonical_url` | `text` | nullable, the retailer's canonical product URL, distinct from `affiliate_url` which carries the (currently empty) affiliate tag |
+| `retailer_key` | `text` | nullable, references `retailer_programmes(key)` `ON DELETE SET NULL` |
+| `last_check_outcome` | `text` | nullable, `CHECK (... IN ('ok', 'price_changed', 'out_of_stock', 'gone', 'blocked'))` |
+| `consecutive_failures` | `int` | not null default `0`; only `gone`/`blocked` increment it, every other outcome resets it (D4: an out-of-stock page is a successful fetch, not a failure) |
+| `last_price_change_at` | `timestamptz` | nullable |
+
+Indexed by `idx_product_offers_retailer_key` (partial, `WHERE retailer_key IS NOT NULL`), the read `gear-recheck` groups its sweep by.
+
+#### `retailer_programmes`
+
+Which retailers `gear-ingest`/`gear-recheck` know how to read, and how. Admin-read only, deliberately NOT public-browse like `affiliate_products`: operational config, not shopper content.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `key` | `text` | PK |
+| `display_name` | `text` | not null |
+| `url_patterns` | `text[]` | not null default `'{}'`, hostname substrings gear-ingest matches a pasted URL against |
+| `affiliate_tag_template` | `text` | nullable, EMPTY until a real affiliate programme is approved (open question 11); `gear-ingest` never fabricates a tag |
+| `extractor` | `jsonb` | nullable, a `RetailerExtractorMap` (see `supabase/functions/_shared/extract-product.ts`): field name to a small CSS-selector-like string, the last-resort extraction strategy after JSON-LD and Open Graph both miss |
+| `fetch_policy` | `jsonb` | not null default `{"maxPerMinute": 10}`, the nightly sweep's per-retailer rate limit |
+| `active` | `boolean` | not null default `true` |
+
+Seeded with `amazon_in` (Amazon India, `amazon.in`), `flipkart` (Flipkart, `flipkart.com`), `decathlon_in` (Decathlon India, `decathlon.in`), every `affiliate_tag_template` null.
+
+#### `product_fetch_log`
+
+One row per `gear-recheck` attempt on one offer. Admin-read only, service-role write only.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `uuid` | PK |
+| `offer_id` | `uuid` | not null, references `product_offers(id)` `ON DELETE CASCADE` |
+| `fetched_at` | `timestamptz` | not null default `now()` |
+| `outcome` | `text` | not null, `CHECK (... IN ('ok', 'price_changed', 'out_of_stock', 'gone', 'blocked', 'unparsed'))` |
+| `http_status` | `int` | nullable |
+| `price_seen` | `numeric(12,2)` | nullable |
+| `in_stock_seen` | `boolean` | nullable |
+| `notes` | `text` | nullable |
+| `ai_suggestion` | `jsonb` | nullable, FR-52's Claude assessment on a 200 that no strategy parses, never applied automatically |
+
+Indexed by `idx_product_fetch_log_offer_fetched_at` on `(offer_id, fetched_at DESC)`, the health page's per-offer history read.
+
+#### `system_auto_delist_affiliate_product(p_id uuid, p_reason text) returns affiliate_products`
+
+`security definer`, `service_role` execute only. Sets `active = false`, `auto_delisted_at = now()`, writes one `audit_log` row with `actor_id` hard-coded `null` and `action = 'affiliate_product.auto_delist'` (FR-51, AC-11-4). The standing `auto-delist-actor-null` invariant in `scripts/security-invariants.sh` (Track D) checks every `audit_log` row whose action starts with `affiliate_product.auto` has `actor_id is null`.
+
+#### `admin_upsert_affiliate_product` / `admin_upsert_product_offer`, extended (ADR-011 D3)
+
+Both dropped and recreated under the same name with two new trailing, defaulted parameters, rather than a new RPC, so a call with the ORIGINAL argument count still resolves to the one function (defaults fill the rest): `admin_upsert_affiliate_product(..., p_image_path text default null, p_source_image_url text default null)`, `admin_upsert_product_offer(..., p_canonical_url text default null, p_retailer_key text default null)`. Manual entry (`apps/admin`'s existing form) never passes the new parameters; `gear-ingest`'s `save` action always does, calling both under the ADMIN'S OWN forwarded JWT, never the service role, so `has_role('admin')` inside stays the one door deciding who writes the catalogue. On update, a null/blank trailing value leaves the existing column value in place rather than clearing it.
+
+#### `product-images` Storage bucket
+
+`XXXX_product_images_bucket.sql`. Public read (product photos render unauthenticated in the guest-browsable shop); no insert/update/delete policy for anon or authenticated at all, since the only writer is `gear-ingest`'s service-role client (see RLS.md). Path convention `product-images/<retailer_key>/<sha256-16>.<ext>`, hash-deduped: re-ingesting the same image skips the upload when that path already exists.
+
+#### `gear-ingest` edge function (ADR-011 D3, AC-11-3)
+
+Two actions: `{ action: "fetch", url }` matches a `retailer_programmes` row by hostname, fetches the page (`_shared/fetch-page.ts`: named UA, 10s timeout, 5MB cap, robots.txt checked first) and extracts a draft (`_shared/extract-product.ts`: JSON-LD Product, then Open Graph, then the programme's `extractor` map), WRITING NOTHING (FR-44); a blocked/unsupported/unparseable page returns 422 with whatever partial fields could still be scraped. `{ action: "save", url, draft, productId? }` fetches only the draft's image (never the page a second time), SHA-256 hashes it, copies it into `product-images` under the service role (skip if the hash already exists), then calls the two extended RPCs above using the caller's own admin JWT. Admin JWT required for both actions; anon and non-admin are refused 401/403.
+
 ## The commerce bill is a third pricing shape (PHASE-4-STATUS.md D1)
 
 Recorded here because it is why `orders` has the money columns it has.
