@@ -1,7 +1,7 @@
 # Phase S1 status: shop search substrate
 
-Status: AWAITING APPROVAL
-Opened: 2026-09-17   Closed:
+Status: APPROVED
+Opened: 2026-09-17   Closed: 2026-09-18
 
 Plan: `docs/PLAN-SHOP-SEARCH.md`. Architecture: `docs/architecture/ADR-011-shop-search-ingest-health.md`.
 Branch: `integration/shop-search`. Track branches `worktree-agent-abe97105e2af71925` (A), `worktree-agent-ad9432ebd7261ee09` (B), merged with --no-ff at de0f3a6 and 506eb12.
@@ -12,7 +12,7 @@ Branch: `integration/shop-search`. Track branches `worktree-agent-abe97105e2af71
 > and `verify-gear-search-rls.mjs` all pass against the local stack, and `supabase db reset`
 > replays every migration. AC-11-1, AC-11-2, AC-11-5, AC-11-6, AC-11-7 proven.
 
-**Verdict:** pending.
+**Verdict:** REJECT cycle 1 (no auditor report), APPROVE cycle 2, 2026-09-18. Approver re-derived every script, the invariant born red, a clean reset, and seven adversarial probes.
 
 ## The hard decision
 
@@ -98,9 +98,33 @@ invariants 10/10; turbo 20/20.
 
 | Defect | Severity | Deferred to | Ticket |
 |---|---|---|---|
+| AC-11-1 p95 1.5 s not measured (needs the production catalog) | P2 | S4 ship gate | tracker |
 | AC-11-2 unproven with real embeddings | P1 | founder sets `VOYAGE_API_KEY`, then re-run `verify-search-hybrid.mjs` before S4 | tracker |
 | `supabase/functions/.env.local` for local serving must be created by hand (`VOYAGE_STUB=1`); the sandbox cannot write `.env*` | P3 | docs/qa/CURRENT-STATE.md environment traps | none |
 
 ## Handoff notes for the next planner
 
-_Written at close._
+- **What you inherit that works:** `affiliate_products.embedding` (vector 1024, HNSW) written only by
+  `gear-embed`; `match_affiliate_products` service role only; `query_embedding_cache` service role
+  only; `ai-search` with additive vector recall, `vector: boolean` in the response, Voyage gated and
+  recorded by the same spend guard as Claude; `_shared/embeddings.ts` with `embedTexts` and a
+  deterministic stub when `VOYAGE_API_KEY` is absent or `VOYAGE_STUB=1`; `app_config` with
+  `shop.owned_enabled=false` public row, `get_app_config`, audited `admin_set_app_config`;
+  `checkout` refuses `OWNED_SHOP_DISABLED` before pricing; four verify scripts and the
+  `embedding-column-grant` invariant.
+- **Traps this phase hit:** builder agents' own worktrees cut from stale `main`, so step 0 is
+  `git reset --hard integration/shop-search`; two tracks on one local Postgres collided (apply only
+  what is missing, never blind re-apply); `db reset` skips `XXXX_` files (psql after) and wipes demo
+  users (reseed); `verify-gear-embed` and `verify-search-hybrid` own the functions serve lifecycle
+  and remove the edge runtime container; the sandbox cannot write `.env*` files.
+- **Contracts you must not break:** `ai-search` `mode` still means "did Claude run"; vector-only
+  hits carry `rankReason: "similar to your query"`; `passesHardConstraints` brand and price checks run
+  before the similarity relaxation and must stay unconditional; `embedding` is never in any client
+  select; no client writes to any shop table, every write is an RPC with `has_role('admin')` inside
+  or a service-role function.
+- **What the founder still owes:** `VOYAGE_API_KEY` (then `verify-search-hybrid.mjs` turns AC-11-2
+  from STUB to PASS); the affiliate programme tags for `retailer_programmes`; `main` reconciled so
+  the two `XXXX_` migrations can take numbers.
+- **Security red team:** not run on S1 alone; scheduled on the S1+S2 diff together because S2 is
+  where untrusted input (fetched retailer pages) enters. Recorded as a deviation from the per-phase
+  rule.
