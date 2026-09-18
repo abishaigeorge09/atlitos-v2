@@ -356,7 +356,16 @@ async function handleSave(req: Request, svc: AnySupabaseClient, body: SaveBody) 
     throw appErrorFromPostgrestMessage(offerError.message);
   }
 
-  return jsonResponse({ product, offer });
+  // The contract in docs/PLAN-SHOP-SEARCH.md names productId, offerId and
+  // imagePath; the full rows ride along for the verify script and callers
+  // that want them. Both shapes are stable.
+  return jsonResponse({
+    productId: (product as { id: string }).id,
+    offerId: (offer as { id: string }).id,
+    imagePath: (product as { image_path: string | null }).image_path ?? null,
+    product,
+    offer,
+  });
 }
 
 Deno.serve((req) =>
