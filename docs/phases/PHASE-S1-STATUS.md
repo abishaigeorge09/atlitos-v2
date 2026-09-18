@@ -76,6 +76,17 @@ Re-derived by the integrator from a clean `supabase db reset` on 2026-09-18 (scr
 | AC-11-2 | **STUB**: top 3 contains a beginner or junior badminton racket under the deterministic embedder; PASS requires `VOYAGE_API_KEY` (founder) | step 5 |
 | Gate | `pnpm turbo typecheck lint` 20/20 | step 6 |
 
+## DoD audit (dod-auditor, 2026-09-18, independent of the integrator)
+
+MISSING FEATURE list: none. 6 verified, 0 not verified, 2 unverifiable this phase (AC-11-2 is
+STUB until `VOYAGE_API_KEY`; AC-11-1's 1.5 s p95 needs the production catalog, deferred to S4).
+Every scope row proven by its own query or call after a real `supabase db reset`: embedding is
+`vector(1024)` with the HNSW index; `query_embedding_cache` has RLS on and zero policies; anon
+`select embedding` refused at the table grant; forbidden write by `player@atlitos.dev` (id
+a1ab5ba3...) refused 400 FORBIDDEN while `admin@atlitos.dev` (id 8ea11073..., a different id)
+reads the flag 200; `verify-*` 17/17, 9/9, 10/10, hybrid all PASS with (a) labelled STUB;
+invariants 10/10; turbo 20/20.
+
 ## Deviations from plan
 
 - `app_config` built as `(key, value jsonb, public)` rather than the ADR's `enabled boolean`; ADR updated (86f253f).
