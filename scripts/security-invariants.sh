@@ -616,6 +616,54 @@ Set the connection string, or pass --offline and accept the recorded gap."
 fi
 
 # --------------------------------------------------------------------------
+# CHECK auto-delist-actor-null  (SQL)
+#
+# ADR-011 D4 / D6, PRD-07 FR-51, AC-11-4: system_auto_delist_affiliate_product
+# is the ONE place that ever writes an audit_log row whose action starts with
+# `affiliate_product.auto`, and it always hard-codes actor_id null (a
+# service-role sweep decision, never a human's). If a future change ever
+# threads a caller's auth.uid() into that path (or a new "auto" action
+# forgets to), an admin's account would look, in the audit trail, like it
+# personally delisted a product it never touched. This has no static
+# equivalent: the bug is in what a function DOES at call time, not a token
+# grep can find, so it is a standing live-catalog check the same shape as
+# suspend-enforcement and embedding-column-grant above.
+# --------------------------------------------------------------------------
+AUTO_DELIST_ACTOR_SQL="select id || ' has actor_id ' || actor_id::text || ' on action ' || action
+from public.audit_log
+where action like 'affiliate_product.auto%' and actor_id is not null
+order by 1;"
+
+if [ -n "$DB_URL" ] && command -v psql >/dev/null 2>&1; then
+  if leaked=$(psql "$DB_URL" -At -c "$AUTO_DELIST_ACTOR_SQL" 2>"$TMP/autodelist.err"); then
+    if [ -n "$leaked" ]; then
+      fail auto-delist-actor-null "an affiliate_product.auto* audit_log row has a non-null actor_id" "$leaked
+
+system_auto_delist_affiliate_product (supabase/migrations/*_gear_ingest_health.sql)
+is the only writer of this action prefix and always inserts actor_id = null
+(no human decided this, the 7-strike counter did). A non-null actor_id here
+means either a hand-written audit_log row or a code path that threaded
+auth.uid() into what must stay a system decision. See ADR-011 D4, AC-11-4."
+    else
+      pass auto-delist-actor-null "every affiliate_product.auto* audit_log row has actor_id is null"
+    fi
+  else
+    fail auto-delist-actor-null "could not query the live catalog" "$(cat "$TMP/autodelist.err")"
+  fi
+elif [ "$OFFLINE" = 1 ]; then
+  echo "NOT RUN  auto-delist-actor-null"
+  echo "         No ATLITOS_DB_URL/SUPABASE_DB_URL or no psql, and --offline was passed."
+  echo "         This check has no static equivalent: it reads audit_log rows a live"
+  echo "         catalog produced, which leaves no trace in the tree to grep for."
+  echo "         Recorded in docs/DEBT.md."
+  echo
+else
+  fail auto-delist-actor-null "the auto-delist actor check could not run" "No ATLITOS_DB_URL or SUPABASE_DB_URL is set, or psql is not on PATH.
+A check that should apply but cannot run is a failure, not a skip.
+Set the connection string, or pass --offline and accept the recorded gap."
+fi
+
+# --------------------------------------------------------------------------
 echo "--------------------------------------------------------------"
 if [ "$FAILED" -gt 0 ]; then
   echo "security-invariants: $FAILED of $CHECKS_RUN checks FAILED."
