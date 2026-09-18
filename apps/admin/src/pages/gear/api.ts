@@ -38,13 +38,16 @@ export type ProductOfferRow = Db.ProductOfferRow;
 // track's, to change; once C's migration lands the base `Db` rows gain the
 // same columns and this file's extensions become a no-op superset.
 
-/** `product_fetch_log.outcome` / `product_offers.last_check_outcome`. */
+/** `product_fetch_log.outcome`: the five offer outcomes plus `unparsed`, which
+ * only ever appears on the log (a 200 no strategy parsed; the offer itself is
+ * recorded as `gone`). `product_offers.last_check_outcome` is the five. */
 export type OfferOutcome = "ok" | "price_changed" | "out_of_stock" | "gone" | "blocked" | "unparsed";
+export type OfferCheckOutcome = Exclude<OfferOutcome, "unparsed">;
 
 export interface HealthOfferRow extends ProductOfferRow {
   canonical_url: string | null;
   retailer_key: string | null;
-  last_check_outcome: OfferOutcome | null;
+  last_check_outcome: OfferCheckOutcome | null;
   consecutive_failures: number;
   last_price_change_at: string | null;
 }
@@ -317,7 +320,7 @@ export function worstOutcomeOf(offers: HealthOfferRow[]): OfferOutcome | null {
 /** Any offer failing a check hard enough that an admin should look at it. */
 export function needsAttention(row: HealthRow): boolean {
   return row.offers.some(
-    (o) => o.last_check_outcome === "gone" || o.last_check_outcome === "blocked" || o.last_check_outcome === "unparsed" || o.last_check_outcome === "out_of_stock",
+    (o) => o.last_check_outcome === "gone" || o.last_check_outcome === "blocked" || o.last_check_outcome === "out_of_stock",
   );
 }
 
