@@ -29,7 +29,11 @@ export interface GearResultCardProps {
   className?: string;
 }
 
-export function freshnessLabel(hours: number): string {
+/** `null` covers an offer the nightly check has never reached yet (Phase S3,
+ * FR-41/FR-48, `product_offers.last_checked_at` before its first run); every
+ * numeric caller is unaffected. */
+export function freshnessLabel(hours: number | null): string {
+  if (hours === null) return 'not checked yet';
   if (hours < 1) return 'checked just now';
   if (hours < 24) return `checked ${Math.round(hours)} h ago`;
   const days = Math.round(hours / 24);

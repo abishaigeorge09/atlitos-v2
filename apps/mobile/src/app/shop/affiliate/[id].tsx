@@ -1,14 +1,15 @@
-import { useShop, toApiError, type AffiliateProduct, type ProductOffer } from '@atlitos/api';
+import { useShop, toApiError, type AffiliateProduct } from '@atlitos/api';
 import type { ApiError } from '@atlitos/types';
-import { formatINR, radii, spacing } from '@atlitos/theme';
+import { spacing } from '@atlitos/theme';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ExternalLink, Package, TriangleAlert } from 'lucide-react-native';
+import { Package, TriangleAlert } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { Image, Linking, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppBar } from '@/components/ui/app-bar';
 import { Button } from '@/components/ui/button';
+import { OfferRow } from '@/components/ui/offer-row';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
 import { supabase } from '@/lib/supabase';
@@ -104,143 +105,116 @@ export default function AffiliateProductScreen() {
 
   if (!product) return null;
 
-  const inStockOffers = product.offers.filter((offer) => offer.inStock);
-  const cheapestId = inStockOffers[0]?.id ?? null;
+  // Sorted cheapest in-stock first by the read layer already; the cheapest
+  // marker goes on the first in-stock offer in that order (FR-36).
+  const cheapestId = product.offers.find((offer) => offer.inStock)?.id ?? null;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       <AppBar variant="back" onPressBack={() => router.back()} />
 
-      <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing['4xl'] }}>
-        <Hero imageUrl={product.imageUrl} />
+      <ScrollView contentContainerStyle={{ paddingBottom: spacing['4xl'] }}>
+        <ImageTile imageUrl={product.imageUrl} />
 
-        <View style={{ gap: spacing.xs }}>
+        <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.md, gap: spacing.xs }}>
           {product.brand ? (
-            <Text style={[textStyle('overline'), { color: colors.accent }]}>{product.brand}</Text>
+            <Text className="font-sans-semibold text-base" style={{ color: colors.text }} numberOfLines={1}>
+              {product.brand}
+            </Text>
           ) : null}
-          <Text style={[textStyle('h2'), { color: colors.text }]}>{product.title}</Text>
+          <Text className="text-base" style={{ color: colors.text }}>
+            {product.title}
+          </Text>
           <Attributes product={product} />
-          {product.bestPrice !== null ? (
-            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: spacing.xs, marginTop: spacing.xs }}>
-              <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>From</Text>
-              <Text style={[textStyle('numericLg'), { color: colors.text }]}>{formatINR(product.bestPrice)}</Text>
-              <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
-                across {inStockOffers.length} retailers
-              </Text>
-            </View>
+          {product.description ? (
+            <Text className="text-base" style={{ color: colors.textSecondary, marginTop: spacing.xs }}>
+              {product.description}
+            </Text>
           ) : null}
         </View>
 
-        {product.description ? (
-          <View style={{ gap: spacing.sm }}>
-            <Text style={[textStyle('overline'), { color: colors.textTertiary }]}>Details</Text>
-            <Text style={[textStyle('body'), { color: colors.textSecondary }]}>{product.description}</Text>
-          </View>
-        ) : null}
-
-        {/* FR-35 / FR-36: the price comparison. Every retailer, cheapest first,
-         * the cheapest highlighted; each row clicks out to its own retailer. */}
-        <View style={{ gap: spacing.sm }}>
-          <Text style={[textStyle('overline'), { color: colors.textTertiary }]}>Compare prices</Text>
+        {/* FR-35 / FR-36: the price comparison. Every retailer, cheapest in
+         * stock first, the cheapest marked; each row clicks out to its own
+         * retailer, prices read straight from the live offer values. */}
+        <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.lg, gap: spacing.sm }}>
+          <Text className="font-sans-semibold text-sm" style={{ color: colors.textSecondary }}>
+            Prices at {product.offers.length} store{product.offers.length === 1 ? '' : 's'}
+          </Text>
           {product.offers.length === 0 ? (
-            <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
+            <Text className="text-base" style={{ color: colors.textSecondary }}>
               No retailer offers listed yet. Check back soon.
             </Text>
           ) : (
-            product.offers.map((offer) => (
-              <OfferRow key={offer.id} offer={offer} isCheapest={offer.id === cheapestId} />
+            product.offers.map((offer, index) => (
+              <OfferRow
+                key={offer.id}
+                dense
+                testID={`compare-offer-${index}`}
+                buyTestID={`compare-buy-${index}`}
+                cheapestTestID="compare-cheapest"
+                retailer={offer.retailer}
+                price={offer.price}
+                inStock={offer.inStock}
+                cheapest={offer.id === cheapestId}
+                checkedHoursAgo={hoursSince(offer.lastCheckedAt)}
+                onBuy={() => void Linking.openURL(offer.affiliateUrl)}
+              />
             ))
           )}
         </View>
 
-        <Text style={[textStyle('caption'), { color: colors.textTertiary }]}>
-          Prices are updated regularly. You complete the purchase on the retailer site. Atlitos may earn a commission.
+        <Text className="text-sm" style={{ color: colors.textTertiary, paddingHorizontal: spacing.lg, paddingTop: spacing.lg }}>
+          You buy on the retailer's site. Atlitos may earn a commission.
         </Text>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function Hero({ imageUrl }: { imageUrl: string | null }) {
+/** Hours elapsed since the offer's nightly check, or null for an offer never
+ * checked yet (FR-41/FR-48). `OfferRow`'s `freshnessLabel` renders "not
+ * checked yet" for the null case. */
+function hoursSince(lastCheckedAt: string | null): number | null {
+  if (!lastCheckedAt) return null;
+  const parsed = Date.parse(lastCheckedAt);
+  if (Number.isNaN(parsed)) return null;
+  return Math.max(0, (Date.now() - parsed) / (1000 * 60 * 60));
+}
+
+/** Direction C's signature tile: a flat square photo area on the white
+ * surface, no corners, no border, product centred at 80 percent, matching
+ * `GearResultTile`'s grid treatment so the tile the shopper tapped and the
+ * tile they land on read as the same object. */
+function ImageTile({ imageUrl }: { imageUrl: string | null }) {
   const colors = useThemeColors();
-  if (!imageUrl) {
-    return (
-      <View
-        accessibilityLabel="Product photo coming soon"
-        style={{
-          height: 260,
-          borderRadius: radii.xl,
-          backgroundColor: colors.surfaceMuted,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <Package size={48} strokeWidth={1.75} color={colors.textTertiary} />
-      </View>
-    );
-  }
-  return <Image source={{ uri: imageUrl }} style={{ height: 260, borderRadius: radii.xl }} resizeMode="cover" />;
+  return (
+    <View style={{ backgroundColor: colors.surface, aspectRatio: 1 }} className="w-full items-center justify-center">
+      {imageUrl ? (
+        <Image
+          source={{ uri: imageUrl }}
+          style={{ width: '80%', height: '80%' }}
+          resizeMode="contain"
+          accessibilityLabel="Product photo"
+        />
+      ) : (
+        <Package size={48} strokeWidth={1.5} color={colors.textTertiary} accessibilityLabel="No photo yet" />
+      )}
+    </View>
+  );
 }
 
 function Attributes({ product }: { product: AffiliateProduct }) {
   const colors = useThemeColors();
   const parts = [
-    product.categoryName,
+    product.sport ? capitalize(product.sport) : null,
     product.skillLevel ? capitalize(product.skillLevel) : null,
     product.ageRange ? capitalize(product.ageRange) : null,
   ].filter((part): part is string => Boolean(part));
   if (parts.length === 0) return null;
   return (
-    <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>{parts.join(' . ')}</Text>
-  );
-}
-
-/** One retailer offer row. The cheapest in-stock offer carries an accent border
- * and a "Cheapest" chip; every in-stock row has a Buy click-out that opens the
- * retailer's affiliate_url. An out-of-stock offer is dimmed and its button
- * disabled, so the cheapest price a shopper cannot buy is never presented as
- * buyable. */
-function OfferRow({ offer, isCheapest }: { offer: ProductOffer; isCheapest: boolean }) {
-  const colors = useThemeColors();
-
-  return (
-    <View
-      style={{
-        borderRadius: radii.md,
-        borderWidth: isCheapest ? 2 : 1,
-        borderColor: isCheapest ? colors.accent : colors.border,
-        backgroundColor: colors.card,
-        padding: spacing.lg,
-        gap: spacing.md,
-        opacity: offer.inStock ? 1 : 0.6,
-      }}
-    >
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md }}>
-        <View style={{ flex: 1, gap: spacing.xs }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-            <Text style={[textStyle('label'), { color: colors.text }]}>{offer.retailer}</Text>
-            {isCheapest ? (
-              <View style={{ borderRadius: radii.pill, backgroundColor: colors.accentTint, paddingHorizontal: spacing.sm, paddingVertical: 2 }}>
-                <Text style={[textStyle('caption'), { color: colors.accent }]}>Cheapest</Text>
-              </View>
-            ) : null}
-          </View>
-          <Text style={[textStyle('caption'), { color: offer.inStock ? colors.textSecondary : colors.danger }]}>
-            {offer.inStock ? 'In stock' : 'Out of stock'}
-          </Text>
-        </View>
-        <Text style={[textStyle('numericBase'), { color: colors.text }]}>{formatINR(offer.price)}</Text>
-      </View>
-
-      <Button
-        variant={isCheapest ? 'primary' : 'secondary'}
-        disabled={!offer.inStock}
-        onPress={() => void Linking.openURL(offer.affiliateUrl)}
-      >
-        <ExternalLink size={18} strokeWidth={1.75} color={isCheapest ? colors.inkOnAccent : colors.text} />
-        <Text style={{ color: isCheapest ? colors.inkOnAccent : colors.text }}>Buy on {offer.retailer}</Text>
-      </Button>
-    </View>
+    <Text className="text-sm" style={{ color: colors.textSecondary }}>
+      {parts.join(', ')}
+    </Text>
   );
 }
 
