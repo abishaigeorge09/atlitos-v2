@@ -82,34 +82,6 @@ const noEmojiOnly = {
  * alongside `compat.extends("next/core-web-vitals", "next/typescript")`
  * instead of spreading the full default export.
  */
-/**
- * React hooks rules. Registered here rather than per app because every React
- * surface in the monorepo (mobile, portals, admin, landing) has the same
- * hazard: a dependency array that lies produces a stale closure, and the one
- * that bit us (BUG-001, an unstable hook return re-triggering its own
- * debounce forever) was invisible while this plugin was absent.
- *
- * It was absent for a long time. Source files carried
- * `eslint-disable-next-line react-hooks/exhaustive-deps` directives for a rule
- * nothing registered, which ESLint 9 reports as "Definition for rule was not
- * found" — so `pnpm lint` was red AND no dependency array was ever checked.
- * Registering it fixes both halves.
- *
- * exhaustive-deps is a warning, matching the React team's own default: it has
- * real false positives around refs and intentionally-once effects, and an
- * error would push authors back to blanket disable comments, which is the
- * state this replaced. rules-of-hooks stays an error because it has none.
- */
-const reactHookRules = [
-  {
-    files: ["**/*.{js,jsx,ts,tsx}"],
-    plugins: { "react-hooks": reactHooks },
-    rules: {
-      "react-hooks/rules-of-hooks": "error",
-      "react-hooks/exhaustive-deps": "warn",
-    },
-  },
-];
 
 const houseRules = [
   // packages/theme is the one place hex literals are the point, it IS the
@@ -156,15 +128,40 @@ const houseRules = [
   },
 ];
 
+/**
+ * React hooks rules. `eslint-plugin-react-hooks` was installed but never
+ * registered, so every `react-hooks/*` rule name was undefined. That did two
+ * things: it made any file carrying an `eslint-disable react-hooks/...`
+ * comment fail with "Definition for rule was not found", and, far worse, it
+ * meant hooks were never actually linted at all. This app has shipped real
+ * hook defects (a video player constructed unconditionally on every mounted
+ * card, a gated action dropped because nothing held it across a re-render),
+ * exactly the class these rules exist to catch.
+ *
+ * `rules-of-hooks` is an error: it flags genuine violations and has a very
+ * low false positive rate. `exhaustive-deps` is a warning: it is frequently
+ * right but not always, and turning it into a build blocker across an
+ * existing codebase punishes the wrong people. Warnings still surface.
+ */
+const reactHooksRules = [
+  {
+    files: ["**/*.{js,jsx,ts,tsx}"],
+    plugins: { "react-hooks": reactHooks },
+    rules: {
+      "react-hooks/rules-of-hooks": "error",
+      "react-hooks/exhaustive-deps": "warn",
+    },
+  },
+];
+
 module.exports = tseslint.config(
   {
     ignores: ["**/node_modules/**", "**/dist/**", "**/.next/**", "**/.expo/**", "**/build/**"],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
-  ...reactHookRules,
+  ...reactHooksRules,
   ...houseRules,
 );
 
 module.exports.houseRules = houseRules;
-module.exports.reactHookRules = reactHookRules;

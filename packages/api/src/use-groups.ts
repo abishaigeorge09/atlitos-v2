@@ -1,8 +1,39 @@
-import { useMemo } from "react";
 import type { ApiError, PaymentDomain, SessionStatus, Sport } from "@atlitos/types";
 
 import type { AtlitosClient } from "./client";
 import { mapEdgeFunctionError, mapPostgrestError } from "./errors";
+/** Page sizes for the coaching group surfaces.
+ *
+ * Bounded because PostgREST silently caps every select on this project, so an
+ * unbounded read is a truncation with a 200 OK rather than a slow query. See
+ * docs/qa/verify/SCALE-CLIENT.md.
+ *
+ * p6 audit correction: this used to say every number here is "well under any
+ * plausible server cap", an unmeasurable quantity on this project (see
+ * BLOCK_LIST_MAX in hooks.ts), and that `training_groups.capacity` has NO
+ * schema ceiling. Both were true when written and the second is no longer
+ * true: `0112_training_group_capacity_ceiling.sql`, merged in the same p6
+ * integration pass, adds `check (capacity <= 100)`. That is now a real,
+ * citable number, and TRAINING_GROUP_CAPACITY_CEILING below is derived from
+ * it rather than guessed. */
+const TRAINING_GROUP_CAPACITY_CEILING = 100;
+const GROUP_LIST_PAGE_SIZE = 100;
+const GROUP_ROSTER_PAGE_SIZE = 200;
+const GROUP_SESSION_PAGE_SIZE = 100;
+/** Attendance is read as (sessions in the page) x (participants each): the
+ * `.in("session_id", sessionIds)` read below is one row per attendee per
+ * session, so the true worst case is not a flat number, it is
+ * GROUP_SESSION_PAGE_SIZE x TRAINING_GROUP_CAPACITY_CEILING. A `.limit()`
+ * below that product can silently under count attendance for a page of full
+ * groups, which is the same "silently wrong count, not a short list" failure
+ * SCHEMA.md already flags for the unrelated chat member count; a real
+ * schema-derived ceiling here closes exactly that, rather than a guess under
+ * an unknown PostgREST cap. */
+const SESSION_PARTICIPANT_PAGE_SIZE = GROUP_SESSION_PAGE_SIZE * TRAINING_GROUP_CAPACITY_CEILING;
+const TRAINEE_NOTE_PAGE_SIZE = 100;
+const TRAINEE_SESSION_PAGE_SIZE = 100;
+
+
 
 /**
  * `@atlitos/api`'s training groups domain (Track A of the Groups phase).
@@ -29,7 +60,41 @@ import { mapEdgeFunctionError, mapPostgrestError } from "./errors";
 // Types
 // ---------------------------------------------------------------------------
 
-export type GroupMembershipStatus = "pending" | "active" | "lapsed";
+/**
+ * public.group_memberships.status (0076, extended by
+ * 0104_membership_expiry_sweep.sql).
+ *
+ * 'expired' is the state between a month ending and the seat being released:
+ * sweep_group_memberships moves active -> expired on the day after period_end
+ * and expired -> lapsed only after the grace window. An expired member STILL
+ * HOLDS THEIR SEAT (the one live per player index and join_training_group's
+ * capacity count both key off "not lapsed") and renews on the same row
+ * through renewMembership. A lapsed member has no seat and re joins.
+ *
+ * Both render as the same Lapsed pill to users; the distinction is a fares
+ * mechanic, not a word an athlete has to learn.
+ */
+export type GroupMembershipStatus = "pending" | "active" | "expired" | "lapsed";
+
+/**
+ * Whether this membership can be renewed on its existing row, which is
+ * exactly the set renew_group_membership (0104) accepts. The server is the
+ * authority; this mirrors it so a screen never offers a Renew button that the
+ * RPC will refuse with INVALID_TRANSITION. Deliberately NOT a date
+ * calculation: period_end is display, status is the truth.
+ */
+export function isMembershipRenewable(status: GroupMembershipStatus): boolean {
+  return status === "active" || status === "expired";
+}
+
+/**
+ * Whether the membership has run past its paid period, from the SERVER's
+ * status rather than from a client side date comparison. The coach roster and
+ * the athlete card both use this, which is what makes the two views agree.
+ */
+export function isMembershipUnpaid(status: GroupMembershipStatus): boolean {
+  return status === "expired" || status === "lapsed";
+}
 export type AttendanceStatus = "present" | "absent";
 
 export interface TrainingGroup {
@@ -339,6 +404,8 @@ async function fetchProfiles(
   const { data, error } = await client
     .from("public_profiles")
     .select("id, name, avatar_url")
+    // Unbounded and safe: primary key `.in()`, one row per id, bounded by the
+    // caller's own already-bounded id list.
     .in("id", userIds)
     .returns<PublicProfileRow[]>();
   if (error) throw mapPostgrestError(error);
@@ -358,7 +425,7 @@ async function requireUserId(client: AtlitosClient): Promise<string> {
 // Hook
 // ---------------------------------------------------------------------------
 
-export function makeGroupsApi(client: AtlitosClient) {
+export function useGroups(client: AtlitosClient) {
   return {
     /** Coach home: my groups, any active state, with live member counts.
      * Explicitly scoped to coach_id = me; the public browse policy would
@@ -370,6 +437,7 @@ export function makeGroupsApi(client: AtlitosClient) {
         .select("*")
         .eq("coach_id", userId)
         .order("created_at", { ascending: false })
+        .limit(GROUP_LIST_PAGE_SIZE)
         .returns<GroupRow[]>();
       if (error) throw mapPostgrestError(error);
       const rows = data ?? [];
@@ -387,6 +455,7 @@ export function makeGroupsApi(client: AtlitosClient) {
         .eq("coach_id", coachId)
         .eq("active", true)
         .order("created_at", { ascending: false })
+        .limit(GROUP_LIST_PAGE_SIZE)
         .returns<GroupRow[]>();
       if (error) throw mapPostgrestError(error);
       const rows = data ?? [];
@@ -417,6 +486,7 @@ export function makeGroupsApi(client: AtlitosClient) {
         .eq("group_id", groupId)
         .neq("status", "lapsed")
         .order("created_at", { ascending: true })
+        .limit(GROUP_ROSTER_PAGE_SIZE)
         .returns<MembershipRow[]>();
       if (membershipError) throw mapPostgrestError(membershipError);
       const memberships = membershipRows ?? [];
@@ -427,6 +497,7 @@ export function makeGroupsApi(client: AtlitosClient) {
         .from("sessions")
         .select("id")
         .eq("group_id", groupId)
+        .limit(GROUP_SESSION_PAGE_SIZE)
         .returns<{ id: string }[]>();
       if (sessionsError) throw mapPostgrestError(sessionsError);
       const sessionIds = (sessionRows ?? []).map((s) => s.id);
@@ -436,7 +507,10 @@ export function makeGroupsApi(client: AtlitosClient) {
         const { data: participantRows, error: participantsError } = await client
           .from("session_participants")
           .select("*")
+          // NOT input-bounded: `.in()` on a non unique column is one row per
+          // ATTENDEE per session, so this is (sessions) x (roster).
           .in("session_id", sessionIds)
+          .limit(SESSION_PARTICIPANT_PAGE_SIZE)
           .returns<ParticipantRow[]>();
         if (participantsError) throw mapPostgrestError(participantsError);
         participants = participantRows ?? [];
@@ -571,6 +645,7 @@ export function makeGroupsApi(client: AtlitosClient) {
         .select("*")
         .eq("player_id", userId)
         .order("created_at", { ascending: false })
+        .limit(GROUP_LIST_PAGE_SIZE)
         .returns<MembershipRow[]>();
       if (error) throw mapPostgrestError(error);
       const rows = data ?? [];
@@ -581,6 +656,8 @@ export function makeGroupsApi(client: AtlitosClient) {
         const { data: groupRows, error: groupError } = await client
           .from("training_groups")
           .select("*")
+          // Unbounded and safe: primary key `.in()`, one row per id, bounded by
+          // the membership page above.
           .in("id", groupIds)
           .returns<GroupRow[]>();
         if (groupError) throw mapPostgrestError(groupError);
@@ -598,32 +675,7 @@ export function makeGroupsApi(client: AtlitosClient) {
         .eq("group_id", groupId)
         .order("date", { ascending: false })
         .order("slot_start", { ascending: false })
-        .returns<GroupSessionRow[]>();
-      if (error) throw mapPostgrestError(error);
-      return (data ?? []).map(mapGroupSession);
-    },
-
-    /**
-     * Sessions for MANY groups in one round trip.
-     *
-     * SCALING. Both callers previously did
-     * `Promise.all(groupIds.map(groupSessions))`, which is one query per group
-     * on every open of the Trainings shell. Bounded by how many groups a member
-     * joins, which is small today and is exactly the kind of bound that stops
-     * being true quietly.
-     *
-     * Same explicit scoping as `groupSessions`: `sessions` is a permissive-OR
-     * table across coach and player policies (CLAUDE.md), and the group ids
-     * here come from the caller's OWN `myMemberships()` read, never a browse.
-     */
-    async groupSessionsForGroups(groupIds: string[]): Promise<GroupSession[]> {
-      if (groupIds.length === 0) return [];
-      const { data, error } = await client
-        .from("sessions")
-        .select("id, group_id, coach_id, date, slot_start, slot_end, focus_area, location, status")
-        .in("group_id", groupIds)
-        .order("date", { ascending: false })
-        .order("slot_start", { ascending: false })
+        .limit(GROUP_SESSION_PAGE_SIZE)
         .returns<GroupSessionRow[]>();
       if (error) throw mapPostgrestError(error);
       return (data ?? []).map(mapGroupSession);
@@ -660,6 +712,7 @@ export function makeGroupsApi(client: AtlitosClient) {
         .from("session_participants")
         .select("*")
         .eq("session_id", sessionId)
+        .limit(GROUP_ROSTER_PAGE_SIZE)
         .returns<ParticipantRow[]>();
       if (error) throw mapPostgrestError(error);
       const rows = data ?? [];
@@ -813,6 +866,7 @@ export function makeGroupsApi(client: AtlitosClient) {
         .eq("coach_id", userId)
         .eq("player_id", playerId)
         .order("created_at", { ascending: false })
+        .limit(TRAINEE_NOTE_PAGE_SIZE)
         .returns<NoteRow[]>();
       if (error) throw mapPostgrestError(error);
       return (data ?? []).map((r) => ({
@@ -892,6 +946,7 @@ export function makeGroupsApi(client: AtlitosClient) {
         .eq("player_id", playerId)
         .order("date", { ascending: false })
         .order("slot_start", { ascending: false })
+        .limit(TRAINEE_SESSION_PAGE_SIZE)
         .returns<TraineeSessionRow[]>();
       if (error) throw mapPostgrestError(error);
 
@@ -926,6 +981,7 @@ export function makeGroupsApi(client: AtlitosClient) {
         .eq("coach_id", userId)
         .eq("player_id", playerId)
         .not("status", "in", "(declined,cancelled)")
+        .limit(TRAINEE_SESSION_PAGE_SIZE)
         .returns<TraineeSessionRow[]>();
       if (sessionError) throw mapPostgrestError(sessionError);
 
@@ -935,6 +991,7 @@ export function makeGroupsApi(client: AtlitosClient) {
         .eq("player_id", playerId)
         .eq("training_groups.coach_id", userId)
         .neq("status", "pending")
+        .limit(GROUP_LIST_PAGE_SIZE)
         .returns<(MembershipRow & { training_groups: { id: string; name: string; coach_id: string } })[]>();
       if (membershipError) throw mapPostgrestError(membershipError);
 
@@ -959,16 +1016,4 @@ export function makeGroupsApi(client: AtlitosClient) {
       return entries.sort((a, b) => (a.date < b.date ? 1 : -1));
     },
   };
-}
-
-/**
- * Memoized on [client] for a STABLE identity across renders. Without this every
- * render hands consumers a new object, so any effect or callback that honestly
- * lists it as a dependency re-runs forever (BUG-001).
- *
- * Outside React (module scope, a plain async function) call makeGroupsApi directly:
- * this one calls useMemo and will throw "Invalid hook call" there.
- */
-export function useGroups(client: AtlitosClient) {
-  return useMemo(() => makeGroupsApi(client), [client]);
 }

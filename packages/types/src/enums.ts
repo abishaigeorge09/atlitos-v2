@@ -70,7 +70,20 @@ export type OrderStatus = (typeof ORDER_STATUSES)[number];
 export const STOCK_RESERVATION_STATUSES = ['held', 'consumed', 'released'] as const;
 export type StockReservationStatus = (typeof STOCK_RESERVATION_STATUSES)[number];
 
-export const CLIP_STATUSES = ['uploading', 'processing', 'ready', 'published', 'rejected', 'removed'] as const;
+// 'failed' added Phase 3 LAUNCH (CT-6, 0094_clip_failed_state_and_sweep_capture.sql,
+// Track A). A technical upload/processing failure, distinct from `rejected`
+// (moderation): `uploading|processing -> failed`, and `failed -> uploading`
+// is the owner's Retry action (retry_failed_clip RPC). See
+// docs/architecture/SCHEMA.md and transitions/index.ts CLIP_TRANSITIONS.
+export const CLIP_STATUSES = [
+  'uploading',
+  'processing',
+  'ready',
+  'published',
+  'rejected',
+  'removed',
+  'failed',
+] as const;
 export type ClipStatus = (typeof CLIP_STATUSES)[number];
 
 export const UPA_STATUSES = ['submitted', 'under_review', 'needs_info', 'verified', 'rejected'] as const;
@@ -139,6 +152,12 @@ export type LedgerDirection = (typeof LEDGER_DIRECTIONS)[number];
 export const FEE_VALUE_TYPES = ['percentage', 'flat'] as const;
 export type FeeValueType = (typeof FEE_VALUE_TYPES)[number];
 
+// Mirrors public.notification_type (0002_notifications.sql, extended by
+// 0102_notification_types_coaching.sql). 'session' and 'membership' are the
+// coaching pair: a session changing state (accept, decline, start, complete)
+// and a group membership approaching or passing its period_end. Neither reuses
+// 'booking', which means a court booking everywhere else in the product, and
+// prefs are per type so folding them together would let one mute the other.
 export const NOTIFICATION_TYPES = [
   'booking',
   'order',
@@ -148,6 +167,8 @@ export const NOTIFICATION_TYPES = [
   'verification',
   'transfer',
   'support',
+  'session',
+  'membership',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 

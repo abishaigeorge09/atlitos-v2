@@ -29,6 +29,18 @@ export const brand = {
  */
 const ACTIVE_ACCENT: string = brand.orange;
 
+/**
+ * Aurora gradient stops for the auth backdrop (`AuthScene`, used by register
+ * and role select). The ONE place these stops live; screens import
+ * `auroraStops` rather than hardcoding hex. See docs/design/DESIGN-LANGUAGE.md.
+ */
+export const auroraStops = {
+  ember: brand.ember,
+  orange: brand.orange,
+  gold: "#F4A15D",
+  cream: "#FFE3CE",
+} as const;
+
 /** Pressed state per accent candidate, so the gallery can preview both live. */
 const accentPressed: Record<"orange" | "ember", string> = {
   orange: "#D94000",

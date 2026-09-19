@@ -28,6 +28,9 @@ export interface ProductCardProps {
   wishlisted?: boolean;
   quantity?: number;
   variant?: ProductCardVariant;
+  /** `grid` only: the Add to cart button shows a spinner and ignores taps
+   * while the caller's add request is in flight. */
+  addingToCart?: boolean;
   onPress?: () => void;
   onAddToCart?: () => void;
   onToggleWishlist?: () => void;
@@ -43,6 +46,7 @@ function ProductCard({
   wishlisted,
   quantity = 1,
   variant = 'grid',
+  addingToCart = false,
   onPress,
   onAddToCart,
   onToggleWishlist,
@@ -54,11 +58,13 @@ function ProductCard({
 
   const priceBlock = (
     <View className="flex-row items-center gap-xs">
-      <Text className="font-mono-semibold text-base text-text">{formatINR(price)}</Text>
+      <Text className="font-mono-semibold text-base" style={{ color: colors.text }}>
+        {formatINR(price)}
+      </Text>
       {originalPrice && originalPrice > price ? (
         // text-secondary, not tertiary: sits on bg-card, textTertiary fails
         // AA contrast against the card surface in dark mode.
-        <Text className="font-mono text-xs text-text-secondary line-through">
+        <Text className="font-mono text-xs line-through" style={{ color: colors.textSecondary }}>
           {formatINR(originalPrice)}
         </Text>
       ) : null}
@@ -71,9 +77,15 @@ function ProductCard({
     // sibling that sits under the wishlist heart, the Add to cart button and
     // the quantity stepper, so no action control is ever a descendant of
     // another pressable.
+    // bg-card/border-border are shadcn compat slots (var(--card) -> hsl(var(--color-card))),
+    // a double-nested CSS var nativewind's native runtime does not re-resolve on the dark
+    // toggle, so they stayed at the light #FFFFFF/cream value in dark mode (FB-002). Source
+    // the card surface + border from the JS-resolved theme instead, the same path the chrome
+    // (colors.bg) already uses, so the tile follows the resolved theme.
     <View
+      style={{ backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }}
       className={cn(
-        'overflow-hidden rounded-xl border border-border bg-card',
+        'overflow-hidden rounded-xl',
         isRow ? 'flex-row' : 'flex-col',
         className,
       )}
@@ -118,8 +130,8 @@ function ProductCard({
           }}
           accessibilityRole="button"
           accessibilityLabel={wishlisted ? 'Remove from wishlist' : 'Save to wishlist'}
-          style={{ zIndex: 1 }}
-          className="absolute right-xs top-xs h-11 w-11 items-center justify-center rounded-pill bg-surface"
+          style={{ zIndex: 1, backgroundColor: colors.surface }}
+          className="absolute right-xs top-xs h-11 w-11 items-center justify-center rounded-pill"
         >
           <Heart
             size={18}
@@ -135,7 +147,7 @@ function ProductCard({
         className={cn('gap-sm p-lg', isRow && 'flex-1 justify-center')}
       >
         <View style={{ pointerEvents: 'none' }} className="gap-sm">
-          <Text className="font-sans-medium text-sm text-text" numberOfLines={2}>
+          <Text className="font-sans-medium text-sm" style={{ color: colors.text }} numberOfLines={2}>
             {title}
           </Text>
 
@@ -143,7 +155,13 @@ function ProductCard({
         </View>
 
         {variant === 'grid' ? (
-          <Button variant="ghost" size="sm" className="border border-border-strong" onPress={onAddToCart}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="border border-border-strong"
+            loading={addingToCart}
+            onPress={onAddToCart}
+          >
             <ShoppingCart size={16} strokeWidth={1.75} color={colors.text} />
             <Text>Add to cart</Text>
           </Button>
@@ -164,7 +182,12 @@ function ProductCard({
               <Minus size={16} strokeWidth={1.75} color={colors.text} />
             </Pressable>
             <View style={{ pointerEvents: 'none' }}>
-              <Text className="font-mono-semibold min-w-6 text-center text-base text-text">{quantity}</Text>
+              <Text
+                className="font-mono-semibold min-w-6 text-center text-base"
+                style={{ color: colors.text }}
+              >
+                {quantity}
+              </Text>
             </View>
             <Pressable
               onPress={() => {

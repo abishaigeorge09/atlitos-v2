@@ -1,0 +1,104 @@
+appId: com.atlitos.app
+---
+# ATHLETE UPLOADS A CLUTCH CLIP. The last untested write path, and the one that
+# carries a fix nobody has ever seen work.
+#
+# WHY IT MATTERS BEYOND COVERAGE. upload.tsx used to call
+# finalizeUpload(ticket.clipId) with ONE argument against a TWO argument
+# signature, so thumb_path arrived undefined and EVERY clip posted from the app
+# had no thumbnail. It was masked in production because all 12 published clips
+# are pre 2026-07-28 fixtures created by scripts that pass the argument; the
+# three newest `ready` clips all had thumb_path NULL. The fix shipped without
+# device proof. This flow is that proof, and the verdict is the DATABASE:
+#
+#   psql "$ATLITOS_LOCAL_DB_URL" -c "select status, storage_path, thumb_path
+#     from public.clips order by created_at desc limit 1"
+#
+#   thumb_path NOT NULL  -> the fix works
+#   thumb_path NULL      -> it does not, whatever this flow reports
+#
+# PREREQUISITE, and the flow cannot create it for you: the simulator's photo
+# library must hold a video, because upload.tsx uses the SYSTEM picker
+# (ImagePicker.launchImageLibraryAsync, upload.tsx:77). Add one first:
+#
+#   xcrun simctl addmedia 8AF6A5E2-F889-4477-8634-97B4AB5D5453 \
+#     docs/phases/evidence/p5-web/atlitos-clip.mp4
+- launchApp:
+    clearState: true
+- runFlow:
+    when:
+      visible: "Not Now"
+    commands:
+      - tapOn: "Not Now"
+
+- openLink: atlitos://login
+- runFlow:
+    when:
+      visible: "Open in .*"
+    commands:
+      - tapOn: "Cancel"
+- extendedWaitUntil:
+    visible: "Email or phone.*"
+    timeout: 10000
+- tapOn: "Email or phone input"
+- inputText: "player@atlitos.dev"
+- tapOn: "Password input"
+- inputText: "AtlitosDemo!2026"
+- tapOn:
+    text: "Log in"
+    index: 1
+- extendedWaitUntil:
+    visible: "Hyderabad|Save Password.*"
+    timeout: 20000
+- runFlow:
+    when:
+      visible: "Save Password.*"
+    commands:
+      - tapOn: "Not Now"
+
+- openLink: atlitos://clutch/upload
+- runFlow:
+    when:
+      visible: "Open in .*"
+    commands:
+      - tapOn: "Cancel"
+- extendedWaitUntil:
+    visible: "Post a clip"
+    timeout: 15000
+- takeScreenshot: /tmp/clip-verify/01-upload-screen
+
+# The system photo picker. Grant the permission prompt if it appears; it is a
+# springboard alert, not part of the app, so it must be handled explicitly or it
+# holds accessibility focus and every assert beneath it fails.
+# "Post a clip" is the screen TITLE. The picker is the tile labelled
+# "Select a clip"; tapping the title reports COMPLETED and does nothing.
+- tapOn: "Select a clip"
+- runFlow:
+    when:
+      visible: "Allow.*|OK|Select More Photos.*"
+    commands:
+      - tapOn: "Allow.*|OK|Select More Photos.*"
+- takeScreenshot: /tmp/clip-verify/02-picker
+
+# The picker thumbnail carries no text, so it is a POINT tap. The added clip is
+# the only item and sits top left.
+- tapOn:
+    point: "17%,26%"
+- extendedWaitUntil:
+    visible: "Caption"
+    timeout: 20000
+- takeScreenshot: /tmp/clip-verify/03-clip-selected
+
+- tapOn: "Say something about this clip"
+- inputText: "maestro upload proof"
+- tapOn: "Caption"
+- tapOn: "Cricket"
+- takeScreenshot: /tmp/clip-verify/04-ready-to-post
+
+- tapOn: "Post clip"
+- takeScreenshot: /tmp/clip-verify/05-posted
+
+# THE VERDICT IS THE DATABASE, NOT THIS FLOW. Run:
+#   select status, storage_path, thumb_path from public.clips
+#     order by created_at desc limit 1
+# thumb_path NOT NULL means the finalizeUpload two argument fix actually works.

@@ -6,6 +6,8 @@ import type { ApiError, Sport } from "@atlitos/types";
 
 import type { AtlitosClient } from "./client";
 import { mapEdgeFunctionError, mapPostgrestError } from "./errors";
+import type { SizedImageOptions } from "./image-url";
+import { IMAGE_SIZE, sizedImageUrl } from "./image-url";
 
 /**
  * `@atlitos/api`'s Empower lane (AT-123, P6 Track D), per
@@ -195,12 +197,124 @@ export interface MyImpact {
 const UPA_PHOTOS_BUCKET = "upa-photos";
 const GRATITUDE_PHOTOS_BUCKET = "gratitude-photos";
 
-/** `photo_url` may be a full URL (fixtures) or a storage path in the public
- * `upa-photos` bucket. Pass a full URL through untouched, resolve a bare path. */
-function resolvePhoto(client: AtlitosClient, bucket: string, value: string | null | undefined): string | undefined {
+/** Page sizes for the Empower surfaces. Sized to sit under the silent
+ * PostgREST row cap; see docs/qa/verify/SCALE-CLIENT.md for why an unbounded
+ * read here is a truncation bug rather than a slow query. */
+const UPA_PAGE_SIZE = 48;
+const UPA_MAX_PAGE_SIZE = 96;
+const GRATITUDE_PAGE_SIZE = 50;
+/** Simultaneous `upa_fund_balance` calls in the degraded path only. Five
+ * because Android OkHttp allows 5 concurrent connections per host and iOS
+ * NSURLSession about 6, so anything above this queues on the socket anyway
+ * while starving every other request the screen needs. */
+const UPA_BALANCE_CONCURRENCY = 5;
+
+/** Ledger derived `raised` for each account ref, as a map keyed by ref.
+ *
+ * Never a sum of `funded_amount` (rule 1 in this file's own docblock); the
+ * balance always comes from the ledger through the RPC.
+ *
+ * PREFERRED: one `upa_fund_balances(uuid[])` call. `ledger_entries` already
+ * carries `idx_ledger_entries_account (account_type, account_ref)`, verified
+ * present on the live project, so a single `= ANY($1)` call is an index scan.
+ *
+ * FALLBACK: the per-ref RPC, but through a bounded worker pool instead of the
+ * unbounded `Promise.all` fan-out this replaced. The fallback is live today:
+ * `upa_fund_balances` does not exist on `syzzfgaudpifwvbpycyi` (checked in
+ * `pg_proc`, only the singular `upa_fund_balance` is there) because it is
+ * defined by `0107`, and the applied migration ceiling is `0097`. So the
+ * batched path is inert until that migration is applied, and the thing that
+ * actually protects the 60 connection instance right now is the worker pool:
+ * 200 verified UPAs stop meaning 200 simultaneous requests from one phone. */
+async function fetchUpaBalances(
+  db: SupabaseClient,
+  accountRefs: string[],
+): Promise<Map<string, number>> {
+  const balanceByRef = new Map<string, number>();
+  const refs = Array.from(new Set(accountRefs));
+  if (refs.length === 0) return balanceByRef;
+
+  const { data, error } = await db.rpc("upa_fund_balances", { p_account_refs: refs });
+  if (!error) {
+    for (const row of (data ?? []) as { account_ref: string; balance: number | null }[]) {
+      balanceByRef.set(row.account_ref, row.balance ?? 0);
+    }
+    for (const ref of refs) {
+      if (!balanceByRef.has(ref)) balanceByRef.set(ref, 0);
+    }
+    return balanceByRef;
+  }
+  // Only a missing function falls through. Any other error is a real failure
+  // and must surface, not be retried N times as N separate calls.
+  if (error.code !== "PGRST202" && error.code !== "42883") throw mapPostgrestError(error);
+
+  let cursor = 0;
+  let failure: unknown = null;
+  async function worker(): Promise<void> {
+    while (cursor < refs.length && failure === null) {
+      const ref = refs[cursor];
+      cursor += 1;
+      if (!ref) continue;
+      const { data: bal, error: balError } = await db.rpc("upa_fund_balance", { p_account_ref: ref });
+      if (balError) {
+        failure = mapPostgrestError(balError);
+        return;
+      }
+      balanceByRef.set(ref, (bal as number | null) ?? 0);
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(UPA_BALANCE_CONCURRENCY, refs.length) }, () => worker()),
+  );
+  if (failure !== null) throw failure;
+  return balanceByRef;
+}
+
+/** One size for every UPA photo, deliberately. The photo paints in three
+ * places: the home rail card (288 pt wide, 160 pt tall), the Empower list card
+ * (full phone width, same 160 pt), and the profile hero (full width, 220 pt).
+ * The widest of those is a full width phone card, so it is asked for at the
+ * hero width once and the same transformed object is reused by all three,
+ * which keeps the CDN cache hot instead of minting a second render per surface. */
+const UPA_PHOTO_SIZE = { width: IMAGE_SIZE.hero, height: Math.round(IMAGE_SIZE.hero / 2) } as const;
+
+/** Gratitude photos are read by `listGratitude` but no mobile surface paints
+ * one yet (`account/impact.tsx` renders the body and attribution only). Sized
+ * at tile so the first screen to render one cannot ship an origin fetch. */
+const GRATITUDE_PHOTO_SIZE = { width: IMAGE_SIZE.tile, height: IMAGE_SIZE.tile } as const;
+
+/** `photo_url` may be a full URL or a storage path in the public `upa-photos`
+ * bucket. Resolve a bare path against the bucket, take a full URL as it stands,
+ * then size WHATEVER came out.
+ *
+ * M-6, missed by the original media scale pass and found in the running app's
+ * HTTP cache as the one remaining untransformed Supabase object fetch. The
+ * sizing has to happen AFTER the two branches rejoin, not inside the bare path
+ * branch only, and that distinction is the whole bug rather than a detail.
+ * Production carries both shapes in this one column (verified by SELECT, not
+ * assumed): one bare path, one full
+ * `.../storage/v1/object/public/upa-photos/...` URL written by portal-life's
+ * apply wizard, which stores `getPublicUrl(...).data.publicUrl` verbatim into
+ * `photo_url`, and seven absolute fixture URLs on another host. So the full URL
+ * branch is exactly where the real user upload lives, and sizing only the bare
+ * path branch would have left the one photo that actually costs egress at
+ * origin resolution while reading as fixed.
+ *
+ * `sizedImageUrl` is safe on all three shapes: it rewrites a Supabase public
+ * object URL, and returns anything else, the fixture URLs included, unchanged.
+ * `size` is required rather than defaulted so a new call site has to state what
+ * it paints instead of silently inheriting the wrong number. */
+function resolvePhoto(
+  client: AtlitosClient,
+  bucket: string,
+  value: string | null | undefined,
+  size: SizedImageOptions,
+): string | undefined {
   if (!value) return undefined;
-  if (/^https?:\/\//.test(value)) return value;
-  return client.storage.from(bucket).getPublicUrl(value).data.publicUrl;
+  const resolved = /^https?:\/\//.test(value)
+    ? value
+    : client.storage.from(bucket).getPublicUrl(value).data.publicUrl;
+  return sizedImageUrl(resolved, size);
 }
 
 interface HubUpaQueryRow {
@@ -307,36 +421,51 @@ function makeEmpowerApi(client: AtlitosClient) {
      * by a signed-in UPA owner would surface their own non verified row into a
      * public browse. Each card's `raised` is ledger derived via
      * `upa_fund_balance` (never a sum of funded_amount, rule 1); the goal is the
-     * sum of item costs (a target, not a ledger total). The whole verified set
-     * is returned so a screen can filter the grid client side without moving the
-     * stat banner (FR-2: filters affect the grid, not the stats). */
-    async listUpas(): Promise<HubUpa[]> {
+     * sum of item costs (a target, not a ledger total).
+     *
+     * A PAGE of the verified set is returned, not the whole set. The previous
+     * comment justified reading everything so a screen could filter the grid
+     * client side without moving the stat banner (FR-2: filters affect the
+     * grid, not the stats), and that requirement is unchanged, but "everything"
+     * was never actually delivered: PostgREST silently caps every select, so
+     * the read was already truncated at an unread number with a 200 OK. An
+     * explicit page size means the cutoff is one this file owns. Client side
+     * filtering still works over the page; a verified set larger than
+     * UPA_PAGE_SIZE needs a cursor and a load-more on the hub screen, which is
+     * UI work and is deliberately not in this change.
+     *
+     * The balance lookup used to be a textbook N+1 fanned out with a bare
+     * `Promise.all`, so N verified UPAs meant N simultaneous HTTP requests
+     * from one phone against a 60 connection instance, and the Home rail then
+     * threw away everything past the first 8. `pg_stat_statements` had
+     * `upa_fund_balance` at 975 calls, the most called RPC on the project,
+     * against 2 verified rows. It is now one batched RPC, degrading to a
+     * bounded worker pool rather than a fan-out. See `fetchUpaBalances`. */
+    async listUpas(limit: number = UPA_PAGE_SIZE): Promise<HubUpa[]> {
       const { data, error } = await db
         .from("upa_applications")
         .select("id, story_headline, sport, region, state, photo_url, upa_wishlist_items ( cost )")
         .eq("status", "verified")
         .order("created_at", { ascending: false })
+        .limit(Math.min(Math.max(limit, 1), UPA_MAX_PAGE_SIZE))
         .returns<HubUpaQueryRow[]>();
       if (error) throw mapPostgrestError(error);
 
       const rows = data ?? [];
-      const balances = await Promise.all(
-        rows.map(async (row) => {
-          const { data: bal, error: balError } = await db.rpc("upa_fund_balance", { p_account_ref: row.id });
-          if (balError) throw mapPostgrestError(balError);
-          return (bal as number | null) ?? 0;
-        }),
+      const balanceByRef = await fetchUpaBalances(
+        db,
+        rows.map((row) => row.id),
       );
 
-      return rows.map((row, index) => ({
+      return rows.map((row) => ({
         id: row.id,
         name: row.story_headline,
         headline: row.story_headline,
         sport: row.sport,
         region: row.region,
         state: row.state,
-        photoUrl: resolvePhoto(client, UPA_PHOTOS_BUCKET, row.photo_url),
-        raised: balances[index] ?? 0,
+        photoUrl: resolvePhoto(client, UPA_PHOTOS_BUCKET, row.photo_url, UPA_PHOTO_SIZE),
+        raised: balanceByRef.get(row.id) ?? 0,
         goal: (row.upa_wishlist_items ?? []).reduce((sum, item) => sum + item.cost, 0),
       }));
     },
@@ -358,7 +487,7 @@ function makeEmpowerApi(client: AtlitosClient) {
         sport: json.sport,
         region: json.region,
         state: json.state,
-        photoUrl: resolvePhoto(client, UPA_PHOTOS_BUCKET, json.photo_url),
+        photoUrl: resolvePhoto(client, UPA_PHOTOS_BUCKET, json.photo_url, UPA_PHOTO_SIZE),
         totalRaised: json.total_raised,
         donorCount: json.donor_count ?? 0,
         items: (json.items ?? []).map((item) => ({
@@ -506,13 +635,17 @@ async function loadGratitude(
     .eq("status", "published")
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
+    // Input-bounded by `itemIds` (the caller's own funded wishlist items), but
+    // a single item can accumulate unboundedly many gratitude posts over time,
+    // so the row count is not bounded by the input alone.
+    .limit(GRATITUDE_PAGE_SIZE)
     .returns<GratitudeQueryRow[]>();
   if (error) throw mapPostgrestError(error);
 
   return (data ?? []).map((row) => ({
     id: row.id,
     body: row.body,
-    photoUrl: resolvePhoto(client, GRATITUDE_PHOTOS_BUCKET, row.photo_url),
+    photoUrl: resolvePhoto(client, GRATITUDE_PHOTOS_BUCKET, row.photo_url, GRATITUDE_PHOTO_SIZE),
     itemTitle: row.upa_wishlist_items?.title ?? null,
     upaName: row.upa_applications?.story_headline ?? null,
     createdAt: row.created_at,

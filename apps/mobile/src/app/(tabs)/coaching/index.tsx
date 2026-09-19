@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CoachBrowseList } from '@/components/organisms/coaching/CoachBrowseList';
 import { LoginGateModal } from '@/components/organisms/LoginGateModal';
 import { Text } from '@/components/ui/text';
+import { usePendingAuthAction } from '@/hooks/use-pending-auth-action';
 import { useSessionStore } from '@/store/session-store';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
@@ -25,6 +26,9 @@ export default function CoachingIndexScreen() {
   const colors = useThemeColors();
   const requiresAuthGate = useSessionStore((state) => state.status !== 'signed_in');
   const [gateVisible, setGateVisible] = useState(false);
+  // F8 (P5 fix pass, PRD-01 FR-4): navigating to "My sessions" used to be
+  // dropped when the gate opened.
+  const { requireAuth, clearPendingAction } = usePendingAuthAction(requiresAuthGate);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
@@ -34,13 +38,9 @@ export default function CoachingIndexScreen() {
           <Pressable
             accessibilityRole="button"
             className="min-h-11 flex-row items-center gap-xs rounded-pill px-md active:bg-surface-muted"
-            onPress={() => {
-              if (requiresAuthGate) {
-                setGateVisible(true);
-                return;
-              }
-              router.push('/(tabs)/coaching/bookings');
-            }}
+            onPress={() =>
+              requireAuth(() => router.push('/(tabs)/coaching/bookings'), () => setGateVisible(true))
+            }
           >
             <CalendarClock size={18} strokeWidth={1.75} color={colors.accent} />
             <Text className="font-sans-semibold text-sm text-accent">My sessions</Text>
@@ -52,7 +52,11 @@ export default function CoachingIndexScreen() {
         onOpenCoach={(coachId) => router.push({ pathname: '/(tabs)/coaching/coach/[id]', params: { id: coachId } })}
       />
 
-      <LoginGateModal visible={gateVisible} onClose={() => setGateVisible(false)} />
+      <LoginGateModal
+        visible={gateVisible}
+        onClose={() => setGateVisible(false)}
+        onDismiss={clearPendingAction}
+      />
     </SafeAreaView>
   );
 }

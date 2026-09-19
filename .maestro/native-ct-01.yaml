@@ -1,0 +1,76 @@
+appId: com.atlitos.app
+---
+# CT-01 (MAESTRO, player@): courts browse, sport-chip filter, court detail.
+# Real data from list_courts (seeded verified venues). Filters by a sport chip
+# and asserts the list actually changes (Badminton isolates "Court 1" and drops
+# the cricket turfs), then opens a court detail and confirms it loads with its
+# price readout. Numeric price readouts render in JetBrains Mono tabular figures
+# via PriceText / the numeric textStyle (house token rule); Maestro cannot read
+# a native font family, so the mono rendering is code-backed and asserted
+# structurally by the price string being present. The BillSummary price
+# breakdown itself lives on the Confirm-and-pay screen and is exercised by
+# CT-14; this case covers list + filter + detail load.
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "ATLITOS"
+    timeout: 30000
+# Deep-linking to /login right after a cold clearState launch occasionally
+# races the router before the route is registered and the link is dropped;
+# retry re-fires the openLink until the login screen actually mounts.
+- retry:
+    maxRetries: 3
+    commands:
+      - openLink: "atlitos://login"
+      - extendedWaitUntil:
+          visible: "Log in"
+          timeout: 12000
+- tapOn: "Email or phone input"
+- inputText: "player@atlitos.dev"
+- tapOn: "Password input"
+- inputText: "AtlitosDemo!2026"
+- tapOn:
+    text: "Log in"
+    index: 1
+- extendedWaitUntil:
+    visible: "ATLITOS"
+    timeout: 20000
+# Courts list loads from real data.
+- openLink: "atlitos://courts"
+- extendedWaitUntil:
+    visible: "Courts"
+    timeout: 15000
+- assertVisible: "All sports"
+- extendedWaitUntil:
+    visible: "Turf A"
+    timeout: 15000
+- takeScreenshot: /private/tmp/claude-501/-Users-abishaigeorgegosula/fba33c07-a222-4e4f-ab7d-4ba677415610/scratchpad/native-ct-01-list
+# Filter by a sport chip: Badminton isolates the badminton court and drops the
+# cricket turfs, proving the chip drives a real re-query.
+- tapOn: "Badminton"
+- extendedWaitUntil:
+    visible: "Court 1"
+    timeout: 15000
+- assertNotVisible: "Turf A"
+# Reset the filter.
+- tapOn: "All sports"
+- extendedWaitUntil:
+    visible: "Turf A"
+    timeout: 15000
+# Open a court detail. The header shows the court name, sport, rating and the
+# per-hour price readout (JetBrains Mono tabular figures, code-backed).
+- tapOn: "Turf A"
+- extendedWaitUntil:
+    visible: "per hour"
+    timeout: 15000
+# PriceText renders "₹600" as one node; Maestro anchors its regex to the full
+# node text, so match with a contains-regex rather than a bare "600".
+- assertVisible: ".*600.*"
+- assertVisible: "Pick a date"
+- takeScreenshot: /private/tmp/claude-501/-Users-abishaigeorgegosula/fba33c07-a222-4e4f-ab7d-4ba677415610/scratchpad/native-ct-01-detail
+# The slot section sits below the calendar; scroll it into view.
+- scrollUntilVisible:
+    element:
+      text: "Pick a time"
+    direction: DOWN
+    timeout: 15000

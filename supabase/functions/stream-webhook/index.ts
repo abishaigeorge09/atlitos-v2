@@ -34,12 +34,7 @@ import { handleCorsPreflight } from "../_shared/cors.ts";
 import { jsonResponse, withErrorHandling } from "../_shared/http.ts";
 import { AppError, appErrorFromPostgrestMessage } from "../_shared/app-error.ts";
 import { getAuthenticatedUser, serviceRoleClient } from "../_shared/supabase.ts";
-import {
-  assertPathUnderPrefix,
-  CLIPS_BUCKET,
-  fetchLiveClip,
-  type LiveClip,
-} from "../_shared/clip-access.ts";
+import { CLIPS_BUCKET, fetchLiveClip, type LiveClip } from "../_shared/clip-access.ts";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -155,20 +150,25 @@ Deno.serve((req) =>
     }
 
     // Optional client-captured thumbnail path (v1 does client-side thumbs).
-    // SECURITY: this value is client supplied but is later handed straight to
-    // mintSignedClipUrl under the service role (get-clip-playback-url and
-    // get-clip-moderation-url both mint `thumb_path` unconditionally), so an
-    // unconstrained value mints a signed URL for ANY object in the private
-    // `clips` bucket, another owner's uploading/rejected/removed video
-    // included, by pointing an own clip's thumb at it. Constrain it to the
-    // caller's own owner-id folder, the same prefix stream-upload-url derives
-    // storage_path under, and refuse traversal segments that climb back out.
-    // The same guard the mints now apply (assertPathUnderPrefix), enforced at
-    // the write too so a poisoned value never reaches the column in the first
-    // place. One shared predicate, two enforcement points.
+    //
+    // SCALE-MEDIA M-3 hardening. The path is NOT taken on trust: it must be
+    // exactly the owner-scoped slot stream-upload-url minted for THIS clip,
+    // `${owner_id}/${clip_id}.jpg`. Before this guard any string was written
+    // straight onto the row, so an owner could have pointed thumb_path at
+    // another object in the private `clips` bucket and had the playback mint
+    // hand them a signed URL for it. Accepting only the one derivable path
+    // closes that without needing a storage.objects policy.
     if (body.thumb_path) {
-      assertPathUnderPrefix(body.thumb_path, `${user.id}/`);
-      await supabase.from("clips").update({ thumb_path: body.thumb_path }).eq("id", clip.id);
+      const expectedThumbPath = `${clip.owner_id}/${clip.id}.jpg`;
+      if (body.thumb_path !== expectedThumbPath) {
+        throw new AppError("VALIDATION", "thumb_path does not belong to this clip.", 400);
+      }
+      if (await objectExists(supabase, expectedThumbPath)) {
+        await supabase.from("clips").update({ thumb_path: expectedThumbPath }).eq("id", clip.id);
+      }
+      // A thumb the client failed to upload leaves thumb_path NULL rather than
+      // pointing the feed at an object that is not there (which is what makes
+      // a batch thumb mint land every id in `failed`).
     }
 
     // uploading -> processing (only if still uploading; a concurrent call that

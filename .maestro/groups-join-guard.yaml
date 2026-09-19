@@ -1,8 +1,11 @@
 # Trainings Groups, guest guard (PRD-01 FR-2/FR-3, groups phase). A
-# guest can browse coach1's profile and see the Cric Squad group card,
-# but tapping "Join, month 1" must raise the login gate rather than ever
-# reaching the group join/payment screen: guests cannot pay, and the
-# money path (Razorpay order creation, PRICE_MISMATCH revalidation) is
+# guest can browse coach1's profile (display name "Ravi Kumar", confirmed
+# live via read only SQL against syzzfgaudpifwvbpycyi on 2026-08-13; the
+# seed accounts were renamed/rotated by launch Phase 1's security
+# lockdown, "Demo Coach One" no longer exists) and see the Cric Squad
+# group card, but tapping "Join, month 1" must raise the login gate rather
+# than ever reaching the group join/payment screen: guests cannot pay, and
+# the money path (Razorpay order creation, PRICE_MISMATCH revalidation) is
 # already probe-proven server side, not something Maestro should touch.
 #
 # Writes nothing: guest browse only, gate opens and is dismissed via
@@ -60,11 +63,11 @@ appId: com.atlitos.app
     timeout: 4000
 - scrollUntilVisible:
     element:
-      text: ".*Demo Coach One.*"
+      text: ".*Ravi Kumar.*"
     direction: DOWN
     timeout: 25000
 - tapOn:
-    text: ".*Demo Coach One.*"
+    text: ".*Ravi Kumar.*"
     index: 0
 - extendedWaitUntil:
     visible: "Session type"

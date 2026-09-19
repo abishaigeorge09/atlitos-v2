@@ -46,7 +46,7 @@ Source of truth for every table in the Supabase Postgres schema. One domain per 
 | `ledger_account_type` | `platform`, `coach`, `court_partner`, `upa_fund`, `user` | double-entry account family, see `ledger_entries` below |
 | `ledger_direction` | `debit`, `credit` | |
 | `fee_value_type` | `percentage`, `flat` | |
-| `notification_type` | `booking`, `order`, `chat`, `clip_moderation`, `donation`, `verification`, `transfer`, `support` | |
+| `notification_type` | `booking`, `order`, `chat`, `clip_moderation`, `donation`, `verification`, `transfer`, `support`, `session`, `membership` | `session` and `membership` added in `0102_notification_types_coaching.sql`. Until then the coaching domain had no value it could emit under, which is why no session transition had ever notified anyone. Neither reuses `booking` (a court booking everywhere else), because `notification_prefs` opt-outs are per type, so folding them together would let muting court receipts also mute a coach accepting a session. |
 | `user_status` | `active`, `suspended` | |
 
 ---
@@ -112,7 +112,9 @@ Shopper shipping addresses (commerce domain, kept here as it is an identity-adja
 Indexes: `idx_addresses_user_id` on `user_id`.
 
 ### `athlete_sports`
-Added in `0001_identity.sql`, not originally in this doc. Normalizes an athlete's per-sport detail (skill level, which sport is primary) alongside the denormalized `users.sports sport[]` cache column, which remains the fast-path summary array; reconciling the two is an application-layer concern, not enforced by a trigger in Phase 1.
+Added in `0001_identity.sql`, not originally in this doc. Normalizes an athlete's per-sport detail (skill level, which sport is primary) alongside the denormalized `users.sports sport[]` cache column, which remains the fast-path summary array.
+
+Reconciling the two is done at the write path, not by a trigger. Both onboarding (`complete_player_setup`, 0004) and post-onboarding edits (`set_athlete_sports`, 0088) dual-write `users.sports` and `athlete_sports`/`is_primary` in one transaction, so the primary-sport model that Learn (`get_learn_home`) and the coach-search default read stays consistent with `users.sports`. Before 0088, edits patched only `users.sports`, leaving `athlete_sports` frozen on the onboarding pick (the drift 0088 closes).
 
 | Column | Type | Constraints |
 |---|---|---|
@@ -239,8 +241,10 @@ Indexes: `idx_sessions_coach_id_status` on `(coach_id, status)`, `idx_sessions_p
 
 Founder-ratified fares model: monthly subscription per group, manual renewal in v1 through the same one-time payment rails sessions use, no autopay, no-show has no money effect, no pro-rata refunds, capacity guarded inside the join RPC.
 
-- `training_groups` — id, coach_id -> coach_profiles(user_id), name, sport (the shared `sport` enum), skill_level text, capacity int (check > 0), monthly_fee numeric(12,2) (rupees, the exact unit `sessions.price` uses; check >= 0), attendance_policy text, active bool default true, timestamps. Writes are RPC-only: `create_training_group` / `update_training_group` (0080, coach-owned; deactivate, never delete; capacity may not drop below the live member count).
-- `group_memberships` — id, group_id, player_id, status text check in ('pending','active','lapsed'), period_start/period_end date, price/platform_fee/total numeric(12,2) (fare snapshot at join/renew time, mirroring how book-session snapshots onto sessions), payment_intent_id -> payment_intents (nullable, re-linked to the newest intent on renewal), timestamps. `pending` is the pre-capture state the join RPC inserts (it holds a seat exactly as a `requested` unpaid session holds a slot; `membership_abandon_unpaid` lapses it on a failed checkout). Partial unique index `group_memberships_one_live_per_player` on (group_id, player_id) where status <> 'lapsed': one live membership per player per group, structurally.
+- `training_groups` — id, coach_id -> coach_profiles(user_id), name, sport (the shared `sport` enum), skill_level text, capacity int (check > 0 and, from `0112`, check <= 100), monthly_fee numeric(12,2) (rupees, the exact unit `sessions.price` uses; check >= 0), attendance_policy text, active bool default true, timestamps. Writes are RPC-only: `create_training_group` / `update_training_group` (0080, coach-owned; deactivate, never delete; capacity may not drop below the live member count).
+- `group_memberships` — id, group_id, player_id, status text check in ('pending','active','expired','lapsed') (`expired` added in `0104_membership_expiry_sweep.sql`), period_start/period_end date, price/platform_fee/total numeric(12,2) (fare snapshot at join/renew time, mirroring how book-session snapshots onto sessions), payment_intent_id -> payment_intents (nullable, re-linked to the newest intent on renewal), timestamps. `pending` is the pre-capture state the join RPC inserts (it holds a seat exactly as a `requested` unpaid session holds a slot; `membership_abandon_unpaid` lapses it on a failed checkout). Partial unique index `group_memberships_one_live_per_player` on (group_id, player_id) where status <> 'lapsed': one live membership per player per group, structurally. **`0107` changed both of this table's referential actions.** Checked against account deletion (`0098`, not yet merged here) and found NOT in conflict, despite first appearing to be: see the resolution note under `payment_intents` below. `group_id -> training_groups` was `ON DELETE CASCADE` and is now `RESTRICT`; `payment_intent_id -> payment_intents` was `SET NULL` and is now `RESTRICT`. The two together are how 56 captured payments worth Rs 64,000 became unattributable: deleting 36 training groups cascaded their memberships away while the payments sat on the other side of a `SET NULL` edge and survived with every ledger leg intact, producing Rs 63,440 of phantom withdrawable coach balance that the ledger balance check structurally could not see. A training group that has been paid into can no longer be hard deleted; retire it with `update_training_group`. Note that the sibling edge `sessions.group_id -> training_groups` was already `RESTRICT` in the same migration that made this one `CASCADE` (`0076`), so this is now consistent rather than novel.
+  Also carries `renewal_reminder_sent_at` and `expiry_notified_at` timestamptz (`0104`), the per period idempotency stamps for the sweep; `activate_group_membership_paid` clears both on capture so each paid month gets exactly one reminder.
+  **`expired` vs `lapsed`, and why there are two.** `expired` means the paid month has ended and the seat is STILL HELD: both the partial unique index above and `join_training_group`'s capacity count key off `status <> 'lapsed'`, and `getGroup` (`packages/api/src/use-groups.ts`) keeps the member on the coach's roster on the same test. `renew_group_membership` accepts it, so this is the state in which the Renew button is live and renewal happens on the same row. `lapsed` keeps its original meaning exactly: the grace window passed, the seat was released back to capacity, and the athlete re-joins through `join_training_group` under the capacity guard. Flipping straight from `active` to `lapsed` at `period_end` would have released a paying member's seat on day one, dropped them off the coach's roster, and lit a Renew button that `renew_group_membership` refuses. Both render as the same Lapsed pill to users.
 - `sessions.group_id` — nullable FK added in 0076. Group sessions have player_id NULL, session_type_id NULL, and price = platform_fee = total = 0, enforced by the `sessions_group_shape` CHECK (non-group rows keep the exact old shape). The fare money moves at membership capture, never on a group session row, so group sessions carry no payment intent and no accrual.
 - `session_participants` — pk (session_id, player_id), attendance_status text check in ('present','absent') null until marked, marked_at. Seeded from the group's ACTIVE members by `create_group_session`; written only by `mark_attendance` (coach-only, session must be `in_progress`, marked players must still be active members).
 - `session_status` gained `in_progress` (0077): accepted -> in_progress ('start', coach-driven, no time gate) -> completed (no TOO_EARLY gate once started). Every pre-0077 transition is unchanged; cancel/reschedule remain unreachable from `in_progress`. Group sessions complete through the client `session_transition` door (no money half); 1:1 sessions still complete only through complete-session.
@@ -273,7 +277,10 @@ Integrator TODO: apply `0082_coach_trainee_videos.sql`, deploy both functions, r
 | `description` | `text` | nullable |
 | `status` | `venue_status` | not null default `pending` |
 | `rejection_reason` | `text` | nullable |
+| `booking_url` | `text` | nullable. External booking link (affiliate model for courts, `0120`); when set the app sends the athlete there instead of the in-app slot picker |
 | `created_at`, `updated_at` | `timestamptz` | |
+
+Admin-entered venues (`admin_create_venue`, `0120`) are owned by the entering admin (`partner_user_id = auth.uid()`) and inserted as `verified` with their courts in one transaction.
 
 Indexes: `idx_venues_partner_user_id` on `partner_user_id`, `idx_venues_status_city` on `(status, city)`.
 
@@ -636,7 +643,126 @@ Constraints: `UNIQUE(affiliate_product_id, retailer)` (one offer per retailer pe
 
 **No `orders`, no `stock_reservations`, no payment for affiliate items.** An affiliate purchase happens on the retailer's site; Atlitos runs no charge and holds no stock for these rows. Agentic auto-ordering (a background worker placing the retailer order in app) is a FUTURE epic with its own constraints, explicitly out of scope now, documented in `docs/prd/PRD-agentic-ordering.md`.
 
+### Shop search: vectors, query cache, owned shop flag (Phase S1, PRD-07 section 11, FR-40, FR-43, FR-53)
+
+`docs/architecture/ADR-011-shop-search-ingest-health.md` D1, D2, D5, D6. Extension `vector`, installed `with schema extensions`.
+
+`affiliate_products` gains one column:
+
+| Column | Type | Constraints |
+|---|---|---|
+| `embedding` | `extensions.vector(1024)` | nullable. `embedding IS NULL` IS the pending-embed queue (D2), not a separate flag column. Written only by `gear-embed` under `service_role` (AC-11-7); never in any client select (column-level grant, see RLS.md) |
+
+Indexed by `idx_affiliate_products_embedding_hnsw`, `using hnsw (embedding extensions.vector_cosine_ops)`. A missing/not-yet-built index leaves `match_affiliate_products` correct via a sequential scan, only slower.
+
+`match_affiliate_products(query_embedding extensions.vector(1024), match_threshold float, match_count int) returns table(id uuid, similarity float)`: `security definer`, `stable`, `service_role` execute only (revoked from `anon`/`authenticated`/`public`). Returns `active` products whose cosine similarity to the query clears `match_threshold`, nearest first. Called from inside `ai-search` (Track B) and the `gear-embed` sweep, never directly by a client.
+
+### `query_embedding_cache`
+
+Caches Voyage query embeddings, keyed by `sha256(lower(trim(query)))`, so `ai-search` bounds Voyage cost the way `ai_spend_daily` already bounds Claude cost. TTL (10 minutes) is enforced by the caller, not a column here.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `query_hash` | `text` | PK |
+| `embedding` | `extensions.vector(1024)` | not null |
+| `created_at` | `timestamptz` | not null default `now()` |
+
+`service_role` only: RLS enabled with zero policies (fail closed, the `stock_reservations` shape), and all grants revoked from `anon`/`authenticated`/`public`.
+
+### `app_config`
+
+A small generic key/value/public config table (PRD-07 FR-53). `shop.owned_enabled` is its first row, seeded `false` at launch: hides cart, checkout, orders and every owned product from the consumer app and from search until flipped, which is a config change, not a deploy.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `key` | `text` | PK |
+| `value` | `jsonb` | not null |
+| `public` | `boolean` | not null default `false` |
+| `updated_at` | `timestamptz` | not null default `now()`, via `set_updated_at()` |
+
+Rows with `public = true` are readable by `anon`/`authenticated` (`app_config_select_public`); every other row is invisible to both. `get_app_config(p_key)` (`security definer`, `stable`) is a convenience RPC returning the value for a public row, or null. The only write path is `admin_set_app_config(p_key, p_value)` (`security definer`, `has_role('admin')` checked inside, one `audit_log` row per call with `action = 'app_config.set'`). `audit_log.entity_id` is `uuid not null` (`0003`) while `app_config.key` is text, so the audit row's `entity_id` is a deterministic uuid derived from the key (`'00000000-0000-0000-0000-' || right(md5(key), 12)`), so one key's history always groups under the same `entity_id`.
+
+`checkout` reads `shop.owned_enabled` via `get_app_config` under the service client before any pricing, and refuses `OWNED_SHOP_DISABLED` (403) when it is not `true` (AC-11-5).
+
 Seeded by `scripts/seed-affiliate-catalog.mjs` (8 products, 17 offers across four retailers), including a Babolat racket offered under 2000 at one retailer and higher at another for the WS3 price-comparison proof.
+
+### Ingest and health (Phase S2, PRD-07 FR-44 to FR-52, `XXXX_gear_ingest_health.sql`, `XXXX_product_images_bucket.sql`)
+
+`docs/architecture/ADR-011-shop-search-ingest-health.md` D3 (ingest), D4 (health), D6 (RLS). Extends `affiliate_products`/`product_offers` (0086) and the `admin_upsert_affiliate_product`/`admin_upsert_product_offer` RPCs (0120) rather than replacing either.
+
+`affiliate_products` gains five columns:
+
+| Column | Type | Constraints |
+|---|---|---|
+| `source_image_url` | `text` | nullable, the retailer's own image URL, kept for re-fetch |
+| `image_path` | `text` | nullable, Storage path of our own copy: `product-images/<retailer_key>/<sha256-16>.<ext>` |
+| `health_status` | `text` | nullable, free text the Catalog health page (FR-49) derives and displays; no `CHECK` constraint, so `gear-recheck`'s own vocabulary is not locked into a schema change per new state |
+| `health_checked_at` | `timestamptz` | nullable, when `gear-recheck` last evaluated this product's overall health |
+| `auto_delisted_at` | `timestamptz` | nullable, set only by `system_auto_delist_affiliate_product` (FR-51) |
+
+All five are public-safe the same way `title`/`brand`/`image_url` already are; the column-level grant from Phase S1's `XXXX_gear_search_vectors.sql` (which excludes only `embedding`) is re-asserted with these five columns added.
+
+`product_offers` gains five columns:
+
+| Column | Type | Constraints |
+|---|---|---|
+| `canonical_url` | `text` | nullable, the retailer's canonical product URL, distinct from `affiliate_url` which carries the (currently empty) affiliate tag |
+| `retailer_key` | `text` | nullable, references `retailer_programmes(key)` `ON DELETE SET NULL` |
+| `last_check_outcome` | `text` | nullable, `CHECK (... IN ('ok', 'price_changed', 'out_of_stock', 'gone', 'blocked'))` |
+| `consecutive_failures` | `int` | not null default `0`; only `gone`/`blocked` increment it, every other outcome resets it (D4: an out-of-stock page is a successful fetch, not a failure) |
+| `last_price_change_at` | `timestamptz` | nullable |
+
+Indexed by `idx_product_offers_retailer_key` (partial, `WHERE retailer_key IS NOT NULL`), the read `gear-recheck` groups its sweep by.
+
+#### `retailer_programmes`
+
+Which retailers `gear-ingest`/`gear-recheck` know how to read, and how. Admin-read only, deliberately NOT public-browse like `affiliate_products`: operational config, not shopper content.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `key` | `text` | PK |
+| `display_name` | `text` | not null |
+| `url_patterns` | `text[]` | not null default `'{}'`, hostname substrings gear-ingest matches a pasted URL against |
+| `affiliate_tag_template` | `text` | nullable, EMPTY until a real affiliate programme is approved (open question 11); `gear-ingest` never fabricates a tag |
+| `extractor` | `jsonb` | nullable, a `RetailerExtractorMap` (see `supabase/functions/_shared/extract-product.ts`): field name to a small CSS-selector-like string, the last-resort extraction strategy after JSON-LD and Open Graph both miss |
+| `fetch_policy` | `jsonb` | not null default `{"maxPerMinute": 10}`, the nightly sweep's per-retailer rate limit |
+| `active` | `boolean` | not null default `true` |
+
+Seeded with `amazon_in` (Amazon India, `amazon.in`), `flipkart` (Flipkart, `flipkart.com`), `decathlon_in` (Decathlon India, `decathlon.in`), every `affiliate_tag_template` null.
+
+#### `product_fetch_log`
+
+One row per `gear-recheck` attempt on one offer. Admin-read only, service-role write only.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `uuid` | PK |
+| `offer_id` | `uuid` | not null, references `product_offers(id)` `ON DELETE CASCADE` |
+| `fetched_at` | `timestamptz` | not null default `now()` |
+| `outcome` | `text` | not null, `CHECK (... IN ('ok', 'price_changed', 'out_of_stock', 'gone', 'blocked', 'unparsed'))` |
+| `http_status` | `int` | nullable |
+| `price_seen` | `numeric(12,2)` | nullable |
+| `in_stock_seen` | `boolean` | nullable |
+| `notes` | `text` | nullable |
+| `ai_suggestion` | `jsonb` | nullable, FR-52's Claude assessment on a 200 that no strategy parses, never applied automatically |
+
+Indexed by `idx_product_fetch_log_offer_fetched_at` on `(offer_id, fetched_at DESC)`, the health page's per-offer history read.
+
+#### `system_auto_delist_affiliate_product(p_id uuid, p_reason text) returns affiliate_products`
+
+`security definer`, `service_role` execute only. Sets `active = false`, `auto_delisted_at = now()`, writes one `audit_log` row with `actor_id` hard-coded `null` and `action = 'affiliate_product.auto_delist'` (FR-51, AC-11-4). The standing `auto-delist-actor-null` invariant in `scripts/security-invariants.sh` (Track D) checks every `audit_log` row whose action starts with `affiliate_product.auto` has `actor_id is null`.
+
+#### `admin_upsert_affiliate_product` / `admin_upsert_product_offer`, extended (ADR-011 D3)
+
+Both dropped and recreated under the same name with two new trailing, defaulted parameters, rather than a new RPC, so a call with the ORIGINAL argument count still resolves to the one function (defaults fill the rest): `admin_upsert_affiliate_product(..., p_image_path text default null, p_source_image_url text default null)`, `admin_upsert_product_offer(..., p_canonical_url text default null, p_retailer_key text default null)`. Manual entry (`apps/admin`'s existing form) never passes the new parameters; `gear-ingest`'s `save` action always does, calling both under the ADMIN'S OWN forwarded JWT, never the service role, so `has_role('admin')` inside stays the one door deciding who writes the catalogue. On update, a null/blank trailing value leaves the existing column value in place rather than clearing it.
+
+#### `product-images` Storage bucket
+
+`XXXX_product_images_bucket.sql`. Public read (product photos render unauthenticated in the guest-browsable shop); no insert/update/delete policy for anon or authenticated at all, since the only writer is `gear-ingest`'s service-role client (see RLS.md). Path convention `product-images/<retailer_key>/<sha256-16>.<ext>`, hash-deduped: re-ingesting the same image skips the upload when that path already exists.
+
+#### `gear-ingest` edge function (ADR-011 D3, AC-11-3)
+
+Two actions: `{ action: "fetch", url }` matches a `retailer_programmes` row by hostname, fetches the page (`_shared/fetch-page.ts`: named UA, 10s timeout, 5MB cap, robots.txt checked first) and extracts a draft (`_shared/extract-product.ts`: JSON-LD Product, then Open Graph, then the programme's `extractor` map), WRITING NOTHING (FR-44); a blocked/unsupported/unparseable page returns 422 with whatever partial fields could still be scraped. `{ action: "save", url, draft, productId? }` fetches only the draft's image (never the page a second time), SHA-256 hashes it, copies it into `product-images` under the service role (skip if the hash already exists), then calls the two extended RPCs above using the caller's own admin JWT. Admin JWT required for both actions; anon and non-admin are refused 401/403.
 
 ## The commerce bill is a third pricing shape (PHASE-4-STATUS.md D1)
 
@@ -687,10 +813,36 @@ RLS enabled, no policies, grants withdrawn from `anon` and `authenticated`: the 
 | Function | Grant | What it does |
 |---|---|---|
 | `unpaid_hold_ttl()` | public | How long an unpaid hold survives, defined as `stock_reservation_ttl()` so all three domains cannot drift apart. |
-| `expire_stale_holds()` | `service_role` only | Courts (`pending_payment` past the TTL, via `court_booking_expire_payment`), sessions (`requested` whose payment intent is still `created` past the TTL and which have no captured intent, via `session_abandon_unpaid`), commerce (`release_expired_stock_reservations`, Track A's seam), and **clutch** (`reconcile_stranded_clips`, the fourth arm, AT-93/`0045`). Returns a per domain count so a sweep that ran and did nothing is distinguishable from one that never ran. Per row failures are counted, not fatal, so one refusing row cannot stop the other domains being swept. |
+| `expire_stale_holds()` | `service_role` only | Courts (`pending_payment` past the TTL **and with no captured or refunded intent**, via `court_booking_expire_payment`, which re-checks the same thing under the booking's row lock: `0108` added both layers, the arm previously had neither while its two siblings had both, so a payment landing inside the fifteen minute hold window expired the booking, resold the slot and charged the athlete), sessions (`requested` whose payment intent is still `created` past the TTL and which have no captured intent, via `session_abandon_unpaid`), commerce (`release_expired_stock_reservations`, Track A's seam), and **clutch** (`reconcile_stranded_clips`, the fourth arm, AT-93/`0045`). Returns a per domain count so a sweep that ran and did nothing is distinguishable from one that never ran. Per row failures are counted, not fatal, so one refusing row cannot stop the other domains being swept. |
 | `reconcile_stranded_clips()` | `service_role` only | The v1 form of VIDEO.md's `stream-reconcile` poll fallback, folded into `expire_stale_holds()` rather than a separate cron. Reclaims clips stranded in `uploading`/`processing` past a 30 minute TTL: if the storage object is present in the private `clips` bucket, drives the clip forward to `ready` (through the legal edges); if absent, `rejected`. Per-row failures counted. |
 
-Scheduled with `pg_cron` as job `expire-stale-holds`, `*/5 * * * *`. A session in `requested` is deliberately NOT stale on age alone: a paid session sits there legitimately for days waiting for a coach to answer, so the query keys on the payment intent instead. Verified 2026-07-20: the first scheduled run at 10:45:00 cancelled sessions `4a64c535` and `4ee5bca9`, the two live stale rows P3 left behind, by running rather than by hand (`cron.job_run_details` runid 1, `sessions.updated_at` 10:45:00.041626).
+Scheduled with `pg_cron` as job `expire-stale-holds`, `*/5 * * * *`, declared in SQL by `0105_membership_sweep_schedule.sql` (until then the job existed only in the live database, so a rebuild from migrations came up with the sweep silently not running). A session in `requested` is deliberately NOT stale on age alone: a paid session sits there legitimately for days waiting for a coach to answer, so the query keys on the payment intent instead. Verified 2026-07-20: the first scheduled run at 10:45:00 cancelled sessions `4a64c535` and `4ee5bca9`, the two live stale rows P3 left behind, by running rather than by hand (`cron.job_run_details` runid 1, `sessions.updated_at` 10:45:00.041626).
+
+**Operational note on `0105_membership_sweep_schedule.sql` and the LIVE `expire-stale-holds` job.** An earlier draft of this migration declared `expire-stale-holds` by unscheduling it and rescheduling it, the same idempotency pattern used for the brand new `membership-sweep` job below. That is wrong for a job the migration did not create: `cron.unschedule` deletes the `cron.job` row and, with it, every `cron.job_run_details` row under that jobid, so production would lose the run history for `expire-stale-holds` back to `0038` and the job would come back under a new jobid. `cron.unschedule` and `cron.schedule` both also require the calling role to own the job (or be superuser); the role that first created `expire-stale-holds` against production is not guaranteed to be the role that applies this migration, and if it differs the unschedule fails outright, inside the same transaction as the new `membership-sweep` job. The shipped migration instead only creates `expire-stale-holds` when `cron.job` has no row of that name, which is true exactly once, on a fresh cluster rebuilt from migrations with no jobs yet. Applied to production, where the job already exists with this exact name, schedule and command, this is a no op: no unschedule, no new jobid, no lost history, no ownership requirement. If `expire-stale-holds`'s schedule or command genuinely needs to change in the future, that migration must decide explicitly how to preserve the existing job's identity and confirm the applying role owns it, rather than inherit this file's silence on the question.
+
+
+### The membership sweep (B2, `0104` and `0105`)
+
+Before this, an `active` membership never became anything else: `membership_abandon_unpaid` is the only other writer of `lapsed` and it refuses any row that is not `pending` with no captured payment. So the athlete read "Active until <date>" forever, the Renew button in `MyGroupsCard.tsx` was dead code (it rendered only for `lapsed`), and the coach's roster computed lapsed client side from `period_end`, which is how the two views ended up disagreeing about the same member.
+
+| Function | Grant | What it does |
+|---|---|---|
+| `membership_reminder_lead()` | public | How far before `period_end` the renewal reminder fires. 3 days. |
+| `membership_grace_period()` | public | How long an `expired` membership keeps its seat before it is lapsed and the seat returns to capacity. 7 days. |
+| `sweep_group_memberships()` | `service_role` only | Three idempotent stages. Remind: `active`, `period_end` inside the lead window, `renewal_reminder_sent_at` null, writes a `membership` notification and stamps it. Expire: `active` and `period_end` past but still inside grace, moves to `expired` and notifies; seat is kept. Lapse: `active` or `expired` and `period_end` past by more than grace, moves to `lapsed` and notifies; this is the only stage that releases a seat. Returns jsonb counters including per stage failure counts, and swallows a per row failure rather than aborting the sweep, the `expire_stale_holds` shape. |
+
+Stage 2 is bounded on BOTH sides (`period_end < today` and `period_end >= today - grace`) and stage 3 accepts `active` as well as `expired`. Without that, a membership already months overdue, which is every existing overdue row on the day the job first runs, would be expired and then lapsed inside one sweep and the athlete would get "renew within 7 days to keep your seat" and "your seat was released" in the same minute. That was a real defect, caught by `scripts/verify-session-notifications-and-sweep.sql` on its first run.
+
+Scheduled with `pg_cron` as job `membership-sweep`, `0 22 * * *`, which is 03:30 Asia/Kolkata: after the local date has rolled over, so a membership whose period ended yesterday IST is expired on the first sweep of the new IST day. Daily rather than more often because every stage keys off a date, not a timestamp, so a second run inside the same IST day finds nothing to do. `pg_cron` was not a new dependency: it is 1.6.4, installed, and was already running `expire-stale-holds`.
+
+Two adjacent functions change with it, both replaced in `0104` with their arithmetic untouched:
+
+- `renew_group_membership` accepts `expired` as well as `active`. Nothing else moves; a `lapsed` row is still refused with `INVALID_TRANSITION` because its seat is gone and only `join_training_group` can safely contest capacity.
+- `activate_group_membership_paid` additionally clears `renewal_reminder_sent_at` and `expiry_notified_at`, which re-arms next month's reminder. The period arithmetic (`greatest(period_end, today) + 1 month` for an active row, a fresh month from today otherwise) is byte identical to `0079`.
+
+### Session transition notifications (B1, `0103`)
+
+`session_transition_internal` writes the in-app notification for `accept`, `decline`, `start` and `complete` through `notify_session_parties(session_id, action)` (`service_role` only), in the same transaction as the status change, so a rolled back transition cannot leave a lie in the inbox. It is emitted in-database rather than from the edge functions because only one of the four transitions passes through an edge function at all (1:1 `complete`, via `complete-session`); `session_transition_internal` is the chokepoint every path already funnels through. Recipients are the athlete side only: all four are coach actions, so `player_id` for a 1:1 session and every `session_participants` row for a group session (where `player_id` is null). Deep links are `/trainings/session/<id>` and `/trainings/group-session/<id>`. `cancel` and `reschedule` are deliberately not emitted yet; they are one more branch in the same helper.
 
 ---
 
@@ -1014,7 +1166,14 @@ The `supabase_realtime` publication contains exactly three tables, and membershi
 |---|---|---|
 | `chat_messages` | `0022_chat.sql` | `packages/api/src/use-chat.ts` (`subscribeToThread`, `subscribeToInbox`) |
 | `court_bookings` | `0029_realtime_courts_sessions.sql` | `apps/portal-court` Live Today board (PRD-03 FR-15) |
-| `sessions` | `0029_realtime_courts_sessions.sql` | coach accept/decline push (PRD-02 FR-12) |
+| `sessions` | `0029_realtime_courts_sessions.sql` | NONE. Published opportunistically, never subscribed. See below. |
+| `notifications` | `0106_realtime_notifications.sql` | `packages/api/src/use-notifications.ts` `subscribe`, used by `apps/mobile/src/app/notifications/index.tsx` |
+
+`notifications` was the second dead publication of exactly the AT-32 shape, found while wiring the coaching notifications in `0103`/`0104`: the mobile notifications screen has been opening a `postgres_changes` INSERT subscription on `public.notifications` since AT-147, and the table was never published, so the socket reached SUBSCRIBED and no event ever arrived. That is why the bell only updated on a manual refresh. `0106` publishes it after the RLS review in its header (one SELECT policy, `user_id = auth.uid()`, no public or discovery policy, no client INSERT path).
+
+`sessions` remains published with no subscriber, deliberately. A session subscription was considered and rejected when B1 landed: every accept, decline, start and complete now writes a `notifications` row in the SAME transaction as the status change, so a sessions channel would carry a duplicate of an event already arriving on the notifications stream, and `postgres_changes` single column filters cannot express the audience anyway (athlete is `player_id`, coach is `coach_id`, a group session is neither since `player_id` is null and membership lives in `session_participants`). One stream carrying every domain beats one stream per table.
+
+**Is push plus pull-to-refresh enough for a session transition, or should `sessions` itself be wired for realtime? Push plus pull-to-refresh is enough, answered explicitly rather than left open.** "Push" here means the in-app bell: `0106` makes `notifications` realtime, so an accept/decline/start/complete already reaches a subscribed client the moment `session_transition_internal` commits, with no poll and no manual refresh, exactly the AT-32 gap this same change closed for the bell itself. Device push (APNs/FCM) is the separate P9 stub and reaching it is unrelated to this decision. What a direct `sessions` subscription would additionally buy is a screen showing session state (the trainee sessions list, a session detail card) updating itself without the athlete pulling to refresh or navigating away and back, which today it does not do live. That gap is accepted for the same reason the subscription was rejected in the first place: `postgres_changes` cannot express who is allowed to see a given session row without either a broad table-wide subscription RLS quietly filters per-client (correct but wasteful, one socket message evaluated against every subscriber's policy for every session update in the product) or a bespoke per-user channel this table's shape does not support cleanly. Pull-to-refresh, plus the realtime notification that already tells the athlete something changed and gives them a reason to pull, is judged sufficient for a session card; it would not be sufficient for something with second-by-second stakes, which is exactly why chat and Live Today (a court partner watching bookings arrive) got their own direct subscriptions and a session status card did not.
 
 `court_bookings` and `sessions` were missing until 0029, which is the root cause of advisory AT-32: the Live Today board subscribed correctly to a table that was never replicated, so no event could ever arrive. Adding a table here is a security decision, not a performance one, because Realtime evaluates each table's `SELECT` policy per subscriber before delivering a row; publish nothing without the RLS review 0029's header performs.
 
@@ -1037,8 +1196,26 @@ Both chat tables ship in `0022_chat.sql`, which also adds `text` a non-empty `CH
 | `deep_link` | `text` | not null |
 | `read_at` | `timestamptz` | nullable |
 | `created_at` | `timestamptz` | |
+| `pushed_at` | `timestamptz` | nullable, `0107` |
+| `push_claimed_at` | `timestamptz` | nullable, `0107` |
+| `push_attempts` | `int` | not null default 0, `0107` |
 
-Indexes: `idx_notifications_user_id_read_at` on `(user_id, read_at)`.
+Indexes: `idx_notifications_user_id_read_at` on `(user_id, read_at)`, and
+`idx_notifications_push_pending` on `(created_at) where pushed_at is null` (`0107`), which is
+partial so it holds only the push backlog rather than every notification ever written.
+
+**Push delivery state (`0107`, SCALE-REALTIME R-7).** Until `0107` a notification written by SQL
+never produced a device push: `_shared/notify.ts` had exactly one caller in the repo
+(`finalize-court-booking-payment.ts:157`), and `moderate_clip` (0043),
+`record_donation_from_draft` (0054), the verification RPCs (0066), `notify_session_parties` (0103)
+and `sweep_group_memberships` (0104) all insert the row directly. `pushed_at` is the checkpoint
+that closes that: a null means the row is still owed a device push, and the `notify-push-sweep`
+edge function, run by the `notification-push-sweep` pg_cron job every 30 seconds (`0108`), claims
+those rows through `claim_notification_push_batch` and pushes them grouped by content. A sweeper
+was chosen over a per-row database webhook deliberately; the four-point argument is in `0107`'s
+header. All three columns are service-role only, enforced by the
+`notifications_lock_push_state` BEFORE UPDATE trigger, because 0002's owner UPDATE policy is row
+scoped rather than column scoped and the bell needs it to mark rows read.
 
 ### `push_tokens`
 Named `push_tokens` (renamed from this doc's earlier `device_tokens`) as of `0002_notifications.sql`; same shape.
@@ -1086,9 +1263,19 @@ One row per Razorpay order, created before the domain entity in most flows (an o
 | `amount` | `numeric(12,2)` | not null |
 | `currency` | `text` | not null default `'INR'` |
 | `status` | `payment_intent_status` | not null default `created` |
+| `finalized_at` | `timestamptz` | nullable, `0109`. Set once the domain handler completed. See below |
+| `finalize_claimed_at` | `timestamptz` | nullable, `0109`. When the current attempt claimed the intent |
+| `finalize_attempts` | `integer` | not null default 0, `0109` |
+| `finalize_last_error` | `text` | nullable, `0109`. Verbatim failure from the last dispatch |
 | `created_at`, `updated_at` | `timestamptz` | |
 
-Indexes: `idx_payment_intents_user_id` on `user_id`, `idx_payment_intents_razorpay_order_id` on `razorpay_order_id` (webhook lookup), `idx_payment_intents_domain_entity` on `(domain, entity_id)`.
+Indexes: `idx_payment_intents_user_id` on `user_id`, `idx_payment_intents_razorpay_order_id` on `razorpay_order_id` (webhook lookup), `idx_payment_intents_domain_entity` on `(domain, entity_id)`, and `idx_payment_intents_unfinalized` on `(status, finalize_claimed_at) where finalized_at is null` (`0109`, the reconciliation queue, partial so it stays the size of the backlog rather than the table).
+
+**The two axes, `0109`.** `status` says whether the money moved. `finalized_at` says whether the product delivered. They are not the same question and conflating them is what made a captured-but-undelivered charge invisible: the shared capture gate flipped `status` before dispatching, so a handler that died left an intent no delivery could ever re-enter and no query could ever find. `status = 'captured' and finalized_at is null` is that list, exposed as the `unfinalized_captures` view (service role only). Empty is the correct steady state; a row in it is money owed to somebody. `claim_payment_intent_for_finalization()` is the gate itself, `mark_payment_intent_finalized()` and `record_payment_intent_finalize_failure()` are its two bookkeeping writers, all three service role only. Full reasoning in `PAYMENTS.md`, "The shared capture gate is re-enterable".
+
+**`ON DELETE` behaviour of everything pointing here changed in `0107`.** `ledger_entries.payment_intent_id`, `sessions.payment_intent_id` and `group_memberships.payment_intent_id` were `SET NULL` and are now `RESTRICT`. A captured payment must never become unattributable, and blanking the link is the same loss of attribution as deleting the row.
+
+**Resolved against account deletion, p6 integration audit, 2026-08-14.** `payment_intents.user_id references public.users (id) on delete cascade` (`0010_payments_core.sql`), so if a `public.users` row for a payer were ever hard-deleted, its `payment_intents` would cascade away and immediately hit the new `RESTRICT` on `ledger_entries`/`group_memberships`, aborting the transaction. That never happens, checked against the actual implementation rather than assumed: `delete_my_account()` (`0098_account_deletion.sql`, on `phase-11/p6-account-deletion`, not yet merged to this integration branch) never issues `delete from public.users` or `delete from auth.users`; it UPDATEs `public.users` in place (PII scrubbed, `deleted_at` set) and explicitly RETAINS `payment_intents`, `ledger_entries`, `sessions`, `group_memberships` and `training_groups` untouched, by its own docblock's table-by-table list. The edge function leg (`supabase/functions/delete-account/index.ts:191`) calls `admin.auth.admin.updateUserById(userId, { ..., ban_duration: DELETED_BAN_DURATION })`, a soft ban, never `admin.auth.admin.deleteUser`. So the cascade path the RESTRICT would ever block is one account deletion was already built to avoid, for the same underlying reason the RESTRICT exists (0098's own header cites the identical naive `delete from auth.users` cascade as the bug it replaces, independently of track 5). No code change is required in either migration; when `0098` merges, verify this holds with a live read against `pg_constraint`/`pg_trigger` rather than re-trusting this note, the same way it was checked here.
 
 ### `ledger_entries`
 Double-entry. Every money event writes two or more rows whose `amount` sum, respecting `direction`, is zero within one `entry_group_id`. This table is the single source of truth for every balance the app displays (coach earnings, court partner earnings, UPA totals raised, platform revenue); no balance is ever a denormalized mutable column.
@@ -1287,11 +1474,77 @@ The read path is `get_coach_wallet_balance()` and `get_my_transactions(kind?, li
 
 `ledger_entries` is insert-only and every economic event writes a balanced group (see the worked example above). This gives three properties the product requires: a coach's or partner's balance is always `sum(credits) - sum(debits)` computed live, never a value that can drift from reality; a refund or a payout failure is a new reversing group, never a mutation of history, so `audit_log` and `ledger_entries` together form a complete replayable record; and every screen that shows money (`Earnings`, `My Impact`, admin's `Order Detail` refund panel) reads the same table through a different filter, so there is exactly one place a money bug could live.
 
+## LAUNCH Phase 3 scale hardening (Track A, migrations 0090-0094)
 ## Security remediation, 2026-09-04 (0118 to 0121, formerly 0088 to 0091)
 
-Four migrations closing the SQL half of the 2026-09-04 security audit. All four are proven by `scripts/verify-security-fixes.sql`, which `./scripts/verify-migrations-local.sh` replays against a scratch Postgres with no credentials.
+The launch program's Phase 3 (1000-concurrent readiness) adds one enum value,
+two columns, four tables, and a set of service-role functions. No existing
+table's ownership or money semantics change; every addition is additive.
 
-**`payment_intents.finalized_at timestamptz` (`0118`, SEC-F2).** A second axis beside `status`. `captured` means the money moved; `finalized_at` means the domain handler that owed work for that charge completed. The gate in `_shared/finalize-payment.ts` flips `created -> captured` before dispatching, so a downstream failure used to leave a captured charge whose booking, order, donation, membership or ledger group never landed, and every retry returned `already_processed`. `captured` + `finalized_at is null` now means "money moved, work owed", and the gate re-enters the domain handler for exactly that state. Backfilled to `updated_at` for every row already at or past `captured`, without which the entire live history would read as work-owed on deploy.
+### Enum + column changes
+
+- `clip_status` gains `failed` (`0094`). The full machine is now
+  `uploading -> processing | rejected | failed`, `processing -> ready | rejected | failed`,
+  `ready -> published | rejected`, `published -> removed`, `failed -> uploading`
+  (retry), `rejected`/`removed` terminal. `failed` is a technical upload failure,
+  deliberately distinct from `rejected` (moderation) so the moderation queue
+  semantics are not corrupted (PHASE-3 CT-6, settled decision 6).
+- `clips.failure_reason text` (`0094`): why a clip is `failed`, shown to the
+  owner beside Retry. NULL unless `status = failed`. Set when transitioning to
+  `failed`, cleared on `failed -> uploading`.
+- `feature_flags.value_numeric numeric` (`0093`): optional numeric parameter for
+  a flag needing a threshold. NULL for boolean-only flags. Seeded row
+  `ai_search_daily_budget_usd = 10` (enabled), the daily USD ceiling for
+  ai-search LLM spend (CT-3).
+
+### New tables
+
+- `edge_rate_limits (bucket text, key text, window_start timestamptz, count int, PK(bucket,key,window_start))`
+  (`0093`, CT-2). The Postgres-backed token-bucket counter; one row per active
+  (bucket, key) window. RLS enabled, zero policies, all grants revoked from
+  `anon`/`authenticated`, `service_role` only (the `stock_reservations`
+  fail-closed house pattern). Relies on `service_role` BYPASSRLS to read/write.
+- `ai_spend_daily (day date PK, input_tokens bigint, output_tokens bigint, est_usd numeric)`
+  (`0093`, CT-3). Per-day AI spend meter. Same service-role-only lockdown.
+- `sweep_failures (id uuid PK, arm text, error text, created_at timestamptz)`
+  (`0094`, CT-7). Per-arm capture of `expire_stale_holds()` failures so one arm's
+  error does not abort the siblings. Same service-role-only lockdown; index on
+  `created_at desc`. Watched by the Phase 2 alert channel (DEBT.md records the
+  wiring if that channel is not yet merged).
+
+### New / changed functions (all service-role only unless noted)
+
+- `take_rate_limit_token(bucket text, key text, max int, window_seconds int) returns boolean`
+  (`0093`, CT-2). Atomic fixed-window take via `INSERT ... ON CONFLICT ... DO
+  UPDATE ... RETURNING`. False once the window is exhausted. SECURITY DEFINER,
+  EXECUTE `service_role` only. Callers fail OPEN on error (scale guard, not a
+  security boundary).
+- `record_ai_spend(input_tokens int, output_tokens int, est_usd numeric) returns numeric`
+  (`0093`, CT-3). Upserts today's `ai_spend_daily` row, returns the day's running
+  `est_usd`. SECURITY DEFINER, `service_role` only.
+- `ai_search_daily_budget() returns numeric` (`0093`, CT-3). Reads
+  `feature_flags.value_numeric` for `ai_search_daily_budget_usd`, defaults to 10
+  when absent/null. SECURITY DEFINER, `service_role` only.
+- `clip_transition_internal(...)` (`0094`): the 0043 machine extended with the
+  three `failed` edges. Sets/clears `failure_reason`. service_role only, unchanged
+  grants.
+- `retry_failed_clip(clip_id uuid) returns clips` (`0094`, CT-6). Owner-scoped
+  (`owner_id = auth.uid()`) SECURITY DEFINER retry, `failed -> uploading`. EXECUTE
+  `authenticated` + `service_role`, revoked from `anon`. The upload URL re-mint is
+  `stream-upload-url` (Track C), called after this.
+- `reconcile_stranded_clips()` (`0094`): object-absent stranded clips now become
+  `failed` (retryable) instead of `rejected`. service_role only.
+- `expire_stale_holds()` (`0094`, CT-7): each arm (courts, sessions, commerce,
+  clutch) wrapped in an exception handler that records to `sweep_failures` and
+  lets siblings run. Returns per-domain counts plus `arm_failures`.
+- `broadcast_chat_message()` trigger fn (`0092`, CT-4): AFTER INSERT on
+  `chat_messages`, `realtime.send()` a `message_new` event to each thread member's
+  private `chat:user:{uid}` topic. Members = `participant_a`/`participant_b`
+  (1:1 threads) UNION `chat_thread_members` (group threads). SECURITY DEFINER,
+  EXECUTE revoked from all client roles.
+
+## Account deletion (migration `0098`)
+**`payment_intents.finalized_at timestamptz` (`0109`, SEC-F2).** A second axis beside `status`. `captured` means the money moved; `finalized_at` means the domain handler that owed work for that charge completed. The gate in `_shared/finalize-payment.ts` flips `created -> captured` before dispatching, so a downstream failure used to leave a captured charge whose booking, order, donation, membership or ledger group never landed, and every retry returned `already_processed`. `captured` + `finalized_at is null` now means "money moved, work owed", and the gate re-enters the domain handler for exactly that state. Backfilled to `updated_at` for every row already at or past `captured`, without which the entire live history would read as work-owed on deploy.
 
 | Function | Grant | What it does |
 |---|---|---|
@@ -1300,7 +1553,7 @@ Four migrations closing the SQL half of the 2026-09-04 security audit. All four 
 | `admin_suspend_user(p_user_id, p_reason)` (`0120`) | `authenticated` (admin checked inside), `service_role` | PRD-04 FR-35..FR-38. Status change, `audit_log` row and member notification in ONE transaction. Reason required, idempotent on an already-suspended user, refuses self-suspension. |
 | `admin_reinstate_user(p_user_id, p_reason)` (`0120`) | `authenticated` (admin checked inside), `service_role` | Lifts a suspension and clears `suspended_reason`, same atomicity. |
 
-`expire_stale_holds()` (`0118`) gains a fifth arm, `payments_unfinalized` / `payments_unfinalized_without_ledger`. It counts rather than repairs, for the reason above; a non-zero value is an alert condition, not a routine one.
+`expire_stale_holds()` (`0109`) gains a fifth arm, `payments_unfinalized` / `payments_unfinalized_without_ledger`. It counts rather than repairs, for the reason above; a non-zero value is an alert condition, not a routine one.
 
 `order_transition()` (`0121`, SEC-F5) now writes its `audit_log` row inside the same transaction as the status change and the `order_timeline` row, reading the prior status under the row lock rather than letting the caller reconstruct it. Signature, grants, machine and error strings are unchanged.
 
@@ -1308,49 +1561,125 @@ Four migrations closing the SQL half of the 2026-09-04 security audit. All four 
 
 ## 0122 to 0125 (release hardening, 2026-09-07, formerly 0092 to 0095)
 
-### `user_blocks` (0122)
+### `user_blocks` (0097, table `blocked_users`)
 
-| Column | Type | Notes |
-|---|---|---|
-| `id` | uuid pk | |
-| `blocker_id` | uuid not null, fk `users` cascade | The member who blocked |
-| `blocked_id` | uuid not null, fk `users` cascade | The member being blocked |
-| `created_at` | timestamptz not null | |
+Apple App Store Guideline 5.1.1(v) and the Google Play account deletion policy:
+an account created inside the app must be deletable from inside the app. The
+`atlitos.com/delete-account` page is a request-by-email mechanism and does not
+satisfy either policy on its own.
 
-`check (blocker_id <> blocked_id)`, `unique (blocker_id, blocked_id)`, plus
-`idx_user_blocks_blocked_id` for the reverse lookup the admin queue uses.
+### Why deletion does not delete the row
 
-Blocking is one directional and invisible to the blocked member. The
-subtraction is enforced by RESTRICTIVE policies on `clips` and `clip_comments`
-(see RLS.md), not by a client filter, so a read written later cannot forget it.
+`public.users.id` references `auth.users` `ON DELETE CASCADE`, and 45 foreign
+keys point back at `public.users`. Replaying the whole migration history on a
+local Postgres and running `delete from auth.users where id = <athlete>` against
+a fixture with three captured payment intents produced:
 
-### `users.deleted_at` (0123)
+| Table | Before | After |
+| --- | --- | --- |
+| `payment_intents` | 3 | **0** |
+| `donations` | 1 | **0** |
+| `sessions` | 1 | **0** |
+| `chat_messages` | 2 | **0** |
+| `ledger_entries` | 8 | 8 |
+| `ledger_entries` with a NULL `payment_intent_id` | 0 | **8** |
+| sum(debits) - sum(credits) | 0.00 | 0.00 |
+### `users.deleted_at` (0098)
 
-Nullable timestamptz. Non-null means the member exercised their deletion right.
-Personal data is purged and the row anonymized in place; money-bearing rows are
-retained. The row cannot be deleted because `orders.user_id` has NO on-delete
-action and `payment_intents.user_id` cascades, which would orphan every
-`ledger_entries` row pointing at the intent.
+The last two rows are the point: the ledger stayed perfectly balanced through a
+total loss of traceability, so "the ledger balances" is a necessary but wholly
+insufficient check. The `RESTRICT` on `donations -> payment_intents` never
+fired, because `donations.donor_id` `CASCADE` removed the donation first.
 
-`delete_my_account()` (SECURITY DEFINER, `authenticated`) takes no arguments and
-targets `auth.uid()` only. Idempotent.
+So deletion **never** removes the `public.users` row or the FK graph beneath it.
+The user's own row becomes their own tombstone. Because nothing is deleted at
+the top of the graph, no cascade fires at all, and every retained row keeps a
+live, resolvable author reference. That is what "anonymise, do not orphan"
+means here, and it is why the coach's session history, the court partner's
+future booking and the other party's chat thread all still read correctly.
 
+### Table by table
 ### `rate_limit_counters` (0125)
 
-| Column | Type | Notes |
-|---|---|---|
-| `bucket_key` | text | pk part, e.g. `ai-search:user:<uuid>` |
-| `window_start` | timestamptz | pk part, floor of now() to the window |
-| `count` | integer | |
+**Deleted** (the user's own data, no second party depends on it): `addresses`,
+`athlete_sports`, `cart_items`, `clip_likes`, `clip_saves`, `clips`,
+`coach_certificates`, `coach_trainee_notes`, `coach_trainee_videos`,
+`donation_drafts`, `drill_completions`, `follows` (both directions),
+`notification_prefs`, `notifications`, `order_drafts`,
+`product_wishlist_items`, `push_tokens`, `user_milestones`, `user_roles`,
+`xp_events`, and `blocked_users` rows where the deleting user is the blocker.
 
-RLS enabled with NO policy: service role only, reached through
-`rate_limit_hit(key, limit, window_seconds)`, which increments and tests in one
-statement so concurrent callers cannot both take the last slot.
-`prune_rate_limit_counters()` runs from the existing `expire_stale_holds()`
-sweep, which now also returns `rate_limit_rows_pruned`.
+**Anonymised** (a second party still reads the row):
 
-### `chat_thread_previews(uuid[])` (0124)
+| Table | Treatment |
+| --- | --- |
+| `users` | PII scrubbed in place, `name` becomes `Deleted user` |
+| `coach_profiles` | `bio`, `coaching_style`, `specialization` cleared. The ROW stays: `sessions.coach_id` and `training_groups.coach_id` are `ON DELETE CASCADE` off it |
+| `chat_messages` | `text` kept (it is the other party's conversation too), author resolves to the tombstone |
+| `clip_comments` | Kept, so `clips.comment_count` stays truthful |
+| `donations` | `donor_display_name` scrubbed. No amount, status, intent link or ledger row is touched |
+| `upa_applications` | `status` moved to `deactivated` so the story stops being listed |
+| `blocked_users` | Rows where the deleting user is the blocked party are kept, they belong to the other user's list |
+### `chat_thread_previews(uuid[])` (0113)
 
-SECURITY INVOKER SQL function returning one latest message per thread via
-`distinct on (thread_id)` over the existing `idx_chat_messages_thread_id`.
-Replaces a client-side fold over every message in every thread.
+**Retained untouched** (financial, legal, or another party's record):
+`payment_intents`, `ledger_entries`, `refunds`, `transfers`, `payout_accounts`,
+`orders`, `order_items`, `order_timeline`, `order_feedback`,
+`stock_reservations`, `sessions`, `session_participants`, `court_bookings`,
+`group_memberships`, `venues`, `venue_staff`, `courts`, `audit_log`, `reports`,
+`verification_requests`, `support_tickets`, `gratitude_posts`, `upa_evidence`,
+`upa_wishlist_items`. These are retained exactly as `atlitos.com/privacy`
+already discloses.
+
+### Column and table changes
+
+- `users.deleted_at timestamptz` (`0098`). Non-null means the account is
+  deleted. Deliberately a nullable timestamp rather than a new `user_status`
+  enum value: `alter type ... add value` cannot be used in the same transaction
+  that reads it, and `supabase db push` wraps a migration in one transaction.
+  Partial index `idx_users_deleted_at ... where deleted_at is not null`.
+- `account_deletions (user_id uuid PK -> users, requested_at timestamptz, removed jsonb, retained jsonb, auth_released_at timestamptz)`
+  (`0098`). One row per completed deletion: the audit trail AND the idempotency
+  record. Retained after the user row is tombstoned so the deletion itself is
+  auditable. `auth_released_at` is stamped by the `delete-account` edge function
+  once GoTrue has released the email and banned the user.
+
+### Functions
+
+- `account_deletion_preview() returns jsonb` (`0098`). Read only, STABLE,
+  SECURITY DEFINER, no arguments, so it can only report on `auth.uid()`.
+  Returns `already_deleted`, `blocker`, `blocker_count`, and the real `removed`
+  and `retained` counts. This is the ONLY permitted source for the confirmation
+  screen's numbers; the client never invents them. EXECUTE `authenticated` only.
+- `delete_my_account() returns jsonb` (`0098`). SECURITY DEFINER, **no user id
+  argument by design**, so it can only ever delete its own caller. Idempotent:
+  a second call returns the original receipt rather than erroring. Refuses with
+  `DELETION_BLOCKED: <blocker>` for `PAYMENT_IN_FLIGHT`, `LAST_ADMIN`,
+  `COACH_HAS_UPCOMING_SESSIONS` or `PARTNER_HAS_UPCOMING_BOOKINGS`, all four
+  time bounded. Asserts in the same transaction that the `payment_intents`
+  count, the `ledger_entries` count and the ledger to intent linkage count are
+  unchanged and that every entry group still balances, raising
+  `FINANCIAL_INVARIANT` or `LEDGER_UNBALANCED` rather than committing.
+  EXECUTE `authenticated` only.
+- `account_deletion_mark_auth_released(p_user_id uuid)` (`0098`). Stamps
+  `auth_released_at`. EXECUTE `service_role` only.
+- `is_actor_active()` (`0098`, replacing `0096`'s). Now
+  `status = 'active' and deleted_at is null`. This is what makes a deleted
+  user's still-valid access token harmless for the rest of its life: 0096's
+  restrictive `_active_insert/_active_update/_active_delete` policies call it on
+  every mutating table platform wide.
+- `coach_profiles_public` view (`0098`): now joins `users` and adds
+  `u.deleted_at is null`, so a deleted coach stops being discoverable while the
+  `coach_profiles` row survives for the sessions that cascade off it.
+
+### What makes the account actually gone
+
+1. `users.deleted_at` is set and `is_actor_active()` refuses every write.
+2. Every `user_roles` row is revoked, so the next access token carries no roles.
+3. The `delete-account` edge function, under the service role, releases the
+   email and phone on `auth.users` and bans the GoTrue user, so sign in is
+   impossible and the same email can register a fresh account.
+4. Storage objects under `avatars/<uid>`, `clips/<uid>` and
+   `coach-certificates/<uid>` are removed, recursively (avatars nests cover
+   photos under `<uid>/cover/`), along with the
+   `clips/coach-videos/<coach>/<player>/` paths collected before the RPC runs.

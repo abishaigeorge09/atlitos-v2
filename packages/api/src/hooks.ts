@@ -20,6 +20,7 @@ import type {
 
 import type { AtlitosClient } from "./client";
 import { mapAuthError, mapEdgeFunctionError, mapPostgrestError } from "./errors";
+import { IMAGE_SIZE, sizedImageUrl } from "./image-url";
 
 /**
  * Domain hooks. Each domain below wraps the v1 `services/api.ts` function of
@@ -41,7 +42,15 @@ export interface RegisterInput {
   name: string;
   email: string;
   phone: string;
-  dob: string; // ISO date, "YYYY-MM-DD"
+  /**
+   * ISO date, "YYYY-MM-DD". Optional since the founder moved date of birth
+   * off signup and into the trainings personalization step: asking for it at
+   * the door costs a field on the very first screen a new athlete sees, and
+   * nothing in the product reads it at signup time. `public.users.dob` is
+   * nullable and no age gate exists anywhere in the app, so omitting it
+   * changes no behaviour. Collected later from the profile instead.
+   */
+  dob?: string;
   password: string;
 }
 
@@ -80,7 +89,15 @@ export function makeAuthApi(client: AtlitosClient) {
       const { data, error } = await client.auth.signUp({
         email: input.email,
         password: input.password,
-        options: { data: { name: input.name, phone: input.phone, dob: input.dob } },
+        options: {
+          data: {
+            name: input.name,
+            phone: input.phone,
+            // Only pass dob when it was actually collected. The 0073 trigger
+            // coalesces a missing key to null, which is what we want.
+            ...(input.dob ? { dob: input.dob } : {}),
+          },
+        },
       });
       if (error) throw mapAuthError(error);
 
@@ -93,7 +110,7 @@ export function makeAuthApi(client: AtlitosClient) {
       // turn a successful signup into an error.
       await client
         .from("users")
-        .update({ phone: input.phone, dob: input.dob })
+        .update({ phone: input.phone, ...(input.dob ? { dob: input.dob } : {}) })
         .eq("id", data.session.user.id);
 
       return { session: data.session, needsEmailConfirmation: false };
@@ -138,12 +155,46 @@ export function makeAuthApi(client: AtlitosClient) {
     },
 
     /** v1 `continueAsGuest`. An anonymous auth user with zero `user_roles`
-     * rows is the guest state everywhere else (RLS.md). */
+     * rows is the guest state everywhere else (RLS.md). Guest-first-open is
+     * the app's default landing path, so a transient failure (a dropped
+     * request, a cold edge) must not strand a first-time user on a login
+     * wall: retry signInAnonymously a few times with short linear backoff
+     * before surfacing failure. Only a persistent failure throws, which the
+     * splash screen then degrades into public browsing rather than a wall.
+     *
+     * SCALE-INGRESS.md section 2: a 429 is NOT retried here, and that is the
+     * single most important line in this function. GoTrue limits anonymous
+     * sign-ins per EGRESS IP at a documented 30 per hour, a token bucket that
+     * refills one token every 120 seconds. Burning two more attempts 300 ms
+     * and 600 ms after a refusal cannot succeed (the bucket is provably empty
+     * for the next two minutes) and it does active harm: behind a shared NAT,
+     * the aggregate arrival rate from already-failed devices is what starves
+     * every NEW user of the single token. Retrying is correct per device and
+     * wrong per IP, because the contended resource is the IP bucket. Breaking
+     * out immediately takes the per-device request count on a rate-limited
+     * open from 3 to 1.
+     *
+     * A rate limited failure surfaces as `code: "RATE_LIMITED"`; the caller's
+     * background retry loop reads that and waits out the bucket rather than
+     * re-entering on its own short ladder. */
     async continueAsGuest(): Promise<Session> {
-      const { data, error } = await client.auth.signInAnonymously();
-      if (error) throw mapAuthError(error);
-      if (!data.session) throw mapAuthError({ message: "No session returned for guest sign-in." });
-      return data.session;
+      const maxAttempts = 3;
+      let lastError: unknown = { message: "No session returned for guest sign-in." };
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        const { data, error } = await client.auth.signInAnonymously();
+        if (!error && data.session) return data.session;
+        lastError = error ?? lastError;
+        if (error) {
+          const mapped = mapAuthError(error);
+          // Retrying an empty bucket cannot win it back, it only deepens the
+          // contention on the shared IP. Surface it now.
+          if (mapped.code === "RATE_LIMITED") throw mapped;
+        }
+        if (attempt < maxAttempts) {
+          await new Promise((resolve) => setTimeout(resolve, attempt * 300));
+        }
+      }
+      throw mapAuthError(lastError as Parameters<typeof mapAuthError>[0]);
     },
 
     async signOut(): Promise<void> {
@@ -184,6 +235,11 @@ export interface MeRow {
   city: string | null;
   state: string | null;
   sports: Sport[];
+  /** The primary sport, read from athlete_sports.is_primary (the model Learn
+   * and coach search key off, 0060/0088), NOT users.sports[0]. null when the
+   * player has selected no sport. Drives the Learn roadmap and the coach-search
+   * default. */
+  primarySport: Sport | null;
   roles: AppRole[];
   coachStatus: "pending_review" | "verified" | "rejected" | null;
   /** Appearance preference (0087). Applied client side via nativewind. */
@@ -202,11 +258,24 @@ export interface UpdateProfileInput {
   coverUrl?: string | null;
   avatarUrl?: string | null;
   handle?: string;
-  /** Personalization (0087). All own-row columns; written through the same
-   * owner scoped users update the rest of this payload uses. */
+  /** Personalization (0087). Location/theme/notifications are own-row users
+   * columns. `sports` is the exception: it is routed through the
+   * set_athlete_sports RPC (0088) so users.sports AND athlete_sports/is_primary
+   * are rewritten together, never users.sports alone (the drift fix). */
   sports?: Sport[];
+  /** Which of `sports` is primary. Defaults to sports[0] when omitted. Only
+   * meaningful alongside `sports`; drives Learn and the coach-search default. */
+  primarySport?: Sport;
   city?: string | null;
   state?: string | null;
+  /**
+   * ISO date, "YYYY-MM-DD", or null to clear. Date of birth was moved off
+   * signup into the trainings personalization surface, so this is where it is
+   * collected now. Optional everywhere: `public.users.dob` is nullable and no
+   * age gate exists in the app, so an athlete who never fills it in is not
+   * blocked from anything.
+   */
+  dob?: string | null;
   theme?: "system" | "light" | "dark";
   notificationPrefs?: { sessions: boolean; messages: boolean; promotions: boolean };
 }
@@ -246,15 +315,33 @@ export function makeProfileApi(client: AtlitosClient) {
       if (authError) throw mapAuthError(authError);
       if (!authData.user) return null;
 
-      const [{ data: userRow, error: userError }, { data: roleRows, error: roleError }, { data: coachRow }] =
-        await Promise.all([
-          client.from("users").select("*").eq("id", authData.user.id).maybeSingle(),
-          client.from("user_roles").select("role").eq("user_id", authData.user.id),
-          client.from("coach_profiles").select("status").eq("user_id", authData.user.id).maybeSingle(),
-        ]);
+      const [
+        { data: userRow, error: userError },
+        { data: roleRows, error: roleError },
+        { data: coachRow },
+        { data: primaryRows, error: primaryError },
+      ] = await Promise.all([
+        client.from("users").select("*").eq("id", authData.user.id).maybeSingle(),
+        // Unbounded and safe: one row per role the caller holds, capped by the
+        // cardinality of the `app_role` enum, a schema constant. Does not grow
+        // with users or with time.
+        client.from("user_roles").select("role").eq("user_id", authData.user.id),
+        client.from("coach_profiles").select("status").eq("user_id", authData.user.id).maybeSingle(),
+        // Primary sport from athlete_sports (is_primary first, else earliest
+        // selected), the same tie break get_learn_home uses (0060). Explicit
+        // owner filter, RLS is not scoping (CLAUDE.md).
+        client
+          .from("athlete_sports")
+          .select("sport, is_primary, created_at")
+          .eq("user_id", authData.user.id)
+          .order("is_primary", { ascending: false })
+          .order("created_at", { ascending: true })
+          .limit(1),
+      ]);
 
       if (userError) throw mapPostgrestError(userError);
       if (roleError) throw mapPostgrestError(roleError);
+      if (primaryError) throw mapPostgrestError(primaryError);
       if (!userRow) return null;
 
       return {
@@ -269,6 +356,7 @@ export function makeProfileApi(client: AtlitosClient) {
         city: userRow.city,
         state: userRow.state,
         sports: userRow.sports ?? [],
+        primarySport: (primaryRows?.[0]?.sport as Sport | undefined) ?? null,
         roles: (roleRows ?? []).map((r) => r.role as AppRole),
         coachStatus: coachRow?.status ?? null,
         theme: (userRow.theme as MeRow["theme"] | null) ?? "system",
@@ -306,14 +394,33 @@ export function makeProfileApi(client: AtlitosClient) {
       if (authError) throw mapAuthError(authError);
       if (!authData.user) throw mapAuthError({ message: "Sign in to edit your profile.", status: 401 });
 
+      // Sports go through the RPC, not the users patch: it rewrites
+      // users.sports AND athlete_sports/is_primary together so Learn and the
+      // coach-search default follow the edit instead of drifting (0088).
+      if (input.sports !== undefined) {
+        const primary = input.primarySport ?? input.sports[0];
+        if (primary === undefined) {
+          throw {
+            code: "VALIDATION",
+            message: "Pick at least one sport.",
+            status: 422,
+          } satisfies ApiError;
+        }
+        const { error: sportsError } = await client.rpc("set_athlete_sports", {
+          p_sports: input.sports,
+          p_primary: primary,
+        });
+        if (sportsError) throw mapPostgrestError(sportsError);
+      }
+
       const patch: {
         bio?: string | null;
         cover_url?: string | null;
         avatar_url?: string | null;
         handle?: string;
-        sports?: Sport[];
         city?: string | null;
         state?: string | null;
+        dob?: string | null;
         theme?: string;
         notification_prefs?: { sessions: boolean; messages: boolean; promotions: boolean };
       } = {};
@@ -321,11 +428,15 @@ export function makeProfileApi(client: AtlitosClient) {
       if (input.coverUrl !== undefined) patch.cover_url = input.coverUrl;
       if (input.avatarUrl !== undefined) patch.avatar_url = input.avatarUrl;
       if (input.handle !== undefined) patch.handle = input.handle.trim().toLowerCase();
-      if (input.sports !== undefined) patch.sports = input.sports;
       if (input.city !== undefined) patch.city = input.city;
       if (input.state !== undefined) patch.state = input.state;
+      if (input.dob !== undefined) patch.dob = input.dob;
       if (input.theme !== undefined) patch.theme = input.theme;
       if (input.notificationPrefs !== undefined) patch.notification_prefs = input.notificationPrefs;
+
+      // Nothing left to write to users (e.g. a sports-only edit): the RPC
+      // already ran, so return rather than firing an empty UPDATE.
+      if (Object.keys(patch).length === 0) return;
 
       const { error } = await client.from("users").update(patch).eq("id", authData.user.id);
       if (error) {
@@ -566,7 +677,16 @@ interface CourtQueryRow {
 function resolveVenuePhotoUrls(client: AtlitosClient, photos: { storage_path: string; position: number }[] | null): string[] {
   return [...(photos ?? [])]
     .sort((a, b) => a.position - b.position)
-    .map((photo) => client.storage.from("venue-media").getPublicUrl(photo.storage_path).data.publicUrl);
+    // M-6: venue photos paint as court card tiles and a phone width detail
+    // header, so they are requested at that size instead of at origin.
+    .map(
+      (photo) =>
+        sizedImageUrl(
+          client.storage.from("venue-media").getPublicUrl(photo.storage_path).data.publicUrl,
+          { width: IMAGE_SIZE.hero, height: Math.round(IMAGE_SIZE.hero / 2) },
+        ) ?? "",
+    )
+    .filter((url) => url !== "");
 }
 
 function mapCourtRow(client: AtlitosClient, row: CourtQueryRow, near?: { lat: number; lng: number } | null): Court {
@@ -599,6 +719,24 @@ function mapCourtRow(client: AtlitosClient, row: CourtQueryRow, near?: { lat: nu
   };
 }
 
+/** Page sizes for the courts surfaces.
+ *
+ * Every number here is chosen to sit BELOW the PostgREST server side row cap
+ * rather than to be generous. See docs/qa/verify/SCALE-CLIENT.md: 0 of 751
+ * `WITH pgrst_source` statements on this project carry `LIMIT ALL` and 670
+ * carry a parameterised `LIMIT`, which proves a `db-max-rows` is set. The cap
+ * value itself is still UNREAD (Supabase dashboard, Settings, API, "Max
+ * rows"), so these are deliberately small enough that the cap cannot be the
+ * thing that truncates the list. */
+const BOOKINGS_PAGE_SIZE = 50;
+const BOOKINGS_MAX_PAGE_SIZE = 100;
+/** A city's browsable courts. `listCourts` sorts by haversine distance in
+ * JavaScript (see mapCourtRow), so the bound is what keeps that sort, and the
+ * payload, from growing with the whole country's court inventory. Recorded as
+ * P2 in SCALE-CLIENT.md: the correct long term shape is a bounding box filter
+ * server side, which is a migration and is deliberately NOT done here. */
+const COURTS_PAGE_SIZE = 100;
+
 const COURT_SELECT = `
   id, venue_id, name, sport, base_price_per_hour, active,
   venues!inner ( id, name, address, city, lat, lng, status, venue_photos ( storage_path, position ) )
@@ -617,7 +755,8 @@ export function useCourts(client: AtlitosClient) {
         .from("courts")
         .select(COURT_SELECT)
         .eq("active", true)
-        .eq("venues.status", "verified");
+        .eq("venues.status", "verified")
+        .limit(COURTS_PAGE_SIZE);
 
       if (filters.sport) {
         query = query.eq("sport", filters.sport);
@@ -731,32 +870,70 @@ export function useCourts(client: AtlitosClient) {
       return { bookingId: body.booking_id, status: body.status, outcome: body.outcome };
     },
 
-    /** v1 `sessions`-shaped "my bookings" list, courts variant. RLS
-     * (`court_bookings_select`) already scopes this to the caller's own
-     * bookings (or their venue's, for a partner/staff account, which this
-     * player-facing hook never calls as such). */
-    async listMyBookings(): Promise<CourtBooking[]> {
+    /** v1 `sessions`-shaped "my bookings" list, courts variant.
+     *
+     * The owner filter is EXPLICIT and is not left to RLS, per CLAUDE.md's
+     * "RLS is not scoping" rule. This docblock previously claimed
+     * `court_bookings_select` already scoped the read; that claim was both a
+     * house-rule breach and a measured performance defect.
+     * `court_bookings_select_merged` is
+     * `is_court_partner_or_staff(court_id) OR user_id = auth.uid() OR ...`,
+     * a permissive OR whose branches Postgres evaluates left to right, so the
+     * non-inlinable partner function ran on EVERY row of the whole table
+     * before the cheap owner test was ever tried. Measured on production
+     * (docs/qa/verify/SCALE-DATABASE.md P0-2): Seq Scan, 41 ms and 1,140
+     * buffers for 103 rows, which is 0.395 ms per row scanned, so the 8 s
+     * `authenticated` statement timeout is reached at 20,250 rows in the
+     * table, roughly month 7 at the 10k target. With the filter the same plan
+     * becomes an Index Scan on `idx_court_bookings_user_id` at 20.5 ms, and
+     * the cost becomes O(my bookings) rather than O(every booking in the
+     * product), which is the property that actually matters.
+     *
+     * The limit is separate and equally load bearing: PostgREST applies a
+     * silent server side row cap to every select, so an unbounded read is not
+     * slow, it is TRUNCATED with a 200 OK and no error anywhere in the stack.
+     * An explicit page size the code owns is visible in review and testable;
+     * an implicit cap the code does not know about is neither. */
+    async listMyBookings(limit: number = BOOKINGS_PAGE_SIZE): Promise<CourtBooking[]> {
+      const { data: authData, error: authError } = await client.auth.getUser();
+      if (authError) throw mapAuthError(authError);
+      if (!authData.user) throw mapAuthError({ message: "Sign in to see your bookings.", status: 401 });
+
       const { data, error } = await client
         .from("court_bookings")
         .select(
           "id, court_id, user_id, booking_source, date, slot_start, slot_end, subtotal, gst, platform_fee, total, status, rating, remarks, cancellation_reason, courts ( name, sport, venues ( name, address, city ) )",
         )
+        .eq("user_id", authData.user.id)
         .order("date", { ascending: false })
         .order("slot_start", { ascending: false })
+        .limit(Math.min(Math.max(limit, 1), BOOKINGS_MAX_PAGE_SIZE))
         .returns<CourtBookingQueryRow[]>();
       if (error) throw mapPostgrestError(error);
 
       return (data ?? []).map(mapCourtBookingRow);
     },
 
-    /** v1 `courts.get` for a single booking (booking detail screen). */
+    /** v1 `courts.get` for a single booking (booking detail screen).
+     *
+     * Scoped by owner, not by RLS alone (CLAUDE.md: RLS is permissive-OR and
+     * is not scoping). `court_bookings` carries a partner read policy for the
+     * venue side, so an unscoped `.eq("id")` from the athlete app would return
+     * another person's booking to anyone who guessed or was handed its id.
+     * D22 (fix/d22-booking-detail), applied 2026-09-15 during the branch audit;
+     * `listMyBookings` had already been scoped, this call site was missed. */
     async getBooking(bookingId: string): Promise<CourtBooking | null> {
+      const { data: authData, error: authError } = await client.auth.getUser();
+      if (authError) throw mapAuthError(authError);
+      if (!authData.user) return null;
+
       const { data, error } = await client
         .from("court_bookings")
         .select(
           "id, court_id, user_id, booking_source, date, slot_start, slot_end, subtotal, gst, platform_fee, total, status, rating, remarks, cancellation_reason, courts ( name, sport, venues ( name, address, city ) )",
         )
         .eq("id", bookingId)
+        .eq("user_id", authData.user.id)
         .maybeSingle<CourtBookingQueryRow>();
       if (error) throw mapPostgrestError(error);
       if (!data) return null;
@@ -963,6 +1140,14 @@ export interface ClipUploadTicket {
   path: string;
   bucket: string;
   status: ClipStatus;
+  /** SCALE-MEDIA M-3. The second signed slot, for the poster frame the client
+   * extracts from the picked video. Null when the mint failed server side, in
+   * which case the clip simply posts without a thumbnail. The `clips` bucket
+   * is private and grants clients no storage write, so this ticket is the only
+   * way a thumbnail can reach storage at all. */
+  thumbUploadUrl: string | null;
+  thumbToken: string | null;
+  thumbPath: string | null;
 }
 
 /** `stream-webhook` (on-upload finalizer) response. */
@@ -980,6 +1165,31 @@ export interface ClipPlayback {
   thumbUrl: string | null;
   expiresIn: number;
   status: ClipStatus;
+}
+
+/** CT-1 (Phase 3 LAUNCH, P1-1). One resolved URL from a batch
+ * `get-clip-playback-url` call: `expiresAt` is an ISO timestamp (thumb TTL
+ * 3600s, video TTL 300s per CT-1; the batch caller does not need to compute
+ * an expiry itself, unlike the legacy single-clip `expiresIn` seconds
+ * shape). */
+export interface ClipPlaybackBatchEntry {
+  clipId: string;
+  url: string;
+  expiresAt: string;
+}
+
+/** One clip_id the batch could not resolve a URL for (unpublished and not
+ * the caller's own, removed, or a mint error). Never thrown as an error: a
+ * partial batch is a 200 with some ids in `failed`, so one broken clip never
+ * blanks an entire grid's worth of posters. */
+export interface ClipPlaybackBatchFailure {
+  clipId: string;
+  reason: string;
+}
+
+export interface ClipPlaybackBatchResult {
+  urls: ClipPlaybackBatchEntry[];
+  failed: ClipPlaybackBatchFailure[];
 }
 
 export interface ClipLikeResult {
@@ -1001,6 +1211,93 @@ export interface UploadClipInput {
 }
 
 const CLUTCH_PAGE_SIZE = 10;
+/** Ceiling on the caller's own block list.
+ *
+ * Bounding a block list is the one place where truncation has a safety
+ * consequence rather than a cosmetic one: a blocked user dropped off the end
+ * of this set has their content reappear in the feed, the comments and the
+ * inbox. It is bounded anyway, and deliberately high, because the read is
+ * ALREADY truncated today by the silent PostgREST cap at a number nobody in
+ * this repo has read.
+ *
+ * p6 audit correction: the number below must NOT be justified as "comfortably
+ * under any plausible db-max-rows", because that cap is unmeasurable here
+ * (not in pg_roles rolconfig, and no table on this project exceeds 1000 rows
+ * to measure it empirically either) and a bound reasoned from an unknown
+ * quantity is not a real bound, it is a second guess stacked on the first.
+ * 1000 is kept as a PRODUCT ceiling instead, independent of whatever the
+ * PostgREST cap turns out to be: no verified block list on this project comes
+ * close to three figures, and a moderation-shaped list a real person builds by
+ * hand, one block at a time, in the thousands is itself the signal that the
+ * honest fix (stop shipping the list to the device, filter server side) is
+ * overdue, not a reason to raise the number further. */
+const BLOCK_LIST_MAX = 1000;
+
+// SCALE-MEDIA M-4. One page of a profile clip GRID. Deliberately equal to
+// PLAYBACK_BATCH_MAX below so a full grid page resolves its posters in exactly
+// ONE batch call: before this, `getCreatorClips` and `getMyClips` were
+// unbounded, and a 61 clip creator profile was enough to trip the playback
+// throttle on a single screen open.
+export const CLUTCH_GRID_PAGE_SIZE = 24;
+
+/**
+ * A page of a profile clip grid, mirroring `CoachListPage` (CT-5) rather than
+ * inventing a second pagination shape.
+ *
+ * WHY THE SHAPE CHANGED. `getCreatorClips`/`getMyClips` previously returned a
+ * bare `Clip[]` bounded to CLUTCH_GRID_PAGE_SIZE with an optional `cursor`
+ * argument that no screen ever passed, so a creator with more than 24
+ * published clips silently lost the rest: the grid stopped at 24 with no
+ * marker and nothing to scroll to. A caller cannot derive "is there more" from
+ * an array length here, because `getMyClips` drops soft deleted rows AFTER the
+ * limit, so a short page is not proof of exhaustion. `nextCursor` is decided
+ * server side from a limit+1 probe and is null exactly on the last page.
+ */
+export interface ClipPage {
+  items: Clip[];
+  nextCursor: string | null;
+}
+
+// Keyset cursor over (created_at desc, id desc). The id half is not
+// decoration: `created_at` alone is not unique, and two clips sharing a
+// timestamp across a page boundary would drop one of them silently, which is
+// the same class of invisible loss the hard stop at 24 was.
+function encodeClipCursor(createdAt: string, id: string): string {
+  return `${createdAt}|${id}`;
+}
+
+function decodeClipCursor(cursor: string): { createdAt: string; id: string } | null {
+  const at = cursor.lastIndexOf("|");
+  if (at <= 0 || at === cursor.length - 1) return null;
+  return { createdAt: cursor.slice(0, at), id: cursor.slice(at + 1) };
+}
+
+/** Shared page assembly for both clip grids: take the limit+1 probe, decide
+ * `nextCursor` from whether the extra row existed, and never return it.
+ *
+ * `keepRow` filters rows out of `items` WITHOUT affecting the cursor, which is
+ * the whole reason it lives here: the cursor must describe where the SERVER
+ * page ended, not where the filtered list ended. */
+function toClipPage(
+  rows: ClipFeedRow[],
+  mapRow: (row: ClipFeedRow) => Clip,
+  keepRow?: (row: ClipFeedRow) => boolean,
+): ClipPage {
+  const hasNextPage = rows.length > CLUTCH_GRID_PAGE_SIZE;
+  const pageRows = hasNextPage ? rows.slice(0, CLUTCH_GRID_PAGE_SIZE) : rows;
+  const last = pageRows[pageRows.length - 1];
+  const nextCursor = hasNextPage && last ? encodeClipCursor(last.created_at, last.id) : null;
+  const kept = keepRow ? pageRows.filter(keepRow) : pageRows;
+  return { items: kept.map(mapRow), nextCursor };
+}
+
+// CT-1 (Phase 3 LAUNCH, P1-1). The endpoint rejects a batch over 24 ids
+// (BATCH_TOO_LARGE); getPlaybackUrls chunks any longer list itself so a call
+// site never has to. Concurrency caps how many chunk requests are ever
+// in flight at once, so a big grid still cannot flood the function the way
+// the old one-call-per-tile mint did.
+const PLAYBACK_BATCH_MAX = 24;
+const PLAYBACK_BATCH_CONCURRENCY = 4;
 
 // NOTE: the column is `thumb_path` on `clips` (0042; the same column
 // stream-webhook writes and get-clip-playback-url/get-clip-moderation-url
@@ -1018,8 +1315,29 @@ const CLUTCH_PAGE_SIZE = 10;
 // back null for every row not owned by the caller and the whole feed rendered
 // the "Athlete" fallback. The `!owner_id`/`!user_id` hints resolve the FK to
 // users through the view; the `users:` alias preserves the row shapes below.
+// failure_reason (CT-6, 0094) is selected on every read: it is null for
+// every status but `failed`, so carrying it here costs nothing and lets
+// getMyClips/getFeed/getCreatorClips all share one row shape. Only the
+// owner's own grid ever renders it (a clip is never `failed` and visible to
+// anyone else, same as `uploading`/`processing`/`rejected`).
 const CLIP_FEED_SELECT =
-  "id, owner_id, caption, sport, status, likes_count, comment_count, created_at, thumb_path, users:public_profiles!owner_id ( name, channel_name, avatar_url )";
+  "id, owner_id, caption, sport, status, likes_count, comment_count, created_at, thumb_path, failure_reason, users:public_profiles!owner_id ( name, channel_name, avatar_url )";
+
+// The OWNER surfaces (own grid, post detail) additionally need `comments_enabled`
+// (0101) and `deleted_at` (0100), and they use a `*` projection ON PURPOSE.
+//
+// PostgREST fails the WHOLE select when a NAMED column does not exist, and the
+// two migrations that add these columns are written but NOT applied (the DB
+// write gate). Naming them explicitly would mean this build 400s on every clip
+// read until someone applies the migrations, the same failure shape as the
+// `thumb_url` column that did not exist (see the note above). A `*` projection
+// returns whatever the table actually has: the fields are simply absent before
+// the migration and present after, and `mapClipRow` defaults `comments_enabled`
+// to open, so the code is correct on both sides of the deploy. The feed keeps
+// its narrow explicit select above, unchanged, because it never needs either
+// column and the narrow select is cheaper at feed scale.
+const CLIP_OWNER_SELECT =
+  "*, users:public_profiles!owner_id ( name, channel_name, avatar_url )";
 
 const CLIP_COMMENT_SELECT =
   "id, clip_id, user_id, text, created_at, users:public_profiles!user_id ( name, channel_name )";
@@ -1040,6 +1358,12 @@ interface ClipFeedRow {
   comment_count: number;
   created_at: string;
   thumb_path: string | null;
+  failure_reason: string | null;
+  // Present only on the owner surfaces (CLIP_OWNER_SELECT), and only once
+  // 0100/0101 are applied. See CLIP_OWNER_SELECT's docblock for why these are
+  // optional rather than required.
+  comments_enabled?: boolean | null;
+  deleted_at?: string | null;
   users: ClipUserJoin | null;
 }
 
@@ -1083,11 +1407,16 @@ function isHttpUrl(value: string | null | undefined): boolean {
   return typeof value === "string" && /^https?:\/\//.test(value);
 }
 
-function mapClipRow(row: ClipFeedRow, likedByMe: boolean): Clip {
+function mapClipRow(row: ClipFeedRow, likedByMe: boolean, savedByMe = false): Clip {
   return {
     id: row.id,
     ownerId: row.owner_id,
     channel: channelOf(row.users),
+    // `CLIP_FEED_SELECT` already asks for `avatar_url` and always has. It was
+    // simply never mapped onto the domain type, which is why the post detail
+    // header could not show a picture. Absent (the owner surfaces' `*`
+    // projection, which carries no join) resolves to null through the `??`.
+    channelAvatarUrl: row.users?.avatar_url ?? null,
     // videoUrl is deliberately absent here: playback is a fresh signed URL
     // minted per visible card via getPlaybackUrl, never carried on the row.
     // thumb_path is a private-`clips`-bucket storage path, not a loadable URL:
@@ -1100,10 +1429,18 @@ function mapClipRow(row: ClipFeedRow, likedByMe: boolean): Clip {
     caption: row.caption,
     sport: row.sport,
     status: row.status,
+    failureReason: row.failure_reason,
     likes: row.likes_count,
     commentCount: row.comment_count,
     createdAt: row.created_at,
     likedByMe,
+    savedByMe,
+    // A null here means the column came back null, not that the switch is
+    // off. Default to open so a row written before 0101 never reads as
+    // closed. Absent entirely (narrow CLIP_FEED_SELECT, or 0101 unapplied)
+    // resolves the same way through the same `??`.
+    commentsEnabled: row.comments_enabled ?? true,
+    deletedAt: row.deleted_at ?? null,
   };
 }
 
@@ -1146,6 +1483,10 @@ async function followProfiles(db: SupabaseClient, ids: string[]): Promise<Follow
   const { data, error } = await db
     .from("public_profiles")
     .select("id, name, avatar_url, handle")
+    // Unbounded and safe: `.in("id", ids)` on a primary key returns at most
+    // one row per id, so the result is exactly bounded by the caller's own
+    // already-bounded id list. Adding a `.limit()` here could only truncate a
+    // page the caller has already sized.
     .in("id", ids)
     .returns<Pick<PublicProfileRow, "id" | "name" | "avatar_url" | "handle">[]>();
   if (error) throw mapPostgrestError(error);
@@ -1173,11 +1514,128 @@ function makeClutchApi(client: AtlitosClient) {
     const { data, error } = await db
       .from("clip_likes")
       .select("clip_id")
+      // Unbounded and safe: `clip_likes_clip_id_user_id_key` makes
+      // (clip_id, user_id) unique, so owner plus an id list returns at most
+      // one row per requested clip, bounded by the caller's page of 10.
       .eq("user_id", authData.user.id)
       .in("clip_id", ids)
       .returns<{ clip_id: string }[]>();
     if (error) throw mapPostgrestError(error);
     return new Set((data ?? []).map((r) => r.clip_id));
+  }
+
+  /** The subset of `ids` the caller has saved, for the feed/viewer bookmark
+   * state. Explicit owner filter on `clip_saves` (owner-only RLS is the
+   * ceiling; the query still scopes itself, CLAUDE.md). A guest has no saves. */
+  async function savedClipIds(ids: string[]): Promise<Set<string>> {
+    if (ids.length === 0) return new Set();
+    const { data: authData } = await client.auth.getUser();
+    if (!authData.user || authData.user.is_anonymous) return new Set();
+
+    const { data, error } = await db
+      .from("clip_saves")
+      .select("clip_id")
+      // Unbounded and safe, same shape as likedClipIds above:
+      // `clip_saves_clip_id_user_id_key` bounds this to one row per requested
+      // clip.
+      .eq("user_id", authData.user.id)
+      .in("clip_id", ids)
+      .returns<{ clip_id: string }[]>();
+    if (error) throw mapPostgrestError(error);
+    return new Set((data ?? []).map((r) => r.clip_id));
+  }
+
+  /** v1 `clutch.upload` step 1 -> `stream-upload-url` edge function. Mints
+   * the one-time signed Storage upload URL and creates (or, with `clipId`,
+   * reuses) the caller's OWN clip row in `uploading` status server side; the
+   * client then PUTs the MP4 to `uploadUrl` (or `uploadToSignedUrl(path,
+   * token, file)`), never writing the clip row itself. See VIDEO.md. Named
+   * so `retryFailedClip` (CT-6) can call it directly after the RPC flips a
+   * `failed` row back to `uploading`, without going through the public
+   * `requestUploadUrl` method a second time removed. */
+  async function requestUploadUrlImpl(input: UploadClipInput): Promise<ClipUploadTicket> {
+    const { data, error } = await client.functions.invoke("stream-upload-url", {
+      body: { caption: input.caption, sport: input.sport, clip_id: input.clipId },
+    });
+    if (error) throw await mapEdgeFunctionError(error);
+
+    const body = data as Partial<ClipUploadTicket> & {
+      clipId: string;
+      uploadUrl: string;
+      token: string;
+      path: string;
+      bucket: string;
+      status: ClipStatus;
+    };
+    // The thumb slot is defaulted rather than required so a client running
+    // against an edge deployment that predates M-3 still posts, without a
+    // poster, instead of reading undefined off the response.
+    return {
+      ...body,
+      thumbUploadUrl: body.thumbUploadUrl ?? null,
+      thumbToken: body.thumbToken ?? null,
+      thumbPath: body.thumbPath ?? null,
+    };
+  }
+
+  /** CT-1 (Phase 3 LAUNCH, P1-1). Resolves signed thumb/video URLs for a
+   * batch of clips in ceil(n/24) calls to `get-clip-playback-url` instead of
+   * one call per clip (the flood the profile grid and any future long list
+   * used to cause). Chunks run with bounded concurrency
+   * (PLAYBACK_BATCH_CONCURRENCY) so even a very long list never puts more
+   * than a few requests in flight at once. A chunk that errors outright
+   * (network blip, 429) degrades to "no poster this pass" for its own ids
+   * rather than throwing and blanking every other chunk's already-resolved
+   * posters; per-clip auth failures inside a successful batch arrive in the
+   * response's own `failed` array (unpublished/removed/another owner's
+   * clip), same 200-with-partial-failure shape either way. */
+  async function mintPlaybackBatch(
+    clipIds: string[],
+    kind: "thumb" | "video",
+  ): Promise<ClipPlaybackBatchResult> {
+    const ids = Array.from(new Set(clipIds));
+    const result: ClipPlaybackBatchResult = { urls: [], failed: [] };
+    if (ids.length === 0) return result;
+
+    const chunks: string[][] = [];
+    for (let i = 0; i < ids.length; i += PLAYBACK_BATCH_MAX) {
+      chunks.push(ids.slice(i, i + PLAYBACK_BATCH_MAX));
+    }
+
+    interface RawBatchResponse {
+      urls: { clip_id: string; url: string; expires_at: string }[];
+      failed: { clip_id: string; reason: string }[];
+    }
+
+    let cursor = 0;
+    async function worker(): Promise<void> {
+      while (cursor < chunks.length) {
+        const chunk = chunks[cursor];
+        cursor += 1;
+        if (!chunk) continue;
+        try {
+          const { data, error } = await client.functions.invoke("get-clip-playback-url", {
+            body: { clip_ids: chunk, kind },
+          });
+          if (error) throw await mapEdgeFunctionError(error);
+          const body = data as RawBatchResponse;
+          for (const u of body.urls ?? []) {
+            result.urls.push({ clipId: u.clip_id, url: u.url, expiresAt: u.expires_at });
+          }
+          for (const f of body.failed ?? []) {
+            result.failed.push({ clipId: f.clip_id, reason: f.reason });
+          }
+        } catch {
+          for (const clipId of chunk) {
+            result.failed.push({ clipId, reason: "MINT_FAILED" });
+          }
+        }
+      }
+    }
+
+    const workerCount = Math.min(PLAYBACK_BATCH_CONCURRENCY, chunks.length);
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
+    return result;
   }
 
   return {
@@ -1219,10 +1677,10 @@ function makeClutchApi(client: AtlitosClient) {
     /**
      * App Store guideline 1.2: a member must be able to block another member.
      *
-     * The subtraction itself is a RESTRICTIVE RLS policy (0092), not a filter
-     * applied here, so blocked content disappears from every read including
-     * ones written later that forget about blocking. This call only records
-     * the block.
+     * Records the block in `blocked_users` (0097), the same table
+     * `useModeration().blockUser` writes. The subtraction is the explicit
+     * `getBlockedUserIds` filter on feed, comment and chat reads (RLS is a
+     * floor, not scoping). This call only records the block.
      */
     async blockUser(userId: string): Promise<void> {
       const { data: authData } = await client.auth.getUser();
@@ -1233,7 +1691,7 @@ function makeClutchApi(client: AtlitosClient) {
         throw { code: "VALIDATION", message: "You cannot block yourself." };
       }
       const { error } = await db
-        .from("user_blocks")
+        .from("blocked_users")
         // Idempotent: blocking twice is not an error the member should see.
         .upsert(
           { blocker_id: authData.user.id, blocked_id: userId },
@@ -1246,7 +1704,7 @@ function makeClutchApi(client: AtlitosClient) {
       const { data: authData } = await client.auth.getUser();
       if (!authData.user) return;
       const { error } = await db
-        .from("user_blocks")
+        .from("blocked_users")
         .delete()
         .eq("blocker_id", authData.user.id)
         .eq("blocked_id", userId);
@@ -1259,10 +1717,9 @@ function makeClutchApi(client: AtlitosClient) {
      * that is the ONLY cross-user read surface for `users`; reading `users`
      * directly returns nothing for anyone but yourself.
      *
-     * A blocked account's own clips are hidden by the RESTRICTIVE policy, but
-     * `public_profiles` is not filtered by it, which is what makes an unblock
-     * list possible at all: you can still see the name of the person you chose
-     * to stop seeing.
+     * `public_profiles` is not filtered by the block, which is what makes an
+     * unblock list possible at all: you can still see the name of the person
+     * you chose to stop seeing.
      */
     async blockedUsers(): Promise<Array<{ id: string; name: string }>> {
       const ids = await this.blockedUserIds();
@@ -1280,13 +1737,13 @@ function makeClutchApi(client: AtlitosClient) {
     },
 
     /** Ids the caller has blocked, for rendering an unblock list in settings.
-     * Owner-scoped explicitly on top of `user_blocks_select_own` (CLAUDE.md:
+     * Owner-scoped explicitly on top of `blocked_users_select_own` (CLAUDE.md:
      * RLS is a floor, not scoping). */
     async blockedUserIds(): Promise<string[]> {
       const { data: authData } = await client.auth.getUser();
       if (!authData.user) return [];
       const { data, error } = await db
-        .from("user_blocks")
+        .from("blocked_users")
         .select("blocked_id")
         .eq("blocker_id", authData.user.id)
         .returns<{ blocked_id: string }[]>();
@@ -1313,28 +1770,44 @@ function makeClutchApi(client: AtlitosClient) {
       if (error) throw mapPostgrestError(error);
 
       const rows = data ?? [];
-      const liked = await likedClipIds(rows.map((r) => r.id));
+      const ids = rows.map((r) => r.id);
+      // CT-C: subtract the caller's own blocked-owner set (permissive-OR RLS
+      // cannot subtract rows, so this is an explicit client-layer filter, same
+      // shape as the status='published' guard above; a guest has no blocks so
+      // this resolves to an empty set and costs one no-op round trip).
+      const [liked, saved, blocked] = await Promise.all([
+        likedClipIds(ids),
+        savedClipIds(ids),
+        getBlockedUserIds(client),
+      ]);
       const last = rows.at(-1);
       return {
-        clips: rows.map((r) => mapClipRow(r, liked.has(r.id))),
+        clips: rows
+          .filter((r) => !blocked.has(r.owner_id))
+          .map((r) => mapClipRow(r, liked.has(r.id), saved.has(r.id))),
+        // Cursor is derived from the UNFILTERED page so pagination never skips
+        // a page's worth of rows just because some were blocked out of view.
         nextCursor: rows.length === CLUTCH_PAGE_SIZE && last ? last.created_at : null,
       };
     },
 
     /** v1 `clutch.get`. A single clip for the post detail screen. RLS lets a
      * guest/other athlete read it only when `published`; the owner can read
-     * their own in any status (own-profile deep link into a pending clip). */
+     * their own in any status (own-profile deep link into a pending clip).
+     * Uses CLIP_OWNER_SELECT because the detail screen needs
+     * `comments_enabled` to decide whether to show the composer, and the
+     * owner's own menu needs both it and `deleted_at`. */
     async getClip(clipId: string): Promise<Clip | null> {
       const { data, error } = await db
         .from("clips")
-        .select(CLIP_FEED_SELECT)
+        .select(CLIP_OWNER_SELECT)
         .eq("id", clipId)
         .maybeSingle<ClipFeedRow>();
       if (error) throw mapPostgrestError(error);
       if (!data) return null;
 
-      const liked = await likedClipIds([data.id]);
-      return mapClipRow(data, liked.has(data.id));
+      const [liked, saved] = await Promise.all([likedClipIds([data.id]), savedClipIds([data.id])]);
+      return mapClipRow(data, liked.has(data.id), saved.has(data.id));
     },
 
     /** v1 `clutch.comments`. Keyset on `created_at`, oldest first (a comment
@@ -1352,9 +1825,13 @@ function makeClutchApi(client: AtlitosClient) {
       if (error) throw mapPostgrestError(error);
 
       const rows = data ?? [];
+      // CT-C: subtract the caller's own blocked-author set, same explicit
+      // client-layer filter shape as getFeed above.
+      const blocked = await getBlockedUserIds(client);
       const last = rows.at(-1);
       return {
-        comments: rows.map(mapCommentRow),
+        comments: rows.filter((r) => !blocked.has(r.user_id)).map(mapCommentRow),
+        // Cursor from the UNFILTERED page, same pagination-safety reason as getFeed.
         nextCursor: rows.length === CLUTCH_PAGE_SIZE && last ? last.created_at : null,
       };
     },
@@ -1376,6 +1853,64 @@ function makeClutchApi(client: AtlitosClient) {
       if (error) throw mapPostgrestError(error);
 
       return mapCommentRow(data);
+    },
+
+    /** Delete one of the caller's OWN comments. The policy this rides on,
+     * `clip_comments_delete_own` (0042_clutch_rls.sql:131), has existed since
+     * the clutch RLS migration shipped and had no API method and no UI, so a
+     * user who posted something they regretted had no way to take it back.
+     *
+     * Own-row scoping is EXPLICIT here (`.eq("user_id", ...)`) and not left to
+     * the policy, per CLAUDE.md's "RLS is not scoping" rule: clip_comments
+     * carries a public read policy for published clips alongside the own-row
+     * delete policy, and a delete written without the filter would depend
+     * entirely on RLS being right. With the filter, a delete aimed at
+     * someone else's comment id matches zero rows instead of relying on a
+     * policy to refuse it.
+     *
+     * The `clip_comments_count_delete` trigger (0041) decrements
+     * `clips.comment_count` in the same transaction, so the header count and
+     * the thread stay in step without a client-side adjustment. */
+    async deleteComment(commentId: string): Promise<void> {
+      const { data: authData, error: authError } = await client.auth.getUser();
+      if (authError) throw mapAuthError(authError);
+      if (!authData.user) throw mapAuthError({ message: "Sign in to manage comments.", status: 401 });
+
+      const { error } = await db
+        .from("clip_comments")
+        .delete()
+        .eq("id", commentId)
+        .eq("user_id", authData.user.id);
+      if (error) throw mapPostgrestError(error);
+    },
+
+    /** Owner soft delete of their own clip -> `delete_my_clip` RPC (0100).
+     * Moves the clip to `removed` and stamps `deleted_at`, so the likes, the
+     * comment thread, any report against it and the audit trail all survive.
+     * The client never writes `clips.status`; 0042 grants it no UPDATE at all.
+     * `FORBIDDEN` if the caller is not the owner. UNAPPLIED: 0100 has not been
+     * run against production, so this call 404/undefined-function's until it
+     * is; the UI surfaces that failure inline (B2) rather than silently. */
+    async deleteMyClip(clipId: string): Promise<void> {
+      const { error } = await db.rpc("delete_my_clip", { p_clip_id: clipId });
+      if (error) throw mapPostgrestError(error);
+    },
+
+    /** Owner toggle for a clip's comment thread -> `set_clip_comments_enabled`
+     * RPC (0101). Closing a thread refuses NEW comments (enforced in the
+     * `clip_comments_insert_own` policy, not only in the UI) and leaves every
+     * existing comment readable. `FORBIDDEN` if the caller is not the owner.
+     * UNAPPLIED: same caveat as deleteMyClip above. */
+    async setCommentsEnabled(clipId: string, enabled: boolean): Promise<boolean> {
+      const { data, error } = await db.rpc("set_clip_comments_enabled", {
+        p_clip_id: clipId,
+        p_enabled: enabled,
+      });
+      if (error) throw mapPostgrestError(error);
+      const row = ((Array.isArray(data) ? data[0] : data) ?? null) as
+        | { comments_enabled?: boolean }
+        | null;
+      return row?.comments_enabled ?? enabled;
     },
 
     /** v1 `clutch.like` -> `toggle_clip_like` RPC. Atomic toggle that also
@@ -1510,38 +2045,161 @@ function makeClutchApi(client: AtlitosClient) {
       return (data ?? []).map((row) => mapClipRow(row.clips, true));
     },
 
+    /** PRD-01 FR-45. Toggle a clip into or out of the caller's private saves.
+     * `clip_saves` is owner-only (0088): direct owner-scoped DML is the write
+     * path, no RPC and no count trigger. Idempotent by the unique (clip_id,
+     * user_id): a save that already exists is removed, otherwise inserted.
+     * Returns true when the clip is now saved. A guest is refused server-side
+     * (the insert policy requires `not is_guest()`); the UI gates first. */
+    async toggleSaveClip(clipId: string): Promise<boolean> {
+      const { data: authData, error: authError } = await client.auth.getUser();
+      if (authError) throw mapAuthError(authError);
+      if (!authData.user || authData.user.is_anonymous) {
+        throw mapAuthError({ message: "Sign in to save clips.", status: 401 });
+      }
+
+      const { data: existing, error: readError } = await db
+        .from("clip_saves")
+        .select("id")
+        .eq("user_id", authData.user.id)
+        .eq("clip_id", clipId)
+        .maybeSingle<{ id: string }>();
+      if (readError) throw mapPostgrestError(readError);
+
+      if (existing) {
+        const { error } = await db
+          .from("clip_saves")
+          .delete()
+          .eq("user_id", authData.user.id)
+          .eq("clip_id", clipId);
+        if (error) throw mapPostgrestError(error);
+        return false;
+      }
+
+      const { error } = await db
+        .from("clip_saves")
+        .insert({ clip_id: clipId, user_id: authData.user.id });
+      if (error) throw mapPostgrestError(error);
+      return true;
+    },
+
+    /** The caller's saved clips for the profile's Saved grid, newest save
+     * first. EXPLICIT owner filter on `clip_saves` (the owner-only RLS is a
+     * ceiling, not scoping) AND an explicit `clips.status = 'published'` on the
+     * inner join, so a save on a since-removed clip never resurfaces. Rows come
+     * back in the feed select shape so the thumb card renders unchanged;
+     * savedByMe is true by construction. */
+    async listSavedClips(): Promise<Clip[]> {
+      const { data: authData, error: authError } = await client.auth.getUser();
+      if (authError) throw mapAuthError(authError);
+      if (!authData.user || authData.user.is_anonymous) return [];
+
+      const { data, error } = await db
+        .from("clip_saves")
+        .select(`created_at, clips!inner ( ${CLIP_FEED_SELECT} )`)
+        .eq("user_id", authData.user.id)
+        .eq("clips.status", "published")
+        .order("created_at", { ascending: false })
+        .limit(100)
+        .returns<{ created_at: string; clips: ClipFeedRow }[]>();
+      if (error) throw mapPostgrestError(error);
+
+      return (data ?? []).map((row) => mapClipRow(row.clips, false, true));
+    },
+
     /** A creator's public grid: their `published` clips, newest first. The
      * explicit `status='published'` filter is the same RLS-is-not-scoping
-     * guard as the feed (a visitor must not see a creator's pending clips). */
-    async getCreatorClips(creatorId: string): Promise<Clip[]> {
-      const { data, error } = await db
+     * guard as the feed (a visitor must not see a creator's pending clips).
+     *
+     * BOUNDED (SCALE-MEDIA M-4). This had no `.limit()` and no pagination, so
+     * a 500 clip creator returned 500 rows and, once the grid mints posters,
+     * ceil(500/24) = 21 batch calls on one screen open. One page of
+     * CLUTCH_GRID_PAGE_SIZE keeps the grid inside a SINGLE batch call, which
+     * is the whole point of the batch endpoint; pass the previous page's
+     * `nextCursor` for the next page.
+     *
+     * PAGINATED, not merely bounded. The bound shipped without a continuation
+     * and neither grid screen passed a cursor, so a creator with more than 24
+     * published clips lost the rest with no indication. */
+    async getCreatorClips(creatorId: string, cursor?: string): Promise<ClipPage> {
+      let query = db
         .from("clips")
         .select(CLIP_FEED_SELECT)
         .eq("owner_id", creatorId)
         .eq("status", "published")
         .order("created_at", { ascending: false })
-        .returns<ClipFeedRow[]>();
+        .order("id", { ascending: false })
+        // limit + 1: the extra row decides `nextCursor` and is never returned.
+        .limit(CLUTCH_GRID_PAGE_SIZE + 1);
+      const decoded = cursor ? decodeClipCursor(cursor) : null;
+      if (decoded) {
+        query = query.or(
+          `created_at.lt.${decoded.createdAt},and(created_at.eq.${decoded.createdAt},id.lt.${decoded.id})`,
+        );
+      }
+
+      const { data, error } = await query.returns<ClipFeedRow[]>();
       if (error) throw mapPostgrestError(error);
-      return (data ?? []).map((r) => mapClipRow(r, false));
+      return toClipPage(data ?? [], (r) => mapClipRow(r, false));
     },
 
     /** The signed-in athlete's own clips for their own Clutch profile, in
      * ANY status (an `uploading`/`processing`/`rejected` clip must show on
      * the owner's own grid per PRD-01 FR-44), so this deliberately does NOT
-     * filter by status. RLS scopes the read to the caller's own rows. */
-    async getMyClips(): Promise<Clip[]> {
+     * filter by status. RLS scopes the read to the caller's own rows.
+     *
+     * It DOES drop `deleted_at` rows (0100): a clip the creator deleted
+     * themselves leaves their grid, while a MODERATOR takedown (also status
+     * `removed`, but with `deleted_at` null) stays visible with its status
+     * pill, which is how the creator learns the clip was taken down.
+     * Filtering on status alone would collapse those two very different
+     * cases.
+     *
+     * The drop is applied AFTER the read rather than as `.is("deleted_at",
+     * null)` for the same reason CLIP_OWNER_SELECT exists: a filter on a
+     * column that does not exist yet 400s the whole query. This is not a
+     * security boundary being moved client side, it is an own-scoped read of
+     * the caller's own rows hiding rows the caller themselves deleted. */
+    async getMyClips(cursor?: string): Promise<ClipPage> {
       const { data: authData, error: authError } = await client.auth.getUser();
       if (authError) throw mapAuthError(authError);
-      if (!authData.user) return [];
+      if (!authData.user) return { items: [], nextCursor: null };
 
-      const { data, error } = await db
+      let query = db
         .from("clips")
-        .select(CLIP_FEED_SELECT)
+        .select(CLIP_OWNER_SELECT)
         .eq("owner_id", authData.user.id)
         .order("created_at", { ascending: false })
-        .returns<ClipFeedRow[]>();
+        .order("id", { ascending: false })
+// Note the interaction with the `deleted_at` filter below, which runs
+        // in JavaScript rather than as a `.is("deleted_at", null)` qual.
+        // `clips` has no `deleted_at` column on the live project, checked in
+        // information_schema, not inferred: `0100_clip_owner_delete.sql` adds
+        // it and the applied ceiling is `0097`. So the filter is a no-op TODAY
+        // (CLIP_OWNER_SELECT is `*`, the property is undefined, and
+        // `undefined == null` is true) and this page is always full.
+        // Once 0100 applies, a soft deleted clip consumes a slot in the page
+        // and is then dropped, so the grid can render fewer than
+        // CLUTCH_GRID_PAGE_SIZE tiles. Worth knowing before someone reads a
+        // short grid as a bug; the fix at that point is to move the predicate
+        // into the query, which the column existing is what makes possible.
+        //
+        // It is also why `nextCursor` is decided from the RAW page and not
+        // from `items.length`: a page that returns 20 tiles after dropping 4
+        // soft deleted rows is not the last page, and a caller that stopped
+        // paginating on a short page would hide the rest of the grid, which is
+        // the exact bug this continuation exists to fix.
+        .limit(CLUTCH_GRID_PAGE_SIZE + 1);
+      const decoded = cursor ? decodeClipCursor(cursor) : null;
+      if (decoded) {
+        query = query.or(
+          `created_at.lt.${decoded.createdAt},and(created_at.eq.${decoded.createdAt},id.lt.${decoded.id})`,
+        );
+      }
+
+      const { data, error } = await query.returns<ClipFeedRow[]>();
       if (error) throw mapPostgrestError(error);
-      return (data ?? []).map((r) => mapClipRow(r, false));
+      return toClipPage(data ?? [], (r) => mapClipRow(r, false), (r) => r.deleted_at == null);
     },
 
     /** v1 `clutch.upload` step 1 -> `stream-upload-url` edge function. Mints
@@ -1549,22 +2207,7 @@ function makeClutchApi(client: AtlitosClient) {
      * `uploading` status server side; the client then PUTs the MP4 to
      * `uploadUrl` (or `uploadToSignedUrl(path, token, file)`), never writing
      * the clip row itself. See VIDEO.md. */
-    async requestUploadUrl(input: UploadClipInput): Promise<ClipUploadTicket> {
-      const { data, error } = await client.functions.invoke("stream-upload-url", {
-        body: { caption: input.caption, sport: input.sport, clip_id: input.clipId },
-      });
-      if (error) throw await mapEdgeFunctionError(error);
-
-      const body = data as {
-        clipId: string;
-        uploadUrl: string;
-        token: string;
-        path: string;
-        bucket: string;
-        status: ClipStatus;
-      };
-      return body;
-    },
+    requestUploadUrl: requestUploadUrlImpl,
 
     /** v1 `clutch.upload` step 3 -> `stream-webhook` (on-upload finalizer).
      * Called after the MP4 PUT completes; flips the clip to `ready` (into the
@@ -1599,10 +2242,165 @@ function makeClutchApi(client: AtlitosClient) {
       };
       return body;
     },
+
+    /** CT-1 (Phase 3 LAUNCH, P1-1). Batch form of getPlaybackUrl: resolves
+     * many clips' thumb or video URLs in ceil(n/24) calls instead of one per
+     * clip, with bounded concurrency. Use `kind: "thumb"` for a poster grid
+     * (3600s TTL) and `kind: "video"` for playback (300s TTL, matching
+     * getPlaybackUrl). A clip this caller cannot read (unpublished, not
+     * their own, removed) comes back in `failed`, never thrown, so one bad
+     * id never blanks the rest of the grid. */
+    async getPlaybackUrls(clipIds: string[], kind: "thumb" | "video" = "thumb"): Promise<ClipPlaybackBatchResult> {
+      return mintPlaybackBatch(clipIds, kind);
+    },
+
+    /** CT-6 (Phase 3 LAUNCH, P1-6). The owner's Retry action for a clip in
+     * `failed` status: transitions it back to `uploading` via the
+     * owner-scoped `retry_failed_clip` RPC (clients hold no UPDATE grant on
+     * `clips`, 0042, so this SECURITY DEFINER RPC is the only client path off
+     * `failed`; non-owner retry is refused server side), then immediately
+     * re-mints a fresh `stream-upload-url` ticket against the SAME clip row,
+     * now back in `uploading`, the only status that mint will reuse rather
+     * than 409 INVALID_TRANSITION. Never a client-side status flip: both
+     * steps are real round trips, so the grid's Retry tap has honest
+     * evidence (an RPC call, an edge function call) behind it, not an
+     * optimistic local mutation pretending the clip already moved. */
+    async retryFailedClip(clip: Pick<Clip, "id" | "caption" | "sport">): Promise<ClipUploadTicket> {
+      const { error } = await db.rpc("retry_failed_clip", { p_clip_id: clip.id });
+      if (error) throw mapPostgrestError(error);
+      return requestUploadUrlImpl({ caption: clip.caption, sport: clip.sport, clipId: clip.id });
+    },
   };
 }
 
 export type UseClutchResult = ReturnType<typeof useClutch>;
+
+// ---------------------------------------------------------------------------
+// moderation (report + block). Phase 4 LAUNCH Track C, CT-C. PostgREST reads/
+// writes against `blocked_users` (own-row RLS) and `reports` (own-row insert,
+// `entity_type` widened to `chat_message`/`user`, both 0097_report_block.sql).
+// See API-MAPPING.md "moderation" and PHASE-4-STATUS.md Settled decision 4.
+//
+// TYPING NOTE: `blocked_users` is not yet in the generated `Database` type on
+// this branch, same as the clutch section above, so this section borrows the
+// same untyped-cast escape hatch.
+//
+// `getBlockedUserIds` is exported as a PLAIN function, not part of a React
+// hook: `useClutch`'s getFeed/getComments above and `useChat`'s
+// listThreads/listMessages (packages/api/src/use-chat.ts, same Track C file)
+// both need to subtract the caller's blocked set from what they return (CT-C:
+// "feed, clip comments, and chat inbox / thread reads filter blocked authors
+// and removed messages"), and a hook's body cannot call another hook. This is
+// the one shared query both files call, so the filtering logic lives in
+// exactly one place.
+// ---------------------------------------------------------------------------
+
+export type ReportEntityType = "clip" | "comment" | "chat_message" | "user";
+
+export interface ReportEntityInput {
+  entityType: ReportEntityType;
+  entityId: string;
+  reason: string;
+}
+
+interface BlockedUserRow {
+  blocked_id: string;
+}
+
+/** The caller's own blocked-user id set, or an empty set for a guest/signed
+ * out caller (a guest has nothing to block and nothing to block them with).
+ * Used internally by the feed/comments/chat reads to subtract blocked
+ * authors; see the section header above for why it is a plain function. */
+export async function getBlockedUserIds(client: AtlitosClient): Promise<Set<string>> {
+  const { data: authData } = await client.auth.getUser();
+  if (!authData.user || authData.user.is_anonymous) return new Set();
+
+  const db = client as unknown as SupabaseClient;
+  const { data, error } = await db
+    .from("blocked_users")
+    .select("blocked_id")
+    .eq("blocker_id", authData.user.id)
+    .limit(BLOCK_LIST_MAX)
+    .returns<BlockedUserRow[]>();
+  if (error) throw mapPostgrestError(error);
+  return new Set((data ?? []).map((row) => row.blocked_id));
+}
+
+export function useModeration(client: AtlitosClient) {
+  // Memoized on [client] for the same reason useClutch is (F1 above): a
+  // consumer that feeds this object into an effect dependency array must see
+  // a STABLE identity across renders, or the effect refires every render.
+  return useMemo(() => makeModerationApi(client), [client]);
+}
+
+function makeModerationApi(client: AtlitosClient) {
+  const db = client as unknown as SupabaseClient;
+
+  async function currentUserId(): Promise<string> {
+    const { data: authData, error } = await client.auth.getUser();
+    if (error) throw mapAuthError(error);
+    if (!authData.user || authData.user.is_anonymous) {
+      throw mapAuthError({ message: "Sign in to do this.", status: 401 });
+    }
+    return authData.user.id;
+  }
+
+  return {
+    /** The caller's own blocked-user ids, for a blocked-list settings surface. */
+    getBlockedIds: () => getBlockedUserIds(client),
+
+    /** PRD-04 FR-31/32 (block half): own-row insert into `blocked_users`
+     * (0097, RLS `blocker_id = auth.uid()` and `blocker_id <> blocked_id` at
+     * the schema level, the AT-62 shape baked in rather than only tested for).
+     * Upserted on the `(blocker_id, blocked_id)` primary key so blocking an
+     * already-blocked user is a no-op success, not a duplicate-key error. */
+    async blockUser(blockedUserId: string): Promise<void> {
+      const meId = await currentUserId();
+      if (meId === blockedUserId) {
+        throw mapPostgrestError({ message: "VALIDATION: cannot block yourself." });
+      }
+      const { error } = await db
+        .from("blocked_users")
+        .upsert({ blocker_id: meId, blocked_id: blockedUserId }, { onConflict: "blocker_id,blocked_id" });
+      if (error) throw mapPostgrestError(error);
+    },
+
+    /** Own-row delete. Idempotent: unblocking a user who was never blocked
+     * succeeds silently (zero rows affected, no error), same as the block
+     * side's upsert. */
+    async unblockUser(blockedUserId: string): Promise<void> {
+      const meId = await currentUserId();
+      const { error } = await db
+        .from("blocked_users")
+        .delete()
+        .eq("blocker_id", meId)
+        .eq("blocked_id", blockedUserId);
+      if (error) throw mapPostgrestError(error);
+    },
+
+    /** PRD-04 FR-31/32 (report half): own-row insert into `reports` (0042
+     * `reports_insert_own`, `entity_type` widened in 0097). Lands `pending`;
+     * the admin Reports Queue (apps/admin/src/pages/reports) is the same
+     * queue clip/comment reports already land in, now also showing chat
+     * message and user reports. */
+    async reportEntity(input: ReportEntityInput): Promise<void> {
+      const meId = await currentUserId();
+      const reason = input.reason.trim();
+      if (reason.length === 0) {
+        throw mapPostgrestError({ message: "VALIDATION: a reason is required to file a report." });
+      }
+      const { error } = await db.from("reports").insert({
+        entity_type: input.entityType,
+        entity_id: input.entityId,
+        reporter_id: meId,
+        reason,
+      });
+      if (error) throw mapPostgrestError(error);
+    },
+  };
+}
+
+export type UseModerationResult = ReturnType<typeof useModeration>;
 
 // P6: empower (hub, UPA profile, donate, My Impact) is implemented in
 // `use-empower.ts` (AT-123, Track D), which owns `useEmpower` and re-exports it

@@ -2,6 +2,8 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { useEffect, useRef, useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 
+import { CLIP_BUFFER_OPTIONS } from '@/lib/video-buffer';
+
 import type { ClipVideoProps } from './clip-video.types';
 
 /**
@@ -18,6 +20,9 @@ export function ClipVideo({ url, thumbUrl, active, muted = true }: ClipVideoProp
   const player = useVideoPlayer(url ?? null, (instance) => {
     instance.loop = true;
     instance.muted = muted;
+    // BUG-042: bound the media3 sample buffer. Left at expo-video's default
+    // this single player reserves 125 MB of Dalvik heap.
+    instance.bufferOptions = CLIP_BUFFER_OPTIONS;
   });
 
   // `muted` is controlled (the profile viewer's unmute toggle flips it). The

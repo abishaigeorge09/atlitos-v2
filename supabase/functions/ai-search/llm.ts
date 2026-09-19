@@ -71,6 +71,27 @@ async function callClaude(body: unknown, timeoutMs: number): Promise<Record<stri
   }
 }
 
+export interface LlmUsage {
+  inputTokens: number;
+  outputTokens: number;
+}
+
+/**
+ * Pull token usage out of a Messages API response, for the LAUNCH Phase 3
+ * spend meter (CT-3). `null` when the response carries no usage block (a
+ * failed/aborted call never reaches here since callers only see a message on
+ * success).
+ */
+function extractUsage(msg: Record<string, unknown> | null): LlmUsage | null {
+  if (!msg) return null;
+  const usage = msg.usage;
+  if (!usage || typeof usage !== "object") return null;
+  const u = usage as Record<string, unknown>;
+  const inputTokens = typeof u.input_tokens === "number" ? u.input_tokens : 0;
+  const outputTokens = typeof u.output_tokens === "number" ? u.output_tokens : 0;
+  return { inputTokens, outputTokens };
+}
+
 // Pull the first text block out of a Messages API response.
 function firstText(msg: Record<string, unknown> | null): string | null {
   if (!msg) return null;
@@ -130,12 +151,20 @@ const INTENT_SYSTEM =
   "ageHint is the user's age in years if stated, else null. keywords are the remaining concrete content words (product nouns, features), lowercased, excluding sport, brand, and filler words. " +
   "Return only the structured object.";
 
+export interface LlmParseIntentResult {
+  intent: Partial<ParsedIntent> | null;
+  /** Usage of the underlying call, present whenever the call itself succeeded, even if the parsed payload was unusable. */
+  usage: LlmUsage | null;
+}
+
 /**
- * Parse intent with Claude. Returns null on absent key, timeout, error, or an
- * unusable response so the caller keeps the deterministic parse. The result is
- * merged OVER the deterministic intent (hybrid), never replacing it wholesale.
+ * Parse intent with Claude. Returns `{ intent: null }` on absent key, timeout,
+ * error, or an unusable response so the caller keeps the deterministic parse.
+ * The result is merged OVER the deterministic intent (hybrid), never replacing
+ * it wholesale. `usage`, when present, is what LAUNCH Phase 3's spend meter
+ * (CT-3) records against the day's budget.
  */
-export async function llmParseIntent(query: string): Promise<Partial<ParsedIntent> | null> {
+export async function llmParseIntent(query: string): Promise<LlmParseIntentResult> {
   const msg = await callClaude(
     {
       model: MODEL,
@@ -146,9 +175,10 @@ export async function llmParseIntent(query: string): Promise<Partial<ParsedInten
     },
     INTENT_TIMEOUT_MS,
   );
+  const usage = extractUsage(msg);
 
   const parsed = safeJson(firstText(msg));
-  if (!parsed || typeof parsed !== "object") return null;
+  if (!parsed || typeof parsed !== "object") return { intent: null, usage };
   const p = parsed as Record<string, unknown>;
 
   const out: Partial<ParsedIntent> = {};
@@ -173,7 +203,7 @@ export async function llmParseIntent(query: string): Promise<Partial<ParsedInten
     if (kw.length > 0) out.keywords = kw;
   }
 
-  return out;
+  return { intent: out, usage };
 }
 
 // --------------------------------------------------------------------------
@@ -203,15 +233,20 @@ const RERANK_SCHEMA = {
   required: ["ranking"],
 } as const;
 
+export interface LlmRerankResult {
+  hits: ScoredHit[];
+  usage: LlmUsage | null;
+}
+
 /**
  * Rerank the deterministically-scored hits with Claude, rewriting rankReason.
  * Falls back to the incoming order (already sorted by the hybrid deterministic
  * score) for any id the model drops, so results stay stable and complete even
  * on a partial or failed response. Returns the original hits unchanged on any
- * failure.
+ * failure. `usage`, when present, is recorded against the CT-3 spend meter.
  */
-export async function llmRerank(query: string, hits: ScoredHit[]): Promise<ScoredHit[]> {
-  if (hits.length === 0) return hits;
+export async function llmRerank(query: string, hits: ScoredHit[]): Promise<LlmRerankResult> {
+  if (hits.length === 0) return { hits, usage: null };
 
   const candidates = hits.map((h) => ({
     id: `${h.entityType}:${h.entityId}`,
@@ -236,11 +271,12 @@ export async function llmRerank(query: string, hits: ScoredHit[]): Promise<Score
     },
     RERANK_TIMEOUT_MS,
   );
+  const usage = extractUsage(msg);
 
   const parsed = safeJson(firstText(msg));
-  if (!parsed || typeof parsed !== "object") return hits;
+  if (!parsed || typeof parsed !== "object") return { hits, usage };
   const ranking = (parsed as Record<string, unknown>).ranking;
-  if (!Array.isArray(ranking)) return hits;
+  if (!Array.isArray(ranking)) return { hits, usage };
 
   const byKey = new Map(hits.map((h) => [`${h.entityType}:${h.entityId}`, h]));
   const ordered: ScoredHit[] = [];
@@ -263,5 +299,5 @@ export async function llmRerank(query: string, hits: ScoredHit[]): Promise<Score
     if (!used.has(k)) ordered.push(h);
   }
 
-  return ordered;
+  return { hits: ordered, usage };
 }

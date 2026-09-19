@@ -281,7 +281,12 @@ export default function BookCourtPayScreen() {
         ) : null}
       </ScrollView>
 
-      <View style={{ padding: spacing.lg, paddingBottom: navInset + spacing.lg, borderTopWidth: 1, borderTopColor: colors.border }}>
+      <View style={{ padding: spacing.lg, paddingBottom: navInset + spacing.lg, borderTopWidth: 1, borderTopColor: colors.border, gap: spacing.xs }}>
+        {payLoading || state === 'paying' ? (
+          <Text style={[textStyle('caption'), { color: colors.textSecondary, textAlign: 'center' }]}>
+            Preparing secure checkout. This can take a few seconds.
+          </Text>
+        ) : null}
         <Button loading={payLoading || state === 'paying'} disabled={!booking} onPress={() => void handlePay()}>
           <Text style={{ color: colors.inkOnAccent }}>
             Pay{booking ? ' ' : ''}

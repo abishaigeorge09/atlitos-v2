@@ -15,7 +15,10 @@
 import { createClient } from '@supabase/supabase-js';
 import { EMPOWER_PASSWORD } from './lib/demo-credentials.mjs';
 
+import { assertWritableTarget } from './lib/guard-target.mjs';
 const SUPABASE_URL = process.env.SUPABASE_URL ?? 'https://syzzfgaudpifwvbpycyi.supabase.co';
+assertWritableTarget(SUPABASE_URL, 'seed-empower-upa-users.mjs');
+
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!SERVICE_ROLE_KEY) {

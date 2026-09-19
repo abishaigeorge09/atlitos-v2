@@ -1,0 +1,123 @@
+appId: com.atlitos.app
+---
+# COACH CREATES A TRAINING GROUP. Write path, never tested before tonight.
+#
+# Until the local stack existed this could not run at all: it WRITES, and
+# production is read only by standing rule. Every training_groups row in
+# production was made by an e2e script or a raw RPC call, never by a coach
+# using the product.
+#
+# THREE THINGS LEARNED ON coach-session-type-create APPLY HERE VERBATIM, and
+# skipping any of them produces a flow that reports success while doing nothing:
+#
+#  1. SCROLL THE FORM ABOVE THE KEYBOARD before tapping a lower field. Maestro
+#     taps an element's COORDINATES; a field underneath the keypad gets tapped
+#     THROUGH it, the tap lands on a number key, and the step still reports
+#     COMPLETED.
+#  2. NEVER assert on a value you typed. `assertVisible: "<name you entered>"`
+#     is satisfied by the text still sitting in the INPUT, so it passes over an
+#     empty table. Assert on something only a rendered result produces.
+#  3. NEVER use assertNotVisible as the proof. On a screen the accessibility
+#     tree cannot see (task #45), every negative assertion passes vacuously:
+#     it passes when nothing was created and when the app is on another page.
+#
+# The verdict for this flow is the SCREENSHOT plus this query:
+#   psql "$ATLITOS_LOCAL_DB_URL" -c "select name, capacity, monthly_fee
+#     from public.training_groups where name = 'Evening Cricket Squad'"
+- launchApp:
+    clearState: true
+- runFlow:
+    when:
+      visible: "Not Now"
+    commands:
+      - tapOn: "Not Now"
+
+- openLink: atlitos://login
+- runFlow:
+    when:
+      visible: "Open in .*"
+    commands:
+      - tapOn: "Cancel"
+- extendedWaitUntil:
+    visible: "Email or phone.*"
+    timeout: 10000
+- tapOn: "Email or phone input"
+- inputText: "coach1@atlitos.dev"
+- tapOn: "Password input"
+- inputText: "AtlitosDemo!2026"
+- tapOn:
+    text: "Log in"
+    index: 1
+- extendedWaitUntil:
+    visible: "Hyderabad|Save Password.*"
+    timeout: 20000
+- runFlow:
+    when:
+      visible: "Save Password.*"
+    commands:
+      - tapOn: "Not Now"
+
+# Straight to the create form. `/trainings/group/edit` with no id is create,
+# with an id is edit (edit.tsx:80).
+- openLink: atlitos://trainings/group/edit
+- runFlow:
+    when:
+      visible: "Open in .*"
+    commands:
+      - tapOn: "Cancel"
+- extendedWaitUntil:
+    visible: "Group name"
+    timeout: 15000
+- takeScreenshot: /tmp/coach-verify/10-group-form
+
+- tapOn:
+    below: "Group name"
+- inputText: "Evening Cricket Squad"
+# hideKeyboard is unreliable, it failed outright here and takes the flow with
+# it. Tapping a label dismisses focus and cannot change a value.
+- tapOn: "Group name"
+- swipe:
+    start: 50%, 75%
+    end: 50%, 40%
+
+# ERASE BEFORE TYPING. Capacity and fee arrive PRE-FILLED (12 and 2500), they
+# are not placeholders, so inputText APPENDS: "12" + "16" became a capacity of
+# 1216 and the form correctly refused with "A group can hold up to 100 members.
+# Split a larger squad into two groups." The flow still reported every step
+# COMPLETED, because a flow made only of taps and screenshots always does.
+- tapOn: "12"
+- eraseText
+- inputText: "16"
+- tapOn: "Capacity"
+- tapOn: "2500"
+- eraseText
+- inputText: "3000"
+- takeScreenshot: /tmp/coach-verify/11-group-filled
+
+- tapOn: "Group name"
+- tapOn: "Create group"
+- takeScreenshot: /tmp/coach-verify/12-group-created
+
+# A REAL ASSERTION. Without one this flow passed while creating NOTHING, and
+# later while creating a DUPLICATE every run: a flow made only of taps and
+# screenshots always passes, because nothing in it can fail. The duplicates were
+# only ever visible in SQL.
+#
+# Creating a group navigates to the GROUP DETAIL page, not back to the trainees
+# list. Two earlier assertion attempts targeted screens this flow never reaches:
+# the trainees card's accessibilityLabel (trainees.tsx:212) and "spots left",
+# which lives on the ATHLETE's coach profile (coaching/coach/[id].tsx:307).
+# Both would have failed for entirely the wrong reason. The screenshot is what
+# settled it.
+#
+# "0 of 16" is rendered ONLY by the saved group's detail page, from the stored
+# capacity against its live member count. The form holds a bare "16" in an
+# input and never that phrase, so this cannot be satisfied by text left behind,
+# which is exactly how the session type flow first went green over an empty
+# table.
+- extendedWaitUntil:
+    visible: ".*0 of 16.*"
+    timeout: 15000
+- assertVisible: ".*0 of 16.*"
+- assertVisible: "Monthly fee"
+- takeScreenshot: /tmp/coach-verify/13-group-card

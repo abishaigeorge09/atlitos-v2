@@ -1,0 +1,6 @@
+-rw-r--r--@ 1 abishaigeorgegosula  staff  250883583 11 Aug 15:07 apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
+
+lib/arm64-v8a/
+lib/armeabi-v7a/
+lib/x86_64/
+lib/x86/

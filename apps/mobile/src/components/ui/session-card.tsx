@@ -72,8 +72,12 @@ function SessionCard({
         />
       ) : null}
 
-      <View style={{ pointerEvents: 'none' }} className="flex-row items-center justify-between">
-        <Text className="font-sans-semibold text-lg text-text">{personName}</Text>
+      <View style={{ pointerEvents: 'none' }} className="flex-row items-center justify-between gap-sm">
+        {/* flex-1 + numberOfLines: this label is UNBOUNDED user data sitting in a
+        justify-between row, the same shape that made "Sessions this month"
+        collide with its icon at 393pt. A long person name pushed the element on the
+        right off screen instead of ellipsizing. Swept 2026-08-22. */}
+        <Text numberOfLines={1} className="flex-1 font-sans-semibold text-lg text-text">{personName}</Text>
         <Text className="font-mono text-sm text-text-secondary">{sessionType}</Text>
       </View>
 

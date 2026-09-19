@@ -2,27 +2,9 @@ import { useProfile } from '@atlitos/api';
 import { radii, spacing } from '@atlitos/theme';
 import { SPORTS, type Sport } from '@atlitos/types';
 import { router } from 'expo-router';
-import {
-  Bell,
-  ChevronRight,
-  LogIn,
-  FileText,
-  LifeBuoy,
-  LogOut,
-  ShieldCheck,
-  Scale,
-  UserRoundX,
-  Trash2,
-  Monitor,
-  Moon,
-  Palette,
-  Sun,
-  UserRoundPlus,
-  UserRoundPen,
-  Volleyball,
-} from 'lucide-react-native';
-import { useEffect, useRef, useState } from 'react';
-import { Alert, Linking, Pressable, ScrollView, Switch, View } from 'react-native';
+import { Bell, ChevronRight, LogIn, LogOut, Monitor, Moon, Palette, Star, Sun, Trash2, UserRoundPen, UserRoundPlus, UserRoundX, Volleyball } from 'lucide-react-native';
+import { useState } from 'react';
+import { Pressable, ScrollView, Switch, View } from 'react-native';
 
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
@@ -33,24 +15,6 @@ import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
-
-/**
- * App Store 5.1.1 needs the privacy policy reachable, and 1.2 needs a published
- * content policy plus a monitored contact, for any app carrying user content.
- * These live OUTSIDE the signed-in branch below so a guest can reach them too,
- * which is the whole point of a published policy.
- */
-const LEGAL_LINKS: Array<{ key: string; icon: typeof Sun; label: string; url: string }> = [
-  { key: 'privacy', icon: ShieldCheck, label: 'Privacy policy', url: 'https://www.atlitos.com/privacy' },
-  { key: 'terms', icon: Scale, label: 'Terms of service', url: 'https://www.atlitos.com/terms' },
-  { key: 'content', icon: FileText, label: 'Content policy', url: 'https://www.atlitos.com/content-policy' },
-  {
-    key: 'support',
-    icon: LifeBuoy,
-    label: 'Contact support',
-    url: 'mailto:founder@synthsports.co?subject=Atlitos%20support',
-  },
-];
 
 const SPORT_LABEL: Record<Sport, string> = {
   football: 'Football',
@@ -147,57 +111,19 @@ export function SettingsContent() {
   const profileApi = useProfile(supabase);
 
   const status = useSessionStore((s) => s.status);
+  const session = useSessionStore((s) => s.session);
   const me = useSessionStore((s) => s.me);
+  const meLoading = useSessionStore((s) => s.meLoading);
   const refreshMe = useSessionStore((s) => s.refreshMe);
   const signOut = useSessionStore((s) => s.signOut);
-  const [deleting, setDeleting] = useState(false);
-
-  /**
-   * App Store 5.1.1(v). Two taps, not one: the first Alert states exactly what
-   * survives deletion, because "delete my account" that quietly keeps order
-   * history would be a worse surprise than the extra tap. The destructive
-   * action is never the default button.
-   */
-  function confirmDeleteAccount() {
-    Alert.alert(
-      'Delete your account',
-      'This permanently removes your profile, clips, comments, chats, saved addresses and cart. Your order and payment records are kept, without your name attached, because we are required to retain them. This cannot be undone.',
-      [
-        { text: 'Keep my account', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            Alert.alert('Are you sure?', 'Deleting your account signs you out immediately and cannot be reversed.', [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Delete forever', style: 'destructive', onPress: () => void handleDeleteAccount() },
-            ]);
-          },
-        },
-      ],
-    );
-  }
-
-  async function handleDeleteAccount() {
-    setDeleting(true);
-    try {
-      await profileApi.deleteAccount();
-      // Sign out locally straight away. The access token stays syntactically
-      // valid until it expires; every server layer refuses it, but leaving it
-      // on the device would show a signed-in shell over an account that is
-      // gone. signOut() returns the app to guest, the same path as Sign out.
-      await signOut();
-    } catch (e) {
-      const message = (e as { message?: string })?.message;
-      Alert.alert('We could not delete your account', message ?? 'Please try again, or contact support.');
-    } finally {
-      setDeleting(false);
-    }
-  }
   const continueAsGuest = useSessionStore((s) => s.continueAsGuest);
 
   const isSignedIn = status === 'signed_in';
-  const isCoach = me?.coachStatus === 'verified' || me?.coachStatus === 'pending_review';
+  // Trust `me` for the coach role only once it is loaded AND belongs to the
+  // current session user, so the "Become a coach" row never appears (or hides)
+  // based on a stale/previous user's profile while a new login resolves.
+  const meReady = !meLoading && !!me && me.id === session?.user.id;
+  const isCoach = meReady && (me.coachStatus === 'verified' || me.coachStatus === 'pending_review');
 
   const [city, setCity] = useState(me?.city ?? '');
   const [state, setState] = useState(me?.state ?? '');
@@ -210,32 +136,8 @@ export function SettingsContent() {
   // lands; refreshMe reconciles from the row afterwards.
   const [themePref, setThemePref] = useState<ThemePref>(me?.theme ?? 'system');
   const [sports, setSports] = useState<Sport[]>(me?.sports ?? []);
+  const [primarySport, setPrimarySport] = useState<Sport | null>(me?.primarySport ?? me?.sports?.[0] ?? null);
   const [prefs, setPrefs] = useState(me?.notificationPrefs ?? { sessions: true, messages: true, promotions: false });
-
-  // BUG-10. Every field above seeds from `me` with a useState INITIALISER,
-  // which React evaluates once, on first mount. This screen is not guarded on
-  // the profile having loaded (settings.tsx renders <SettingsContent /> flat),
-  // so on any path where `me` resolves after mount -- a cold open straight to
-  // Settings, a slow network, a signed-in user whose profile fetch is still in
-  // flight -- the form rendered permanently empty and a Save would then write
-  // those blanks back over real values.
-  //
-  // It looked fine in testing only because navigating from an already-warm app
-  // meant `me` happened to be cached before this mounted.
-  //
-  // Sync once per account, keyed on the user id, and never after the member has
-  // started editing: re-seeding under someone's fingers would discard their
-  // typing every time `me` refetched.
-  const seededForUserId = useRef<string | null>(null);
-  useEffect(() => {
-    if (!me?.id || seededForUserId.current === me.id) return;
-    seededForUserId.current = me.id;
-    setCity(me.city ?? '');
-    setState(me.state ?? '');
-    setThemePref(me.theme ?? 'system');
-    setSports(me.sports ?? []);
-    setPrefs(me.notificationPrefs ?? { sessions: true, messages: true, promotions: false });
-  }, [me]);
 
   async function persist(patch: Parameters<typeof profileApi.updateProfile>[0]) {
     if (!isSignedIn) return;
@@ -257,10 +159,29 @@ export function SettingsContent() {
     void persist({ theme: pref });
   }
 
+  // Sports edits write users.sports AND athlete_sports/is_primary together
+  // through the RPC (0088), so Learn and the coach-search default follow the
+  // edit. Every write carries the primary so the two models never drift.
   function toggleSport(sport: Sport) {
-    const next = sports.includes(sport) ? sports.filter((s) => s !== sport) : [...sports, sport];
+    const isSelected = sports.includes(sport);
+    // Keep at least one sport, matching onboarding. Deselecting the last one
+    // does nothing rather than clearing Learn's primary sport.
+    if (isSelected && sports.length === 1) return;
+
+    const next = isSelected ? sports.filter((s) => s !== sport) : [...sports, sport];
+    // Removing the current primary reassigns it to the first remaining sport;
+    // adding the first ever sport makes it primary.
+    const nextPrimary =
+      primarySport && next.includes(primarySport) ? primarySport : (next[0] ?? null);
     setSports(next);
-    void persist({ sports: next });
+    setPrimarySport(nextPrimary);
+    if (nextPrimary) void persist({ sports: next, primarySport: nextPrimary });
+  }
+
+  function handleSetPrimary(sport: Sport) {
+    if (!sports.includes(sport) || sport === primarySport) return;
+    setPrimarySport(sport);
+    void persist({ sports, primarySport: sport });
   }
 
   function toggleNotification(key: 'sessions' | 'messages' | 'promotions', value: boolean) {
@@ -360,7 +281,7 @@ export function SettingsContent() {
       {isSignedIn ? (
         <>
           <Section title="Preferred sports">
-            <View style={{ padding: spacing.lg, gap: spacing.sm }}>
+            <View style={{ padding: spacing.lg, gap: spacing.md }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
                 <Volleyball size={18} strokeWidth={1.75} color={colors.textSecondary} />
                 <Text style={[textStyle('body'), { color: colors.text }]}>What you play</Text>
@@ -376,6 +297,29 @@ export function SettingsContent() {
                   />
                 ))}
               </View>
+
+              {sports.length > 0 ? (
+                <View style={{ gap: spacing.sm }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                    <Star size={16} strokeWidth={1.75} color={colors.textSecondary} />
+                    <Text style={[textStyle('body'), { color: colors.text }]}>Primary sport</Text>
+                  </View>
+                  <Text style={[textStyle('caption'), { color: colors.textTertiary }]}>
+                    Your primary sport tunes your Learn roadmap and the coaches shown first.
+                  </Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+                    {sports.map((sport) => (
+                      <Chip
+                        key={sport}
+                        label={SPORT_LABEL[sport]}
+                        variant="filter"
+                        selected={sport === primarySport}
+                        onPress={() => handleSetPrimary(sport)}
+                      />
+                    ))}
+                  </View>
+                </View>
+              ) : null}
             </View>
           </Section>
 
@@ -429,14 +373,13 @@ export function SettingsContent() {
 
           <Section title="Account">
             <ActionRow icon={UserRoundPen} label="Edit profile" onPress={() => router.push('/profile/edit')} />
-            <View style={{ borderTopWidth: 1, borderTopColor: colors.border }}>
-              <ActionRow
-                icon={UserRoundX}
-                label="Blocked accounts"
-                onPress={() => router.push('/account/blocked')}
-              />
-            </View>
-            {!isCoach ? (
+            {/* RECONCILIATION 2026-09-14, from origin/main eca5992. A block with no
+                undo is a trap; this is the only place a person can see who they
+                blocked and reverse it. The screen is a drop in: it calls the
+                LOCAL clutch.blockedUsers() and clutch.unblockUser(), which already
+                run against blocked_users. His migrations were not taken. */}
+            <ActionRow icon={UserRoundX} label="Blocked accounts" onPress={() => router.push('/account/blocked')} />
+            {meReady && !isCoach ? (
               <View style={{ borderTopWidth: 1, borderTopColor: colors.border }}>
                 <ActionRow
                   icon={UserRoundPlus}
@@ -450,40 +393,21 @@ export function SettingsContent() {
             <View style={{ borderTopWidth: 1, borderTopColor: colors.border }}>
               <ActionRow icon={LogOut} label="Sign out" tone="danger" onPress={() => void handleSignOut()} />
             </View>
+            {/* Apple Guideline 5.1.1(v) and the Google Play account deletion
+                policy: an account created in the app must be deletable from
+                inside the app. This row only opens the confirmation screen;
+                nothing is deleted until the word DELETE is typed there. */}
             <View style={{ borderTopWidth: 1, borderTopColor: colors.border }}>
               <ActionRow
                 icon={Trash2}
-                label={deleting ? 'Deleting your account...' : 'Delete account'}
+                label="Delete account"
                 tone="danger"
-                onPress={() => {
-                  if (!deleting) confirmDeleteAccount();
-                }}
+                onPress={() => router.push('/profile/delete-account')}
               />
             </View>
           </Section>
         </>
       ) : null}
-
-      {/* Outside the signed-in branch on purpose: a guest must be able to read
-          the policies and reach support before creating an account. */}
-      <Section title="Legal and support">
-        {LEGAL_LINKS.map((link, index) => (
-          <View
-            key={link.key}
-            style={index === 0 ? undefined : { borderTopWidth: 1, borderTopColor: colors.border }}
-          >
-            <ActionRow
-              icon={link.icon}
-              label={link.label}
-              onPress={() => {
-                void Linking.openURL(link.url).catch(() => {
-                  Alert.alert('We could not open that', 'Please visit atlitos.com instead.');
-                });
-              }}
-            />
-          </View>
-        ))}
-      </Section>
 
       {error ? <Text style={[textStyle('caption'), { color: colors.danger }]}>{error}</Text> : null}
       {busy ? <Text style={[textStyle('caption'), { color: colors.textTertiary }]}>Saving...</Text> : null}

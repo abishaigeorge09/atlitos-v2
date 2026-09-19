@@ -33,6 +33,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { StatTile } from '@/components/ui/stat-tile';
 import { StatusPill, type Status as StatusPillStatus } from '@/components/ui/status-pill';
 import { Text } from '@/components/ui/text';
+import { COACH_TRAINEE_VIDEO_REVIEW_ENABLED } from '@/lib/feature-flags';
 import { SESSION_STATUS_PILL } from '@/lib/session-display';
 import { supabase } from '@/lib/supabase';
 import { textStyle } from '@/theme/text-style';
@@ -42,17 +43,29 @@ type ScreenState = 'loading' | 'populated' | 'error';
 type ProfileTab = 'overview' | 'sessions' | 'payments' | 'notes' | 'video';
 type SessionsFilter = 'upcoming' | 'all';
 
+/** The video tab is labelled Videos, not Video Analytics: nothing in this
+ * product analyses a video, and the tab that promised it only ever rendered
+ * a coming soon state. It is present only when
+ * COACH_TRAINEE_VIDEO_REVIEW_ENABLED is on, which is where the whole
+ * decision, and the recommendation, is written down. */
 const TABS: Array<{ key: ProfileTab; label: string }> = [
   { key: 'overview', label: 'Overview' },
   { key: 'sessions', label: 'Sessions' },
   { key: 'payments', label: 'Payments' },
   { key: 'notes', label: 'Notes' },
-  { key: 'video', label: 'Video Analytics' },
+  ...(COACH_TRAINEE_VIDEO_REVIEW_ENABLED
+    ? [{ key: 'video' as ProfileTab, label: 'Videos' }]
+    : []),
 ];
 
 const MEMBERSHIP_STATUS_PILL: Record<string, StatusPillStatus> = {
   pending: 'pending',
   active: 'confirmed',
+  // `expired` and `lapsed` both read as the same pill here (0104 adds
+  // `expired` as the grace window state between the two): a coach reading
+  // a trainee's payment history should see the same "not current" signal
+  // for either, not one falling back to a misleading `pending` tone.
+  expired: 'expired',
   lapsed: 'expired',
 };
 
@@ -455,11 +468,16 @@ export default function CoachTraineeDetailScreen() {
           ) : null}
 
           {tab === 'video' ? (
-            // Seam: no per-trainee video table exists yet (COACH-TRAININGS-GAP.md
-            // item 8, needs a storage bucket plus a coach_trainee_videos link
-            // table). When that ships, swap this block for the real list
-            // component, keeping the same tab shell and empty state as the
-            // zero-videos case.
+            // The comment that used to sit here said no per-trainee video
+            // table existed. That is STALE: 0082_coach_trainee_videos.sql
+            // created it, with RLS, and two edge functions sign upload and
+            // playback. The finished upload UI is
+            // components/organisms/trainings/TraineeVideoAnalytics.tsx and is
+            // mounted nowhere. Mounting it here is the entire remaining work,
+            // gated on COACH_TRAINEE_VIDEO_REVIEW_ENABLED, which carries the
+            // founder decision and the recommendation. This block is
+            // unreachable while that flag is off, since the tab is not
+            // rendered at all.
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md, padding: spacing.lg }}>
               <VideoOff size={48} color={colors.textTertiary} strokeWidth={1.75} />
               <Text style={[textStyle('h3'), { color: colors.text, textAlign: 'center' }]}>No videos found</Text>

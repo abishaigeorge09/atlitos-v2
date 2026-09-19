@@ -1,4 +1,5 @@
 import { Button } from '@/components/organisms/_shared';
+import { Sentry } from '@/lib/sentry';
 import { textStyle } from '@/theme/text-style';
 import { getTheme, spacing } from '@atlitos/theme';
 import { TriangleAlert } from 'lucide-react-native';
@@ -6,7 +7,9 @@ import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { Appearance, Text, View } from 'react-native';
 
 /**
- * The app had no error boundary at all. A render error anywhere in the tree
+ * On the branch this was written against, the app had no error boundary.
+ * Here it sits inside Sentry.ErrorBoundary and adds the recovery control.
+ * A render error anywhere in the tree
  * unmounted everything and left a blank screen with no way out but a force
  * quit, and a release build shows no red box to explain it.
  *
@@ -42,9 +45,17 @@ export class AppErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    // Console only for now. When a crash reporter is added, this is its one
-    // call site for render errors, which is why `surface` is threaded through
-    // rather than reconstructed from the stack.
+    // RECONCILIATION 2026-09-14. This boundary came from origin/main 192cdab,
+    // whose header says the app had no boundary at all. On this branch it
+    // already had Sentry.ErrorBoundary at the root. Nesting this one INSIDE it
+    // means errors are caught here first and would never reach Sentry, so the
+    // crash reporter that Phase 2 wired would go silent for exactly the class
+    // of error it exists for. Report explicitly, then keep the reset UX, which
+    // the Sentry fallback lacks (it dead ends on "restart the app").
+    Sentry.captureException(error, {
+      contexts: { react: { componentStack: info.componentStack } },
+      tags: { surface: this.props.surface ?? 'root' },
+    });
     console.error('[AppErrorBoundary]', this.props.surface ?? 'root', error, info.componentStack);
   }
 

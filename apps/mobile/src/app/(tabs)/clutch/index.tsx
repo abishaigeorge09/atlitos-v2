@@ -4,15 +4,17 @@ import type { ApiError, Clip } from '@atlitos/types';
 import { router } from 'expo-router';
 import { Play, Plus, TriangleAlert } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Pressable, View, type ViewToken } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, Share, View, type ViewToken } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ClutchPostCard } from '@/components/molecules/ClutchPostCard';
 import { EmptyState } from '@/components/organisms/EmptyState';
 import { LoginGateModal } from '@/components/organisms/LoginGateModal';
+import { ModerationSheet, type ModerationTarget } from '@/components/organisms/moderation/ModerationSheet';
 import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
+import { usePendingAuthAction } from '@/hooks/use-pending-auth-action';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
 import { textStyle } from '@/theme/text-style';
@@ -24,16 +26,21 @@ type LoadState = 'loading' | 'empty' | 'populated' | 'error';
  * on-screen clip never stalls on an expired URL mid-watch. */
 const PLAYBACK_REFRESH_LEAD_S = 15;
 
-/** Fixed reasons rather than a free-text box as the first step: a moderator
- * queue is only useful if the rows are comparable, and a member reporting
- * abuse should not have to compose a sentence. */
-const REPORT_REASONS = [
-  'Nudity or sexual content',
-  'Violence or dangerous acts',
-  'Hate speech or harassment',
-  'Spam or a scam',
-  'Something else',
-] as const;
+/** SCALE-MEDIA M-1. Bounded retry for a failed playback mint. Four attempts
+ * from a 2s base doubles to 2, 4, 8, 16 seconds, capped at 30, each with up to
+ * 50 percent added jitter so devices sharing one throttle key do not retry in
+ * lockstep and re-exhaust the window together. A RATE_LIMITED refusal waits
+ * out the server's own `retry_after_seconds` instead of the base. */
+const MINT_MAX_ATTEMPTS = 4;
+const MINT_RETRY_BASE_MS = 2000;
+const MINT_RETRY_MAX_MS = 30000;
+const MINT_RETRY_JITTER = 0.5;
+
+/** Deep link into a single clip in the viewer. `atlitos://` is the app scheme
+ * (app.json); the share sheet carries it so a tap reopens the exact clip. */
+function clipDeepLink(clipId: string): string {
+  return `atlitos://clutch/post/${clipId}`;
+}
 
 /**
  * Clutch feed (PRD-01 3.4, FR-42/FR-43). Full-bleed vertical video feed, one
@@ -60,57 +67,15 @@ export default function ClutchFeedScreen() {
   const [cursor, setCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [gateVisible, setGateVisible] = useState(false);
-
-  /**
-   * App Store guideline 1.2. Both required controls behind one control on the
-   * content itself: report the clip, or block its author outright.
-   *
-   * Blocking removes the author's clips from this member's feed immediately.
-   * The subtraction is a RESTRICTIVE RLS policy (0092), so the next fetch
-   * simply does not contain them; the local splice below is only so the
-   * current screen updates without waiting for a refetch.
-   */
+  /** App Store guideline 1.2: report the clip or block its author from the
+   * feed card itself, through the same ModerationSheet the viewer uses (CT-C),
+   * so the copy, the reason list and the block confirmation stay in one place. */
+  const [moderationTarget, setModerationTarget] = useState<ModerationTarget | null>(null);
   function openReportOrBlock(clip: Clip) {
-    Alert.alert('This post', 'Tell us what is wrong, or stop seeing posts from this account.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Report post',
-        onPress: () =>
-          requireAuth(() => {
-            Alert.alert('Report this post', 'What is the problem?', [
-              { text: 'Cancel', style: 'cancel' },
-              ...REPORT_REASONS.map((reason) => ({
-                text: reason,
-                onPress: () => void submitReport(clip, reason),
-              })),
-            ]);
-          }),
-      },
-      {
-        text: `Block ${clip.channel}`,
-        style: 'destructive' as const,
-        onPress: () => requireAuth(() => void submitBlock(clip)),
-      },
-    ]);
-  }
-
-  async function submitReport(clip: Clip, reason: string) {
-    try {
-      await clutch.report('clip', clip.id, reason);
-      Alert.alert('Thanks for telling us', 'Our team will review this post.');
-    } catch {
-      Alert.alert('We could not send that report', 'Please try again.');
-    }
-  }
-
-  async function submitBlock(clip: Clip) {
-    try {
-      await clutch.blockUser(clip.ownerId);
-      setClips((current) => current.filter((c) => c.ownerId !== clip.ownerId));
-      Alert.alert('Blocked', `You will not see posts from ${clip.channel} again.`);
-    } catch {
-      Alert.alert('We could not block that account', 'Please try again.');
-    }
+    requireAuth(
+      () => setModerationTarget({ type: 'clip', entityId: clip.id, userId: clip.ownerId, userName: clip.channel }),
+      () => setGateVisible(true),
+    );
   }
 
   const [containerH, setContainerH] = useState(0);
@@ -120,9 +85,15 @@ export default function ClutchFeedScreen() {
   // as an <Image> source), so the poster the card shows is the SIGNED thumb URL
   // get-clip-playback-url mints alongside the video, never clip.thumbUrl.
   const [posterUrls, setPosterUrls] = useState<Record<string, string>>({});
+  // Cards whose playback mint is currently failing (M-1). Drives the card's
+  // visible, non-blocking "could not load" state instead of a black rectangle.
+  const [mintFailed, setMintFailed] = useState<Record<string, true>>({});
 
   const activeIdRef = useRef<string | null>(null);
   const refreshTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  // Consecutive failed mint attempts per clip, so the backoff is bounded and a
+  // card that keeps failing stops asking rather than retrying forever.
+  const mintAttempts = useRef<Record<string, number>>({});
 
   const clearTimer = useCallback((id: string) => {
     const timer = refreshTimers.current[id];
@@ -140,6 +111,15 @@ export default function ClutchFeedScreen() {
         if (playback.thumbUrl) {
           setPosterUrls((prev) => ({ ...prev, [clipId]: playback.thumbUrl as string }));
         }
+        // A success clears the card's failure state and its attempt count, so
+        // a card that recovers is not still counting toward the retry cap.
+        mintAttempts.current[clipId] = 0;
+        setMintFailed((prev) => {
+          if (!prev[clipId]) return prev;
+          const next = { ...prev };
+          delete next[clipId];
+          return next;
+        });
         clearTimer(clipId);
         const refreshMs = Math.max(PLAYBACK_REFRESH_LEAD_S, playback.expiresIn - PLAYBACK_REFRESH_LEAD_S) * 1000;
         refreshTimers.current[clipId] = setTimeout(() => {
@@ -147,12 +127,65 @@ export default function ClutchFeedScreen() {
           if (activeIdRef.current === clipId) void mintPlayback(clipId);
           else clearTimer(clipId);
         }, refreshMs);
-      } catch {
-        // Leave the poster in place; a card without a playback URL still
-        // renders its thumbnail. Expected for placeholder fixture bytes.
+      } catch (err) {
+        // SCALE-MEDIA M-1. This catch used to be empty, with a comment saying
+        // the poster stayed in place. It does not: the SAME call mints the
+        // poster, so a failure leaves no video URL AND no poster URL, and the
+        // card renders as a bare black rectangle. Worse, the refresh timer was
+        // armed only inside the try after a success, so a card that failed
+        // once never retried while it was on screen. The feed silently stopped
+        // working and looked exactly like a broken app.
+        //
+        // Now: a bounded retry with exponential backoff and jitter, and a
+        // visible non-blocking state on the card once the retries are spent.
+        // Jitter matters specifically because the throttle is shared: without
+        // it, every device behind one carrier NAT that got a 429 in the same
+        // second would retry in the same second and re-exhaust the window.
+        const apiError = err as ApiError;
+        const attempt = (mintAttempts.current[clipId] ?? 0) + 1;
+        mintAttempts.current[clipId] = attempt;
+
+        if (attempt > MINT_MAX_ATTEMPTS) {
+          setMintFailed((prev) => ({ ...prev, [clipId]: true }));
+          clearTimer(clipId);
+          return;
+        }
+
+        // A throttle refusal waits out the window the server named rather than
+        // hammering it further; anything else backs off from a short base.
+        const baseMs =
+          apiError?.code === 'RATE_LIMITED'
+            ? Math.max(MINT_RETRY_BASE_MS, (apiError.retryAfterSeconds ?? 60) * 1000)
+            : MINT_RETRY_BASE_MS;
+        const backoffMs = Math.min(MINT_RETRY_MAX_MS, baseMs * 2 ** (attempt - 1));
+        const jitterMs = Math.random() * backoffMs * MINT_RETRY_JITTER;
+
+        // Shown while the retry is pending too, so the card says something
+        // rather than sitting black in silence.
+        setMintFailed((prev) => ({ ...prev, [clipId]: true }));
+        clearTimer(clipId);
+        refreshTimers.current[clipId] = setTimeout(() => {
+          if (activeIdRef.current === clipId) void mintPlayback(clipId);
+          else clearTimer(clipId);
+        }, backoffMs + jitterMs);
       }
     },
     [clutch, clearTimer],
+  );
+
+  /** Manual retry from the card's own affordance: resets the attempt budget so
+   * a user who waited out a throttle gets a full set of tries again. */
+  const retryMint = useCallback(
+    (clipId: string) => {
+      mintAttempts.current[clipId] = 0;
+      setMintFailed((prev) => {
+        const next = { ...prev };
+        delete next[clipId];
+        return next;
+      });
+      void mintPlayback(clipId);
+    },
+    [mintPlayback],
   );
 
   const load = useCallback(async () => {
@@ -235,14 +268,34 @@ export default function ClutchFeedScreen() {
       }
       return changed ? nextUrls : prev;
     });
+    // M-1: a scrolled-away card drops its failure state and its attempt count
+    // too, so returning to it starts clean rather than showing a stale error
+    // or arriving with the retry budget already spent.
+    setMintFailed((prev) => {
+      let changed = false;
+      const next: Record<string, true> = {};
+      for (const id of Object.keys(prev)) {
+        if (keep.has(id)) next[id] = true;
+        else {
+          changed = true;
+          mintAttempts.current[id] = 0;
+        }
+      }
+      return changed ? next : prev;
+    });
   }, [activeId, clips, playbackUrls, mintPlayback, clearTimer]);
 
-  function requireAuth(action: () => void) {
-    if (requiresAuthGate) {
-      setGateVisible(true);
-      return;
-    }
-    action();
+  // F8 (P5 fix pass, PRD-01 FR-4): `requireAuth` used to gate an action by
+  // opening LoginGateModal and dropping the closure outright: a guest tapped
+  // Like, the gate opened, they logged in, and the like never applied.
+  // `usePendingAuthAction` queues and replays it instead; see its own
+  // docblock. Like, Save, and the upload-tab navigation are the only gated
+  // actions in this file, all cheap and idempotent to replay, never a charge
+  // or a state-machine transition.
+  const { requireAuth, clearPendingAction } = usePendingAuthAction(requiresAuthGate);
+
+  function closeGate() {
+    setGateVisible(false);
   }
 
   async function handleLike(clip: Clip) {
@@ -266,7 +319,30 @@ export default function ClutchFeedScreen() {
           ),
         );
       }
-    });
+    }, () => setGateVisible(true));
+  }
+
+  async function handleSave(clip: Clip) {
+    requireAuth(async () => {
+      // Optimistic flip of the bookmark; reconcile with the toggle's result.
+      setClips((prev) => prev.map((c) => (c.id === clip.id ? { ...c, savedByMe: !c.savedByMe } : c)));
+      try {
+        const saved = await clutch.toggleSaveClip(clip.id);
+        setClips((prev) => prev.map((c) => (c.id === clip.id ? { ...c, savedByMe: saved } : c)));
+      } catch {
+        // Roll back on failure.
+        setClips((prev) => prev.map((c) => (c.id === clip.id ? { ...c, savedByMe: clip.savedByMe } : c)));
+      }
+    }, () => setGateVisible(true));
+  }
+
+  async function handleShare(clip: Clip) {
+    const label = clip.caption ? clip.caption : `Clip by ${clip.channel}`;
+    try {
+      await Share.share({ message: label, url: clipDeepLink(clip.id) });
+    } catch {
+      // A dismissed or failed share sheet is a no-op.
+    }
   }
 
   function openDetail(clipId: string) {
@@ -302,7 +378,7 @@ export default function ClutchFeedScreen() {
             title="No clips yet"
             body="Match and training highlights show up here. Be the first to post one."
             ctaLabel="Upload a clip"
-            onCtaPress={() => requireAuth(() => router.push('/(tabs)/clutch/upload'))}
+            onCtaPress={() => requireAuth(() => router.push('/(tabs)/clutch/upload'), () => setGateVisible(true))}
           />
         </View>
       ) : containerH > 0 ? (
@@ -316,18 +392,48 @@ export default function ClutchFeedScreen() {
           viewabilityConfig={viewabilityConfig}
           onEndReachedThreshold={0.5}
           onEndReached={() => void loadMore()}
-          renderItem={({ item }) => (
+          // F1 (P5 fix pass): bound how much of the feed React Native keeps
+          // mounted at all. The RN default windowSize (21 "screens") plus a
+          // feed where every card is a real video player is what produced
+          // ~10 to 21 concurrent native players (Android OOM'd first because
+          // Media3 allocates a heavier per-item MediaSession than AVPlayer,
+          // but the same unbounded-mount shape is wrong on iOS too). 5
+          // screens (roughly 2 above/below the active one) plus a small batch
+          // size keeps the feed responsive on fling without holding the
+          // world in memory. removeClippedSubviews frees the native views
+          // for cards scrolled well out of range.
+          initialNumToRender={2}
+          maxToRenderPerBatch={3}
+          windowSize={5}
+          removeClippedSubviews
+          renderItem={({ item, index }) => (
             <View style={{ height: containerH }}>
               <ClutchPostCard
                 clip={item}
                 variant="feed"
                 active={item.id === activeId}
+                // F1: only the active card and its minted neighbors (the
+                // same "keep" window the playback-URL effect above already
+                // computes) get a real ClipVideo/useVideoPlayer instance.
+                // Every other rendered-but-offscreen card shows its poster
+                // image only, so it never allocates a native decoder.
+                mountPlayer={
+                  item.id === activeId ||
+                  playbackUrls[item.id] !== undefined ||
+                  (activeId === null && index === 0)
+                }
                 playbackUrl={playbackUrls[item.id]}
                 posterUrl={posterUrls[item.id]}
+                // M-1: a failed mint now says so on the card and offers a
+                // retry, instead of leaving a black rectangle with no poster,
+                // no error and no way forward.
+                playbackFailed={mintFailed[item.id] === true}
+                onRetryPlayback={() => retryMint(item.id)}
                 onOpen={() => openDetail(item.id)}
                 onComment={() => openDetail(item.id)}
                 onLike={() => void handleLike(item)}
-                onShare={() => requireAuth(() => openDetail(item.id))}
+                onSave={() => void handleSave(item)}
+                onShare={() => void handleShare(item)}
                 onReportOrBlock={() => openReportOrBlock(item)}
                 bottomInset={navInset}
               />
@@ -342,33 +448,11 @@ export default function ClutchFeedScreen() {
         style={{ pointerEvents: 'box-none', position: 'absolute', top: insets.top, left: 0, right: 0, paddingHorizontal: spacing.lg }}
         className="flex-row items-center justify-between"
       >
-        {/* BUG-04. The header sits directly on the video with no separation, so
-            "Clutch" and the Post pill collided with whatever the clip itself
-            renders at the top, most visibly a clip's own burned-in title card.
-            Two white texts over arbitrary video is unreadable for both.
-
-            A scrim rather than a solid bar: the feed is deliberately full
-            bleed (SPEC 3.4), so an opaque header would eat a slice of every
-            clip. This darkens only the strip the controls occupy, fading to
-            nothing, which is the standard treatment for controls over video
-            and keeps the full-bleed look intact. Non-interactive so it cannot
-            swallow a tap meant for the Post button. */}
-        <View
-          pointerEvents="none"
-          style={{
-            position: 'absolute',
-            top: -insets.top,
-            left: 0,
-            right: 0,
-            height: insets.top + spacing['4xl'],
-            backgroundColor: 'rgba(0,0,0,0.35)',
-          }}
-        />
         <Text style={[textStyle('h2'), { color: colors.textInverse }]}>Clutch</Text>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Upload a clip"
-          onPress={() => requireAuth(() => router.push('/(tabs)/clutch/upload'))}
+          onPress={() => requireAuth(() => router.push('/(tabs)/clutch/upload'), () => setGateVisible(true))}
           className="min-h-11 min-w-11 flex-row items-center justify-center gap-xs rounded-pill bg-accent px-md"
         >
           <Plus size={20} strokeWidth={2} color={colors.inkOnAccent} />
@@ -378,7 +462,15 @@ export default function ClutchFeedScreen() {
         </Pressable>
       </View>
 
-      <LoginGateModal visible={gateVisible} onClose={() => setGateVisible(false)} />
+      <LoginGateModal visible={gateVisible} onClose={closeGate} onDismiss={clearPendingAction} />
+      <ModerationSheet
+        visible={moderationTarget !== null}
+        target={moderationTarget}
+        onClose={() => setModerationTarget(null)}
+        // A blocked owner's clips come out of the NEXT feed fetch (packages/api
+        // filters by blocked_users); reload so the feed reflects it now.
+        onBlocked={() => void load()}
+      />
     </View>
   );
 }

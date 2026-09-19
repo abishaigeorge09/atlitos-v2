@@ -13,6 +13,7 @@
 // transitions (those remain the state-machine's job). Idempotent (upsert).
 import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
+import { assertWritableTarget } from "./lib/guard-target.mjs";
 
 function readEnvFile(path) {
   const out = {};
@@ -25,6 +26,7 @@ function readEnvFile(path) {
 const mobileEnv = readEnvFile("apps/mobile/.env");
 const rootEnv = readEnvFile(".env.local");
 const URL = mobileEnv.EXPO_PUBLIC_SUPABASE_URL;
+assertWritableTarget(URL, "seed-clutch-clip-bytes.mjs");
 const SERVICE_KEY = rootEnv.SUPABASE_SERVICE_ROLE_KEY;
 if (!SERVICE_KEY) throw new Error("SUPABASE_SERVICE_ROLE_KEY missing from .env.local");
 

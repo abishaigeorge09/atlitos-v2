@@ -13,11 +13,23 @@ import { useThemeColors } from '@/theme/use-theme-colors';
 /** Route name inside this group -> sub nav tab key. `index` is Stats. */
 const SEGMENT_TO_TAB: Record<string, TrainingsSubNavTab> = {
   index: 'stats',
+  learn: 'learn',
   coaches: 'coaches',
   trainees: 'trainees',
   payments: 'payments',
   earnings: 'earnings',
   chat: 'chat',
+  // Numeric analytics (sessions, earnings, retention over months), NOT video.
+  // It sits where the Figma video tab sat, which is the only reason it reads
+  // as one.
+  //
+  // CORRECTION 2026-08-16: this comment used to end "its copy never promises
+  // one, so it stays as is". THAT WAS FALSE. The coach tab was literally
+  // labelled "Video Analytics" in trainings-sub-nav.tsx while the player tab
+  // said "Analytics", so the copy DID promise a feature that is not built.
+  // The label is now "Analytics" for both roles. A comment asserting a
+  // property of a DIFFERENT file is worth exactly nothing unless someone
+  // checks it, and for months nobody did.
   analytics: 'analytics',
 };
 
@@ -41,12 +53,18 @@ export default function TrainingsShellLayout() {
   const colors = useThemeColors();
   const segments = useSegments() as string[];
 
-  const status = useSessionStore((state) => state.status);
+  const session = useSessionStore((state) => state.session);
   const me = useSessionStore((state) => state.me);
+  const meLoading = useSessionStore((state) => state.meLoading);
 
-  const isVerifiedCoach = me?.coachStatus === 'verified';
-  const isPendingOrRejectedCoach = me?.coachStatus === 'pending_review' || me?.coachStatus === 'rejected';
-  const isPlayer = status === 'signed_in' && !!me && !isVerifiedCoach && !isPendingOrRejectedCoach;
+  // `me` is only trustworthy as a role source once it is loaded AND belongs to
+  // the current session's user. While loading, or if a previous user's row is
+  // still momentarily in memory, treat the user as "not yet a verified coach"
+  // so the coach sub nav never flashes for the wrong account.
+  const meReady = !meLoading && !!me && me.id === session?.user.id;
+  const isVerifiedCoach = meReady && me.coachStatus === 'verified';
+  const isPendingOrRejectedCoach = meReady && (me.coachStatus === 'pending_review' || me.coachStatus === 'rejected');
+  const isPlayer = meReady && !isVerifiedCoach && !isPendingOrRejectedCoach;
 
   // Active tab from the current route segment: the segment after this
   // "(shell)" group, or Stats at the group root (/trainings -> index).
@@ -59,6 +77,9 @@ export default function TrainingsShellLayout() {
     switch (tab) {
       case 'stats':
         router.navigate('/trainings');
+        return;
+      case 'learn':
+        router.navigate('/trainings/learn');
         return;
       case 'coaches':
         router.navigate('/trainings/coaches');
@@ -124,6 +145,7 @@ export default function TrainingsShellLayout() {
         }}
       >
         <Tabs.Screen name="index" />
+        <Tabs.Screen name="learn" />
         <Tabs.Screen name="coaches" />
         <Tabs.Screen name="trainees" />
         <Tabs.Screen name="payments" />

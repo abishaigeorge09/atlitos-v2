@@ -3,7 +3,8 @@ import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
 import { formatINR, radii, spacing } from '@atlitos/theme';
 import { Calendar, MessageCircle } from 'lucide-react-native';
-import { Image, ScrollView, Text, View } from 'react-native';
+import { Image, PixelRatio, ScrollView, Text, View } from 'react-native';
+import { sizedImageUrl } from '@atlitos/api';
 
 export interface CoachSessionOffered {
   label: string;
@@ -61,7 +62,14 @@ export function CoachProfileSheet({
       <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.xl }}>
         <View style={[styles.row, { gap: spacing.md }]}>
           <View style={{ height: 80, width: 80, borderRadius: radii.pill, backgroundColor: colors.surfaceMuted, overflow: 'hidden' }}>
-            {avatarUrl ? <Image source={{ uri: avatarUrl }} style={{ flex: 1 }} /> : null}
+            {/* SCALE-MEDIA M-6. An 80 point circle outside `Avatar`, so it
+                was fetching the origin upload. */}
+            {avatarUrl ? (
+              <Image
+                source={{ uri: sizedImageUrl(avatarUrl, { width: 80 * Math.min(3, PixelRatio.get()) }) }}
+                style={{ flex: 1 }}
+              />
+            ) : null}
           </View>
           <View style={{ flex: 1, gap: spacing.xs }}>
             <Text style={[textStyle('h2'), { color: colors.text }]}>{name}</Text>

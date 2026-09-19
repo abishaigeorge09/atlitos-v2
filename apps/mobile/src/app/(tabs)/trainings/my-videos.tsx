@@ -14,7 +14,9 @@ import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
+import { COACH_TRAINEE_VIDEO_REVIEW_ENABLED } from '@/lib/feature-flags';
 import { supabase } from '@/lib/supabase';
+import { CLIP_BUFFER_OPTIONS } from '@/lib/video-buffer';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
 
@@ -25,8 +27,15 @@ type ScreenState = 'loading' | 'empty' | 'populated' | 'error';
  * review. Read only, this athlete's own review videos from every coach that
  * has posted one, newest first. Reached from the Trainings dashboard (Stats
  * tab, "My review videos" row), the least invasive spot since the athlete
- * side of Trainings has no per screen tab set to hang a Video Analytics tab
- * off of the way the coach's trainee profile does.
+ * side of Trainings has no per screen tab set to hang a video tab off of the
+ * way the coach's trainee profile does.
+ *
+ * Gated behind COACH_TRAINEE_VIDEO_REVIEW_ENABLED. The screen and its reads
+ * are complete and correct; what is missing is any mounted coach surface
+ * that can upload a video, so with the flag off this can only ever render
+ * an empty list, which reads as a broken screen rather than an unbuilt
+ * feature. The route stays reachable for deep links and stale navigation
+ * state, and says so plainly instead.
  */
 export default function MyTraineeVideosScreen() {
   const colors = useThemeColors();
@@ -41,9 +50,16 @@ export default function MyTraineeVideosScreen() {
   const [playbackError, setPlaybackError] = useState<ApiError | null>(null);
   const player = useVideoPlayer(null, (instance) => {
     instance.loop = false;
+    // BUG-042, same class as ClipVideo: expo-video's default maxBufferBytes of
+    // 0 lets media3 reserve 125 MB of Dalvik heap per player.
+    instance.bufferOptions = CLIP_BUFFER_OPTIONS;
   });
 
   const load = useCallback(async () => {
+    if (!COACH_TRAINEE_VIDEO_REVIEW_ENABLED) {
+      setState('empty');
+      return;
+    }
     setState('loading');
     setError(null);
     try {
@@ -104,8 +120,12 @@ export default function MyTraineeVideosScreen() {
       ) : state === 'empty' ? (
         <EmptyState
           icon={Film}
-          title="No data found"
-          body="Videos your coach posts to review your training will show up here."
+          title={COACH_TRAINEE_VIDEO_REVIEW_ENABLED ? 'No data found' : 'Coming soon'}
+          body={
+            COACH_TRAINEE_VIDEO_REVIEW_ENABLED
+              ? 'Videos your coach posts to review your training will show up here.'
+              : 'Video review is not available yet. Your coach will be able to post training clips here later.'
+          }
         />
       ) : (
         <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.sm, paddingBottom: navInset + spacing.xl }}>

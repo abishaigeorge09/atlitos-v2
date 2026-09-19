@@ -135,11 +135,11 @@ Verified against the live catalog on 2026-09-12, not inferred from the file.
 
 **`0118_payment_finalization_recovery`. Do not apply unchanged.** Production
 already has `payment_intents.finalized_at` and three more finalization columns
-from `0109`, already backfilled. `0118` adds only `finalized_at`, with
+from `0109`, already backfilled. `0109` adds only `finalized_at`, with
 `if not exists`, so that part is inert. Two problems remain. Its
 `create index if not exists idx_payment_intents_unfinalized` uses the same name
 as `0109`'s index with a different definition, so it silently does nothing and
-the index `0118` wants never lands. Worse, it replays `expire_stale_holds()`
+the index `0109` wants never lands. Worse, it replays `expire_stale_holds()`
 from before `0108` and before `0094b`: the courts arm loses the captured
 payment predicate that stops a paid booking being expired and its slot resold,
 and the per arm `sweep_failures` capture disappears. The genuinely new and
@@ -177,13 +177,13 @@ target status.
 
 **`0122_user_blocks`. Partial overlap, founder decision.** Production has
 `blocked_users` from `0097`; `user_blocks` does not exist. Same concept, two
-table names. `0122` also adds restrictive `clips_hide_blocked` and
+table names. `0097` also adds restrictive `clips_hide_blocked` and
 `clip_comments_hide_blocked` policies, which `0097` deliberately did not,
 preferring client side subtraction. Note the live consequence: the app calls
 `useClutch().blockUser()` against `user_blocks` (see
 `docs/architecture/API-MAPPING.md`), and that table is not in production, so
 blocking is broken today. Recommendation: pick one table name, then either
-retarget `0122` at `blocked_users` or retarget the client at whichever name
+retarget `0097` at `blocked_users` or retarget the client at whichever name
 wins.
 
 **`0123_account_deletion`. Needed, apply after `0120` is settled.**
@@ -201,7 +201,7 @@ as a thread preview.
 **`0125_rate_limits`. Do not apply unchanged.** Production already has rate
 limiting from `0093`, as `edge_rate_limits` plus `take_rate_limit_token()`.
 `0125` builds a parallel `rate_limit_counters` plus `rate_limit_hit()`. It also
-replays the same pre `0108` `expire_stale_holds()` that `0118` does, so it
+replays the same pre `0108` `expire_stale_holds()` that `0109` does, so it
 carries the identical courts regression. Recommendation: keep the prune arm
 idea, drop the duplicate table, and rebase the sweep on production's current
 definition.

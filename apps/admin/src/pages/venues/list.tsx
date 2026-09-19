@@ -1,9 +1,9 @@
 import type { Db } from "@atlitos/types";
-import { AlertTriangle, Building2, Search } from "lucide-react";
+import { AlertTriangle, Building2, Plus, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
-import { Badge, Card, EmptyState } from "../../components/ui";
+import { Badge, Button, Card, EmptyState } from "../../components/ui";
 import { supabaseClient } from "../../providers/supabaseClient";
 
 // Admin additions task (AT-4, AT-10): Venues resource. Lists every
@@ -45,8 +45,12 @@ export function VenuesList() {
     async function load() {
       setState("loading");
       const { data, error } = await supabaseClient
+        // invariant-allow: owner-scope the admin verification queue is
+        // deliberately every partner's venue. `venues_select_merged` reads
+        // `has_role('admin') OR partner_user_id = auth.uid()`, so this list is
+        // empty for anyone without the admin role rather than leaking rows.
         .from("venues")
-        .select("id,partner_user_id,name,address,city,pincode,lat,lng,description,status,rejection_reason,created_at,updated_at")
+        .select("id,partner_user_id,name,address,city,pincode,lat,lng,description,status,rejection_reason,booking_url,created_at,updated_at")
         .order("created_at", { ascending: false });
 
       if (cancelled) return;
@@ -91,11 +95,17 @@ export function VenuesList() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-lg)" }}>
-      <div>
-        <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0, letterSpacing: "-0.4px" }}>Venues</h1>
-        <p style={{ fontSize: 14, color: "var(--color-text-secondary)", margin: "var(--space-xs) 0 0" }}>
-          Every court partner venue on the platform, with its verification status.
-        </p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "var(--space-md)" }}>
+        <div>
+          <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0, letterSpacing: "-0.4px" }}>Venues</h1>
+          <p style={{ fontSize: 14, color: "var(--color-text-secondary)", margin: "var(--space-xs) 0 0" }}>
+            Every court partner venue on the platform, with its verification status.
+          </p>
+        </div>
+        <Button onClick={() => navigate("/venues/create")}>
+          <Plus size={16} strokeWidth={1.75} />
+          New venue
+        </Button>
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--space-md)" }}>

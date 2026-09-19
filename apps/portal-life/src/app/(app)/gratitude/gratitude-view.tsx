@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 import { ErrorState } from "@/components/error-state";
 import { formatDate } from "@/lib/format";
+import { sizedImageUrl } from "@/lib/image-url";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -112,7 +113,10 @@ export function GratitudeView({ upaId, userId }: { upaId: string; userId: string
                 {post.photo_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={post.photo_url}
+                    // SCALE-MEDIA M-6: a card width band capped at 224 px tall,
+                    // and this is a LIST, so an origin fetch here is paid once
+                    // per post per load.
+                    src={sizedImageUrl(post.photo_url, { width: 1200, height: 448 })}
                     alt="Gratitude"
                     className="max-h-56 w-full rounded-lg object-cover"
                   />
@@ -226,7 +230,16 @@ function Composer({
           <div className="flex items-center gap-3">
             {photoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={photoUrl} alt="Attached" className="size-14 rounded-lg object-cover" />
+              <img
+                // SCALE-MEDIA M-6: a 56 px thumbnail of what was just
+                // uploaded. `photoUrl` itself stays the untransformed origin
+                // URL, because that is the value inserted into
+                // `gratitude_posts.photo_url` and a stored render URL would
+                // freeze the photo at this one size for every future reader.
+                src={sizedImageUrl(photoUrl, { width: 168, height: 168 })}
+                alt="Attached"
+                className="size-14 rounded-lg object-cover"
+              />
             ) : (
               <div className="flex size-14 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
                 <Upload className="size-5" strokeWidth={1.75} />

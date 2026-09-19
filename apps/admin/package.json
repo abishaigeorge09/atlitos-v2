@@ -18,6 +18,7 @@
     "@refinedev/core": "^5.0.12",
     "@refinedev/react-router": "^2.0.4",
     "@refinedev/supabase": "^6.0.2",
+    "@sentry/react": "^10.69.0",
     "@supabase/supabase-js": "^2.110.2",
     "lucide-react": "^1.24.0",
     "react": "^19.2.4",

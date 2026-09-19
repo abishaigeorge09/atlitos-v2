@@ -1,10 +1,75 @@
--- 0108_courts_arm_captured_payment_guard
--- The courts arm of expire_stale_holds had no captured-payment guard while its
--- siblings had two layers each. The window is the full 15 minute unpaid hold
--- TTL, not a microsecond, so a captured booking could be expired and its slot
--- resold after the athlete was charged. Adds the candidate-query predicate and
--- the under-lock re-check, matching session_abandon_unpaid (0024) and
--- membership_abandon_unpaid (0079).
+-- ATLITOS v2 — 0108_courts_arm_captured_payment_guard.sql
+-- Domain: courts, the expiry sweep.
+--
+-- WRITTEN, NOT APPLIED. The DB write gate forbids applying it.
+--
+-- ============================================================================
+-- THE DEFECT
+-- ============================================================================
+--
+-- The courts arm of expire_stale_holds() has no captured-payment guard, and
+-- its siblings do. The asymmetry, read from the live pg_get_functiondef and
+-- confirmed against the repo's own DDL:
+--
+--   sessions arm  (0094:311)  candidate query carries
+--                             `and not exists (... pi.status = 'captured')`,
+--                             and session_abandon_unpaid (0024:74) re-checks
+--                             it under `for update` and raises
+--                             INVALID_TRANSITION.
+--   membership    (0079:165)  membership_abandon_unpaid raises
+--                             'INVALID_TRANSITION: membership % has a
+--                             captured payment'. Two layers, same shape.
+--   courts arm    (0094:283)  candidate query is only
+--                             `where b.status = 'pending_payment'
+--                                and b.created_at <= v_cutoff`,
+--                             and court_booking_expire_payment (0012:93)
+--                             never reads payment_intents at all. ZERO layers.
+--
+-- The window is not microseconds. `unpaid_hold_ttl()` is 15 minutes and UPI
+-- collect routinely exceeds it. A payment landing at 15:01 is flipped to
+-- `captured` by the shared gate, then court_booking_confirm_payment raises
+-- INVALID_TRANSITION because the sweep already expired the booking,
+-- finalize-court-booking-payment.ts:73 throws, and razorpay-webhook logs it
+-- and returns 200 so Razorpay never redelivers. End state: intent captured,
+-- booking expired, zero ledger entries, zero refunds, slot resold, athlete
+-- charged.
+--
+-- ============================================================================
+-- THE FIX: both layers the siblings have, not one
+-- ============================================================================
+--
+-- Layer 1, the candidate query, so a paid booking is never selected.
+-- Layer 2, inside court_booking_expire_payment under the row lock, so the
+-- guard holds against a capture that lands between the SELECT and the UPDATE.
+--
+-- Layer 1 alone would be exactly the race it is meant to close. That is why
+-- the sessions arm has both, and the finding was that courts had neither.
+--
+-- ============================================================================
+-- THE CLASS SWEEP, all four arms, stated in full
+-- ============================================================================
+--
+--   courts     had no guard. FIXED here, both layers.
+--   sessions   has both layers. Verified, unchanged.
+--   commerce   release_expired_stock_reservations releases a stock HOLD, not
+--              money. consume_reservation is the money step and it runs
+--              inside the capture path, so an expired reservation whose
+--              payment later captures raises OUT_OF_STOCK and is refunded by
+--              finalize-order-payment (PAYMENTS.md:101). Different mechanism,
+--              correctly guarded, nothing to add.
+--   clutch     reconcile_stranded_clips touches no money table. Not in class.
+--
+-- NOT DONE, and it is a real gap: expire_stale_holds has no MEMBERSHIP arm at
+-- all. membership_abandon_unpaid exists and is correctly guarded, and nothing
+-- calls it, so an abandoned pending membership holds a group seat forever
+-- (VERIFICATION-WAVE-1 P1-3). Adding that arm is a product behaviour change
+-- (it starts releasing seats), not a guard, so it is deliberately left for the
+-- decision that owns P1-3 rather than smuggled into a guard migration.
+
+-- ============================================================================
+-- Layer 2. court_booking_expire_payment gains the guard its two siblings have.
+-- create or replace preserves the service_role-only grant from 0012.
+-- ============================================================================
 
 create or replace function public.court_booking_expire_payment(p_booking_id uuid)
 returns public.court_bookings
@@ -26,6 +91,14 @@ begin
     raise exception 'INVALID_TRANSITION: court_booking % is not pending_payment', p_booking_id;
   end if;
 
+  -- 0108. Never release a booking whose money actually moved. The capture gate
+  -- in _shared/finalize-payment.ts and this function can race across the whole
+  -- 15 minute hold TTL, not a microsecond: if the payment is captured, the
+  -- athlete owns that slot and this call must fail loudly rather than silently
+  -- free a paid one and resell it. Word for word the reasoning in
+  -- session_abandon_unpaid (0024) and membership_abandon_unpaid (0079); courts
+  -- was the arm that never got it.
+  --
   -- Taken AFTER the `for update` on the booking, so the check and the UPDATE
   -- below are inside the same lock and a capture cannot land between them.
   select count(*) into v_captured
@@ -49,6 +122,16 @@ $$;
 
 comment on function public.court_booking_expire_payment(uuid) is
   '0012 + 0108: expire an unpaid court hold. Refuses with INVALID_TRANSITION if a captured or refunded payment_intent exists for the booking, checked under the same row lock as the UPDATE. service_role only.';
+
+-- ============================================================================
+-- Layer 1. The courts candidate query in expire_stale_holds.
+--
+-- This is a full create or replace of the 0094 body with one predicate added,
+-- because Postgres has no way to patch a function body in place. Everything
+-- else below is 0094 verbatim: the per-arm CT-7 exception handlers, the
+-- per-row handlers inside courts and sessions, and all four per-domain counts
+-- in the returned jsonb. Diff this against 0094:269 before believing it.
+-- ============================================================================
 
 create or replace function public.expire_stale_holds()
 returns jsonb
@@ -74,8 +157,10 @@ begin
       from public.court_bookings b
       where b.status = 'pending_payment'
         and b.created_at <= v_cutoff
-        -- 0108. A booking whose payment already captured is not a stale hold,
-        -- it is a paid booking whose confirmation has not landed yet.
+        -- 0108. The guard the sessions arm has had since 0094 and this one
+        -- never did. A booking whose payment already captured is not a stale
+        -- hold, it is a paid booking whose confirmation has not landed yet,
+        -- and expiring it resells a slot the athlete has been charged for.
         and not exists (
           select 1 from public.payment_intents pi
           where pi.entity_id = b.id

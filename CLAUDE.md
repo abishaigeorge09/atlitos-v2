@@ -6,11 +6,13 @@ This file is read by every agent working in this repo. It is not optional contex
 
 Before touching anything, read in this order:
 
-1. `docs/PLAN.md` — the approved build plan. This is the contract. Do not deviate from it without a founder decision recorded in a phase status doc.
+1. `docs/qa/CURRENT-STATE.md` — what is already proven, what has been DISPROVEN, and what is open. Read this first and read it fully. It exists because five separate agents independently investigated the same bug and four reached wrong conclusions, each starting cold. Its DISPROVEN section is the most valuable part: it is the list of dead ends that have already been walked, so you do not walk them again. It also carries the environment traps that have each cost hours here, and the rule that has been earned eight times over: an environmental failure looks exactly like a product bug, so open the screenshot before you file anything.
+2. `docs/PLAN.md` — the approved build plan. This is the contract. Do not deviate from it without a founder decision recorded in a phase status doc.
 2. The relevant PRD(s) in `docs/prd/` for whatever surface you are touching (PRD-01 athlete, PRD-02 coach, PRD-03 court partner, PRD-04 admin, PRD-05 UPA life, PRD-06 sponsor, PRD-07 shopper). The PRD is the ceiling on scope, not a suggestion. If a feature is not traceable to a `PRD-0X FR-y`, it does not belong in this phase.
 3. The current `docs/phases/PHASE-N-STATUS.md` for whatever phase is active. It tells you what is already done, what is in flight, and what handoff notes the previous phase left.
 4. `docs/design/TASTE.md` and `docs/design/DESIGN-LANGUAGE.md` for anything touching UI.
-5. `docs/agents/workflows.md` if you are unsure what role you are playing in the current phase (planner, builder, integrator, biased approver, phase-close) or how to hand off to the next agent.
+5. `docs/BRANCHING.md` before you create a branch or merge one. Six rules. `main` is canonical, everyone branches from it, migrations take their number at merge time. Two histories that never met cost a day on 2026-09-14.
+6. `docs/agents/workflows.md` if you are unsure what role you are playing in the current phase (planner, builder, integrator, biased approver, phase-close) or how to hand off to the next agent.
 
 Agents are spun up fresh per phase and have no memory beyond what is written in this repo. If something is not written down here, it does not exist for the next agent. Write it down.
 
@@ -74,6 +76,50 @@ This repo tracks work in Jira project `ATL` (Kanban, 12 epics) via the Atlassian
 - Transition to In Review when done, with a one-line implementation note (what changed, which files).
 
 Phase-close agents reconcile the board against `PHASE-N-STATUS.md` at the end of every phase: every ticket tied to the phase should be Done; anything left open gets moved to the right epic or flagged to the founder.
+
+## No UI ships unproven. Screenshot plus Maestro, every time.
+
+A UI change is NOT done when it typechecks, and NOT done when the diff looks right. It is done
+when it has been SEEN on a real device and the flows still pass. Founder rule, 2026-08-14, and
+it is not negotiable per task.
+
+Every change touching a screen, a component, copy, a token or a layout requires BOTH:
+
+1. **A screenshot from a Release build on a real device.** iPhone 16 Pro Max
+   (`8AF6A5E2-F889-4477-8634-97B4AB5D5453`) and, for anything platform sensitive, Pixel_7_API_35.
+   A Release build specifically: prove the bundle is embedded by checking `main.jsbundle` exists
+   inside the `.app`. "No Metro running" is NOT proof, because `expo run:ios` starts its own.
+2. **A Maestro run.** Per flow, pinned with `--udid`. NEVER `maestro test .maestro/` in directory
+   form: it runs flows concurrently and will grab whichever device it likes, including a live
+   Android emulator, which has already produced 15 of 15 false failures here.
+
+Rules the pass itself must follow, each learned the hard way:
+
+- **Screenshot the INTEGRATED tree, not a branch.** Three branches photographed separately prove
+  three things that never ship together and miss every interaction between them.
+- **Refuse to run above load 25.** This Mac reached 780 and produced a full sheet of fabricated
+  failures that read exactly like product bugs. A delay is cheaper than a false finding.
+- **Seed enough data to see the bug.** The comments sheet overflow was invisible because
+  production has three comments across two clips. A capture of a short list proves nothing.
+- **Before believing any failure, open the screenshot** and rule out a stale build, a wrong
+  device, a redbox, and a system dialog holding accessibility focus. That has been the wrong
+  answer nine times on this project.
+- **Revert any debug shim and then CHECK `git diff` is empty.** A temporary shim that silently
+  fails to revert is how a planted change ships.
+
+If the device is held by another session, WAIT. Do not contend, and do not report a green you
+could not take.
+
+## Ten thousand users, not one thousand
+
+The scale target is **10,000 users**, raised from 1,000 by the founder on 2026-08-14. Phase 3
+hardened for 1,000 and its assumptions do not automatically survive a 10x. Anything that was
+"fine at 1,000" needs re-deriving, not re-assuring: connection limits, the anon sign-in rate
+limit, realtime fan-out, signed URL minting, unbounded queries, RLS hot paths, and per-request
+work that is linear in users.
+
+Performance is a correctness property here. A query that is fast on 200 rows and quadratic in
+users is a bug, and it is one that only appears when it is too late.
 
 ## Every phase gate
 

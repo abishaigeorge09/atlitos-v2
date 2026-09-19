@@ -29,7 +29,10 @@
 import { createClient } from '@supabase/supabase-js';
 import { ATLITOS_PASSWORD } from './lib/demo-credentials.mjs';
 
+import { assertWritableTarget } from './lib/guard-target.mjs';
 const SUPABASE_URL = process.env.SUPABASE_URL ?? 'https://syzzfgaudpifwvbpycyi.supabase.co';
+assertWritableTarget(SUPABASE_URL, 'seed-coaching-fixtures.mjs');
+
 const ANON_KEY = process.env.SUPABASE_ANON_KEY;
 
 if (!ANON_KEY) {

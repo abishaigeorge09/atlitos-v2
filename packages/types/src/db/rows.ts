@@ -180,6 +180,8 @@ export interface VenueRow {
   description: string | null;
   status: VenueStatus;
   rejection_reason: string | null;
+  /** External booking link (affiliate model for courts, 0120). */
+  booking_url: string | null;
   created_at: ISODateTime;
   updated_at: ISODateTime;
 }
@@ -767,4 +769,112 @@ export interface SupportTicketRow {
   resolution_note: string | null;
   resolved_at: ISODateTime | null;
   created_at: ISODateTime;
+}
+
+// ---- affiliate marketplace (0086, admin writes 0120) --------------------
+
+export interface AffiliateProductRow {
+  id: UUID;
+  title: string;
+  brand: string | null;
+  sport: Sport | null;
+  category_id: UUID | null;
+  skill_level: string | null;
+  age_range: string | null;
+  description: string | null;
+  image_url: string | null;
+  active: boolean;
+  created_at: ISODateTime;
+  updated_at: ISODateTime;
+  /** Phase S2, ADR-011 D3. The retailer's own image URL, kept for re-fetch. Never rendered directly. */
+  source_image_url: string | null;
+  /** Phase S2, ADR-011 D3. Storage path of our own copy under product-images/<retailer_key>/<hash>.<ext>, written only by gear-ingest's save action. */
+  image_path: string | null;
+  /** Phase S2, ADR-011 D4. Free-text health summary the Catalog health page derives; written by gear-recheck. */
+  health_status: string | null;
+  /** Phase S2, ADR-011 D4. When gear-recheck last evaluated this product's overall health. */
+  health_checked_at: ISODateTime | null;
+  /** Phase S2, FR-51, AC-11-4. Set only by system_auto_delist_affiliate_product. Null for an admin-initiated delist. */
+  auto_delisted_at: ISODateTime | null;
+}
+
+export interface ProductOfferRow {
+  id: UUID;
+  affiliate_product_id: UUID;
+  retailer: string;
+  price: number;
+  currency: string;
+  affiliate_url: string;
+  in_stock: boolean;
+  last_checked_at: ISODateTime;
+  created_at: ISODateTime;
+  updated_at: ISODateTime;
+  /** Phase S2, ADR-011 D3. The retailer's canonical product URL, distinct from affiliate_url (which carries the, currently empty, affiliate tag). */
+  canonical_url: string | null;
+  /** Phase S2, ADR-011 D3. Which retailer_programmes row produced this offer. Null for a manual entry with no matching programme. */
+  retailer_key: string | null;
+  /** Phase S2, ADR-011 D4. Only gone/blocked count toward consecutive_failures; every other outcome resets it. */
+  last_check_outcome: 'ok' | 'price_changed' | 'out_of_stock' | 'gone' | 'blocked' | null;
+  consecutive_failures: number;
+  last_price_change_at: ISODateTime | null;
+}
+
+// ---- ingest and health: retailer config, fetch log (Phase S2) -----------
+// See docs/architecture/ADR-011-shop-search-ingest-health.md D3, D4, D6 and
+// PRD-07 section 11 (FR-44 to FR-52). Both tables are admin-read only
+// (has_role('admin')), no anon/authenticated grant at all: operational
+// config and an operational log, not shopper-facing content.
+
+export interface RetailerExtractorMap {
+  title?: string;
+  brand?: string;
+  price?: string;
+  currency?: string;
+  image?: string;
+  description?: string;
+  inStock?: string;
+}
+
+export interface RetailerProgrammeRow {
+  key: string;
+  display_name: string;
+  url_patterns: string[];
+  /** Empty until a real affiliate programme is approved (open question 11). Never fabricated. */
+  affiliate_tag_template: string | null;
+  extractor: RetailerExtractorMap | null;
+  fetch_policy: { maxPerMinute: number } & Record<string, unknown>;
+  active: boolean;
+}
+
+export type ProductFetchOutcome = 'ok' | 'price_changed' | 'out_of_stock' | 'gone' | 'blocked' | 'unparsed';
+
+export interface ProductFetchLogRow {
+  id: UUID;
+  offer_id: UUID;
+  fetched_at: ISODateTime;
+  outcome: ProductFetchOutcome;
+  http_status: number | null;
+  price_seen: number | null;
+  in_stock_seen: boolean | null;
+  notes: string | null;
+  /** FR-52. Claude's read of a 200 that no extraction strategy could parse. Never applied automatically. */
+  ai_suggestion: Record<string, unknown> | null;
+}
+
+// ---- shop search: vectors, query cache, owned shop flag (Phase S1) -------
+// See docs/architecture/ADR-011-shop-search-ingest-health.md D1, D5, D6 and
+// PRD-07 section 11 (FR-40, FR-43, FR-53).
+
+/**
+ * `affiliate_products.embedding` is excluded from every client select via a
+ * column-level grant (AC-11-6, AC-11-7), so `AffiliateProductRow` above
+ * intentionally has no `embedding` field: no client-side type should carry
+ * a column no client can ever read.
+ */
+
+export interface AppConfigRow {
+  key: string;
+  value: unknown;
+  public: boolean;
+  updated_at: ISODateTime;
 }

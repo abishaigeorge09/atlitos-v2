@@ -1,0 +1,443 @@
+[ {
+  "command" : {
+    "defineVariablesCommand" : {
+      "env" : {
+        "MAESTRO_DISABLE_ANALYTICS" : "1",
+        "MAESTRO_FILENAME" : "groups-join-guard",
+        "MAESTRO_DEVICE_UDID" : "8AF6A5E2-F889-4477-8634-97B4AB5D5453",
+        "MAESTRO_SHARD_ID" : "1",
+        "MAESTRO_SHARD_INDEX" : "0"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1786448964275,
+    "duration" : 7,
+    "sequenceNumber" : 0,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "defineVariablesCommand" : {
+        "env" : {
+          "MAESTRO_DISABLE_ANALYTICS" : "1",
+          "MAESTRO_FILENAME" : "groups-join-guard",
+          "MAESTRO_DEVICE_UDID" : "8AF6A5E2-F889-4477-8634-97B4AB5D5453",
+          "MAESTRO_SHARD_ID" : "1",
+          "MAESTRO_SHARD_INDEX" : "0"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "applyConfigurationCommand" : {
+      "config" : {
+        "appId" : "com.atlitos.app"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1786448964284,
+    "duration" : 4,
+    "sequenceNumber" : 1,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "applyConfigurationCommand" : {
+        "config" : {
+          "appId" : "com.atlitos.app"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "launchAppCommand" : {
+      "appId" : "com.atlitos.app",
+      "clearState" : true,
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1786448964290,
+    "duration" : 3034,
+    "sequenceNumber" : 2,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "launchAppCommand" : {
+        "appId" : "com.atlitos.app",
+        "clearState" : true,
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "tapOnElement" : {
+          "selector" : {
+            "textRegex" : "Continue as guest",
+            "optional" : false
+          },
+          "retryIfNoChange" : false,
+          "waitUntilVisible" : false,
+          "longPress" : false,
+          "optional" : false
+        }
+      } ],
+      "condition" : {
+        "visible" : {
+          "textRegex" : "Continue as guest",
+          "optional" : false
+        }
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "SKIPPED",
+    "timestamp" : 1786448967327,
+    "duration" : 7375,
+    "sequenceNumber" : 3,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "tapOnElement" : {
+            "selector" : {
+              "textRegex" : "Continue as guest",
+              "optional" : false
+            },
+            "retryIfNoChange" : false,
+            "waitUntilVisible" : false,
+            "longPress" : false,
+            "optional" : false
+          }
+        } ],
+        "condition" : {
+          "visible" : {
+            "textRegex" : "Continue as guest",
+            "optional" : false
+          }
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "scrollUntilVisible" : {
+      "selector" : {
+        "textRegex" : "Log out",
+        "optional" : false
+      },
+      "direction" : "DOWN",
+      "scrollDuration" : "60",
+      "visibilityPercentage" : 100,
+      "timeout" : "25000",
+      "centerElement" : false,
+      "originalSpeedValue" : "60",
+      "optional" : true,
+      "visibilityPercentageNormalized" : 1.0
+    }
+  },
+  "metadata" : {
+    "status" : "WARNED",
+    "timestamp" : 1786448974702,
+    "duration" : 28062,
+    "sequenceNumber" : 4,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "scrollUntilVisible" : {
+        "selector" : {
+          "textRegex" : "Log out",
+          "optional" : false
+        },
+        "direction" : "DOWN",
+        "scrollDuration" : "401",
+        "visibilityPercentage" : 100,
+        "timeout" : "25000",
+        "centerElement" : false,
+        "originalSpeedValue" : "60",
+        "optional" : true,
+        "visibilityPercentageNormalized" : 1.0
+      }
+    },
+    "artifacts" : [ {
+      "type" : "SCREEN_HIERARCHY",
+      "path" : "screen-hierarchy/step-005-scrollUntilVisible-Log_out.json"
+    }, {
+      "type" : "SCREENSHOT",
+      "path" : "screenshots/step-005-scrollUntilVisible-Log_out.png"
+    } ]
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "tapOnElement" : {
+          "selector" : {
+            "textRegex" : "Log out",
+            "optional" : false
+          },
+          "retryIfNoChange" : false,
+          "waitUntilVisible" : false,
+          "longPress" : false,
+          "optional" : false
+        }
+      }, {
+        "waitForAnimationToEndCommand" : {
+          "timeout" : "3000",
+          "optional" : false
+        }
+      } ],
+      "condition" : {
+        "visible" : {
+          "textRegex" : "Log out",
+          "optional" : false
+        }
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "SKIPPED",
+    "timestamp" : 1786449003196,
+    "duration" : 437,
+    "sequenceNumber" : 5,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "tapOnElement" : {
+            "selector" : {
+              "textRegex" : "Log out",
+              "optional" : false
+            },
+            "retryIfNoChange" : false,
+            "waitUntilVisible" : false,
+            "longPress" : false,
+            "optional" : false
+          }
+        }, {
+          "waitForAnimationToEndCommand" : {
+            "timeout" : "3000",
+            "optional" : false
+          }
+        } ],
+        "condition" : {
+          "visible" : {
+            "textRegex" : "Log out",
+            "optional" : false
+          }
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "scrollUntilVisible" : {
+      "selector" : {
+        "textRegex" : "What are you looking for...",
+        "optional" : false
+      },
+      "direction" : "UP",
+      "scrollDuration" : "40",
+      "visibilityPercentage" : 100,
+      "timeout" : "10000",
+      "centerElement" : false,
+      "originalSpeedValue" : "40",
+      "optional" : true,
+      "visibilityPercentageNormalized" : 1.0
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1786449003633,
+    "duration" : 8045,
+    "sequenceNumber" : 6,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "scrollUntilVisible" : {
+        "selector" : {
+          "textRegex" : "What are you looking for...",
+          "optional" : false
+        },
+        "direction" : "UP",
+        "scrollDuration" : "601",
+        "visibilityPercentage" : 100,
+        "timeout" : "10000",
+        "centerElement" : false,
+        "originalSpeedValue" : "40",
+        "optional" : true,
+        "visibilityPercentageNormalized" : 1.0
+      }
+    }
+  }
+}, {
+  "command" : {
+    "assertConditionCommand" : {
+      "condition" : {
+        "visible" : {
+          "textRegex" : "ATLITOS",
+          "optional" : false
+        }
+      },
+      "timeout" : "15000",
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1786449011679,
+    "duration" : 217,
+    "sequenceNumber" : 7,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "assertConditionCommand" : {
+        "condition" : {
+          "visible" : {
+            "textRegex" : "ATLITOS",
+            "optional" : false
+          }
+        },
+        "timeout" : "15000",
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "openLinkCommand" : {
+      "link" : "atlitos://coaching",
+      "autoVerify" : false,
+      "browser" : false,
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1786449011898,
+    "duration" : 977,
+    "sequenceNumber" : 8,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "openLinkCommand" : {
+        "link" : "atlitos://coaching",
+        "autoVerify" : false,
+        "browser" : false,
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "assertConditionCommand" : {
+      "condition" : {
+        "visible" : {
+          "textRegex" : "Coaches",
+          "optional" : false
+        }
+      },
+      "timeout" : "15000",
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1786449012879,
+    "duration" : 125,
+    "sequenceNumber" : 9,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "assertConditionCommand" : {
+        "condition" : {
+          "visible" : {
+            "textRegex" : "Coaches",
+            "optional" : false
+          }
+        },
+        "timeout" : "15000",
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "waitForAnimationToEndCommand" : {
+      "timeout" : "4000",
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1786449013005,
+    "duration" : 559,
+    "sequenceNumber" : 10,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "waitForAnimationToEndCommand" : {
+        "timeout" : "4000",
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "scrollUntilVisible" : {
+      "selector" : {
+        "textRegex" : ".*Demo Coach One.*",
+        "optional" : false
+      },
+      "direction" : "DOWN",
+      "scrollDuration" : "40",
+      "visibilityPercentage" : 100,
+      "timeout" : "25000",
+      "centerElement" : false,
+      "originalSpeedValue" : "40",
+      "optional" : false,
+      "visibilityPercentageNormalized" : 1.0
+    }
+  },
+  "metadata" : {
+    "status" : "FAILED",
+    "timestamp" : 1786449013565,
+    "duration" : 25464,
+    "error" : {
+      "message" : "No visible element found: \".*Demo Coach One.*\"",
+      "debugMessage" : "Could not find a visible element matching selector: \".*Demo Coach One.*\"\nTip: Try adjusting the following settings to improve detection:\n- `timeout`: current = 25000ms → Increase if you need more time to find the element\n- `speed`: current = 40 (0-100 scale) → Increase for faster scrolling if element is far away\n- `waitToSettleTimeoutMs`: current = Not defined → Set this value (e.g., 500ms) if your UI updates frequently between scrolls\n- `visibilityPercentage`: current = 100% → Lower this value if you want to detect partially visible elements\n- `centerElement`: current = false → Enable if you want the element to be centered after finding it\n"
+    },
+    "sequenceNumber" : 11,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "scrollUntilVisible" : {
+        "selector" : {
+          "textRegex" : ".*Demo Coach One.*",
+          "optional" : false
+        },
+        "direction" : "DOWN",
+        "scrollDuration" : "601",
+        "visibilityPercentage" : 100,
+        "timeout" : "25000",
+        "centerElement" : false,
+        "originalSpeedValue" : "40",
+        "optional" : false,
+        "visibilityPercentageNormalized" : 1.0
+      }
+    },
+    "artifacts" : [ {
+      "type" : "SCREEN_HIERARCHY",
+      "path" : "screen-hierarchy/step-012-scrollUntilVisible-Demo_Coach_One.json"
+    }, {
+      "type" : "SCREENSHOT",
+      "path" : "screenshots/step-012-scrollUntilVisible-Demo_Coach_One.png"
+    } ]
+  }
+} ]

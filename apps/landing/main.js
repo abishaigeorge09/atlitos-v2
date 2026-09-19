@@ -1,18 +1,20 @@
-/* ATLITOS landing motion. Progressive: full content renders with zero JS.
-   No scroll pinning library. Sticky scenes are fixed height CSS sticky tracks,
-   so later sections can never scroll over a stuck stage.
+/* ATLITOS landing, the BASIC floor. Progressive: full content renders with
+   zero JS; this file renders a correct, plainer page with no library. The rich
+   ceiling lives in motion/ (GSAP + Lenis) and switches pieces of this file off
+   through window.__atlitosBasic when it boots. If motion/ never boots, nothing
+   is switched off and this file IS the page. See docs/MOTION-ARCHITECTURE.md.
    Block map, in order: nav folder tab morph (down tucks, up reopens),
    old way toggle with self drawing paths and one auto advance,
    lazy three.js Empower ball (WebGL gated, fallback circle),
-   reduced motion early return (holds the film resting frame, no autoplay),
-   hero film controller (phase 1 autoplay to REST, phase 2 rAF scrub REST to END,
-   veil and nav and hint driven from the same progress, reversible, intro never replays),
+   hero-ready hard fallback (1800ms, forces hero and nav final states),
+   reduced motion early return,
    problem word rotator, typewriters, universal reveal IntersectionObserver,
-   count ups with Indian digit grouping, footer giant mark parallax.
-   Verification gotcha for future agents: hidden or backgrounded tabs suspend scroll
-   events, IntersectionObserver, CSS transitions, and video loading. Always verify
-   with the tab actually visible (take a screenshot first to wake it) before
-   concluding anything is broken. */
+   count ups with Indian digit grouping, footer giant mark parallax,
+   the __atlitosBasic handover surface.
+   Verification gotcha for future agents: hidden or backgrounded tabs suspend
+   scroll events, IntersectionObserver, CSS transitions, and media loading.
+   Always verify with the tab actually visible (take a screenshot first to wake
+   it) before concluding anything is broken. */
 (function () {
   "use strict";
 
@@ -23,9 +25,15 @@
      any scroll up, always expanded near the top. ---------- */
   var header = document.getElementById("siteHeader");
   var lastY = window.scrollY;
+  /* the nav glass flips paper once scroll leaves the dark opening (hero +
+     title card); .problem is the first light band */
+  var darkEnd = function () {
+    var problem = document.querySelector(".problem");
+    return problem ? problem.offsetTop - 120 : 90;
+  };
   var onScrollNav = function () {
     var y = window.scrollY;
-    docEl.classList.toggle("scrolled", y > 90);
+    docEl.classList.toggle("scrolled", y > darkEnd());
     if (header) {
       if (y < 80) {
         header.classList.remove("compact");
@@ -92,91 +100,31 @@
   var oldwaySection = document.querySelector(".oldway");
   if (oldwaySection) {
     observeOnce(oldwaySection, function () {
-      drawPath(document.getElementById("pathOld"));
+      /* rich mode sequences the chaos draw inside its own court timeline;
+         drawing it here too would draw the path twice */
+      if (!docEl.classList.contains("motion-rich")) {
+        drawPath(document.getElementById("pathOld"));
+      }
+      /* the auto advance is the same story in both modes */
       window.setTimeout(function () {
         if (!wayTouched) { setWay(true); }
-      }, 2600);
+      }, 3200);
     });
   }
 
-  /* ---------- Empower 3D ball: lazy loaded, WebGL gated, never above the fold. ---------- */
-  var emp3d = document.getElementById("emp3d");
-  if (emp3d && !reduced) {
-    observeOnce(document.getElementById("empower"), function () {
-      var script = document.createElement("script");
-      script.src = "vendor/three.min.js";
-      script.onload = function () {
-        try {
-          if (!window.THREE) { return; }
-          var canvas = document.createElement("canvas");
-          var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
-          var w = emp3d.clientWidth, h = emp3d.clientHeight;
-          renderer.setSize(w, h);
-          renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
-          var scene = new THREE.Scene();
-          var camera = new THREE.PerspectiveCamera(38, w / h, 0.1, 100);
-          camera.position.set(0, 0, 6.2);
-          var group = new THREE.Group();
-          group.add(new THREE.Mesh(
-            new THREE.SphereGeometry(1.6, 48, 48),
-            new THREE.MeshStandardMaterial({ color: 0xFBF7F1, roughness: 0.55, metalness: 0.05 })
-          ));
-          var seamMat = new THREE.MeshStandardMaterial({ color: 0x1C1712, roughness: 0.6 });
-          var seam1 = new THREE.Mesh(new THREE.TorusGeometry(1.61, 0.035, 12, 90), seamMat);
-          var seam2 = seam1.clone(); seam2.rotation.y = Math.PI / 2;
-          var seam3 = seam1.clone(); seam3.rotation.x = Math.PI / 2;
-          group.add(seam1); group.add(seam2); group.add(seam3);
-          var ring = new THREE.Mesh(
-            new THREE.TorusGeometry(2.6, 0.02, 8, 120),
-            new THREE.MeshBasicMaterial({ color: 0x4CAF7D })
-          );
-          ring.rotation.x = Math.PI / 2.4;
-          group.add(ring);
-          scene.add(group);
-          scene.add(new THREE.AmbientLight(0xFBF7F1, 0.55));
-          var key = new THREE.DirectionalLight(0xE8B324, 1.4);
-          key.position.set(3, 4, 5);
-          scene.add(key);
-          var rim = new THREE.DirectionalLight(0xE46136, 0.9);
-          rim.position.set(-4, -2, 3);
-          scene.add(rim);
-          emp3d.appendChild(canvas);
-          emp3d.classList.add("has-gl");
-          var render = function () {
-            var rect = emp3d.getBoundingClientRect();
-            var visible = rect.bottom > 0 && rect.top < window.innerHeight;
-            if (visible && document.visibilityState !== "hidden") {
-              var p = 1 - rect.top / window.innerHeight;
-              group.rotation.y += 0.006;
-              group.rotation.x = -0.3 + p * 0.5;
-              group.position.y = Math.sin(Date.now() / 900) * 0.12;
-              renderer.render(scene, camera);
-            }
-            requestAnimationFrame(render);
-          };
-          render();
-          window.addEventListener("resize", function () {
-            var w2 = emp3d.clientWidth, h2 = emp3d.clientHeight;
-            renderer.setSize(w2, h2);
-            camera.aspect = w2 / h2;
-            camera.updateProjectionMatrix();
-          });
-        } catch (e) { /* the CSS fallback circle stays */ }
-      };
-      document.body.appendChild(script);
-    });
-  }
+  /* ---------- Hero hard fallback ----------
+     hero-ready forces every hero element (and the nav) to its final state via
+     CSS. The rich path (motion/sections/hero.js) adds it when the load
+     timeline completes; this timer guarantees it regardless. The fold can
+     never depend on animation completing. Registered for every mode, before
+     the reduced-motion early return. */
+  window.setTimeout(function () {
+    docEl.classList.add("hero-ready");
+  }, 1800);
 
   if (reduced) {
-    /* Reduced motion: no autoplaying film, hold the resting frame. */
-    var rv = document.getElementById("heroVideo");
-    if (rv) {
-      rv.removeAttribute("autoplay");
-      rv.pause();
-      var seekRest = function () { try { rv.currentTime = 7.9; } catch (e) {} };
-      if (rv.readyState > 0) { seekRest(); }
-      else { rv.addEventListener("loadedmetadata", seekRest); }
-    }
+    /* Reduced motion: final states on first paint, handled in CSS. */
+    docEl.classList.add("hero-ready");
     return;
   }
 
@@ -194,67 +142,11 @@
     setTimeout(tick, 250);
   };
 
-  /* ---------- Hero film: phase 1 autoplays the intro to the resting frame,
-     phase 2 maps scroll to the final camera push. Reversible, never replays
-     the intro. ---------- */
-  var vid = document.getElementById("heroVideo");
-  var vhero = document.querySelector(".vhero");
-  var heroVeil = document.getElementById("heroVeil");
-  var heroHint = document.getElementById("heroHint");
-  if (vid && vhero) {
-    var REST = 7.9, END = 9.88;
-    var phase = "intro";
-    var cur = REST;
-    var enterRest = function () {
-      if (phase !== "intro") { return; }
-      phase = "scrub";
-      vid.pause();
-      try { vid.currentTime = REST; } catch (e) {}
-      cur = REST;
-      docEl.classList.add("v-rested");
-      if (heroHint) { heroHint.style.opacity = "1"; }
-    };
-    vid.addEventListener("timeupdate", function () {
-      if (phase === "intro" && vid.currentTime >= REST) { enterRest(); }
-    });
-    vid.addEventListener("ended", enterRest);
-    /* Hard fallback: the page must never stay navless. */
-    window.setTimeout(enterRest, 12000);
-    /* Scrolling during the intro skips straight to the resting frame. */
-    window.addEventListener("scroll", function () {
-      if (phase === "intro" && window.scrollY > 60) { enterRest(); }
-    }, { passive: true });
-
-    var heroLoop = function () {
-      requestAnimationFrame(heroLoop);
-      if (phase !== "scrub") { return; }
-      var track = vhero.offsetHeight - window.innerHeight;
-      if (track <= 0) { return; }
-      var p = Math.min(1, Math.max(0, window.scrollY / track));
-      /* chase the target with a little inertia, clamped to the push in */
-      var target = REST + p * (END - REST);
-      cur += (target - cur) * 0.16;
-      cur = Math.min(END, Math.max(REST, cur));
-      if (Math.abs(cur - (vid.currentTime || 0)) > 0.008 && vid.readyState > 1) {
-        try { vid.currentTime = cur; } catch (e) {}
-      }
-      /* scroll hint: gone within the first tenth of the push */
-      if (heroHint) { heroHint.style.opacity = String(Math.max(0, 1 - p * 10)); }
-      /* navbar: visible to 40 percent, gone by 70 */
-      if (header) {
-        var nOp = p < 0.4 ? 1 : p > 0.7 ? 0 : 1 - (p - 0.4) / 0.3;
-        header.style.opacity = String(nOp);
-        header.style.pointerEvents = nOp < 0.05 ? "none" : "";
-      }
-      /* the LED veil rises over the close up so section 2 emerges from it */
-      if (heroVeil) {
-        heroVeil.style.opacity = String(p < 0.8 ? 0 : (p - 0.8) / 0.2 * 0.92);
-      }
-    };
-    heroLoop();
-  }
-
   /* ---------- Problem word rotator: fade out to blank, then the next phrase ---------- */
+  /* Basic-mode text behaviours check motion-rich AT FIRE TIME so the rich
+     modules can own the same elements without double-driving them. */
+  var richOwns = function () { return docEl.classList.contains("motion-rich"); };
+
   var rotChip = document.getElementById("rotChip");
   if (rotChip) {
     var phrases = [
@@ -264,7 +156,9 @@
       "cash only and no refunds"
     ];
     var pi = 0;
+    window.__atlitosPhrases = phrases;
     observeOnce(rotChip, function () {
+      if (richOwns()) { return; }
       setInterval(function () {
         if (document.visibilityState === "hidden") { return; }
         rotChip.classList.add("is-out");
@@ -278,13 +172,14 @@
   }
 
   document.querySelectorAll("[data-type]").forEach(function (el) {
-    observeOnce(el, function () { typeOnce(el); });
+    observeOnce(el, function () { if (!richOwns()) { typeOnce(el); } });
   });
 
   /* Typewriter, looping (features headline). */
   document.querySelectorAll("[data-type-loop]").forEach(function (el) {
     var full = el.textContent;
     observeOnce(el, function () {
+      if (richOwns()) { return; }
       var loop = function () {
         el.textContent = "";
         var i = 0;
@@ -368,9 +263,10 @@
   /* ---------- Footer giant mark parallax ---------- */
   var mark = document.getElementById("giantMark");
   var footer = document.querySelector(".site-footer");
+  var onScrollMark = null;
   if (mark && footer) {
     var ticking = false;
-    var onScrollMark = function () {
+    onScrollMark = function () {
       if (ticking) { return; }
       ticking = true;
       requestAnimationFrame(function () {
@@ -385,4 +281,19 @@
     window.addEventListener("scroll", onScrollMark, { passive: true });
     onScrollMark();
   }
+
+  /* ---------- Handover surface for motion/ (the rich ceiling) ----------
+     If motion/index.js boots it calls these to switch basic behaviours off.
+     If it never boots, nothing calls them and this file IS the page. */
+  window.__atlitosBasic = {
+    disableReveal: function () { revealIO.disconnect(); },
+    disableNavScroll: function () { window.removeEventListener("scroll", onScrollNav); },
+    disableMarkParallax: function () {
+      if (onScrollMark) { window.removeEventListener("scroll", onScrollMark); }
+    },
+    setWay: setWay,
+    drawPath: drawPath,
+    formatIN: formatIN,
+    observeOnce: observeOnce
+  };
 })();

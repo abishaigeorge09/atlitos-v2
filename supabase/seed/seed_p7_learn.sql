@@ -15,34 +15,42 @@
 -- ============================================================================
 -- Demo player IDs for isolation testing
 -- ============================================================================
+--
+-- FINDING, 2026-08-14: this section was written against an older schema.
+-- Run against the first-ever from-scratch local stack it failed on both
+-- statements:
+--   ERROR: column "email" of relation "users" does not exist
+--   ERROR: column "has_role_player" of relation "users" does not exist
+-- public.users has never had an email column (auth.users carries email;
+-- public.users carries name/phone/dob, confirmed via \d public.users on the
+-- local stack) and roles live in public.user_roles, not a boolean column on
+-- users. Rewritten below to the current schema: an auth.users insert (which
+-- fires on_auth_user_created and writes public.users itself, the same
+-- pattern seed_p5_clutch_fixtures.sql now uses) plus an explicit
+-- user_roles grant, since the default role a new signup gets is 'player'
+-- only via the app's own onboarding RPC, not the trigger.
 
--- Player A: Gets completed drills and XP progression for roadmap/milestone render
-insert into public.users (id, email, phone, created_at)
-  values (
-    '550e8400-e29b-41d4-a716-446655440001'::uuid,
-    'player_a@test.local',
-    '+919876543210',
-    now()
-  )
-  on conflict do nothing;
+insert into auth.users (
+  instance_id, id, aud, role, email, encrypted_password,
+  email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
+  confirmation_token, recovery_token, email_change_token_new, email_change,
+  created_at, updated_at
+) values
+  ('00000000-0000-0000-0000-000000000000', '550e8400-e29b-41d4-a716-446655440001'::uuid, 'authenticated', 'authenticated', 'player_a@test.local', 'not-a-real-password', now(), '{"provider":"email","providers":["email"]}', '{"name":"Player A","phone":"+919876543210"}', '', '', '', '', now(), now()),
+  ('00000000-0000-0000-0000-000000000000', '550e8400-e29b-41d4-a716-446655440002'::uuid, 'authenticated', 'authenticated', 'player_b@test.local', 'not-a-real-password', now(), '{"provider":"email","providers":["email"]}', '{"name":"Player B","phone":"+919876543211"}', '', '', '', '', now(), now())
+on conflict (id) do nothing;
 
--- Player B: Exists for isolation test (never gets Player A's data)
-insert into public.users (id, email, phone, created_at)
-  values (
-    '550e8400-e29b-41d4-a716-446655440002'::uuid,
-    'player_b@test.local',
-    '+919876543211',
-    now()
-  )
-  on conflict do nothing;
-
--- Set both as players (not coaches)
-update public.users
-  set has_role_player = true
+-- Set both as players (not coaches). public.user_roles.role is the
+-- public.app_role enum; 'player' is the default any signup gets through the
+-- app's own role-select flow.
+insert into public.user_roles (user_id, role)
+  select id, 'player'::public.app_role
+  from public.users
   where id in (
     '550e8400-e29b-41d4-a716-446655440001'::uuid,
     '550e8400-e29b-41d4-a716-446655440002'::uuid
-  );
+  )
+  on conflict (user_id, role) do nothing;
 
 -- ============================================================================
 -- DRILLS: Cricket, Tennis, Badminton. Mostly active; one inactive to prove filter.
@@ -101,7 +109,8 @@ insert into public.drills (id, title, description, sport, skill_category, diffic
       'advanced'::public.drill_difficulty,
       120,
       true
-    );
+    )
+  on conflict (id) do nothing;
 
 -- Tennis drills
 insert into public.drills (id, title, description, sport, skill_category, difficulty, xp_value, active)
@@ -145,7 +154,8 @@ insert into public.drills (id, title, description, sport, skill_category, diffic
       'beginner'::public.drill_difficulty,
       45,
       true
-    );
+    )
+  on conflict (id) do nothing;
 
 -- Badminton drills
 insert into public.drills (id, title, description, sport, skill_category, difficulty, xp_value, active)
@@ -189,7 +199,8 @@ insert into public.drills (id, title, description, sport, skill_category, diffic
       'beginner'::public.drill_difficulty,
       50,
       true
-    );
+    )
+  on conflict (id) do nothing;
 
 -- ============================================================================
 -- ROADMAP_STAGES: Per sport with ascending xp_threshold. Names benefit-led.
@@ -202,7 +213,8 @@ insert into public.roadmap_stages (sport, stage_order, name, xp_threshold)
     ('cricket'::public.sport, 2, 'Building consistency', 100),
     ('cricket'::public.sport, 3, 'Expanding your game', 300),
     ('cricket'::public.sport, 4, 'Match ready', 600),
-    ('cricket'::public.sport, 5, 'Elite athlete', 1000);
+    ('cricket'::public.sport, 5, 'Elite athlete', 1000)
+  on conflict (sport, stage_order) do nothing;
 
 -- Tennis roadmap
 insert into public.roadmap_stages (sport, stage_order, name, xp_threshold)
@@ -211,7 +223,8 @@ insert into public.roadmap_stages (sport, stage_order, name, xp_threshold)
     ('tennis'::public.sport, 2, 'Baseline confidence', 120),
     ('tennis'::public.sport, 3, 'Net game emerging', 320),
     ('tennis'::public.sport, 4, 'Tournament player', 650),
-    ('tennis'::public.sport, 5, 'Advanced competitor', 1100);
+    ('tennis'::public.sport, 5, 'Advanced competitor', 1100)
+  on conflict (sport, stage_order) do nothing;
 
 -- Badminton roadmap
 insert into public.roadmap_stages (sport, stage_order, name, xp_threshold)
@@ -220,7 +233,8 @@ insert into public.roadmap_stages (sport, stage_order, name, xp_threshold)
     ('badminton'::public.sport, 2, 'Stroke control', 110),
     ('badminton'::public.sport, 3, 'Rally master', 310),
     ('badminton'::public.sport, 4, 'Competitive player', 620),
-    ('badminton'::public.sport, 5, 'Champion mindset', 1050);
+    ('badminton'::public.sport, 5, 'Champion mindset', 1050)
+  on conflict (sport, stage_order) do nothing;
 
 -- ============================================================================
 -- MILESTONES: Seed-authored, both xp_threshold and drill_count criteria.
@@ -236,7 +250,8 @@ insert into public.milestones (key, name, description, icon_name, criteria)
     ('intermediate_trained', 'Intermediate drills completed', 'Master five intermediate level drills.', 'star', '{"type":"drill_count","value":5}'::jsonb),
     ('three_hundred_xp', '300 XP achievement', 'Reach 300 XP. You are building real skill now.', 'flame', '{"type":"xp_threshold","value":300}'::jsonb),
     ('half_thousand_xp', 'Five hundred XP reached', 'Cross 500 XP. The work is showing results.', 'heart', '{"type":"xp_threshold","value":500}'::jsonb),
-    ('thousand_xp', 'Thousand XP legend', 'Achieve 1000 XP. Elite level training unlocked.', 'crown', '{"type":"xp_threshold","value":1000}'::jsonb);
+    ('thousand_xp', 'Thousand XP legend', 'Achieve 1000 XP. Elite level training unlocked.', 'crown', '{"type":"xp_threshold","value":1000}'::jsonb)
+  on conflict (key) do nothing;
 
 -- ============================================================================
 -- DRILL_COMPLETIONS: Player A completes several drills to populate roadmap/milestones.
@@ -269,4 +284,5 @@ insert into public.drill_completions (user_id, drill_id, completed_at)
       '550e8400-e29b-41d4-a716-446655440001'::uuid,
       '660e8400-e29b-41d4-a716-446655440008'::uuid,
       now() - interval '1 day'
-    );
+    )
+  on conflict (user_id, drill_id) do nothing;

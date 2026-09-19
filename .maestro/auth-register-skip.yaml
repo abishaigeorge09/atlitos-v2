@@ -15,6 +15,24 @@ appId: com.atlitos.app
 # to Login. This flow reaches Login and Register instead through the app's
 # own atlitos:// deep link scheme (app.json "scheme": "atlitos"), a real,
 # user-reachable capability (e.g. a marketing link), confirmed working.
+#
+# APP BUG, CONFIRMED 2026-08-13, root caused in source, left failing on
+# purpose (do not weaken this assertion to pass): after the false pass on
+# "ATLITOS" was fixed (see below), this flow's final assertion genuinely
+# fails on a fresh Release build, on device, every run. Tapping "Log in"
+# on Register pushes Login onto the stack (Register stays underneath).
+# Tapping "Continue as guest" on Login calls afterAuth()
+# (apps/mobile/src/app/(auth)/login.tsx lines 46 to 58), which always
+# prefers `router.back()` when `router.canGoBack()` is true, on the
+# assumption Login was reached from a mutating gate that should resume
+# its origin screen. That assumption does not hold for Login reached via
+# Register's own "Log in" link: canGoBack() is true (Register is still on
+# the stack), so continueAsGuest lands the user back on Register instead
+# of Home. Severity P2: a guest who backs out of signup via Login can get
+# stuck cycling back into Register instead of reaching Home. Fix belongs
+# in login.tsx's afterAuth(), not in this test (e.g. only router.back()
+# when the previous screen is a gate-raising screen, not another auth
+# screen). Filed for Track F, not fixed here per task scope.
 - launchApp
 - runFlow:
     when:
@@ -41,7 +59,16 @@ appId: com.atlitos.app
     direction: UP
     timeout: 10000
     optional: true
-- assertVisible: "ATLITOS"
+# "ATLITOS" (all caps, AppBar.tsx line 90) is NOT a safe Home marker: it
+# false matches app.json's "name": "Atlitos" surfaced somewhere in the OS
+# accessibility tree, so this assertion can report COMPLETED while the app
+# sits on Register (proven via screenshot + screen-hierarchy JSON, see
+# docs/qa/P5-IOS-FINDINGS.md F-4). The Home search bar placeholder is
+# unique to Home (apps/mobile/src/components/ui/search-bar.tsx, only
+# rendered by (tabs)/index.tsx, home/search.tsx and shop category screens,
+# none of which are reachable from Login/Register), so it cannot false
+# match auth screens.
+- assertVisible: "What are you looking for..."
 
 - openLink: "atlitos://login"
 - waitForAnimationToEnd:
@@ -59,12 +86,17 @@ appId: com.atlitos.app
       - waitForAnimationToEnd:
           timeout: 1500
 
-# Register form fields, apps/mobile/src/app/(auth)/register.tsx.
+# Register form fields, apps/mobile/src/app/(auth)/register.tsx. Date of
+# birth was removed from signup and moved to the profile edit screen
+# (commit 24bb65a: "move date of birth off signup into the profile", see
+# apps/mobile/src/app/profile/edit.tsx line 317). Register now has five
+# fields, not six; confirmed both in source (register.tsx has no dob Input)
+# and in the installed build (main.jsbundle has zero "Date of birth *"
+# strings originating from register.tsx).
 - assertVisible: "Create your account"
 - assertVisible: "Full name *"
 - assertVisible: "Email *"
 - assertVisible: "Phone *"
-- assertVisible: "Date of birth *"
 - assertVisible: "Password *"
 - assertVisible: "Confirm password *"
 
@@ -92,5 +124,14 @@ appId: com.atlitos.app
       - tapOn: "Continue as guest"
       - waitForAnimationToEnd:
           timeout: 1500
-- assertVisible: "ATLITOS"
+# This is the assertion F-4 identified as a false pass under the old
+# "ATLITOS" text match (it can complete while still on Register, since
+# "Atlitos" the OS app name is present somewhere off screen in the a11y
+# tree). Use the Home search bar placeholder instead, which only renders
+# on Home, and wait for it explicitly rather than a bare assertVisible so
+# a real navigation delay is not mistaken for the same failure.
+- extendedWaitUntil:
+    visible: "What are you looking for..."
+    timeout: 8000
+- assertVisible: "What are you looking for..."
 - assertVisible: "Badminton"

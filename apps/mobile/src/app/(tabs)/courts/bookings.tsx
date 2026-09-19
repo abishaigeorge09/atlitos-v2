@@ -114,6 +114,8 @@ export default function CourtBookingsListScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} />}
           renderItem={({ item }) => (
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Booking for ${item.courtName ?? 'court'} on ${item.date}`}
               onPress={() => router.push({ pathname: '/(tabs)/courts/booking/[id]', params: { id: item.id } })}
               style={{
                 borderRadius: radii.xl,

@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
 import { supabase } from '@/lib/supabase';
+import { CLIP_BUFFER_OPTIONS } from '@/lib/video-buffer';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
 
@@ -27,6 +28,24 @@ type UploadState = 'idle' | 'picking' | 'uploading' | 'error';
  * PUT to the signed URL). Exported as a standalone organism so the trainee
  * profile tab shell (Track C) mounts it directly as the tab's content, no
  * AppBar or screen chrome of its own.
+ *
+ * MOUNTED NOWHERE, deliberately, and this is the single reason the whole
+ * video loop is inert: without this component on screen no coach can upload
+ * anything, so the athlete's my-videos screen can never hold a row. The
+ * component itself is complete and its backend is real (0082 plus the two
+ * signing edge functions). It is kept rather than deleted because turning
+ * the feature on is exactly one mount plus one flag, and deleting it would
+ * throw away working code to solve a labelling problem.
+ *
+ * To turn it on: set COACH_TRAINEE_VIDEO_REVIEW_ENABLED true in
+ * apps/mobile/src/lib/feature-flags.ts, then render
+ * `<TraineeVideoAnalytics playerId={id} />` as the video tab's content in
+ * trainings/trainee/[id].tsx, replacing the coming soon block there. Read
+ * that flag's comment first; it carries the founder decision.
+ *
+ * Nothing here is video ANALYSIS. There is no annotation, no breakdown, no
+ * automatic anything. It is a coach posting a clip and an athlete watching
+ * it, which is why the surfaces it feeds are worded as review videos.
  */
 export interface TraineeVideoAnalyticsProps {
   playerId: string;
@@ -49,6 +68,9 @@ export function TraineeVideoAnalytics({ playerId }: TraineeVideoAnalyticsProps) 
   const [playbackError, setPlaybackError] = useState<ApiError | null>(null);
   const player = useVideoPlayer(null, (instance) => {
     instance.loop = false;
+    // BUG-042, same class as ClipVideo: expo-video's default maxBufferBytes of
+    // 0 lets media3 reserve 125 MB of Dalvik heap per player.
+    instance.bufferOptions = CLIP_BUFFER_OPTIONS;
   });
 
   // The signed playback url is minted fresh on each open (never cached), so
@@ -93,7 +115,13 @@ export function TraineeVideoAnalytics({ playerId }: TraineeVideoAnalyticsProps) 
     try {
       const ticket = await videos.requestUploadUrl(playerId, caption.trim() || undefined);
       const fileResponse = await fetch(asset.uri);
-      const fileBody = await fileResponse.blob();
+      // ArrayBuffer, NOT blob(). React Native's Blob carries an empty `type`,
+      // so supabase-js stores the object as text/plain no matter what the
+      // `contentType` below says. Proven on device 2026-08-14 through the
+      // Clutch upload path, which had the identical shape: both the mp4 and
+      // the jpg landed in storage.objects as text/plain. A wrong stored
+      // content type does not fail the upload, it fails the PLAYBACK later.
+      const fileBody = await fileResponse.arrayBuffer();
       const { error: uploadErr } = await supabase.storage
         .from(ticket.bucket)
         .uploadToSignedUrl(ticket.path, ticket.token, fileBody, {

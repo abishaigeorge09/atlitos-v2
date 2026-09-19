@@ -33,6 +33,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { serviceRoleClient } from "../_shared/supabase.ts";
 import { verifyWebhookSignature } from "../_shared/razorpay.ts";
 import { finalizePaymentCaptured } from "../_shared/finalize-payment.ts";
+import { captureEdgeError } from "../_shared/sentry.ts";
 
 interface RazorpayPaymentEntity {
   id: string;
@@ -393,6 +394,7 @@ Deno.serve(async (req) => {
     // relying on verify-payment instead); a 500 here is a configuration
     // error, not a signature failure.
     console.error("razorpay-webhook misconfigured:", err);
+    await captureEdgeError(err, { fn: "razorpay-webhook", stage: "misconfigured" });
     return plainResponse("webhook not configured", 500);
   }
 
@@ -434,6 +436,12 @@ Deno.serve(async (req) => {
       return plainResponse("ok (duplicate)", 200);
     }
     console.error("razorpay-webhook: failed to record webhook_events row:", dedupeError);
+    await captureEdgeError(dedupeError, {
+      fn: "razorpay-webhook",
+      stage: "webhook_events insert",
+      eventId,
+      eventType: event.event,
+    });
     return plainResponse("failed to record event", 500);
   }
 
@@ -502,7 +510,18 @@ Deno.serve(async (req) => {
     // side-effect step fails, log for investigation but still ack so
     // Razorpay does not retry indefinitely into a guaranteed-duplicate
     // event id. Manual reconciliation reads webhook_events.payload.
+    //
+    // webhook_events (0010_payments_core.sql) has no status/error column to
+    // poll: id, event_type, payload, processed_at only, and every row that
+    // reaches this insert is by definition delivered. So the alert path is
+    // here, at the one place a delivered event's processing actually failed,
+    // rather than a cron job scanning a column that does not exist.
     console.error(`razorpay-webhook: failed to process event ${eventId} (${event.event}):`, err);
+    await captureEdgeError(err, {
+      fn: "razorpay-webhook",
+      eventId,
+      eventType: event.event,
+    });
   }
 
   return plainResponse("ok", 200);

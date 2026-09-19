@@ -5,19 +5,29 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 
 /**
- * Molecule 15: TrainingsSubNav. Role-aware 5-tab horizontal scroller.
- * Player: Stats, Coaches, Payments, Chat, Analytics.
+ * Molecule 15: TrainingsSubNav. Role-aware horizontal scroller.
+ * Player: Stats, Learn, Coaches, Payments, Chat, Analytics.
  * Coach: Stats, Trainees, Earnings, Chat, Video Analytics (coach IA spec,
  * Figma node 728:5521; the route key stays `analytics` for both roles).
- * Active tab gets accent text plus an accent underline; each tab keeps a
- * 44pt minimum touch target even though the row itself is compact.
+ * The row scrolls, so an extra player tab (Learn, the training spine) does not
+ * crowd the layout. Active tab gets accent text plus an accent underline; each
+ * tab keeps a 44pt minimum touch target even though the row itself is compact.
  */
 export type TrainingsSubNavRole = 'player' | 'coach';
-export type TrainingsSubNavTab = 'stats' | 'coaches' | 'trainees' | 'payments' | 'earnings' | 'chat' | 'analytics';
+export type TrainingsSubNavTab =
+  | 'stats'
+  | 'learn'
+  | 'coaches'
+  | 'trainees'
+  | 'payments'
+  | 'earnings'
+  | 'chat'
+  | 'analytics';
 
 const TABS_BY_ROLE: Record<TrainingsSubNavRole, Array<{ key: TrainingsSubNavTab; label: string }>> = {
   player: [
     { key: 'stats', label: 'Stats' },
+    { key: 'learn', label: 'Learn' },
     { key: 'coaches', label: 'Coaches' },
     { key: 'payments', label: 'Payments' },
     { key: 'chat', label: 'Chat' },
@@ -28,7 +38,13 @@ const TABS_BY_ROLE: Record<TrainingsSubNavRole, Array<{ key: TrainingsSubNavTab;
     { key: 'trainees', label: 'Trainees' },
     { key: 'earnings', label: 'Earnings' },
     { key: 'chat', label: 'Chat' },
-    { key: 'analytics', label: 'Video Analytics' },
+    // "Analytics", NOT "Video Analytics". This tab opens NUMERIC analytics
+    // (sessions, earnings, retention). Video analysis is NOT BUILT, and the
+    // founder asked that no surface promise it. The player role already used
+    // the honest label above; only the coach role advertised a feature that
+    // does not exist. Changed 2026-08-16 after a peer session read both files
+    // and found the contradiction.
+    { key: 'analytics', label: 'Analytics' },
   ],
 };
 

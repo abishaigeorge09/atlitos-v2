@@ -1,84 +1,84 @@
 // ATLITOS v2 — supabase/functions/_shared/rate-limit.ts
 //
-// SEC-F9. A per-caller spend ceiling for endpoints whose work costs money.
+// LAUNCH Phase 3, Track B. Thin wrapper over the Postgres-backed token bucket
+// RPC Track A owns (CT-2, PHASE-3-STATUS.md): `public.take_rate_limit_token`.
+// Edge isolates have no durable shared memory, so the bucket state lives in
+// Postgres (`public.edge_rate_limits`), one shared RPC, service_role EXECUTE
+// only. This file never talks to that table directly, only the RPC.
 //
-// TWO RULES FROM THE HANDBOOK, both deliberate:
-//
-//   1. Check BEFORE the expensive work, never after the response. A limiter
-//      that runs after the paid call has already been made is a log line, not
-//      a control.
-//   2. FAIL CLOSED. If the counter cannot be read or written, deny. An open
-//      failure mode on a spend ceiling means the one time the database is
-//      unhappy is also the one time the key is unmetered.
-//
-// Keys are per USER, and callers should pass a per-IP key as well: either
-// alone is trivially bypassable. A guest can mint a fresh anonymous session
-// (0008) to reset a user key, and a residential proxy resets an IP key, but
-// resetting both at once is real work.
+// FAIL-MODE (the plan's non-negotiable): a DB hiccup on the rate-limit check
+// itself must never turn into a 500 on a READ path. `takeRateLimitToken`
+// FAILS OPEN on an RPC error (serves the request, logs the failure) for both
+// consumers in this phase (`get-clip-playback-url`/`get-clip-playback-urls`,
+// `ai-search`). Throttling is a scale guard, not a security boundary; the
+// security boundaries (clip authz, RLS) fail closed as always and are
+// untouched by this file.
 
-import { AppError } from "./app-error.ts";
-import { serviceRoleClient } from "./supabase.ts";
+// deno-lint-ignore no-explicit-any
+type AnySupabaseClient = any;
 
-export interface RateLimit {
-  /** Requests permitted per window. */
-  limit: number;
-  /** Window length in seconds. */
-  windowSeconds: number;
+export interface RateLimitOutcome {
+  /** True when the request may proceed (token taken, or the check failed open). */
+  allowed: boolean;
+  /** True when `allowed` is true only because the RPC itself errored. */
+  failedOpen: boolean;
 }
 
 /**
- * Consumes one slot for every key. Throws `RATE_LIMITED` (429) when any key is
- * over its limit, so the caller can simply await this and proceed.
- *
- * Every key is incremented even when an earlier one already failed. That is
- * intentional: a caller who is over their IP limit should not get free user
- * quota out of it.
+ * Atomically take one token from `bucket`/`key`'s fixed window
+ * (`p_max` tokens per `p_window_seconds`). Must be called with a
+ * SERVICE ROLE client: EXECUTE on `take_rate_limit_token` is revoked from
+ * `anon`/`authenticated` (CT-2), so a caller passing a user-scoped client
+ * gets a permission error here, which itself fails open per the mode above.
  */
-export async function enforceRateLimit(
-  keys: string[],
-  { limit, windowSeconds }: RateLimit,
-): Promise<void> {
-  const supabase = serviceRoleClient();
-
-  const results = await Promise.all(
-    keys.map(async (key) => {
-      const { data, error } = await supabase.rpc("rate_limit_hit", {
-        p_key: key,
-        p_limit: limit,
-        p_window_seconds: windowSeconds,
-      });
-      // Fail closed: an unavailable limiter denies.
-      if (error) {
-        console.error("rate-limit: counter unavailable, denying", {
-          key,
-          message: error.message,
-        });
-        return false;
-      }
-      return data === true;
-    }),
-  );
-
-  if (results.some((allowed) => !allowed)) {
-    throw new AppError(
-      "RATE_LIMITED",
-      "You are doing that too quickly. Please wait a moment and try again.",
-      429,
-      // Retry-After in seconds. The window is fixed, so the honest worst case
-      // is the full window; a caller that retries sooner is refused again
-      // rather than charged.
-      windowSeconds,
-    );
+export async function takeRateLimitToken(
+  supabase: AnySupabaseClient,
+  bucket: string,
+  key: string,
+  max: number,
+  windowSeconds: number,
+): Promise<RateLimitOutcome> {
+  try {
+    const { data, error } = await supabase.rpc("take_rate_limit_token", {
+      p_bucket: bucket,
+      p_key: key,
+      p_max: max,
+      p_window_seconds: windowSeconds,
+    });
+    if (error) {
+      console.error(`[rate-limit] take_rate_limit_token(${bucket}) errored, failing open: ${error.message}`);
+      return { allowed: true, failedOpen: true };
+    }
+    return { allowed: data === true, failedOpen: false };
+  } catch (err) {
+    console.error(`[rate-limit] take_rate_limit_token(${bucket}) threw, failing open:`, err);
+    return { allowed: true, failedOpen: true };
   }
 }
 
+/** Best-effort client IP, for the per-IP playback bucket. Never authoritative for security, only for the throttle key. */
+export function getClientIp(req: Request): string {
+  const xff = req.headers.get("x-forwarded-for");
+  if (xff) {
+    const first = xff.split(",")[0]?.trim();
+    if (first) return first;
+  }
+  const real = req.headers.get("x-real-ip");
+  if (real) return real;
+  return "unknown";
+}
+
 /**
- * Best-effort caller IP. Supabase sits behind a proxy, so the socket address is
- * the proxy's; `x-forwarded-for`'s FIRST entry is the client. It is spoofable
- * by anyone who can set the header, which is why it is only ever ONE of the
- * keys and never the only one.
+ * The CT-1 429 shape: `{ error: "RATE_LIMITED", retry_after_seconds }`, flat
+ * (not the `{ error: { code, message } }` AppError envelope every other
+ * function uses), because CT-1 in PHASE-3-STATUS.md names this exact body.
  */
-export function callerIp(req: Request): string {
-  const forwarded = req.headers.get("x-forwarded-for");
-  return forwarded?.split(",")[0]?.trim() || "unknown";
+export function rateLimitedResponse(retryAfterSeconds: number, corsHeaders: Record<string, string>): Response {
+  return new Response(
+    JSON.stringify({ error: "RATE_LIMITED", retry_after_seconds: retryAfterSeconds }),
+    {
+      status: 429,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    },
+  );
 }

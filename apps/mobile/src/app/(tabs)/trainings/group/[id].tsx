@@ -1,9 +1,17 @@
 import { useGroups, type GroupDetail, type GroupMember, type GroupSession } from '@atlitos/api';
 import type { ApiError } from '@atlitos/types';
 import { radii, spacing } from '@atlitos/theme';
-import { router, useLocalSearchParams } from 'expo-router';
-import { CalendarCheck2, CalendarX2, ClipboardList, Percent, TriangleAlert } from 'lucide-react-native';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import {
+  CalendarCheck2,
+  CalendarPlus,
+  CalendarX2,
+  ClipboardList,
+  Percent,
+  Pencil,
+  TriangleAlert,
+} from 'lucide-react-native';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -34,14 +42,17 @@ function titleCase(value: string): string {
 }
 
 /** Membership display state for the Team Members chips. `lapsed` rows are
- * excluded from `getGroup`, but an `active` membership whose paid period
- * has ended reads as Lapsed under the manual renewal fares model (no
- * autopay, D-053): the member keeps their seat, the chip tells the coach
- * the month has not been renewed yet. */
+ * excluded from `getGroup` entirely. Reads `membership.status` directly
+ * (0104 membership_expiry_sweep is the sole writer of `expired`), never a
+ * client side date comparison: the sweep job and this screen used to
+ * disagree about the exact same row when this compared `periodEnd` to
+ * `todayISO()` locally instead of trusting the server's state machine.
+ * `expired` reads as Lapsed here too, matching `GROUP_MEMBERSHIP_STATUS_PILL`
+ * (session-display.ts): the athlete card and this roster chip must say the
+ * same word about the same row on the same day. */
 function memberChip(member: GroupMember): { label: string; tone: 'active' | 'lapsed' | 'pending' } {
   if (member.membership.status === 'pending') return { label: 'Pending', tone: 'pending' };
-  const periodEnd = member.membership.periodEnd;
-  if (periodEnd && periodEnd < todayISO()) return { label: 'Lapsed', tone: 'lapsed' };
+  if (member.membership.status === 'expired') return { label: 'Lapsed', tone: 'lapsed' };
   return { label: 'Active', tone: 'active' };
 }
 
@@ -112,6 +123,20 @@ export default function GroupProfileScreen() {
     void load();
   }, [load]);
 
+  // Edit and Schedule are pushed screens that mutate this group. Coming back
+  // must not show the values this screen loaded before they ran, so refetch
+  // silently on focus rather than trusting the first load.
+  const isFirstFocus = useRef(true);
+  useFocusEffect(
+    useCallback(() => {
+      if (isFirstFocus.current) {
+        isFirstFocus.current = false;
+        return;
+      }
+      void load({ silent: true });
+    }, [load]),
+  );
+
   async function handleRefresh() {
     setRefreshing(true);
     await load({ silent: true });
@@ -164,6 +189,14 @@ export default function GroupProfileScreen() {
 
   function goToSession(sessionId: string) {
     router.push({ pathname: '/(tabs)/trainings/group-session/[id]', params: { id: sessionId } });
+  }
+
+  function goToEdit() {
+    router.push({ pathname: '/(tabs)/trainings/group/edit', params: { id: group.id } });
+  }
+
+  function goToSchedule() {
+    router.push({ pathname: '/(tabs)/trainings/group/schedule', params: { groupId: group.id } });
   }
 
   function SessionRow({ session }: { session: GroupSession }) {
@@ -265,6 +298,21 @@ export default function GroupProfileScreen() {
             </View>
 
             <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+              <View style={{ flex: 1 }}>
+                <Button variant="secondary" onPress={goToEdit}>
+                  <Pencil size={16} strokeWidth={1.75} color={colors.text} />
+                  <Text style={{ color: colors.text }}>Edit group</Text>
+                </Button>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Button onPress={goToSchedule}>
+                  <CalendarPlus size={16} strokeWidth={1.75} color={colors.inkOnAccent} />
+                  <Text style={{ color: colors.inkOnAccent }}>Schedule</Text>
+                </Button>
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: spacing.sm }}>
               <StatTile label="Total sessions" value={liveSessions.length} icon={CalendarCheck2} />
               <StatTile
                 label="Attendance rate"
@@ -346,6 +394,11 @@ export default function GroupProfileScreen() {
           </View>
         ) : (
           <View style={{ gap: spacing.lg }}>
+            <Button onPress={goToSchedule}>
+              <CalendarPlus size={18} strokeWidth={1.75} color={colors.inkOnAccent} />
+              <Text style={{ color: colors.inkOnAccent }}>Schedule a session</Text>
+            </Button>
+
             <View style={{ gap: spacing.sm }}>
               <Text style={[textStyle('h3'), { color: colors.text }]}>Upcoming sessions</Text>
               {upcoming.length === 0 ? (
@@ -361,7 +414,7 @@ export default function GroupProfileScreen() {
                 <View style={{ alignItems: 'center', gap: spacing.md, padding: spacing.lg }}>
                   <CalendarX2 size={40} color={colors.textTertiary} strokeWidth={1.75} />
                   <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
-                    No sessions scheduled for this group yet.
+                    No sessions scheduled for this group yet. Schedule one and every active member is added to it.
                   </Text>
                 </View>
               ) : (

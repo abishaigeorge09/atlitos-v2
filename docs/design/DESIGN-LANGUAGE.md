@@ -86,6 +86,10 @@ Each has a base and a subtle tint (tint = roughly 8–10% of the base blended to
 | `info` | `#1D6FC4` | `#DFEBFB` | `#5B9FE8` | `#16273A` |
 | `danger` | `#D7263D` | `#FBE1E4` | `#F0616F` | `#3A1418` |
 
+### Aurora (auth backdrop)
+
+The auth and onboarding surface (`AuthScene`) renders a slow, warm animated aurora, a mesh of drifting react-native-svg radial glows over a cream (light) or espresso (dark) wash. Its gradient stops are the one place the palette needs warm intermediate points between the two brand accents and the paper background, so they live as a dedicated token set `auroraStops` in `packages/theme` (`ember`, `orange` reuse the brand accents; `gold` `#F4A15D` and `cream` `#FFE3CE` are the two hand picked warm mids). Screens import `auroraStops`, never hardcode these. Motion is reanimated driven and freezes to a static composition under reduced motion. Glass form cards over the aurora are translucent token derived rgba fills of `surface`, not a native blur.
+
 ## Typography
 
 **Inter** for UI text. **JetBrains Mono** for every numeric readout (prices, scores, timers, stat counters, XP, distances), always with tabular figures (`font-variant-numeric: tabular-nums` on web, tabular lining figures on mobile) so digits don't reflow as values tick.
@@ -194,6 +198,29 @@ Lucide only, everywhere, always. No emoji, ever, as an icon substitute (this is 
 - **Inputs**: `surfaceMuted` fill, `radius.sm`, `border` outline, `accent` outline on focus (2px), `danger` outline on error.
 - **Money surfaces**: every screen touching money renders a `BillSummary` component (line items in `body`/`callout`, totals in `numericLg` mono), never a bare number. This mirrors the biased-approver's hard rule and is a design requirement, not just a build one. On mobile this is `apps/mobile/src/components/molecules/BillSummary.tsx`; on the web portals it is `@atlitos/ui-web`'s `BillSummary` (added in the Courts vertical slice pass), same rows-plus-total shape, expressed as vanilla CSS reading the same token set instead of nativewind classNames.
 - **Portals (court, life, admin)**: shadcn/ui component bones, same token values expressed as HSL CSS variables (see `packages/theme/src/index.ts` `hslVar`/`toCssVars` helpers), warm-light default with a dark toggle. GMV's sidebar-dashboard structure, not GMV's pink/cyan palette.
+
+## Shop tiles and compare rows (direction C)
+
+Amazon's card, on Atlitos ground (`docs/design/DIRECTION-SHOP.md`, direction C, approved). Applies
+to `GearResultTile` (the browse grid) and `OfferRow dense` (the affiliate compare screen,
+`/shop/affiliate/[id]`).
+
+- **Image tile**: flat square, `radius.none`, no border, filled with `color.surface` so a
+  retailer photo shot on white blends into the tile. The product image sits centred at 80
+  percent of the tile; the `Package` glyph is the placeholder for a product with no image yet.
+- **Grid tile sizes**: three only, `13` (brand semibold, title regular), `12` (retailer line,
+  freshness), `18` mono semibold (the price, the one accent).
+- **Compare row sizes**: `13` semibold (retailer name), `13` semibold mono in `color.text` (the
+  price, never the accent except on the cheapest row), `12` (in stock/out of stock plus
+  freshness). The screen title above the rows is the fourth and last size on the surface.
+- **One accent per surface**: the grid tile's price is the accent; the compare screen's one
+  accent is the word "Cheapest" on the cheapest in stock row, never a border or a price color on
+  every row. No strikethrough price on the compare rows (S3 hard decision 2: `previous_price`
+  does not exist yet).
+- **Freshness is always present, never loud**: `checked N h ago` / `checked N days ago` in
+  `color.textTertiary`, or `not checked yet` for an offer the nightly job has never reached.
+- **Out of stock**: the whole row at 60 percent opacity, no buy action, so a price the shopper
+  cannot actually buy is never presented as buyable.
 
 ## Interactive cards: the pressable overlay pattern
 

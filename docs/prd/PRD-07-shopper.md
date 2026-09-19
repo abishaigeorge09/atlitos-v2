@@ -303,3 +303,164 @@ WS4 seeds retailer offers with `affiliate_url`s but does NOT formalise the commi
 8. Commission accounting: do we track click-out attribution and accrued commission in the ledger now, or treat affiliate revenue as an out of band reconciliation until volume justifies it?
 9. Catalog ingestion: are offers refreshed by a scheduled worker against retailer feeds/APIs, by an admin paste, or both? WS4 leaves `last_checked_at` and the service-role write path ready for either.
 10. Do affiliate products appear in the same browse grids as owned products (one blended catalog), or in a separate "Compare prices" surface? WS4 keeps them addressable on their own route; the browse blend is a UI decision.
+
+## 11. Google Shopping model: AI search, URL ingest, catalog health, vectors
+
+Added 2026-09-17 on the founder's direction: "Google Shopping, but for Atlitos". Section 10
+stays the truth for the data model; this section makes the affiliate catalog the primary
+shop, gives it a real search, a way to grow it from pasted retailer links, and a review
+surface that keeps it honest. Founder decisions taken at intake:
+
+- Ships **before store submission** (target 26 September, submission 30 September).
+- Products enter by **pasting a retailer URL**; the system fills the rest. Manual entry
+  (0120 admin Gear) stays as the fallback and the editor.
+- The owned inventory shop (cart, checkout, orders) is **kept in code but switched off**
+  behind a flag until Atlitos has stock to sell. Affiliate is the only visible shop.
+- Vectors: **pgvector in Supabase, Voyage embeddings**. No new database.
+
+### 11.1 Jobs to be done
+
+- A shopper types what they need in their own words ("light racket for a 12 year old
+  starting badminton", "cricket bat under 3000") and sees the right products with every
+  retailer's price and a link to buy at the cheapest.
+- A team member turns a retailer product page into a listed product in under a minute.
+- A team member sees, on one page, every listed product and whether it is still real:
+  link alive, price fresh, image present, in stock somewhere; and delists what is not.
+
+### 11.2 Surfaces
+
+| Surface | Where | What |
+|---|---|---|
+| Shop home | `apps/mobile` `/shop` | Search bar first, then category chips and sport chips, then results grid. Category browse is a filter on the same grid, not a separate page. |
+| Result card | `/shop` grid | Image, title, brand, "from INR n" (cheapest in stock), retailer count ("3 stores"). |
+| Compare | `/shop/affiliate/[id]` (exists, FR-34 to FR-38) | Unchanged contract; gains "checked n hours ago" on each offer and an image that is ours, not the retailer's. |
+| Admin Gear list | `apps/admin` `/gear` (exists, 0120) | Gains health columns and an "Attention" filter. |
+| Admin Add from link | `apps/admin` `/gear/create` | New first section: paste URL, Fetch, review the extracted fields, save. Manual fields stay below. |
+| Admin Catalog health | `apps/admin` `/gear/health` | Every product with its checks; bulk delist; re-check now. |
+
+### 11.3 Functional requirements
+
+**Search**
+
+FR-40. Shop home opens on a search field. A query returns affiliate products ranked by a
+hybrid of vector similarity (query embedding against `affiliate_products.embedding`) and
+the existing deterministic constraints (brand hard match, price ceiling, sport, skill,
+age), through the existing `ai-search` function and its spend guard. Empty query shows
+the grid ordered by recency.
+
+FR-41. Every result carries the retailer URLs the shopper needs: the card shows the count,
+the compare screen lists each offer with its link. A result never shows a price that is
+not the live `product_offers` value.
+
+FR-42. A query with no real match returns the honest empty state and a broaden suggestion
+(PRD-01 FR-16), never filler. Vector similarity below the threshold does not qualify.
+
+FR-43. Embeddings are generated server side on product create and on any change to title,
+brand, description, sport, skill level, age range or category; never client side, never
+on read. A product with a null embedding still appears through the deterministic path.
+
+**Ingest**
+
+FR-44. Admin pastes a product page URL from a supported retailer. The system fetches the
+page server side, extracts title, brand, price, currency, in stock, image URL and the
+canonical product URL, and shows them for review before anything is saved. Nothing is
+saved on Fetch.
+
+FR-45. On save, the extracted fields create (or update, when the same canonical URL is
+already an offer) the `affiliate_products` row and one `product_offers` row for that
+retailer. The affiliate tag is applied to the stored URL from the retailer's programme
+config, never typed by hand.
+
+FR-46. The product image is copied into Atlitos Storage (`product-images` bucket) at
+ingest and served from there. `image_url` on the product points at our copy; the
+retailer's original is kept as `source_image_url` for re-fetch. A product with no image
+shows the house placeholder, never a broken image.
+
+FR-47. Unsupported retailers, blocked fetches and pages without a recognisable product
+produce a readable refusal ("Could not read a product from this page") and leave the
+manual form usable with whatever was extracted.
+
+**Catalog health**
+
+FR-48. A nightly job re-fetches every in-stock offer's page: updates `price`,
+`in_stock`, `last_checked_at`, and records the outcome (ok, price changed, out of stock,
+gone, blocked). Rate limited per retailer; a failure on one offer never stops the sweep.
+
+FR-49. The Catalog health page lists every product with: image present, offers alive
+(n of m), cheapest price and its age, last check outcome, days since last successful
+check. Filters: Attention (any check failing), Delisted, All. Sort by worst first.
+
+FR-50. An admin can delist or list a product from the health page in one action, bulk
+select included, through the existing audited RPC. An admin can trigger "Re-check now"
+on one product.
+
+FR-51. A product whose every offer has been gone or blocked for 7 consecutive nightly
+checks is delisted automatically, with an audit_log row naming the reason. Nothing is
+deleted automatically.
+
+FR-52. An AI assessment runs on any offer whose fetch succeeded but whose page no longer
+parses cleanly: Claude reads the fetched text and answers whether the product is still
+sold there and at what price; the answer is stored as a suggestion on the health page,
+never applied on its own.
+
+**Owned shop flag**
+
+FR-53. A single flag (`shop.owned_enabled`, false at launch) hides cart, checkout, orders
+and every owned product from the consumer app and from search. Admin Catalog and Orders
+pages stay reachable for the team. Flipping the flag is a config change, not a deploy.
+
+### 11.4 Data touched
+
+- `affiliate_products` gains `embedding vector(1024)`, `source_image_url`, `image_path`
+  (Storage), `health_status`, `health_checked_at`, `auto_delisted_at`.
+- `product_offers` gains `canonical_url`, `retailer_key` (programme id), `last_check_outcome`,
+  `consecutive_failures`, `last_price_change_at`.
+- New `retailer_programmes` (key, display name, url patterns, affiliate tag template,
+  fetch policy). Seeded with Amazon India, Flipkart, Decathlon India; extended by migration.
+- New `product_fetch_log` (offer id, fetched at, outcome, http status, price seen,
+  in stock seen, notes). The health page reads it; the AI assessment writes to it.
+- New Storage bucket `product-images`, public read, service role write.
+- Extension `vector`; HNSW index on `affiliate_products.embedding`.
+- New edge functions `gear-ingest` (fetch + extract + image copy), `gear-recheck`
+  (nightly sweep, pg_cron trigger), `gear-embed` (embedding writer, called by both).
+- Config: `app_config` row or Vault entry for `shop.owned_enabled`.
+
+### 11.5 Out of scope for this section
+
+- Commission attribution and accrued commission ledger (10.4 stands).
+- Official retailer APIs (Amazon PA-API) until affiliate accounts are approved.
+- Price history charts and alerts.
+- Shopper accounts on retailers, one-click buy, agentic ordering (PRD-agentic-ordering).
+- Any retailer not in `retailer_programmes`.
+
+### 11.6 Acceptance criteria
+
+- AC-11-1. Query "Babolat under 2000" returns only Babolat products priced under 2000, ranked
+  with a rank reason, in under 1.5 s p95 on the production catalog.
+- AC-11-2. Query "light racket for a 12 year old starting badminton" returns a badminton
+  racket tagged beginner or junior in the top 3 with no brand in the query (vector path).
+- AC-11-3. Pasting a real Amazon.in product URL fills title, brand, price, image and saves a
+  product with one offer; the served image URL is on our Storage domain.
+- AC-11-4. A deliberately dead offer URL shows "gone" on the health page after one re-check
+  and the product auto-delists after 7 consecutive failures (test with the counter set to 6).
+- AC-11-5. With `shop.owned_enabled = false`, the consumer app has no cart route, no owned
+  product in any grid or search result, and `checkout` refuses with a readable error.
+- AC-11-6. An anon client cannot write `affiliate_products`, `product_offers`,
+  `retailer_programmes` or `product_fetch_log`, and cannot invoke `gear-ingest` or
+  `gear-recheck` (prove the refusal).
+- AC-11-7. Embedding writes happen only through `gear-embed` under the service role; the
+  `embedding` column is not in any client select.
+
+### 11.7 Open questions for the founder
+
+11. Which affiliate programmes are approved today, and what are the tags? Until known,
+    offers store the canonical URL and the tag template is empty.
+12. Fetching retailer pages server side is against some retailers' terms. Acceptable for
+    launch volume (hundreds of products, one fetch a night)? The alternative is manual
+    only until PA-API approval. **Decided 2026-09-17: yes, fetch.** Blocked fetches are
+    recorded as `blocked`, never shown as a price; each retailer moves to its official
+    API as its programme approves.
+13. Image rights: copying a retailer's product image into our Storage is standard affiliate
+    practice but not universally licensed. Proceed, with takedown on request?
+    **Decided 2026-09-17: copy, with takedown on request.** A takedown contact goes on
+    the privacy page.

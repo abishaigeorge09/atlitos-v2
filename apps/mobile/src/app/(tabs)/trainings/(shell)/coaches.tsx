@@ -4,11 +4,10 @@ import { radii, spacing } from '@atlitos/theme';
 import { router } from 'expo-router';
 import { TriangleAlert, Users } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { CoachBrowseList } from '@/components/organisms/coaching/CoachBrowseList';
 import { EmptyState } from '@/components/organisms/EmptyState';
-import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
 import { supabase } from '@/lib/supabase';
@@ -42,20 +41,20 @@ function todayISO(): string {
  * coaching bottom nav tab; a tapped coach opens as a drill in above this
  * shell (`trainings/coach/[id]`, a re-export of the coaching profile
  * screen) and backs out to this tab with the shell intact, same pattern as
- * `trainings/booking/[id]`. One outer ScrollView owns both sections so
- * there is only ever one scroller. States: loading, error for "My
- * coaches"; CoachBrowseList carries its own loading/empty/populated/error
- * quartet for the browse section.
+ * `trainings/booking/[id]`. CoachBrowseList's own list is the single
+ * scroller and "My coaches" rides in its `header` prop, so there is only
+ * ever one scroller AND the browse list keeps its virtualization (see the
+ * P0-3 note at the return below for why those two are the same sentence).
+ * States: loading, error for "My coaches"; CoachBrowseList carries its own
+ * loading/empty/populated/error quartet for the browse section.
  */
 export default function PlayerCoachesScreen() {
   const colors = useThemeColors();
-  const navInset = useNavBarInset();
   const coaching = useCoaching(supabase);
 
   const [state, setState] = useState<ScreenState>('loading');
   const [rows, setRows] = useState<MyCoachRow[]>([]);
   const [error, setError] = useState<ApiError | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async (options?: { silent?: boolean }) => {
     if (!options?.silent) setState('loading');
@@ -73,12 +72,6 @@ export default function PlayerCoachesScreen() {
   useEffect(() => {
     void load();
   }, [load]);
-
-  async function handleRefresh() {
-    setRefreshing(true);
-    await load({ silent: true });
-    setRefreshing(false);
-  }
 
   const myCoachesSection = (
     <View style={{ gap: spacing.md }}>
@@ -137,20 +130,24 @@ export default function PlayerCoachesScreen() {
     </View>
   );
 
+  // SCALE-CLIENT.md P0-3. This used to wrap CoachBrowseList in its own
+  // ScrollView and pass `scrollEnabled={false}`, which read as "one scroller,
+  // two sections" and was in fact "virtualization off, pagination running
+  // away": a plain RN ScrollView provides no VirtualizedListContext, so the
+  // nested list laid out at full content height, distanceFromEnd stayed 0
+  // forever, every row stayed mounted and every appended page instantly
+  // fetched the next one until the table ran out.
+  //
+  // CoachBrowseList is the single scroller now, and "My coaches" rides in its
+  // `header` prop, which is what that prop was added for. Pull to refresh
+  // still reloads both sections, via `onRefresh`.
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <ScrollView
-        contentContainerStyle={{ paddingBottom: navInset + spacing.xl }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} />}
-      >
-        <CoachBrowseList
-          header={myCoachesSection}
-          scrollEnabled={false}
-          onOpenCoach={(coachId) =>
-            router.push({ pathname: '/(tabs)/trainings/coach/[id]', params: { id: coachId } })
-          }
-        />
-      </ScrollView>
+      <CoachBrowseList
+        header={myCoachesSection}
+        onRefresh={() => load({ silent: true })}
+        onOpenCoach={(coachId) => router.push({ pathname: '/(tabs)/trainings/coach/[id]', params: { id: coachId } })}
+      />
     </View>
   );
 }
@@ -164,7 +161,10 @@ function groupByCoach(sessions: Session[]): MyCoachRow[] {
   for (const session of sessions) {
     if (session.status === 'declined') continue;
     const existing = byCoach.get(session.coachId);
-    const isUpcoming = session.status === 'accepted' && session.date >= today;
+    // `in_progress` counts too (0077): without it, the row's next-session
+    // date drops the moment the coach taps Start, even though the session
+    // is happening right now, not in the past.
+    const isUpcoming = (session.status === 'accepted' || session.status === 'in_progress') && session.date >= today;
     if (!existing) {
       byCoach.set(session.coachId, {
         coachId: session.coachId,

@@ -1,0 +1,80 @@
+appId: com.atlitos.app
+---
+# Phase S3 Track H gate: shop affiliate compare and click-out path
+# (PRD-07 FR-35 to FR-38, FR-41, FR-46).
+#
+# Asserts: deep link to /shop, tap a product tile (gear-tile-0), see the
+# compare screen with at least one offer row (compare-offer-0), assert the
+# "Cheapest" label is visible on the best price, assert the commission
+# disclosure text is visible, then tap "Buy on X" (compare-buy-0) and confirm
+# the browser or another app opens (the offer row is no longer visible after
+# the navigation).
+#
+# Positive assertions on the destination screen before each exit.
+
+- launchApp:
+    clearState: false
+
+# If presented with auth gate, skip it.
+- runFlow:
+    when:
+      visible: "Continue as guest"
+    commands:
+      - tapOn: "Continue as guest"
+      - waitForAnimationToEnd:
+          timeout: 3000
+
+# Deep link directly to the shop.
+- openLink: "atlitos://shop"
+- waitForAnimationToEnd:
+    timeout: 2000
+
+# Assert the shop search screen is visible.
+- assertVisible:
+    id: shop-search-input
+- waitForAnimationToEnd:
+    timeout: 1000
+
+# Tap the first gear tile to open the product detail / compare screen.
+- tapOn:
+    id: gear-tile-0
+- waitForAnimationToEnd:
+    timeout: 2000
+
+# Assert the compare screen loaded with at least one offer.
+- assertVisible:
+    id: compare-offer-0
+
+# Assert the "Cheapest" label is visible on one of the offers.
+- assertVisible:
+    id: compare-cheapest
+
+# Assert the commission disclosure text is visible on the screen.
+# The disclosure sits under the offer rows; scroll it into view first.
+- scrollUntilVisible:
+    element:
+      text: ".*commission.*"
+    direction: DOWN
+    timeout: 8000
+- assertVisible:
+    text: ".*commission.*"
+# Back to the top so the first buy control is on screen for the click-out.
+- scrollUntilVisible:
+    element:
+      id: compare-buy-0
+    direction: UP
+    timeout: 8000
+
+- waitForAnimationToEnd:
+    timeout: 1000
+
+# Tap the "Buy on X" button on the first offer to open the retailer link.
+- tapOn:
+    id: compare-buy-0
+
+# Wait briefly for the navigation to happen, then assert the offer row is no
+# longer visible (indicating the app navigated away or another app/browser opened).
+- extendedWaitUntil:
+    notVisible:
+      id: compare-offer-0
+    timeout: 8000

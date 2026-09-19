@@ -34,3 +34,31 @@ Synthesized from Abishai's four reference projects. The v2 design language must 
 - Motion: SRM easings + framer/reanimated micro-interactions; haptics on mobile presses.
 - Brand assets: logo SVGs + Benji/Wendy mascot avatars at ~/Desktop/ATLITOS/04 Design & Brand/.
 - Numbers are a design feature: stats, prices, timers always mono with tabular figures.
+
+## Reference 5: Google Shopping (2026-09-17, for the shop search rebuild)
+
+Images in the repo: `references/google-shopping-grid.jpg`, `references/google-shopping-compare.jpg`.
+The founder's named precedent: "Google Shopping, but for Atlitos".
+
+What specifically is good, and what we take:
+
+- **The search field is the page.** Everything else (filter chips, grid) sits under one query
+  box. No category tree to walk first. We take this: the Shop tab opens on the search field,
+  with categories and sports as chips beneath it, never as a separate page.
+- **The card is four lines, in a fixed order.** Image, title, price, then "Retailer & more".
+  Price is the second most prominent thing after the image; the retailer line tells you it is
+  comparable before you tap. We take the order and the "& more" idea as "3 stores".
+- **Compare panel lists retailers as rows, cheapest first, each with its own buy action.** The
+  price is right aligned and heavy; stock and delivery are a quiet second line. Our compare
+  screen (FR-35 to FR-37) already has this shape; the reference confirms it and adds the
+  freshness line ("checked 6 h ago") we need because our prices are fetched, not live.
+- **Strikethrough old price beside the new one** when a price dropped. We take this only once
+  the nightly recheck stores `last_price_change_at`; never fabricated.
+- **Images are cut out on a flat light tile.** Product on white with generous padding. Our
+  images come from retailers and will not be uniform; the tile background does the
+  unifying, so the tile is a token surface, not the image.
+
+What we do not take: the pure white ground and Google's blue, the rating stars (we have no
+ratings and will not invent them), the "Free delivery" lines (we do not know delivery), and
+the dense chip row of retailer names as filters (our retailer set is small; sport and price
+ceiling are the useful chips).

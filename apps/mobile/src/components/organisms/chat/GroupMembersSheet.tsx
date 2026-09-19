@@ -9,7 +9,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
+import { usePortalBackDismiss } from '@/hooks/use-portal-back-dismiss';
 import { useThemeColors } from '@/theme/use-theme-colors';
+
+/** B4 (clip-controls fix pass). The sheet never covers more than this share
+ * of the viewport. Resolved to PIXELS from the live window height, not a
+ * percentage: see the docblock below for why a percentage silently does
+ * nothing here. */
+const SHEET_HEIGHT_RATIO = 0.7;
 
 export interface GroupMembersSheetProps {
   visible: boolean;
@@ -24,13 +31,28 @@ export interface GroupMembersSheetProps {
  * roster of a training group's chat thread, opened from the conversation
  * screen's AppBar. Same in-tree Portal + absolute scrim + slide up pattern
  * as `LoginGateModal`, not a native RN `Modal`, for the same verified a11y
- * and navigation-ordering reasons documented there.
+ * and navigation-ordering reasons documented there. F2 (P5 fix pass): same
+ * `usePortalBackDismiss` wiring so Android hardware BACK closes it.
+ *
+ * B4 (clip-controls fix pass). This file carried `maxHeight: '70%'` despite
+ * being cited in `ClutchCommentsSheet`'s own docblock as the CORRECT
+ * reference pattern for a Portal sheet. It is the exact same inert shape
+ * that file diagnoses: a percentage `maxHeight` on a view whose `SlideUp`
+ * parent is absolutely positioned (`left`/`right`/`bottom`, no `top`, no
+ * height) inside an `absoluteFill` Portal host, so the percentage has no
+ * resolved parent height to resolve against and Yoga discards it. Fixed with
+ * the same pixel-derived cap (`useWindowDimensions`) `ClutchCommentsSheet`
+ * uses, for the same reason.
  */
 export function GroupMembersSheet({ visible, groupName, members, loading, onClose }: GroupMembersSheetProps) {
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
+  usePortalBackDismiss(visible, onClose);
 
   if (!visible) return null;
+
+  const sheetMaxHeight = Math.round(height * SHEET_HEIGHT_RATIO);
 
   return (
     <Portal name="group-members-sheet">
@@ -52,11 +74,15 @@ export function GroupMembersSheet({ visible, groupName, members, loading, onClos
               // instead of a fixed pad, so the roster clears the home indicator.
               paddingBottom: spacing.xl + insets.bottom,
               gap: spacing.lg,
-              maxHeight: '70%',
+              maxHeight: sheetMaxHeight,
             }}
           >
-            <View className="flex-row items-center justify-between">
-              <Text className="font-sans-semibold text-lg text-text">{groupName}</Text>
+            <View className="flex-row items-center justify-between gap-sm">
+              {/* flex-1 + numberOfLines: this label is UNBOUNDED user data sitting in a
+              justify-between row, the same shape that made "Sessions this month"
+              collide with its icon at 393pt. A long group name pushed the element on the
+              right off screen instead of ellipsizing. Swept 2026-08-22. */}
+              <Text numberOfLines={1} className="flex-1 font-sans-semibold text-lg text-text">{groupName}</Text>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Close"

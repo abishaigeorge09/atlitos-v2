@@ -101,10 +101,6 @@ interface CheckoutRequestBody {
   delivery_charges?: number;
   gst_and_others?: number;
   total?: number;
-  /** The client's own roundup figure, carried only so the comparison below can
-   * catch a client that computed it wrong. Declared rather than smuggled in
-   * through a `Record<string, unknown>` cast, which did not typecheck. */
-  __client_roundup?: number;
 }
 
 interface AddressRow {
@@ -225,7 +221,7 @@ function parseRequestBody(raw: unknown): CheckoutRequestBody {
   if (typeof roundupInput === "number") {
     // Carried through only so the comparison below can catch a client that
     // computed the roundup itself and got it wrong.
-    parsed.__client_roundup = roundupInput;
+    (parsed as unknown as Record<string, unknown>).__client_roundup = roundupInput;
   }
 
   return parsed;
@@ -249,6 +245,34 @@ Deno.serve((req) =>
     const body = parseRequestBody(await request.json().catch(() => null));
     const user = await getAuthenticatedUser(request);
     const supabase = serviceRoleClient();
+
+    // ------------------------------------------------------------------
+    // 0. The owned shop flag (PRD-07 FR-53, ADR-011 D5, Phase S1 AC-11-5).
+    //    Read BEFORE any pricing or address lookup, so a stale client cannot
+    //    buy while the flag is off. `get_app_config` returns null both when
+    //    the row is missing and when it is not public; either way this
+    //    refuses rather than assuming enabled, fail closed by design.
+    // ------------------------------------------------------------------
+    const { data: ownedEnabled, error: configError } = await supabase.rpc(
+      "get_app_config",
+      { p_key: "shop.owned_enabled" },
+    );
+
+    if (configError) {
+      throw new AppError(
+        "INTERNAL",
+        `Failed to read shop.owned_enabled: ${configError.message}`,
+        500,
+      );
+    }
+
+    if (ownedEnabled !== true) {
+      throw new AppError(
+        "OWNED_SHOP_DISABLED",
+        "The Atlitos store is not open yet.",
+        403,
+      );
+    }
 
     // ------------------------------------------------------------------
     // 1. The address, scoped to the caller. See the header.
@@ -388,7 +412,7 @@ Deno.serve((req) =>
     // the client can re-display BillSummary for confirmation without a second
     // round trip.
     // ------------------------------------------------------------------
-    const clientRoundup = body.__client_roundup;
+    const clientRoundup = (body as unknown as Record<string, unknown>).__client_roundup;
     const mismatches: string[] = [];
     const compare = (label: string, expected: number, actual: number | undefined) => {
       if (actual === undefined) return;

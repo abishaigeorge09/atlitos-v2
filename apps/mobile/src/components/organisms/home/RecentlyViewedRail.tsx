@@ -1,4 +1,4 @@
-import { useShop, type ShopProduct } from '@atlitos/api';
+import { useAppConfig, useShop, type ShopProduct } from '@atlitos/api';
 import { spacing } from '@atlitos/theme';
 import { router } from 'expo-router';
 import { ChevronRight } from 'lucide-react-native';
@@ -25,14 +25,28 @@ import { useThemeColors } from '@/theme/use-theme-colors';
  * nothing recently viewed (a new install, a guest who has never opened a
  * PDP) or either read fails, so the section is never empty for a shopper
  * with any catalog at all.
+ *
+ * Phase S3, FR-53: this rail only knows OWNED products (`useShop().listProducts`,
+ * never `listAffiliateProducts`), so while `shop.owned_enabled` is false there
+ * is nothing here it may honestly render; it renders nothing at all rather
+ * than an empty owned read dressed up as a shop rail.
  */
 export function RecentlyViewedRail({ reloadKey }: { reloadKey: number }) {
   const colors = useThemeColors();
   const shop = useShop(supabase);
+  const appConfig = useAppConfig(supabase);
 
+  const [ownedEnabled, setOwnedEnabled] = useState<boolean | undefined>(undefined);
   const [state, setState] = useState<'loading' | 'ready'>('loading');
   const [recentProducts, setRecentProducts] = useState<ShopProduct[]>([]);
   const [fallbackProducts, setFallbackProducts] = useState<ShopProduct[]>([]);
+
+  useEffect(() => {
+    appConfig
+      .getBoolean('shop.owned_enabled', false)
+      .then(setOwnedEnabled)
+      .catch(() => setOwnedEnabled(false));
+  }, [appConfig]);
 
   const load = useCallback(async () => {
     setState('loading');
@@ -57,10 +71,12 @@ export function RecentlyViewedRail({ reloadKey }: { reloadKey: number }) {
   }, []);
 
   useEffect(() => {
-    void load();
-  }, [load, reloadKey]);
+    if (ownedEnabled) void load();
+  }, [load, reloadKey, ownedEnabled]);
 
-  if (state === 'loading') {
+  if (ownedEnabled === false) return null;
+
+  if (ownedEnabled === undefined || state === 'loading') {
     return (
       <View style={{ gap: spacing.sm }}>
         <Skeleton shape="line" width="40%" />

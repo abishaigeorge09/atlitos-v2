@@ -1,9 +1,10 @@
 import { cn } from '@/lib/utils';
-import { formatINR } from '@atlitos/theme';
 import { LandPlot, MapPin } from 'lucide-react-native';
+import { useState } from 'react';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/ui/button';
+import { PriceText } from '@/components/ui/price-text';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/theme/use-theme-colors';
 
@@ -15,7 +16,26 @@ import { useThemeColors } from '@/theme/use-theme-colors';
  * tile rather than an `<Image>` with an empty `uri`, which would render a
  * blank box), and the list screen sorts/labels by distance from the
  * location store, the same mono numeric convention CoachCard already uses
- * for its own `distanceKm`.
+ * for its own `distanceKm`. F5 (concurrent native QA, Phase 5): a dead
+ * Unsplash seed URL 404s and, with no `onError` handler, `<Image>` just
+ * renders nothing rather than falling back to the same LandPlot placeholder
+ * tile an absent `imageUri` already gets. Track F root-caused and fixed the
+ * identical gap on two sibling card components; documented here rather than
+ * applied there since this file was this session's contested territory
+ * during that pass. `imageFailed` tracks a load failure the same way
+ * `imageUri` absence already does, so a 404 degrades to the placeholder
+ * tile instead of a blank image. D18: the price row rendered the amount as a bare
+ * string sibling nested inside the same className'd `<Text>` as the "/hour"
+ * label (`<Text>{formatINR(...)}<Text>/hour</Text></Text>`). On web that
+ * left only the "/hour" span in the DOM, the leading amount never rendered,
+ * while the court detail screen (PRD-01 3.5), which renders the identical
+ * `basePricePerHour` value through `PriceText` as a sibling next to a plain
+ * "per hour" `Text` rather than nested inside it, has always shown the price
+ * correctly. Fixed by matching that working composition: `PriceText` and
+ * "/hour" as siblings in a row, not one nested in the other. Name color
+ * also sourced from the JS-resolved theme (colors.text) rather than the
+ * `text-text` Tailwind class, matching the FB-002 fix already applied to
+ * this card's surface/border.
  */
 export interface CourtCardProps {
   imageUri?: string;
@@ -39,12 +59,20 @@ function CourtCard({
   className,
 }: CourtCardProps) {
   const colors = useThemeColors();
+  const [imageFailed, setImageFailed] = useState(false);
 
   return (
     // Pressable overlay card, see docs/design/DESIGN-LANGUAGE.md. The card is a
     // plain View so Book is a sibling of the card level press target, not a
     // button nested inside another button.
-    <View className={cn('overflow-hidden rounded-xl border border-border bg-card', className)}>
+    // bg-card/border-border are shadcn compat slots (var(--card) -> hsl(var(--color-card))),
+    // a double-nested CSS var nativewind's native runtime does not re-resolve on the dark
+    // toggle, so they stayed at the light #FFFFFF/cream value in dark mode (FB-002). Source
+    // the card surface + border from the JS-resolved theme instead, matching the chrome.
+    <View
+      style={{ backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }}
+      className={cn('overflow-hidden rounded-xl', className)}
+    >
       {onPress ? (
         <Pressable
           onPress={onPress}
@@ -55,8 +83,13 @@ function CourtCard({
       ) : null}
 
       <View style={{ pointerEvents: 'none' }}>
-        {imageUri ? (
-          <Image source={{ uri: imageUri }} className="h-36 w-full rounded-t-xl" resizeMode="cover" />
+        {imageUri && !imageFailed ? (
+          <Image
+            source={{ uri: imageUri }}
+            className="h-36 w-full rounded-t-xl"
+            resizeMode="cover"
+            onError={() => setImageFailed(true)}
+          />
         ) : (
           <View
             style={{ backgroundColor: colors.surfaceMuted }}
@@ -69,24 +102,32 @@ function CourtCard({
 
       <View style={{ pointerEvents: 'box-none', zIndex: 1 }} className="gap-sm p-lg">
         <View style={{ pointerEvents: 'none' }} className="gap-sm">
-          <Text className="font-sans-semibold text-lg text-text">{name}</Text>
+          <Text style={{ color: colors.text }} className="font-sans-semibold text-lg">
+            {name}
+          </Text>
 
           <View className="flex-row items-center gap-xs">
           <MapPin size={14} strokeWidth={1.75} color={colors.textTertiary} />
-          <Text className="flex-1 font-sans text-sm text-text-secondary" numberOfLines={1}>
+          <Text
+            style={{ color: colors.textSecondary }}
+            className="flex-1 font-sans text-sm"
+            numberOfLines={1}
+          >
             {location}
           </Text>
           {distanceKm !== undefined ? (
-            <Text className="font-mono text-xs text-text-secondary">{distanceKm.toFixed(1)} km</Text>
+            <Text style={{ color: colors.textSecondary }} className="font-mono text-xs">
+              {distanceKm.toFixed(1)} km
+            </Text>
           ) : null}
           </View>
         </View>
 
         <View style={{ pointerEvents: 'box-none' }} className="flex-row items-center justify-between pt-xs">
-          <View style={{ pointerEvents: 'none' }}>
-            <Text className="font-mono-semibold text-base text-text">
-              {formatINR(pricePerHour)}
-              <Text className="font-sans text-sm text-text-secondary">/hour</Text>
+          <View style={{ pointerEvents: 'none' }} className="flex-row items-baseline gap-xs">
+            <PriceText amount={pricePerHour} size="base" />
+            <Text style={{ color: colors.textSecondary }} className="font-sans text-sm">
+              /hour
             </Text>
           </View>
 

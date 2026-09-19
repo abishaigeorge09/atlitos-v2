@@ -1,3 +1,25 @@
+# KNOWN LOCAL GAP, 2026-08-14: this flow needs a PAYMENTS dataset the local seed
+# does not provide. It passes against production and fails locally, which makes
+# it a HARNESS finding, not a product one.
+#
+# Fixed along the way, both now in scripts/reset-local-fixtures.sh:
+#   - the 1:1 coaching chat thread (the "Ravi Kumar" chat assertion)
+#   - three completed sessions, since Analytics renders an honest empty state
+#     ("Complete at least 3 sessions to see your trends here") below that
+#
+# STILL BLOCKED: public.payment_intents is EMPTY locally (0 rows), so the
+# Payments tab has nothing to list and the "Ravi Kumar, <date>" transaction row
+# cannot appear.
+#
+# DO NOT hand-seed payment rows to make this green. Money rows carry a
+# double-entry ledger with a deferred balance constraint, and inventing them by
+# hand is exactly the shape that produced 73 captured payments orphaned from
+# their entity (task #40). A fake-money fixture that makes a test pass is worse
+# than a test that honestly cannot run.
+#
+# THE RIGHT FIX is to let the product create them: run a Razorpay TEST payment
+# through book-session against the local stack once the payment edge functions
+# are deployed (task #43), then snapshot that state as a fixture.
 # Trainings fixed shell verification, both roles (PRD-01 3.3, PRD-02 3.2
 # to 3.9). Proves the founder directive: the module title plus
 # TrainingsSubNav stay fixed while switching tabs (only the content below
@@ -13,6 +35,19 @@
 # Signs in as the athlete demo account first, then the coach demo account,
 # via the atlitos://login deep link. Unlike the guest suite this flow signs
 # in, but it still writes no server state (taps only lists, tabs, back).
+#
+# Coach1's display name is "Ravi Kumar" (confirmed live via read only SQL
+# against syzzfgaudpifwvbpycyi on 2026-08-13, user 5b262cf1-8f95-45df-b453-
+# 0802013f82a1), not "Demo Coach One": launch Phase 1's security lockdown
+# renamed/rotated the seed accounts. The upcoming session drill in
+# assertion further down does not pin an exact date: it originally
+# targeted "2026-07-30", a session that has since passed and dropped off
+# the upcoming list (replaced on device by a later one, 2026-08-25, per
+# ordinary calendar movement), so a fixed date goes stale on its own with
+# no data change at all. Matches any upcoming session with this coach
+# instead (".*Ravi Kumar, 2026-.*"), which does not require re-editing
+# every time the clock advances past whatever date was hardcoded.
+
 appId: com.atlitos.app
 # Demo password, read from the shell environment when set. The literal is
 # only the default for an unconfigured checkout. Maestro cannot import the
@@ -130,7 +165,7 @@ env:
     visible: "My coaches"
     timeout: 10000
 - assertVisible: "Browse coaches"
-- assertVisible: "Coach Demo Coach One"
+- assertVisible: "Coach Ravi Kumar"
 - assertVisible: "Trainings"
 - assertVisible: "Stats"
 - takeScreenshot: /tmp/trainings-shell/player-coaches
@@ -145,11 +180,16 @@ env:
 - assertVisible: "Stats"
 - takeScreenshot: /tmp/trainings-shell/player-payments
 
-# Chat tab: inline thread list, no redirect, shell intact. Thread rows
-# render the participant as ".*Atlitos user.*" (public profile name masking).
+# Chat tab: inline thread list, no redirect, shell intact. Thread rows no
+# longer mask the participant name (confirmed via screenshot on
+# 2026-08-13: 1:1 threads show the real counterparty name directly, no
+# "Atlitos user" placeholder anywhere in current source either). The
+# player has several 1:1 threads with coach1 ("Ravi Kumar", confirmed live
+# via read only SQL against syzzfgaudpifwvbpycyi: chat_threads rows with
+# participant_b 5b262cf1-8f95-45df-b453-0802013f82a1), so match that.
 - tapOn: "Chat"
 - extendedWaitUntil:
-    visible: ".*Atlitos user.*"
+    visible: ".*Ravi Kumar.*"
     timeout: 10000
 - assertVisible: "Trainings"
 - assertVisible: "Stats"
@@ -158,7 +198,7 @@ env:
 # Open a thread: conversation pushes ABOVE the module (sub nav hidden),
 # back returns to the Chat tab with the shell intact.
 - tapOn:
-    text: ".*Atlitos user.*"
+    text: ".*Ravi Kumar.*"
     index: 0
 - extendedWaitUntil:
     visible: "Send message"
@@ -167,16 +207,23 @@ env:
 - takeScreenshot: /tmp/trainings-shell/player-chat-thread
 - tapOn: "Back"
 - extendedWaitUntil:
-    visible: ".*Atlitos user.*"
+    visible: ".*Ravi Kumar.*"
     timeout: 10000
 - assertVisible: "Trainings"
 - assertVisible: "Stats"
 - assertVisible: "Chat"
 
-# Analytics tab (player has 2 held sessions, under the threshold of 3).
+# Analytics tab. Was authored assuming the player had 2 held sessions,
+# under a 3 session empty state threshold ("Not enough sessions yet").
+# The player's session history has grown organically since then (5 held
+# sessions confirmed live via read only SQL against syzzfgaudpifwvbpycyi
+# on 2026-08-13, well over the threshold), so the tab now renders real
+# analytics content, not the empty state. Assert the "Sessions held" stat
+# tile label instead of a session count dependent empty state string, so
+# this does not go stale again the next time the count changes.
 - tapOn: "Analytics"
 - extendedWaitUntil:
-    visible: "Not enough sessions yet"
+    visible: "Sessions held"
     timeout: 10000
 - assertVisible: "Trainings"
 - assertVisible: "Stats"
@@ -196,11 +243,20 @@ env:
     timeout: 10000
 - scrollUntilVisible:
     element:
-      text: "Demo Coach One, 2026-07-30.*"
+      text: ".*Ravi Kumar, 2026-.*"
     direction: DOWN
     timeout: 15000
+    centerElement: true
+# The session card sat right at the bottom edge of the screen after the
+# scroll (confirmed via screenshot: "Ravi Kumar / Batting Basics" was
+# only the top sliver of the card, cut off by the tab bar), and tapping
+# an element whose bounding box straddles the tab bar landed on the
+# Clutch tab instead of the card (confirmed reproduced: the flow ended up
+# on the Clutch feed). `centerElement: true` above forces the scroll to
+# bring the whole card clear of the tab bar before this tap.
 - tapOn:
-    text: "Demo Coach One, 2026-07-30.*"
+    text: ".*Ravi Kumar, 2026-.*"
+    index: 0
 - extendedWaitUntil:
     visible: "Session"
     timeout: 10000
@@ -339,10 +395,14 @@ env:
 - assertVisible: "Stats"
 - takeScreenshot: /tmp/trainings-shell/coach-earnings
 
-# Chat tab inline (participant renders as ".*Atlitos user.*").
+# Chat tab inline. Names are not masked (see the player section above);
+# coach1's 1:1 threads are with the player account, display name "Demo
+# Player" (confirmed live via read only SQL, users.id
+# 58756043-7c59-43b2-b23a-c72f0011970f, and matches the chat_threads
+# participant rows for coach1).
 - tapOn: "Chat"
 - extendedWaitUntil:
-    visible: ".*Atlitos user.*"
+    visible: ".*Demo Player.*"
     timeout: 10000
 - assertVisible: "Trainings"
 - assertVisible: "Stats"
@@ -350,7 +410,7 @@ env:
 
 # Open a thread and come back to the Chat tab.
 - tapOn:
-    text: ".*Atlitos user.*"
+    text: ".*Demo Player.*"
     index: 0
 - extendedWaitUntil:
     visible: "Send message"
@@ -359,16 +419,24 @@ env:
 - takeScreenshot: /tmp/trainings-shell/coach-chat-thread
 - tapOn: "Back"
 - extendedWaitUntil:
-    visible: ".*Atlitos user.*"
+    visible: ".*Demo Player.*"
     timeout: 10000
 - assertVisible: "Trainings"
 - assertVisible: "Stats"
 - assertVisible: "Chat"
 
-# Video Analytics tab (coach has 2 completed sessions, under threshold).
+# Video Analytics tab. Was authored assuming the coach had 2 completed
+# sessions, under the 3 session empty state threshold. Coach1 has at
+# least 5 rated sessions now (confirmed live via read only SQL against
+# syzzfgaudpifwvbpycyi on 2026-08-13), same organic growth as the player
+# Analytics tab above, so this renders real content too. The coach branch
+# of analytics.tsx is a different layout from the athlete branch though
+# (confirmed via screenshot and source): no top level "Sessions held"
+# tile, monthly cards straight away with a "Hours coached" row label
+# (analytics.tsx line 176), so assert that instead.
 - tapOn: "Video Analytics"
 - extendedWaitUntil:
-    visible: "Not enough sessions yet"
+    visible: "Hours coached"
     timeout: 10000
 - assertVisible: "Trainings"
 - assertVisible: "Stats"

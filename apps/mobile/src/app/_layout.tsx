@@ -7,9 +7,11 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useColorScheme } from 'nativewind';
 import { useEffect } from 'react';
-import { StatusBar } from 'react-native';
+import { Platform, StatusBar, Text, View } from 'react-native';
 
+import { usePushRegistration } from '@/hooks/use-push-registration';
 import { applyTheme } from '@/lib/apply-theme';
+import { Sentry } from '@/lib/sentry';
 import { startSessionListener, useSessionStore } from '@/store/session-store';
 import { useThemeColors } from '@/theme/use-theme-colors';
 
@@ -24,12 +26,30 @@ SplashScreen.preventAutoHideAsync().catch(() => {
   // Not fatal, the splash screen just hides on its own default timing.
 });
 
-export default function RootLayout() {
+function RootLayout() {
   // nativewind's resolved scheme, not RN's own useColorScheme, so the
   // status bar style always agrees with useThemeColors()/the `dark` class,
   // see src/theme/use-theme-colors.ts for why the two can disagree on web.
   const { colorScheme: scheme } = useColorScheme();
   const colors = useThemeColors();
+
+  // D23 fix: on web, nativewind v4 resolves `useColorScheme()`/`colorScheme.set()`
+  // for the StyleSheet-driven token system (useThemeColors, above) but does not
+  // itself toggle a `dark` class on `<html>`, the selector global.css's `.dark:root`
+  // needs (tailwind.config.js's `darkMode: "class"`). Every screen that reads
+  // colors through a Tailwind className (BillSummary, Button's secondary/ghost
+  // text, ...) instead of useThemeColors() was silently stuck on the light-mode
+  // CSS variable values, e.g. the booking detail screen's cancel/reschedule
+  // actions and price breakdown render illegible near-invisible text in dark
+  // mode: light-theme near-black ink on a dark-theme near-black card, and a
+  // permanently white "secondary" button background. Mirrors this file's
+  // existing dark-class sync intent (see the comment on the hook above); keeps
+  // native untouched, where NativeWind's own Appearance-backed interop already
+  // works and this is a no-op (`document` does not exist there).
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    document.documentElement.classList.toggle('dark', scheme === 'dark');
+  }, [scheme]);
 
   // Loaded from local files under assets/fonts (not from
   // @expo-google-fonts/* package requires) so `expo export --platform web`
@@ -50,6 +70,12 @@ export default function RootLayout() {
   // so it never crosses through any node_modules directory and survives
   // the Vercel upload. See docs/design/DESIGN-LANGUAGE.md for the token
   // names these map to (`packages/theme` `rnFontFamily`).
+  /* eslint-disable @typescript-eslint/no-require-imports --
+     Metro resolves static asset references through `require`, and that is
+     the documented contract for `useFonts`. An ESM import does not produce
+     the asset module id the native side needs, so this is not a style
+     choice that can be modernised away. See the note above for why the
+     files are local copies rather than package imports. */
   const [fontsLoaded, fontError] = useFonts({
     Urbanist_400Regular: require('../../assets/fonts/Urbanist_400Regular.ttf'),
     Urbanist_500Medium: require('../../assets/fonts/Urbanist_500Medium.ttf'),
@@ -58,6 +84,7 @@ export default function RootLayout() {
     JetBrainsMono_500Medium: require('../../assets/fonts/JetBrainsMono_500Medium.ttf'),
     JetBrainsMono_600SemiBold: require('../../assets/fonts/JetBrainsMono_600SemiBold.ttf'),
   });
+  /* eslint-enable @typescript-eslint/no-require-imports */
 
   // BUG-01. The splash was held until `useFonts` settled, with no other exit.
   // If that promise never resolves or rejects, and a font load stalling on a
@@ -107,12 +134,21 @@ export default function RootLayout() {
   }, []);
 
   // Apply the signed-in user's persisted appearance preference (0087) once
-  // their profile resolves. 'system' hands control back to the OS. Guests
-  // (no me row) stay on system default.
+  // their profile resolves, defaulting guests (no me row) to 'system'.
+  // applyTheme() (not a bare nativewind colorScheme.set()) is required here:
+  // see apply-theme.ts for why passing 'system' straight through leaves the
+  // DOM `dark` class stuck on light while useThemeColors() correctly
+  // resolves dark, the root cause of the J/K section contrast bug.
   const themePref = useSessionStore((state) => state.me?.theme);
   useEffect(() => {
-    if (themePref) applyTheme(themePref);
+    applyTheme(themePref ?? 'system');
   }, [themePref]);
+
+  // Push registration: requests permission, registers/unregisters the
+  // device's Expo push token against the current session, and routes taps
+  // through expo-router. Phase 4 Track D, CT-D, PRD-01 FR-61/62. See
+  // src/hooks/use-push-registration.ts for the full lifecycle.
+  usePushRegistration();
 
   if (!fontsLoaded && !fontError) {
     return null;
@@ -136,3 +172,23 @@ export default function RootLayout() {
     </>
   );
 }
+
+function RootLayoutFallback() {
+  return (
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <Text>Something went wrong. Restart the app to continue.</Text>
+    </View>
+  );
+}
+
+// Sentry.wrap adds native crash and render-error reporting when a DSN is
+// configured (src/lib/sentry.ts). The wrapped ErrorBoundary catches a render
+// crash in this tree and shows a fallback instead of a blank screen; a
+// missing DSN just means the boundary reports nowhere, it still catches.
+export default Sentry.wrap(function WrappedRootLayout() {
+  return (
+    <Sentry.ErrorBoundary fallback={<RootLayoutFallback />}>
+      <RootLayout />
+    </Sentry.ErrorBoundary>
+  );
+});

@@ -27,7 +27,21 @@ type BookingRow =
   | { kind: 'session'; date: string; from: string; session: Session }
   | { kind: 'group'; date: string; from: string; entry: MyGroupSessionEntry };
 
-const LIVE_STATUSES: Session['status'][] = ['requested', 'accepted', 'completed', 'rescheduled', 'rated'];
+/** Every status a session the athlete actually paid for can hold, i.e.
+ * everything except `declined` and `cancelled`. `in_progress` is in this
+ * list and was missing before: 0077 added it between `accepted` and
+ * `completed`, so a session the coach had started dropped out of the
+ * athlete's list and out of every stat tile computed from it, then
+ * reappeared on completion. The athlete watched their own session count go
+ * down while the session was happening. */
+const LIVE_STATUSES: Session['status'][] = [
+  'requested',
+  'accepted',
+  'in_progress',
+  'completed',
+  'rescheduled',
+  'rated',
+];
 
 function timeToMinutes(time: string): number {
   const [h, m] = time.split(':').map(Number);

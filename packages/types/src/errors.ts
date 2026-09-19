@@ -88,6 +88,11 @@ export type ApiErrorCode =
   // clutch
   | 'TOO_LARGE'
   | 'BAD_FORMAT'
+  // get-clip-playback-url batch mode (Phase 3 LAUNCH CT-1): more than 24
+  // clip_ids in one call. The client (getPlaybackUrls, packages/api
+  // hooks.ts) chunks to 24 itself, so seeing this means a call site bypassed
+  // the chunker, never a user-facing state.
+  | 'BATCH_TOO_LARGE'
   // empower
   | 'ITEM_FUNDED'
   | 'MIN_AMOUNT'
@@ -97,6 +102,16 @@ export type ApiErrorCode =
   // Track C (AT-50) for the coach payout setup and transfer screens
   | 'ROUTE_UNAVAILABLE'
   | 'PAYMENT_NOT_CAPTURED'
+  // 0109, _shared/finalize-session-payment.ts. The capture landed on a session
+  // that was already cancelled or declined, which the 15 minute unpaid hold
+  // TTL makes an ordinary sequence rather than a rare race: the athlete backs
+  // out, or a UPI collect takes longer than the hold, and the charge arrives
+  // after cancel-session-refund has already run and correctly found nothing to
+  // refund. The athlete HAS been charged and has no session, so this is the
+  // one payment code that must never be rendered as a generic failure and must
+  // never be rendered as success. Show the message verbatim: it says the
+  // booking was not created and a refund is owed, which is the true state.
+  | 'SESSION_CANCELLED'
   // groups (0079_group_rpcs.sql, join-group/renew-group-membership edge
   // functions, _shared/app-error.ts): this file's vocabulary was not
   // extended when that migration landed, backfilled here by the athlete
@@ -109,12 +124,6 @@ export type ApiErrorCode =
   | 'ALREADY_MEMBER'
   | 'GROUP_INACTIVE'
   | 'NOT_A_MEMBER'
-  // account state (0090 suspension, 0093 deletion). Both are 403s that the
-  // caller authenticated fine for, and they route differently: SUSPENDED sends
-  // the member to support, DELETED signs them out without offering an appeal
-  // for an account they chose to remove.
-  | 'ACCOUNT_SUSPENDED'
-  | 'ACCOUNT_DELETED'
   // generic
   | 'INTERNAL';
 
@@ -123,4 +132,8 @@ export interface ApiError {
   message: string;
   field?: string;
   status: number;
+  /** Present only on `RATE_LIMITED`: the throttle's own window, so a caller
+   * backs off for at least as long as the server said rather than guessing.
+   * See `rateLimitedResponse` in `supabase/functions/_shared/rate-limit.ts`. */
+  retryAfterSeconds?: number;
 }

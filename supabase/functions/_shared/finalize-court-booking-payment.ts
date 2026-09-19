@@ -18,15 +18,42 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { AppError } from "./app-error.ts";
 import { round2 } from "./fee-config.ts";
 import type { CapturedIntent, FinalizeResult } from "./finalize-payment.ts";
+import { dispatchNotification } from "./notify.ts";
 
 interface CourtBookingRow {
   id: string;
   court_id: string;
+  user_id: string | null;
   status: string;
+  date: string;
+  slot_start: string;
+  slot_end: string;
   subtotal: number;
   gst: number;
   platform_fee: number;
   total: number;
+}
+
+/** "2026-08-12" -> "Aug 12, 2026", no hyphens in the rendered copy string. */
+function formatBookingDate(isoDate: string): string {
+  const [year, month, day] = isoDate.split("-").map((part) => Number(part));
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/** "18:00:00" -> "6:00 PM". */
+function formatBookingTime(time: string): string {
+  const [hourStr, minuteStr] = time.split(":");
+  const hour24 = Number(hourStr);
+  const minute = Number(minuteStr);
+  const period = hour24 >= 12 ? "PM" : "AM";
+  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+  return `${hour12}:${minute.toString().padStart(2, "0")} ${period}`;
 }
 
 export async function finalizeCourtBookingCaptured(
@@ -54,9 +81,9 @@ export async function finalizeCourtBookingCaptured(
 
   const { data: court, error: courtLookupError } = await supabase
     .from("courts")
-    .select("venue_id")
+    .select("venue_id, name")
     .eq("id", booking.court_id)
-    .single<{ venue_id: string }>();
+    .single<{ venue_id: string; name: string }>();
 
   if (courtLookupError || !court) {
     throw new AppError(
@@ -64,40 +91,6 @@ export async function finalizeCourtBookingCaptured(
       `Failed to resolve venue_id for court ${booking.court_id}.`,
       500,
     );
-  }
-
-  // SEC-F2 ledger idempotency, the guard courts was missing while commerce,
-  // donation and membership all had one. The gate can now re-enter this handler
-  // for a captured intent whose downstream work never finished, and a re-entry
-  // that reached this point AFTER a previous attempt wrote the group would
-  // otherwise double-credit the partner.
-  //
-  // "Any ledger row for this payment_intent_id" is the right predicate rather
-  // than a narrower one: the capture group is always the FIRST group an intent
-  // has, so its presence proves this handler already completed. A later
-  // reversing refund group shares the payment_intent_id, which is exactly why a
-  // unique index could not be used here (0088's header explains).
-  const { data: existingLegs, error: existingLegsError } = await supabase
-    .from("ledger_entries")
-    .select("id")
-    .eq("payment_intent_id", intent.id)
-    .limit(1);
-
-  if (existingLegsError) {
-    throw new AppError(
-      "INTERNAL",
-      `Failed to check existing ledger group for booking ${bookingId}: ${existingLegsError.message}`,
-      500,
-    );
-  }
-
-  if (existingLegs && existingLegs.length > 0) {
-    return {
-      outcome: "captured",
-      domain: "court",
-      entityId: bookingId,
-      entityStatus: booking.status,
-    };
   }
 
   const entryGroupId = crypto.randomUUID();
@@ -152,6 +145,28 @@ export async function finalizeCourtBookingCaptured(
       `Failed to write ledger_entries for booking ${bookingId}: ${ledgerError.message}`,
       500,
     );
+  }
+
+  // UC-96 / AT-146: tell the athlete their court is confirmed, in app and
+  // push. Best effort: the booking is already confirmed and the ledger group
+  // is already committed by this point, so a notification failure (a bad row,
+  // a push provider hiccup) must never roll back or fail the payment
+  // confirmation response the client is waiting on.
+  if (booking.user_id) {
+    try {
+      await dispatchNotification(supabase, {
+        userId: booking.user_id,
+        type: "booking",
+        title: "Court booked",
+        body: `Your booking at ${court.name} for ${formatBookingDate(booking.date)} at ${formatBookingTime(booking.slot_start)} is confirmed.`,
+        deepLink: `/courts/booking/${bookingId}`,
+      });
+    } catch (notifyError) {
+      console.error(
+        `[finalize-court-booking-payment] failed to dispatch booking notification for ${bookingId}:`,
+        notifyError instanceof Error ? notifyError.message : notifyError,
+      );
+    }
   }
 
   return {

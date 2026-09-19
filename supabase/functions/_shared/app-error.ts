@@ -9,20 +9,11 @@
 export class AppError extends Error {
   readonly code: string;
   readonly status: number;
-  /** Seconds until the caller may retry. Emitted as the `Retry-After` header
-   * by errorResponse. Only meaningful on 429 and 503. */
-  readonly retryAfterSeconds?: number;
 
-  constructor(
-    code: string,
-    message: string,
-    status = 400,
-    retryAfterSeconds?: number,
-  ) {
+  constructor(code: string, message: string, status = 400) {
     super(message);
     this.code = code;
     this.status = status;
-    this.retryAfterSeconds = retryAfterSeconds;
     this.name = "AppError";
   }
 }
@@ -46,16 +37,6 @@ export function appErrorFromPostgrestMessage(message: string): AppError {
 const STATUS_BY_CODE: Record<string, number> = {
   UNAUTHENTICATED: 401,
   FORBIDDEN: 403,
-  // SEC-F4 (0090): the caller authenticated fine but their account is
-  // suspended. Distinct from FORBIDDEN so a client can tell "you may not do
-  // this" from "your account is disabled" and route to support.
-  ACCOUNT_SUSPENDED: 403,
-  // 0093: the account was deleted by its owner. Distinct from
-  // ACCOUNT_SUSPENDED so the client signs out silently rather than routing the
-  // member to support for an account they chose to remove.
-  ACCOUNT_DELETED: 403,
-  // SEC-F9: over a spend or abuse ceiling. Paired with a Retry-After header.
-  RATE_LIMITED: 429,
   NOT_FOUND: 404,
   VALIDATION: 400,
   REASON_REQUIRED: 400,
@@ -80,6 +61,12 @@ const STATUS_BY_CODE: Record<string, number> = {
   NOT_COACH: 403,
   // AT-41: a session reached completion with no captured payment behind it.
   PAYMENT_NOT_CAPTURED: 409,
+  // 0109: the mirror image of PAYMENT_NOT_CAPTURED. A capture landed on a
+  // session that was already cancelled or declined, which the 15 minute hold
+  // TTL makes an ordinary sequence rather than a race. 409 because the request
+  // was well formed and the session's state refused it. The intent stays
+  // captured and unfinalized so the debt is queryable in unfinalized_captures.
+  SESSION_CANCELLED: 409,
   // Commerce (AT-71, AT-72). OUT_OF_STOCK is raised by both
   // reserve_stock_for_checkout (before Razorpay, the ordinary refusal) and
   // consume_reservation (the late capture), and 409 is right for both: the
@@ -135,4 +122,7 @@ const STATUS_BY_CODE: Record<string, number> = {
   // (the item's state refused a second sponsor, resolvable by picking another).
   MIN_AMOUNT: 422,
   ITEM_FUNDED: 409,
+  // Phase S1 (PRD-07 FR-53, ADR-011 D5). `checkout` refuses before any
+  // pricing when `app_config.shop.owned_enabled` is not true.
+  OWNED_SHOP_DISABLED: 403,
 };

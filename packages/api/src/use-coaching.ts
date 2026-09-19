@@ -41,6 +41,14 @@ export interface CoachListFilters {
    * distance the way courts does it; there is no coordinate to compute one
    * from without adding a column outside this story's scope. */
   city?: string;
+  /** CT-5 (P1-3, PHASE-3-STATUS.md): page size. Default 20, clamped to a
+   * max of 50 so a caller can never turn this back into the unbounded
+   * select that made `listCoaches` the P1-3 meltdown item in the first
+   * place. */
+  limit?: number;
+  /** CT-5: opaque continuation token from a previous page's `nextCursor`.
+   * Omit for the first page. */
+  cursor?: string;
 }
 
 export interface CoachListItem {
@@ -59,6 +67,112 @@ export interface CoachListItem {
   priceFrom?: number;
 }
 
+/** CT-5: `listCoaches`'s page shape. `nextCursor` is null exactly on the
+ * last page (fewer than `limit` rows remained, or the table is exhausted);
+ * a caller paginating a FlatList stops fetching once it sees null rather
+ * than guessing from an empty page, since a page can legitimately return 0
+ * `items` after client-side filtering while `nextCursor` is still non null
+ * (there is more server-side data past this cursor even though nothing on
+ * this specific page matched, e.g. a sport filter combined with a sparse
+ * created_at range). */
+export interface CoachListPage {
+  items: CoachListItem[];
+  nextCursor: string | null;
+}
+
+// Exported so `scripts/verify-*` can assert the codec round trips and that
+// two consecutive cursors decode to a strictly decreasing (created_at, id)
+// key, per CT-5/D2, without spinning up the whole hook.
+export { encodeCoachCursor, decodeCoachCursor };
+
+/** A coach's own bookable catalog and weekly availability. Coach-authored, so
+ * small in practice, but nothing in the schema caps either, and both are read
+ * for a whole PAGE of coaches at once on the browse screen. Bounded so the
+ * browse payload stays a function of the page size and not of whatever the
+ * most prolific coach on the platform has created. */
+const COACH_SESSION_TYPES_PER_COACH = 20;
+const COACH_AVAILABILITY_WINDOWS_PER_COACH = 50;
+/** One page of the athlete's own session history, newest first. */
+const PLAYER_SESSION_PAGE_SIZE = 100;
+
+const COACH_LIST_DEFAULT_LIMIT = 20;
+const COACH_LIST_MAX_LIMIT = 50;
+
+/** CT-5 cursor codec: base64 of the JSON tuple `[created_at_iso, user_id]`,
+ * the exact `(created_at desc, id desc)` key the stable order sorts by.
+ * Hand rolled rather than `btoa`/`Buffer` (neither is guaranteed present in
+ * the Hermes JS engine React Native ships without a polyfill this package
+ * does not want to add a dependency for); the cursor payload is always pure
+ * ASCII (an ISO timestamp and a UUID), so this table-based encode/decode
+ * never has to handle multi-byte characters. */
+const BASE64_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+function encodeCursorString(input: string): string {
+  let output = "";
+  let i = 0;
+  for (; i + 2 < input.length; i += 3) {
+    const b0 = input.charCodeAt(i);
+    const b1 = input.charCodeAt(i + 1);
+    const b2 = input.charCodeAt(i + 2);
+    output += BASE64_CHARS[b0 >> 2];
+    output += BASE64_CHARS[((b0 & 0x03) << 4) | (b1 >> 4)];
+    output += BASE64_CHARS[((b1 & 0x0f) << 2) | (b2 >> 6)];
+    output += BASE64_CHARS[b2 & 0x3f];
+  }
+  const remaining = input.length - i;
+  if (remaining === 1) {
+    const b0 = input.charCodeAt(i);
+    output += BASE64_CHARS[b0 >> 2];
+    output += BASE64_CHARS[(b0 & 0x03) << 4];
+    output += "==";
+  } else if (remaining === 2) {
+    const b0 = input.charCodeAt(i);
+    const b1 = input.charCodeAt(i + 1);
+    output += BASE64_CHARS[b0 >> 2];
+    output += BASE64_CHARS[((b0 & 0x03) << 4) | (b1 >> 4)];
+    output += BASE64_CHARS[(b1 & 0x0f) << 2];
+    output += "=";
+  }
+  return output;
+}
+
+function decodeCursorString(input: string): string | null {
+  const clean = input.replace(/=+$/, "");
+  const lookup = new Map(BASE64_CHARS.split("").map((char, index) => [char, index]));
+  let bits = 0;
+  let bitCount = 0;
+  let output = "";
+  for (const char of clean) {
+    const value = lookup.get(char);
+    if (value === undefined) return null;
+    bits = (bits << 6) | value;
+    bitCount += 6;
+    if (bitCount >= 8) {
+      bitCount -= 8;
+      output += String.fromCharCode((bits >> bitCount) & 0xff);
+    }
+  }
+  return output;
+}
+
+function encodeCoachCursor(createdAt: string, userId: string): string {
+  return encodeCursorString(JSON.stringify([createdAt, userId]));
+}
+
+function decodeCoachCursor(cursor: string): { createdAt: string; userId: string } | null {
+  const decoded = decodeCursorString(cursor);
+  if (!decoded) return null;
+  try {
+    const parsed = JSON.parse(decoded) as unknown;
+    if (!Array.isArray(parsed) || parsed.length !== 2) return null;
+    const [createdAt, userId] = parsed;
+    if (typeof createdAt !== "string" || typeof userId !== "string") return null;
+    return { createdAt, userId };
+  } catch {
+    return null;
+  }
+}
+
 interface CoachProfilePublicRow {
   user_id: string;
   sport: Sport;
@@ -69,6 +183,7 @@ interface CoachProfilePublicRow {
   bio: string | null;
   coaching_style: string | null;
   specialization: string[] | null;
+  created_at: string;
 }
 
 interface PublicProfileRow {
@@ -120,26 +235,65 @@ export function useCoaching(client: AtlitosClient) {
      * permissive-OR RLS shape RLS.md warns about (an unscoped select
      * already returns every verified coach's rows publicly, so a plain
      * `.in('coach_id', ids)` here is exactly the intended, documented
-     * query shape, not a scoping bug). */
-    async listCoaches(filters: CoachListFilters = {}): Promise<CoachListItem[]> {
-      let query = client.from("coach_profiles_public").select("*");
+     * query shape, not a scoping bug).
+     *
+     * CT-5 (P1-3, PHASE-3-STATUS.md): the base select is now keyset paged
+     * (`created_at desc, user_id desc`, `.limit()` always bounded) instead
+     * of the prior unbounded select, the P1-3 meltdown item at 1000
+     * concurrent verified coaches. The `filters.cursor` half of the
+     * predicate is `(created_at, user_id) < (cursorCreatedAt, cursorUserId)`
+     * in that tuple order, expressed as PostgREST `.or()` since the JS
+     * client has no native tuple comparison: `created_at < X` OR
+     * (`created_at = X` AND `user_id < Y`). `byCityFirst` still reorders
+     * the page's own items for the "reflects the current location context"
+     * requirement (FR-20); it never changes WHICH rows are on the page, so
+     * it cannot reintroduce a gap or an overlap across pages. */
+    async listCoaches(filters: CoachListFilters = {}): Promise<CoachListPage> {
+      const limit = Math.min(Math.max(filters.limit ?? COACH_LIST_DEFAULT_LIMIT, 1), COACH_LIST_MAX_LIMIT);
+
+      let query = client
+        .from("coach_profiles_public")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .order("user_id", { ascending: false })
+        .limit(limit + 1); // one extra row: its presence is how nextCursor is decided, never returned itself.
       if (filters.sport) query = query.eq("sport", filters.sport);
+      if (filters.cursor) {
+        const decoded = decodeCoachCursor(filters.cursor);
+        if (decoded) {
+          const { createdAt, userId } = decoded;
+          query = query.or(`created_at.lt.${createdAt},and(created_at.eq.${createdAt},user_id.lt.${userId})`);
+        }
+      }
 
       const { data: coachRows, error: coachError } = await query.returns<CoachProfilePublicRow[]>();
       if (coachError) throw mapPostgrestError(coachError);
 
-      const rows = (coachRows ?? []).filter((row): row is CoachProfilePublicRow & { user_id: string } => !!row.user_id);
-      if (rows.length === 0) return [];
+      const fetched = (coachRows ?? []).filter((row): row is CoachProfilePublicRow & { user_id: string } => !!row.user_id);
+      const hasNextPage = fetched.length > limit;
+      const pageRows = hasNextPage ? fetched.slice(0, limit) : fetched;
+      const nextCursor =
+        hasNextPage && pageRows.length > 0
+          ? encodeCoachCursor(pageRows[pageRows.length - 1]!.created_at, pageRows[pageRows.length - 1]!.user_id)
+          : null;
 
-      const ids = rows.map((row) => row.user_id);
+      if (pageRows.length === 0) return { items: [], nextCursor };
+
+      const ids = pageRows.map((row) => row.user_id);
 
       const [{ data: profileRows, error: profileError }, { data: typeRows, error: typeError }] = await Promise.all([
+        // Unbounded and safe: primary key `.in()`, one row per id, and `ids` is
+        // the current listCoaches page (limit + 1).
         client.from("public_profiles").select("id, name, avatar_url").in("id", ids).returns<PublicProfileRow[]>(),
         client
           .from("session_types")
           .select("id, coach_id, name, duration_minutes, price, active")
+          // NOT input-bounded: `.in()` on a non unique column returns one row
+          // per session type per coach, so this is (page of coaches) x (types
+          // each). Bounded to the page size times a generous per coach ceiling.
           .in("coach_id", ids)
           .eq("active", true)
+          .limit(ids.length * COACH_SESSION_TYPES_PER_COACH)
           .returns<SessionTypeRow[]>(),
       ]);
       if (profileError) throw mapPostgrestError(profileError);
@@ -152,7 +306,7 @@ export function useCoaching(client: AtlitosClient) {
         if (current === undefined || type.price < current) minPriceByCoach.set(type.coach_id, type.price);
       }
 
-      return rows
+      const items = pageRows
         .map((row) => {
           const profile = profileById.get(row.user_id);
           return {
@@ -168,6 +322,8 @@ export function useCoaching(client: AtlitosClient) {
           };
         })
         .sort(byCityFirst(filters.city));
+
+      return { items, nextCursor };
     },
 
     /** v1 `coaches.get`. Full profile: `coach_profiles_public` row, the
@@ -192,11 +348,13 @@ export function useCoaching(client: AtlitosClient) {
           .select("id, coach_id, name, duration_minutes, price, active")
           .eq("coach_id", coachId)
           .eq("active", true)
+          .limit(COACH_SESSION_TYPES_PER_COACH)
           .returns<SessionTypeRow[]>(),
         client
           .from("coach_availability_windows")
           .select("coach_id, day_of_week, start_time, end_time, effective_from")
           .eq("coach_id", coachId)
+          .limit(COACH_AVAILABILITY_WINDOWS_PER_COACH)
           .returns<AvailabilityWindowRow[]>(),
       ]);
 
@@ -348,6 +506,7 @@ export function useCoaching(client: AtlitosClient) {
         .eq("player_id", authData.user.id)
         .order("date", { ascending: false })
         .order("slot_start", { ascending: false })
+        .limit(PLAYER_SESSION_PAGE_SIZE)
         .returns<SessionRow[]>();
       if (error) throw mapPostgrestError(error);
 
@@ -549,8 +708,12 @@ async function hydrateSessions(client: AtlitosClient, rows: SessionRow[]): Promi
   const typeIds = Array.from(new Set(rows.map((row) => row.session_type_id)));
 
   const [{ data: profileRows }, { data: typeRows }] = await Promise.all([
-    client.from("public_profiles").select("id, name, avatar_url").in("id", coachIds).returns<PublicProfileRow[]>(),
-    client.from("session_types").select("id, coach_id, name, duration_minutes, price, active").in("id", typeIds).returns<SessionTypeRow[]>(),
+    // Unbounded and safe: primary key `.in()`, one row per id, bounded by the
+  // caller session page.
+  client.from("public_profiles").select("id, name, avatar_url").in("id", coachIds).returns<PublicProfileRow[]>(),
+    // Unbounded and safe: `.in("id", ...)` is a primary key lookup, one row per
+  // id, bounded by the caller session page.
+  client.from("session_types").select("id, coach_id, name, duration_minutes, price, active").in("id", typeIds).returns<SessionTypeRow[]>(),
   ]);
 
   const coachNameById = new Map((profileRows ?? []).map((row) => [row.id, row.name ?? "Coach"]));

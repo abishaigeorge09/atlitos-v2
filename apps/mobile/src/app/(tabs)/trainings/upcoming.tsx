@@ -70,16 +70,7 @@ export default function CoachUpcomingSessionsScreen() {
         coachSessions.listUpcoming(),
         groups.listMyGroups(),
       ]);
-      // One query for every group, not one per group. Grouped by id below so
-      // the rendering below is unchanged.
-      const allGroupSessions = await groups.groupSessionsForGroups(myGroups.map((g) => g.id));
-      const sessionsByGroupId = new Map<string, typeof allGroupSessions>();
-      for (const session of allGroupSessions) {
-        if (!session.groupId) continue;
-        const bucket = sessionsByGroupId.get(session.groupId);
-        if (bucket) bucket.push(session);
-        else sessionsByGroupId.set(session.groupId, [session]);
-      }
+      const sessionsPerGroup = await Promise.all(myGroups.map((group) => groups.groupSessions(group.id)));
       const today = todayISO();
 
       const oneOnOneEntries = oneOnOne.map((session: Session): UpcomingEntry => ({
@@ -96,8 +87,8 @@ export default function CoachUpcomingSessionsScreen() {
         targetId: session.id,
       }));
 
-      const groupEntries = myGroups.flatMap((group) =>
-        (sessionsByGroupId.get(group.id) ?? [])
+      const groupEntries = myGroups.flatMap((group, index) =>
+        (sessionsPerGroup[index] ?? [])
           .filter(
             (session) =>
               session.date >= today && (session.status === 'accepted' || session.status === 'in_progress'),

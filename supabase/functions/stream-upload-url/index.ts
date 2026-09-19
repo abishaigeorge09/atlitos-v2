@@ -175,6 +175,31 @@ Deno.serve((req) =>
       );
     }
 
+    // 2b. SCALE-MEDIA M-3. A second signed upload URL, for the POSTER FRAME the
+    //     client extracts from the picked video before it posts. Without this
+    //     the app has no way to put a thumbnail anywhere: the `clips` bucket is
+    //     private and no storage.objects policy authorizes a client write
+    //     (0042), so stream-upload-url is the only place a client-writable
+    //     path can be minted. thumb_path therefore stayed NULL for every clip
+    //     ever posted through the app, verified live: the three most recent
+    //     `ready` clips all carry thumb_path NULL.
+    //
+    //     The path deliberately mirrors the video's: `${owner}/${clip}.jpg`
+    //     next to `${owner}/${clip}.mp4`, so ownership is readable straight off
+    //     the key, and stream-webhook can REFUSE any thumb_path that is not
+    //     exactly this (the client never gets to name an arbitrary object).
+    const thumbPath = `${user.id}/${clip.id}.jpg`;
+
+    const { data: thumbSigned, error: thumbSignError } = await supabase.storage
+      .from(CLIPS_BUCKET)
+      .createSignedUploadUrl(thumbPath, { upsert: true });
+
+    // A poster is an optimisation, never a gate: if this mint fails the client
+    // simply posts without one, exactly as it did before this existed.
+    if (thumbSignError) {
+      console.error(`[stream-upload-url] thumb upload url mint failed: ${thumbSignError.message}`);
+    }
+
     // 3. Persist the PATH (never a resolved URL). playback_id = storage_path
     //    in v1 (VIDEO.md). cf_stream_uid stays null (future Cloudflare slot).
     const { error: pathError } = await supabase
@@ -197,6 +222,11 @@ Deno.serve((req) =>
         path: objectPath,
         bucket: CLIPS_BUCKET,
         status: "uploading",
+        // The poster slot (M-3). Absent when the mint above failed; the client
+        // treats all three as optional and posts without a thumbnail then.
+        thumbUploadUrl: thumbSigned?.signedUrl ?? null,
+        thumbToken: thumbSigned?.token ?? null,
+        thumbPath: thumbSigned ? thumbPath : null,
       },
       200,
     );

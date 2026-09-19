@@ -1,4 +1,5 @@
-import { toApiError, useProfile } from '@atlitos/api';
+import { sizedImageUrl, toApiError, useProfile } from '@atlitos/api';
+import { COVER_IMAGE_SIZE } from '@/lib/image-sizes';
 import { spacing, radii } from '@atlitos/theme';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -13,6 +14,7 @@ import { Avatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
+import { dobValidationError, formatDob } from '@/lib/dob';
 import { supabase } from '@/lib/supabase';
 import { uploadAvatar, uploadCover } from '@/lib/storage';
 import { useSessionStore } from '@/store/session-store';
@@ -44,6 +46,8 @@ export default function EditProfileScreen() {
 
   const [bio, setBio] = useState(me?.bio ?? '');
   const [handle, setHandle] = useState(me?.handle ?? '');
+  const [dob, setDob] = useState(me?.dob ?? '');
+  const [dobError, setDobError] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(me?.avatarUrl ?? null);
   const [coverUrl, setCoverUrl] = useState<string | null>(me?.coverUrl ?? null);
   const [handleCheck, setHandleCheck] = useState<HandleCheck>('idle');
@@ -144,6 +148,17 @@ export default function EditProfileScreen() {
     }
     if (handleCheck === 'taken') return;
 
+    // Date of birth is optional. Only validate when something was typed, so
+    // leaving it blank is never an error. The message names the exact part
+    // that is wrong (month, day, year, future date), see lib/dob.ts.
+    const dobValue = dob.trim();
+    const dobProblem = dobValue.length > 0 ? dobValidationError(dobValue) : null;
+    if (dobProblem) {
+      setDobError(dobProblem);
+      return;
+    }
+    setDobError(null);
+
     setSaving(true);
     setError(null);
     try {
@@ -151,6 +166,7 @@ export default function EditProfileScreen() {
         bio: bio.trim().length > 0 ? bio.trim() : null,
         avatarUrl,
         coverUrl,
+        dob: dobValue.length > 0 ? dobValue : null,
         ...(handleChanged && normalizedHandle.length > 0 ? { handle: normalizedHandle } : {}),
       });
       await refreshMe();
@@ -199,7 +215,13 @@ export default function EditProfileScreen() {
             }}
           >
             {coverUrl ? (
-              <Image source={{ uri: coverUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+              <Image
+                // SCALE-MEDIA M-6. Same stored object and same width as the
+                // profile header, so the same requested size on purpose.
+                source={{ uri: sizedImageUrl(coverUrl, COVER_IMAGE_SIZE) }}
+                style={{ width: '100%', height: '100%' }}
+                resizeMode="cover"
+              />
             ) : null}
             {coverUploading ? (
               <View
@@ -282,6 +304,19 @@ export default function EditProfileScreen() {
             {bio.length}/{BIO_MAX}
           </Text>
         </View>
+
+        <Input
+          type="pincode"
+          label="Date of birth"
+          placeholder="YYYY-MM-DD"
+          maxLength={10}
+          value={dob}
+          onChangeText={(value) => {
+            setDob(formatDob(value));
+            if (dobError) setDobError(null);
+          }}
+          error={dobError ?? undefined}
+        />
 
         {error ? <Text style={[textStyle('caption'), { color: colors.danger }]}>{error}</Text> : null}
 

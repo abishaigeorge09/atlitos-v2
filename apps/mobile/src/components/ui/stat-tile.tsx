@@ -25,8 +25,17 @@ function StatTile({ label, value, icon: Icon, variant = 'default', progress = 0,
 
   return (
     <View className={cn('flex-1 gap-xs rounded-lg border border-border bg-card p-lg', className)}>
-      <View className="flex-row items-center justify-between">
-        <Text className="font-sans-medium text-sm text-text-secondary">{label}</Text>
+      {/* SAME SHAPE AS THE COACH DASHBOARD HEADER BUG, swept 2026-08-22.
+          This row was `justify-between` with a label that could not shrink and
+          no gap, so at 393pt "Sessions this month" and "Earnings this month"
+          ran flush into their icons with zero space between them. Proven on
+          device, not by inspection: /tmp/header393/01-coach-dash-393.png.
+          `flex-1` lets the label wrap instead of colliding, and `gap-sm`
+          guarantees space even when it does not. Found only because the
+          screenshot was opened; every assertVisible on this screen passed
+          while the collision was on screen. */}
+      <View className="flex-row items-center justify-between gap-sm">
+        <Text className="flex-1 font-sans-medium text-sm text-text-secondary">{label}</Text>
         {Icon ? <Icon size={20} strokeWidth={1.75} color={colors.textTertiary} /> : null}
       </View>
 

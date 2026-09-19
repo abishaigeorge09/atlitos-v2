@@ -1,8 +1,8 @@
-import { useMemo } from "react";
 import type { ApiError, ApiErrorCode, OrderStatus, Sport } from "@atlitos/types";
 
 import type { AtlitosClient } from "./client";
 import { mapEdgeFunctionError, mapPostgrestError } from "./errors";
+import { IMAGE_SIZE, sizedImageUrl } from "./image-url";
 import { readRefundSummary, type RefundSummary } from "./refunds";
 
 /**
@@ -106,7 +106,11 @@ export interface ProductOffer {
   currency: string;
   affiliateUrl: string;
   inStock: boolean;
-  lastCheckedAt: string;
+  /** Null for an offer never nightly-checked yet (Phase S3, FR-41/FR-48). */
+  lastCheckedAt: string | null;
+  /** The offer's `retailer_programmes` key (Phase S3, FR-41), null for an
+   * offer ingested before the programme link existed. */
+  retailerKey: string | null;
 }
 
 export interface AffiliateProduct {
@@ -128,6 +132,13 @@ export interface AffiliateProduct {
   /** Lowest in-stock offer price, the "from" figure the browse card shows.
    * Null only when every offer is out of stock. */
   bestPrice: number | null;
+  /** Total number of retailer offers, in stock or not (Phase S3, FR-41): the
+   * "3 stores" count on the grid tile. */
+  retailerCount: number;
+  /** The cheapest IN STOCK offer, the exact shape `GearResultTile` renders
+   * (Phase S3, FR-40/FR-41). Null only when every offer is out of stock,
+   * matching `bestPrice === null`. */
+  cheapest: { price: number; retailer: string; lastCheckedAt: string | null } | null;
 }
 
 export interface CartLine {
@@ -339,6 +350,34 @@ interface ProductQueryRow {
   product_variant_availability: AvailabilityQueryRow[] | null;
 }
 
+/** Page sizes for the shop surfaces.
+ *
+ * Bounded because PostgREST silently caps every select on this project, so an
+ * unbounded read is a truncation with a 200 OK and no error rather than a slow
+ * query (docs/qa/verify/SCALE-CLIENT.md).
+ *
+ * `listProducts` is the single most expensive read on the project already:
+ * pg_stat_statements has it at 694 calls, mean 5.29 ms, max 68.71 ms, against
+ * 14 active products, and the measured payload is 935.6 bytes per row for this
+ * exact projection including all three embeds. Home called it with NO
+ * arguments to hydrate about eight recently viewed tiles, so a 2,000 product
+ * catalog meant 1.87 MB per Home mount and roughly a 5.6 MB transient heap
+ * spike once parsed (SCALE-CLIENT.md P1-2). Bounding the query is half the
+ * fix; the other half is a `listProductsByIds` for the rail, which is a screen
+ * change and is not in this pass. */
+const PRODUCT_PAGE_SIZE = 50;
+/** Phase S3 (FR-40): the shop grid's empty query reads the catalogue newest
+ * first, capped at 60 rather than the older 50 used before this screen
+ * existed (PHASE-S3-STATUS.md scope row 1). */
+const AFFILIATE_PAGE_SIZE = 60;
+/** A single cart, wishlist or address book. Owner scoped and small in
+ * practice, but nothing caps any of them, and the cart read carries three
+ * embedded resources per row. */
+const CART_PAGE_SIZE = 200;
+const WISHLIST_PAGE_SIZE = 200;
+const ADDRESS_PAGE_SIZE = 50;
+const ORDER_PAGE_SIZE = 50;
+
 const PRODUCT_SELECT = `
   id, title, description, sport, category_id, base_price, recommended_rank,
   categories ( id, name, slug ),
@@ -353,7 +392,8 @@ interface OfferQueryRow {
   currency: string;
   affiliate_url: string;
   in_stock: boolean;
-  last_checked_at: string;
+  last_checked_at: string | null;
+  retailer_key: string | null;
 }
 
 interface AffiliateProductQueryRow {
@@ -372,7 +412,7 @@ interface AffiliateProductQueryRow {
 const AFFILIATE_SELECT = `
   id, title, brand, sport, skill_level, age_range, description, image_url,
   categories ( id, name, slug ),
-  product_offers ( id, retailer, price, currency, affiliate_url, in_stock, last_checked_at )
+  product_offers ( id, retailer, price, currency, affiliate_url, in_stock, last_checked_at, retailer_key )
 `;
 
 /** Map an affiliate product row, sorting its offers cheapest in-stock first so
@@ -390,13 +430,18 @@ function mapAffiliateProductRow(row: AffiliateProductQueryRow): AffiliateProduct
         affiliateUrl: o.affiliate_url,
         inStock: o.in_stock,
         lastCheckedAt: o.last_checked_at,
+        retailerKey: o.retailer_key,
       }),
     )
     .sort((a, b) => {
       if (a.inStock !== b.inStock) return a.inStock ? -1 : 1;
       return a.price - b.price;
     });
-  const inStockPrices = offers.filter((o) => o.inStock).map((o) => o.price);
+  const inStockOffers = offers.filter((o) => o.inStock);
+  const inStockPrices = inStockOffers.map((o) => o.price);
+  // `offers` is sorted cheapest in-stock first (above), so its head is the
+  // cheapest in-stock offer whenever one exists.
+  const cheapestOffer = inStockOffers.length > 0 ? offers[0] : null;
 
   return {
     source: "affiliate",
@@ -406,6 +451,10 @@ function mapAffiliateProductRow(row: AffiliateProductQueryRow): AffiliateProduct
     sport: row.sport,
     categoryName: row.categories?.name ?? null,
     skillLevel: row.skill_level,
+    retailerCount: offers.length,
+    cheapest: cheapestOffer
+      ? { price: cheapestOffer.price, retailer: cheapestOffer.retailer, lastCheckedAt: cheapestOffer.lastCheckedAt }
+      : null,
     ageRange: row.age_range,
     description: row.description,
     imageUrl: row.image_url,
@@ -423,7 +472,17 @@ function resolveMediaUrls(
       if (a.is_primary !== b.is_primary) return a.is_primary ? -1 : 1;
       return a.position - b.position;
     })
-    .map((row) => client.storage.from(PRODUCT_MEDIA_BUCKET).getPublicUrl(row.storage_path).data.publicUrl);
+    // M-6: product media renders in grid tiles and a phone width hero, never
+    // at origin resolution, so it is asked for at the hero width once and
+    // reused rather than fetched full size per card.
+    .map(
+      (row) =>
+        sizedImageUrl(
+          client.storage.from(PRODUCT_MEDIA_BUCKET).getPublicUrl(row.storage_path).data.publicUrl,
+          { width: IMAGE_SIZE.hero, height: IMAGE_SIZE.hero },
+        ) ?? "",
+    )
+    .filter((url) => url !== "");
 }
 
 function mapVariantRow(row: AvailabilityQueryRow): ShopVariant {
@@ -523,21 +582,15 @@ export interface ProductListFilters {
   query?: string;
 }
 
-/** Newest-first page size for order history. */
-const ORDER_HISTORY_PAGE_SIZE = 100;
-
 export function useShop(client: AtlitosClient) {
-  // Memoized on [client] for a STABLE identity across renders. Without this
-  // every render hands consumers a new object, so any effect or callback that
-  // honestly lists it as a dependency re-runs forever (BUG-001).
-  return useMemo(() => ({
+  return {
     /** v1 `products` list. PRD-07 FR-1/FR-2/FR-3. `products` is public browse
      * (`active = true` in the policy) and carries no per user rows, so there
      * is no owner filter to apply here; the explicit `.eq("active", true)`
      * mirrors the policy so PostgREST pushes it down rather than leaning on
      * RLS alone, same shape `listCourts` uses. */
     async listProducts(filters: ProductListFilters = {}): Promise<ShopProduct[]> {
-      let query = client.from("products").select(PRODUCT_SELECT).eq("active", true);
+      let query = client.from("products").select(PRODUCT_SELECT).eq("active", true).limit(PRODUCT_PAGE_SIZE);
 
       if (filters.categorySlug && filters.categorySlug !== "all") {
         query = query.eq("categories.slug", filters.categorySlug).not("categories", "is", null);
@@ -606,6 +659,9 @@ export function useShop(client: AtlitosClient) {
       const { data, error } = await client
         .from("shopper_categories")
         .select("id, name, slug")
+        // Unbounded and safe: `shopper_categories` is a fixed taxonomy, 4 rows
+        // on the live project, and it grows only when someone adds a category
+        // by hand. Not a function of users or of time.
         .order("name");
       if (error) throw mapPostgrestError(error);
       // Postgres views generate every column as nullable even where the
@@ -644,12 +700,20 @@ export function useShop(client: AtlitosClient) {
      * (`active = true` in the policy, no per-user rows), the same shape
      * `listProducts` uses; the `.eq("active", true)` mirrors the policy so
      * PostgREST pushes it down rather than leaning on RLS alone. Offers are
-     * embedded and sorted cheapest in-stock first per product. */
+     * embedded and sorted cheapest in-stock first per product.
+     *
+     * Ordered `created_at desc` (Phase S3, PHASE-S3-STATUS.md hard decision
+     * 3): the empty-query grid on `/shop` is "the catalogue, newest first",
+     * not a price-sorted list. A typed query goes through `search.aiSearch`
+     * instead, which does its own ranking; this function's ordering never
+     * applies there. */
     async listAffiliateProducts(filters: { sport?: Sport; query?: string } = {}): Promise<AffiliateProduct[]> {
       let query = client
         .from("affiliate_products")
         .select(AFFILIATE_SELECT)
-        .eq("active", true);
+        .eq("active", true)
+        .order("created_at", { ascending: false })
+        .limit(AFFILIATE_PAGE_SIZE);
       if (filters.sport) query = query.eq("sport", filters.sport);
       if (filters.query?.trim()) {
         const term = filters.query.trim().replace(/[%,()]/g, "");
@@ -658,9 +722,7 @@ export function useShop(client: AtlitosClient) {
 
       const { data, error } = await query.returns<AffiliateProductQueryRow[]>();
       if (error) throw mapPostgrestError(error);
-      return (data ?? [])
-        .map(mapAffiliateProductRow)
-        .sort((a, b) => (a.bestPrice ?? Number.POSITIVE_INFINITY) - (b.bestPrice ?? Number.POSITIVE_INFINITY));
+      return (data ?? []).map(mapAffiliateProductRow);
     },
 
     /** Affiliate PDP + compare view read. Returns null for a delisted or
@@ -717,7 +779,12 @@ export function useShop(client: AtlitosClient) {
         // here inside a join with three publicly browsable tables, which is
         // exactly the configuration CLAUDE.md warns about.
         .eq("user_id", userId)
+        // Note the ascending order. Under the silent server cap an ascending
+        // unbounded read drops the NEWEST rows, so the item the shopper just
+        // added is the one that vanishes. The explicit bound is what makes
+        // that a known cutoff instead of an invisible one.
         .order("created_at", { ascending: true })
+        .limit(CART_PAGE_SIZE)
         .returns<CartQueryRow[]>();
       if (error) throw mapPostgrestError(error);
 
@@ -793,7 +860,8 @@ export function useShop(client: AtlitosClient) {
         .select("id, line1, line2, city, state, pincode, is_default")
         .eq("user_id", userId)
         .order("is_default", { ascending: false })
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(ADDRESS_PAGE_SIZE);
       if (error) throw mapPostgrestError(error);
 
       return (data ?? []).map((row) => ({
@@ -891,6 +959,9 @@ export function useShop(client: AtlitosClient) {
       const { data, error } = await client
         .from("fee_config")
         .select("key, value")
+        // Unbounded and safe: `fee_config` holds 7 rows in total across every
+        // domain on the live project. It is platform configuration, not user
+        // data, and one domain is a handful of keys.
         .eq("domain", "commerce");
       if (error) throw mapPostgrestError(error);
 
@@ -1032,9 +1103,7 @@ export function useShop(client: AtlitosClient) {
         .select("id, order_number, status, total, created_at, order_items ( qty )")
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
-        // SCALING: bounded. Orders accumulate for the life of the account and
-        // this list had no ceiling, so it got slower every purchase.
-        .limit(ORDER_HISTORY_PAGE_SIZE)
+        .limit(ORDER_PAGE_SIZE)
         .returns<OrderListQueryRow[]>();
       if (error) throw mapPostgrestError(error);
 
@@ -1187,7 +1256,7 @@ export function useShop(client: AtlitosClient) {
 
       return { id: data.id, rating: data.rating, remarks: data.remarks, createdAt: data.created_at };
     },
-  }), [client]);
+  };
 }
 
 export type UseShopResult = ReturnType<typeof useShop>;
@@ -1233,10 +1302,7 @@ export interface WishlistEntry {
 }
 
 export function useWishlist(client: AtlitosClient) {
-  // Memoized on [client] for a STABLE identity across renders. Without this
-  // every render hands consumers a new object, so any effect or callback that
-  // honestly lists it as a dependency re-runs forever (BUG-001).
-  return useMemo(() => ({
+  return {
     /** PRD-07 FR-28. Live price and available stock at display time, read
      * through the same product mapper the browse grid uses, so a wishlisted
      * item can never show a price the PDP disagrees with. Explicit owner
@@ -1257,6 +1323,7 @@ export function useWishlist(client: AtlitosClient) {
         .select(`product_id, created_at, products ( ${PRODUCT_SELECT} )`)
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
+        .limit(WISHLIST_PAGE_SIZE)
         .returns<WishlistQueryRow[]>();
       if (error) throw mapPostgrestError(error);
 
@@ -1286,11 +1353,12 @@ export function useWishlist(client: AtlitosClient) {
       const { data, error } = await client
         .from("product_wishlist_items")
         .select("product_id")
-        .eq("user_id", userId);
+        .eq("user_id", userId)
+        .limit(WISHLIST_PAGE_SIZE);
       if (error) throw mapPostgrestError(error);
       return (data ?? []).map((row) => row.product_id);
     },
-  }), [client]);
+  };
 }
 
 export type UseWishlistResult = ReturnType<typeof useWishlist>;

@@ -133,7 +133,7 @@ Each row states the policy in plain terms; the actual SQL is one `create policy`
 | `users` | own row; any authenticated user may also read the public-facing subset (name, avatar_url, channel_name, and since `0072` handle, bio, cover_url) of a coach/creator/UPA's row via the view `public_profiles`, never the base table cross-user | own row only, `INSERT` is trigger-only (on `auth.users` insert, `handle_new_user()` also seeds a default `player` `user_roles` row). `0072` adds `bio`/`cover_url`/`handle` with NO policy change: `users_update_own` is a whole-row own-row policy (no column list), so the owner already writes the three new columns; the only column locks stay the `0065` trigger's `status`/`suspended_reason`. Handle uniqueness is enforced by the unique index `idx_users_handle_lower` on `lower(handle)`, surfaced to the client as a friendly duplicate-handle error |
 | `user_roles` | own rows; admin reads all | no `authenticated` write at all; every role grant happens through a `SECURITY DEFINER` path (the signup trigger for the initial `player` role, a future verification-approval RPC, venue staff acceptance) so a user can never grant themselves `admin` or `coach` by a direct insert |
 | `addresses` | own rows | own rows, `DELETE` blocked by a trigger if referenced by a non-`delivered`/non-`cancelled` order (PRD-07 FR-30). **Shipped in `0036_address_delete_guard.sql` (AT-70)**, as this row anticipated, now that `orders` exists. The trigger raises `ADDRESS_IN_USE` for an in-flight order (FR-30, AC-F3, rendered inline by the Address Book) and `ADDRESS_ON_PAST_ORDER` when only delivered/cancelled orders reference it. The second case is not in FR-30 and is blocked only because `orders.address_id` is `NOT NULL` with no snapshot, so the delete would fail on the foreign key anyway; the trigger turns a raw Postgres error into an explainable one. See SCHEMA.md's "known gap" note for the proper fix |
-| `athlete_sports` (new, `0001_identity.sql`) | own rows; admin reads all | own rows, full CRUD |
+| `athlete_sports` (new, `0001_identity.sql`) | own rows; admin reads all | own rows, full CRUD. In practice app writes go through the `SECURITY DEFINER` dual-write RPCs `complete_player_setup` (0004) and `set_athlete_sports` (0088), each `auth.uid()`-scoped, so `users.sports` and `athlete_sports`/`is_primary` are rebuilt together and a caller only ever edits their own sports (proven non-vacuously: acting as user A rebuilt A's rows and recomputed A's `is_primary` while user B's rows were untouched, ids asserted distinct) |
 
 ### coaching
 
@@ -186,8 +186,12 @@ Neither policy was rewritten. Re-creating a correct policy to demonstrate that i
 | Table | `SELECT` | `INSERT`/`UPDATE`/`DELETE` |
 |---|---|---|
 | `products`, `product_media`, `product_variants`, `categories` | `active = true` public; admin reads all | `has_role('admin')` only |
-| `affiliate_products` | `active = true` public browse | **no client write** (grants revoked from `anon`/`authenticated`); service-role only (ingest worker / admin). Prices and offers are ingested, never user-set: a client that could write an offer price could rewrite the price it is about to be shown. Same lock shape as `promo_banners`. `0086` |
-| `product_offers` | public browse of offers whose product is `active` (an `EXISTS` re-derives the product's `active` in the policy, so a delisted product's offers never leak) | **no client write**; service-role only. `0086` |
+| `affiliate_products` | `active = true` public browse; `has_role('admin')` reads all including delisted (`affiliate_products_select_admin`, `0120`); **`embedding` excluded from every client select via a column-level grant** naming every other column explicitly, including the Phase S2 columns (`source_image_url`, `image_path`, `health_status`, `health_checked_at`, `auto_delisted_at`) (Phase S1, ADR-011 D6, AC-11-6/7; widened in Phase S2's `XXXX_gear_ingest_health.sql`) | **no client write** (grants revoked from `anon`/`authenticated`); service-role only (ingest worker / admin). Prices and offers are ingested, never user-set: a client that could write an offer price could rewrite the price it is about to be shown. `embedding` specifically is written only by `gear-embed` under `service_role`. `image_path`/`image_url` written only through `gear-ingest`'s `save` action (calling `admin_upsert_affiliate_product` with the caller's own admin JWT) or manual admin entry; `health_status`/`health_checked_at`/`auto_delisted_at` written only by `gear-recheck` and `system_auto_delist_affiliate_product` under `service_role`. Same lock shape as `promo_banners`. `0086`, embedding column and grant in the Phase S1 `XXXX_gear_search_vectors.sql`, ingest/health columns in Phase S2's `XXXX_gear_ingest_health.sql` |
+| `product_offers` | public browse of offers whose product is `active`; admin reads all (`product_offers_select_admin`, `0120`) (an `EXISTS` re-derives the product's `active` in the policy, so a delisted product's offers never leak). Phase S2 adds `canonical_url`, `retailer_key`, `last_check_outcome`, `consecutive_failures`, `last_price_change_at`, table-level grant only, no column narrowing (none of these are sensitive the way `embedding` is) | **no client write**; service-role only for the base columns (`0086`); the Phase S2 columns are written only via the extended `admin_upsert_product_offer` (admin JWT, manual entry or `gear-ingest` save) or `gear-recheck` under `service_role` |
+| `query_embedding_cache` | **nobody**; RLS enabled with zero policies and every grant revoked from `anon`/`authenticated`/`public` (the `stock_reservations` shape) | `service_role` only (`ai-search`'s Voyage query-embedding cache). Phase S1, ADR-011 D1/D6 |
+| `app_config` | `public = true` rows readable by `anon`/`authenticated` (`app_config_select_public`); every other row invisible to both | **no client write**; only `admin_set_app_config` (`security definer`, `has_role('admin')` checked inside, audited). `shop.owned_enabled` seeded `false`. Phase S1, PRD-07 FR-53, ADR-011 D5 |
+| `retailer_programmes` (Phase S2) | `has_role('admin')` only (`retailer_programmes_select_admin`); **no anon/authenticated grant at all**, deliberately NOT public-browse like `affiliate_products`: operational config, not shopper content (ADR-011 D6) | **no client write**; `service_role` only. No upsert RPC yet, service role / seed migration. `XXXX_gear_ingest_health.sql` |
+| `product_fetch_log` (Phase S2) | `has_role('admin')` only (`product_fetch_log_select_admin`); no anon/authenticated grant | **no client write**; `service_role` only (`gear-recheck`). `XXXX_gear_ingest_health.sql`, ADR-011 D4, D6 |
 | `product_wishlist_items`, `cart_items` | own rows | own rows (`cart_items` writes for add/update go through `add_to_cart`/`update_cart_item` RPCs for the stock re-check, `DELETE` is a direct own-row policy since removal needs no stock check) |
 | `orders`, `order_items`, `order_timeline` | own orders (`user_id = auth.uid()`); admin reads all | **no** `authenticated` write on any of the three; `checkout` edge function inserts, `admin-order-advance`/`admin-order-refund` edge functions and RPCs (admin-only) write timeline/status |
 | `order_feedback` | own row | own row `INSERT` only, once (`UNIQUE(order_id)` plus a policy requiring the order's `status = 'delivered'`), no `UPDATE`/`DELETE` |
@@ -286,6 +290,7 @@ Shipped in `0022_chat.sql`. Specifics worth knowing:
 - `INSERT` is restricted to `context_type = 'coaching'`. The `clutch_creator` branch is added when the Clutch domain lands; leaving it out means the failure mode is locked shut rather than "any authenticated user opens a thread with any stranger by sending a different `context_type`".
 - Neither chat table is permissive-OR in the leaky sense: each has a single `SELECT` policy whose `USING` contains the participant `OR` internally, and there is no public policy to be combined with. An unscoped `select * from chat_threads` correctly returns only the caller's own threads. This is the exception to the coaching-domain warning above, not a contradiction of it.
 - `UPDATE` and `DELETE` are revoked at the grant level on both tables, on top of having no policy: messages are immutable and `last_message_at` belongs to the `chat_messages_touch_thread` trigger.
+- **Chat participant/sender names resolve through `public_profiles`, never the `users` embed (BUG-016, phase-10).** `users` SELECT is own-row-or-admin (`users_select_merged`, 0063), so a PostgREST embed of the `users` FK from `chat_threads`/`chat_messages`/`chat_thread_members` returns a row for the caller only and NULL for every other participant. The symptom for a non-admin: a 1:1 header reads "Atlitos user", the group members sheet lists only the caller, and group bubbles carry no sender name (identical shape to the 0074 `creator_stats` fix and the coaching-discovery `coach_profiles_public` rule). The fix keeps the `users` RLS untouched and embeds the definer view `public_profiles` instead (`public_profiles!participant_a` / `!participant_b` / `!sender_id` / `!user_id` in `packages/api/src/use-chat.ts`), the same cross-user surface `hooks.ts` uses for clip authors. No policy or view changed. Any future chat name/avatar read must go through `public_profiles`, not the `users` base table.
 
 ### notifications
 
@@ -341,8 +346,13 @@ Supabase Storage buckets get their own RLS-style policies on `storage.objects`, 
 | `upa-evidence` | `{application_id}/...` | owner + admin, **never public**, per PRD-05 FR-3 | owner (insert only) |
 | `clips` | `{clip_id}/...` | **PRIVATE (`public = false`), NO policy on `storage.objects` at all**: no anon, public, or authenticated direct read. This is the Supabase Storage equivalent of Cloudflare Stream's `requireSignedURLs: true`; no clip object is resolvable by a guessed or scraped path in any status. Playback is a short-lived (TTL 300s) signed URL minted by an edge function against the live clip row (`get_clip_playback_url` / `get_clip_moderation_url`, AT-96) | `stream-upload-url` edge function only, via a service-role-minted signed UPLOAD url (`0042`) |
 | `avatars`, `product-media`, `upa-photos`, `gratitude-photos` | `{owner_id}/...` or admin-managed | public | owner or `has_role('admin')` depending on bucket |
+| `product-images` (Phase S2) | `{retailer_key}/{sha256-16}.{ext}` | public (`product_images_public_read`), the affiliate catalog's own image copies render unauthenticated in the guest-browsable shop | **no anon/authenticated policy of any kind**, not even admin-scoped: `gear-ingest`'s `save` action is the only writer, always under the SERVICE ROLE (which bypasses RLS by construction), even when the caller holds an admin JWT (ADR-011 D3's component boundary: service role there is for the outbound fetch and the Storage write only, never the catalogue DB write) |
 
 `product-media` was listed here from P4 but its bucket and `storage.objects` policies were never actually created (AT-81's admin catalog provisioning did not land), so product images had nowhere to live and `product_media` stayed empty. `0070_product_media_bucket.sql` finally provisions it to match this row: public read (`product_media_public_read`, guest browsable shop) and admin-scoped insert/update/delete (`has_role('admin')`, path `{product_id}/{filename}`).
+
+`product-images` (PRD-07 FR-46, ADR-011 D3) differs from `product-media` deliberately: there is no admin-JWT insert/update/delete policy at all, because there is no admin-JWT write path to grant one to. Hash-deduped by design: the same image copied for two offers of one product, or re-ingested after a re-fetch, resolves to the same path and the second write is skipped. `XXXX_product_images_bucket.sql`.
+
+**Size/MIME limits (Phase 11 lockdown, `0089`).** The five public buckets in the row above (`avatars`, `venue-media`, `upa-photos`, `gratitude-photos`, `product-media`) had `file_size_limit`/`allowed_mime_types` both `null` (unlimited size, any content type) through P10. `0089_security_lockdown_phase1.sql` sets all five to `file_size_limit = 10485760` (10MB) and `allowed_mime_types = {image/jpeg, image/png, image/webp, image/heic, image/heif}`, since every one of these buckets is photo uploads only today (no `media_type`/video column on any of their owning tables). `clips`, `coach-certificates`, and `upa-evidence` are not public and were left alone. If any of these five buckets is ever asked to carry video, its `allowed_mime_types` needs a deliberate follow-up migration, not a silent widening.
 
 ## What the advisor checks at every gate
 
@@ -367,6 +377,28 @@ The P8 hardening pass burned down the fixable advisor debt without changing any 
 
 No new ERROR was introduced. The residual accepted count the biased approver signs against: 3 ERROR (all KEEP `security_definer_view`) and the WARN residual above, every item dispositioned below.
 
+## Phase 11 security lockdown (anon RPC grant fixes, `0089`)
+
+By P11, `anon_security_definer_function_executable` had grown from the P8 baseline of 13 to
+22, and re-auditing all 22 individually (not just re-accepting the count) turned up a real
+bug in the pattern several prior migrations used: this project's schema-level default
+privileges grant `EXECUTE` on every new function directly to `anon`, `authenticated`, and
+`service_role` as named ACL entries. `0005`, `0081`, and `0088` each tried to lock a function
+down with `revoke all on function ... from public`, which only removes the `PUBLIC`
+pseudo-role's own entry, a no-op against those named grants, so the intended `anon` lockdown
+silently never took effect. `0089_security_lockdown_phase1.sql` fixes this for real with an
+explicit `revoke execute ... from anon` per function (see `docs/qa/SECURITY-LOCKDOWN.md`
+section 3 for the full per-function keep/revoke table, the evidence for each decision, and
+the post-change `set local role anon` verification). Net result: 22 -> 12
+`anon_security_definer_function_executable`, all 12 confirmed deliberate guest-facing reads
+with a real guest call site.
+
+**The lesson for any future function that must not be anon-callable**: write
+`revoke execute on function ... from anon` (and `from public` too, if the function predates
+this project's named-grant convention, check `pg_proc.proacl` to be sure) explicitly.
+`revoke ... from public` alone does not revoke a named `anon` grant and will silently leave
+the function anon-callable, exactly the bug this section fixes.
+
 ### What was fixed
 
 - **`auth_rls_initplan`, 100 WARN -> 0 (`0062`, AT-140).** Every RLS policy that called `auth.uid()` directly re-evaluated it per row. `0062` wraps each call in a scalar subselect `(select auth.uid())` via `ALTER POLICY` (expression-only; roles, command, and permissive/restrictive flags are preserved verbatim, so the access set cannot change). Performance-only, the documented Supabase remediation for lint 0003.
@@ -390,46 +422,313 @@ No new ERROR was introduced. The residual accepted count the biased approver sig
 
 Every migration was proven not to change any role's visible-row set, using two real users whose ids were asserted to **differ first**: `A` = `58756043…` (player; owns 5 orders, 35 payment_intents, 11 sessions as player, 6 donations, 4 clips, 2 drill_completions) and `B` = `b290a0c8…` (roleless guest; owns 3 clips), plus `C` = coach `5b262cf1…`, two court partners, and the true `anon` role. For each of `orders, order_items, sessions, payment_intents, ledger_entries, refunds, transfers, donations, upa_applications, drill_completions, xp_events, user_milestones, cart_items, addresses, product_wishlist_items, clips, clip_likes, follows, coach_profiles, venues` a fingerprint (`md5` of the ordered `row::text` of the full visible set) plus row count and cross-owner counts were captured under each user's simulated JWT before any change and after each of `0062`, `0063`, `0064`. **The before-vs-after diff was 0 rows every time** — the visible-row set was byte-identical for all six viewers across all twenty tables. On the strictly-private money tables (`orders`, `payment_intents`, `order_items`, `refunds`, `transfers`, `ledger_entries`) the non-owner `B` and the unrelated coach `C` saw **zero** of `A`'s rows; the only nonzero cross-user counts were the by-design dual-key surfaces (a coach sees the sessions they coach; a UPA sees donations attributed to it), and those too were identical before and after. No non-owner gained visibility. The catastrophic case "user B sees user A's orders" was tested directly and returned 0.
 
-## Security remediation, 2026-09-04
+## LAUNCH Phase 3 RLS work (Track A, migrations 0090-0094)
 
+The launch program's Phase 3 (1000-concurrent readiness) touches RLS in three
+places. The permissive-OR rule above governs all of it: no merge folds an owner
+disjunct into an anon-reachable expression.
 **Suspension as a restrictive layer (`0120`, SEC-F4).** `users.status` existed from `0001` and `0065` stopped a member editing it, but nothing ever READ it: a suspended account kept booking, paying and posting. Enforcement is now layered, because no single layer covers everything. The access-token hook denies a token (widest, bounded by the access-token TTL). `getAuthenticatedUser()` refuses on the spot, which closes every edge function immediately. And for the tables a client writes directly through PostgREST, `0120` adds a RESTRICTIVE insert policy, `<table>_active_user_only`, calling `is_active_user()`:
 
-`clips, clip_comments, reports, chat_threads, chat_messages, gratitude_posts, upa_evidence, upa_wishlist_items, coach_trainee_notes, coach_trainee_videos, verification_requests, addresses`.
+### 0090 / 0091 — P1-4 initplan + duplicate-permissive consolidation
 
-RESTRICTIVE deliberately: it ANDs with whatever permissive policy the table already has, so twelve tables gain a condition without twelve existing predicates being reproduced and possibly mistyped. `support_tickets` is excluded on purpose. A suspended member must still be able to open a ticket to appeal, and a suspension that cannot be appealed is a product failure rather than a security win.
+Since `0062`/`0063` drove `auth_rls_initplan` and the targeted
+`multiple_permissive_policies` to their P8 baseline, migrations `0065-0089` added
+new policies that (a) call `auth.uid()`/`auth.jwt()` directly and (b) duplicate
+permissive SELECT policies. `0090` and `0091` re-apply the `0062`/`0063` fixes to
+whatever accumulated, PROGRAMMATICALLY rather than by a hand list, so they rewrite
+the live set and are idempotent:
 
-**`coach_trainee_videos` insert lock (`0089`, SEC-F3).** `0082` granted `authenticated` a direct INSERT checking only `coach_id = auth.uid() and has_role('coach')`, leaving `storage_path` and `player_id` to the caller. That was a second door around `coach-trainee-video-upload-url`, which derives a safe object key and verifies the trainee relationship. A coach could name themselves as owner, any athlete as `player_id`, and any object in the private `clips` bucket as `storage_path`, then have `get-coach-trainee-video-url` mint a signed URL for it under the service role. The policy now additionally requires `storage_path is null` (only the service-role function may set it) and an existing `sessions` row linking coach to player. The read half is guarded separately in the edge function, because a policy change does not retract rows already written.
+- **`0090_rls_initplan_subselect_wrap.sql`** finds every public-schema policy whose
+  USING/WITH CHECK still contains a BARE `auth.uid()`/`auth.jwt()` and wraps only
+  the bare occurrences via `ALTER POLICY` (already-wrapped calls from `0062` are
+  neutralized and left byte-identical, so a re-run rewrites nothing). This is
+  EXPRESSION-ONLY: `ALTER POLICY` preserves roles, command, and
+  permissive/restrictive verbatim, and `(select auth.uid())` returns the identical
+  scalar, so the visible-row set cannot change. Access-preserving by construction;
+  the isolation matrix proves it empirically regardless.
 
-**Testing note.** `scripts/verify-security-fixes.sql` asserts these refusals on the error MESSAGE, not on SQLSTATE. A missing GRANT and a policy violation both raise `42501`, so matching the state alone lets a privilege gap masquerade as an enforced policy. This is the same class of mistake as the AT-62 vacuous-isolation lesson above, and it was caught in practice while writing that file.
+- **`0091_consolidate_duplicate_permissive_select.sql`** merges, per table, the
+  permissive SELECT policies whose role set is EXACTLY `{authenticated}` into one
+  `<table>_select_merged` whose USING is their OR union. Postgres OR-combines
+  permissive policies, so the union is identical to the separate policies BY
+  CONSTRUCTION (the OR-union theorem, the `0063` argument). The hard safety rule is
+  encoded in the WHERE clause: it NEVER touches a policy whose roles include `anon`
+  or `public` (a cross-role-set merge is the permissive-OR footgun CLAUDE.md
+  records three incidents for), and it NEVER touches a `FOR ALL` policy (splitting
+  one risks a write path; its SELECT contribution is simply OR'd at evaluation
+  time). Tables that carry a public/guest SELECT policy alongside their owner ones
+  (the P8 "21 KEEP" set) are therefore LEFT INTACT here and only take the `0090`
+  initplan win. When equivalence of a merge cannot be shown, the policy stays
+  separate; that is the default, not the exception.
 
-## Blocking (0092)
+Proven on a faithful local slice: after `0090` an authenticated SELECT plan shows
+`InitPlan ... (returns $0)` instead of a per-row `auth.uid()`; after `0091` a table
+with two `{authenticated}` SELECT policies plus an `{anon,authenticated}` public
+policy collapses to one merged authenticated policy with the public policy
+untouched, and the AT-62 isolation matrix (A.id asserted `<>` B.id first) shows A
+sees zero of B's private rows, B sees zero of A's, and anon sees only the public
+row. The biased approver re-derives A1/A2/A3 and the A8 advisor diff against prod
+via the MCP (`scripts/verify-rls-phase3.mjs` carries the exact queries).
 
-Two RESTRICTIVE policies, which AND with every permissive policy rather than
-widening anything:
+### 0092 — CT-4 chat Broadcast, `realtime.messages` policy (money-grade)
 
-| Table | Policy | Predicate |
+Chat realtime moves off `postgres_changes` (which re-evaluates the SELECT policy
+per subscriber per row, the meltdown class) to Broadcast from the database. The
+`broadcast_chat_message()` trigger `realtime.send()`s a `message_new` event to
+each thread member's PRIVATE topic `chat:user:{member_uid}`. Delivery
+authorization is a single SELECT policy on `realtime.messages`:
+
+```sql
+create policy chat_broadcast_receive_own on realtime.messages
+  for select to authenticated
+  using (
+    realtime.messages.extension = 'broadcast'
+    and realtime.topic() = 'chat:user:' || (select auth.uid())::text
+  );
+```
+
+A socket may receive a broadcast ONLY on its own `chat:user:{own uid}` topic.
+There is deliberately NO client insert/send policy on these topics: they are fed
+only by the definer trigger, so a client cannot inject a forged `message_new`.
+Proven: inserting a message broadcasts exactly to the two 1:1 participants (and to
+all three members of a group thread), a non-member receives nothing, and under the
+policy user B may access its own topic while user C (asserted `C.id <> B.id`) is
+refused B's topic (0 rows). A wrong topic predicate here broadcasts private chat,
+so this is Opus-class review scope; the refused-subscription proof is the gate.
+
+### 0093 / 0094 — service-role-only infra (CT-2, CT-3, CT-6, CT-7)
+
+`edge_rate_limits`, `ai_spend_daily`, `sweep_failures` all follow the
+`stock_reservations`/`webhook_events` fail-closed pattern: RLS enabled, ZERO
+policies, `anon`/`authenticated` grants revoked, `service_role` granted (and
+relying on `service_role`'s BYPASSRLS to read past the empty policy set). The
+functions `take_rate_limit_token`, `record_ai_spend`, `ai_search_daily_budget` are
+SECURITY DEFINER with EXECUTE `service_role` ONLY, each revoked from `anon` and
+`authenticated` BY NAME (the `0089` lesson: `revoke ... from public` alone does not
+strip the named client grants). `retry_failed_clip` is the one client-facing
+addition: SECURITY DEFINER, owner-scoped, EXECUTE `authenticated` + `service_role`,
+revoked from `anon`; a non-owner call raises `FORBIDDEN`, a non-`failed` clip
+raises `INVALID_TRANSITION`. Proven: `take_rate_limit_token` returns 60 true then
+false over 61 takes and is `permission denied` for both client roles; the clip
+machine refuses `ready -> failed` with `INVALID_TRANSITION`; the sweep marks a
+planted object-absent stranded clip `failed` and captures a rigged arm's failure
+in `sweep_failures` while the other arms still run.
+
+## LAUNCH Phase 4 Track B — suspension enforcement (`0096`)
+
+PRD-04 FR-34..FR-38, FR-53. Contract: `docs/phases/PHASE-4-STATUS.md` "CT-B" /
+decision 3 ("suspension is three legs, not one"). Suspension is enforced by
+three independent mechanisms so that no single one being slow or missed
+leaves a suspended account able to act:
+
+1. **GoTrue ban** (`admin-user-suspend` edge function, `auth.admin.updateUserById`
+   with `ban_duration: "87600h"` / `"none"`). Blocks new sign-in and token
+   refresh. Not SQL: no Postgres RPC can reach the Auth admin API, hence the
+   edge function.
+2. **`getAuthenticatedUser` suspension check** (`supabase/functions/_shared/supabase.ts`).
+   Every edge function that establishes "who is calling" through this helper
+   now also reads the caller's own `users.status` (their own JWT,
+   `users_select_own`) and throws `SUSPENDED` (403) if it is `'suspended'`.
+   One edit gates every function that imports it (18 at the time of writing:
+   `cancel-session-refund`, `book-court`, `book-session`, `complete-session`,
+   `decline-session-refund`, `ai-search`, `coach-trainee-video-upload-url`,
+   `checkout`, `get-clip-moderation-url`, `donate`, `razorpay-route-onboard`,
+   `join-group`, `renew-group-membership`, `get-coach-trainee-video-url`,
+   `stream-upload-url`, `razorpay-route-transfer`, `stream-webhook`,
+   `verify-payment`, plus `admin-order-advance` and the new
+   `admin-user-suspend`). Guest/anonymous flows that call `getOptionalUserId`
+   (`_shared/clip-access.ts`) instead — `get-clip-playback-url(s)`'s public
+   feed browse — never call this function and are unaffected by construction.
+   A lookup error or a missing `users` row fails OPEN (treated as active),
+   never closed: this check must never be the thing that bricks a legitimate
+   caller.
+3. **Restrictive RLS policies scoped to `INSERT`/`UPDATE`/`DELETE` only,
+   NEVER `SELECT` or `FOR ALL`.** `0096` adds `public.is_actor_active()`
+   (`STABLE SECURITY DEFINER`, reads only the caller's own row, returns
+   `TRUE` when there is nothing to check) and a `do $$ ... $$` block that
+   scans the LIVE `pg_policies` for every `public` table carrying a
+   permissive `INSERT`/`UPDATE`/`DELETE`/`ALL` policy for `authenticated`,
+   then creates a same-named-suffix restrictive companion
+   (`<table>_active_insert` / `_active_update` / `_active_delete`) calling
+   `is_actor_active()`. A table with a `FOR ALL` permissive policy (example:
+   `product_wishlist_items_write_own`) is treated as granting all three
+   commands, since a restrictive policy binds to one command and `FOR ALL`'s
+   `pg_policies.cmd` is `'ALL'`. Deriving the table set from `pg_policies`
+   live, instead of a hand written list, is what makes this FR-36's literal
+   "any mutating action platform wide" rather than whichever tables this
+   migration's author happened to remember.
+
+   **Two tables are deliberately NOT covered here**: `clip_likes` and
+   `follows` carry no direct `INSERT`/`UPDATE`/`DELETE` policy for
+   `authenticated` at all — both write only through the `toggle_like` /
+   `toggle_follow` `SECURITY DEFINER` RPCs (`0044`). Decision 3 explicitly
+   rejects per-RPC suspension guards ("dozens of edits, guaranteed to miss
+   one"), so a suspended user's `toggle_like`/`toggle_follow` calls are not
+   blocked by this migration; the GoTrue ban is what eventually cuts them
+   off, on the caller's next sign-in or token refresh. Recorded here, not
+   silently patched around.
+
+   **Safety invariant** (this migration's highest-risk item, biased-approver
+   Opus-class review scope per `PHASE-4-STATUS.md`): the dynamic block can
+   only ever emit `for insert` / `for update` / `for delete` as a restrictive
+   policy's command, hardcoded as three literal `format()` templates. There
+   is no code path that can produce a restrictive `SELECT` or a restrictive
+   `FOR ALL`, either of which would blank reads platform wide (for a
+   suspended user, or in a `FOR ALL` bug, for everyone). `0096` closes with a
+   `do $$ ... $$` self-check that raises an exception (failing the whole
+   migration, since Supabase runs each migration file in one transaction) if
+   ANY restrictive policy in `public` ever targets a command outside
+   `INSERT`/`UPDATE`/`DELETE`.
+
+`admin_suspend_user(p_user_id, p_reason)` / `admin_reinstate_user(p_user_id,
+p_reason)` (`0096`, `SECURITY DEFINER`, internal `has_role('admin')` check)
+write `users.status`/`suspended_reason` — already admin-locked columns since
+the `0065` `FIELD_LOCKED` trigger, unchanged by this migration — and exactly
+one `audit_log` row (`user.suspend` / `user.reinstate`, FR-53). Both refuse:
+a non-admin caller (`FORBIDDEN`), a missing reason on suspend, self-suspension,
+suspending another admin account, and suspending an already-suspended (or
+reinstating an already-active) row (all `VALIDATION`). Called by
+`admin-user-suspend` through the CALLER'S OWN JWT (`userScopedClient`), never
+the service role, so `has_role('admin')`/`auth.uid()` inside the RPC resolve
+to the real acting admin — the same posture `admin-order-advance` (AT-82)
+already established for `order_transition`.
+
+## LAUNCH Phase 4 Track B — KPI dashboard RPCs (`0096`)
+
+PRD-04 FR-4, FR-5. Four grouped `SECURITY DEFINER` RPCs
+(`admin_kpi_money`, `admin_kpi_users`, `admin_kpi_queues`,
+`admin_kpi_activity`), NOT views — the Phase 1 `security_definer_view`
+advisor finding forbids that shape. Each internally requires
+`has_role('admin')`, is granted `EXECUTE` to `authenticated` only (`anon`
+revoked, the `0089` discipline), and returns `jsonb` so a tile can gain a
+field later without a signature migration. One RPC per tile CLUSTER (not
+per single tile) is what makes FR-5 ("a failure to compute one tile does not
+block the others") hold: `apps/admin`'s dashboard fetches the four
+independently and renders whichever succeed.
+
+`admin_kpi_money` returns GMV as `SUM(payment_intents.amount)` where
+`status = 'captured'` in a rolling 7-day window — GROSS, refunds NOT netted,
+labeled "GMV, gross captured" in the UI, never silently netted or invented.
+`admin_kpi_users` returns total users, a per-role breakdown
+(`user_roles` grouped), and 7-day signups. `admin_kpi_queues` returns pending
+counts for `refunds`, `verification_requests`, and `reports` (the FR-4
+"pending moderation count"). `admin_kpi_activity` returns 7-day
+`court_bookings` + `sessions` combined (FR-4's "bookings this week"), 7-day
+`orders`, and the FR-4 "open support ticket count" from `support_tickets`
+(`status = 'open'`). The 7-day rolling window (rather than a calendar week)
+is a deliberate choice, documented here and in the migration, so GMV does
+not visibly drop to 0 every Monday morning with no incident behind it.
+
+## LAUNCH Phase 4 (Track C, `0097_report_block.sql`) — report + block
+
+CT-C, PRD-04 FR-31/FR-32/FR-33, App Store 1.2 / Play UGC store requirement.
+Extends the existing `0041-0043` reports/moderation machinery (built for
+clip/comment reports only) to also cover a chat message report and a direct
+user report, and adds the own-row `blocked_users` table client filtering
+subtracts from feed/comments/chat reads. Full design rationale lives in
+`docs/phases/PHASE-4-STATUS.md` Settled decision 4-6; this section is the RLS
+surface summary.
+
+| Table | `SELECT` | `INSERT`/`UPDATE`/`DELETE` |
 |---|---|---|
-| `clips` | `clips_hide_blocked` | `not exists (user_blocks where blocker_id = auth.uid() and blocked_id = clips.owner_id)` |
-| `clip_comments` | `clip_comments_hide_blocked` | same, against `clip_comments.user_id` |
+| `blocked_users` (new) | own rows (`blocker_id = auth.uid()`) only; no admin read policy, a block list is private even to moderators | own row `INSERT` (`blocker_id = auth.uid()`, `NOT is_guest()`); own row `DELETE`; **no** `UPDATE` at all (a block is created or removed, never edited); schema-level `check (blocker_id <> blocked_id)`, the AT-62 shape baked into the table itself; `anon` has no grant at all |
+| `reports` | unchanged from `0042` (own rows; admin/moderator reads all) | unchanged; `entity_type` check widened to `'clip' \| 'comment' \| 'chat_message' \| 'user'` (was `'clip' \| 'comment'`), same `reports_insert_own` policy covers every value |
+| `chat_messages` | unchanged (`0022`'s participant-only policy; the two new columns carry no new read surface) | unchanged: still **no** client `UPDATE`/`DELETE` grant at all (`0022`), so the two new columns (`removed_at`, `removed_reason`) stay unwritable by any direct client PostgREST call after this migration exactly as before. The ONLY write path is `resolve_report`'s extended chat arm (SECURITY DEFINER, admin/moderator gated inside) |
 
-Both are `to authenticated` only: anon has no `auth.uid()` and therefore no
-blocks, so an anon arm would evaluate a subquery per row to always return true.
-`auth.uid()` is wrapped in a scalar subselect, matching 0062.
+**Permissive-OR is not the risk here; there is none to subtract.** `blocked_users`
+carries exactly one SELECT policy (own row), so this table itself has no
+permissive-OR leak. The actual CT-C mechanism is the opposite problem: RLS
+*cannot subtract* a blocked user's rows from `clips`/`clip_comments`/
+`chat_messages`, all of which are legitimately readable by policy (published
+feed, thread participant, etc.). `packages/api` (`getBlockedUserIds` in
+`hooks.ts`, consumed by `useClutch`'s `getFeed`/`getComments` and `useChat`'s
+`listThreads`/`listMessages`) is where the caller's own blocked set is
+subtracted, an explicit client-layer filter, same shape and same reasoning as
+the `clips_select_published`/permissive-OR warning at the top of this
+document: **RLS is an authorization ceiling here, never a scoping mechanism,
+and this is the one place in the schema where that gap is filled by app code
+on purpose, not by omission.** DB-enforced message refusal (a restrictive
+policy that blocks the blocked party's own INSERT into a thread the blocker
+is in) is recorded fast-follow debt in `docs/DEBT.md`, not built this phase:
+a restrictive policy on `chat_messages` would sit directly on top of the
+fresh Phase 3 Broadcast delivery path (`0092`), and the store review bar
+(report, block, blocked content disappears from the blocker's own view) is
+met without it, the exact BelieversDiary Guideline 1.2 precedent.
 
-This is the deliberate exception to the standing "RLS is a floor, not scoping"
-rule. That rule is about OWNERSHIP, where the danger is a permissive-OR policy
-returning other people's rows to an unscoped read. A block is a SUBTRACTION
-that must hold on every read, including reads written by someone who has never
-heard of blocking, and a RESTRICTIVE policy is the only construct that cannot
-be forgotten at a call site. `scripts/verify-security-fixes.sql` asserts it
-against a completely unfiltered select, and the negative control (flipping
-RESTRICTIVE to PERMISSIVE) fails that assertion.
+`admin_get_reported_entity(p_report_id)`: SECURITY DEFINER, internal
+`has_role('admin') OR has_role('moderator')` check (raises `FORBIDDEN`
+otherwise), EXECUTE granted to `authenticated` only (the internal check is
+the real gate, same pattern as `resolve_report`/`moderate_clip`). Returns
+exactly one reported entity's snapshot for exactly one EXISTING `reports`
+row, admin-checked inside; there is **no** blanket admin SELECT policy on
+`chat_messages` (a far wider privacy grant than moderation needs, PHASE-4-
+STATUS.md highest risk item 4), so this RPC is the ONLY way an admin/
+moderator ever reads a chat message's content. `resolve_report` (`create or
+replace`, `0043`'s clip/comment branches unchanged byte-for-byte) gains a
+`chat_message` remove arm (soft-delete via `removed_at`/`removed_reason`,
+never a hard delete) and a `user` remove arm (resolves the report as
+`actioned` with no further row mutation; account enforcement is Track B's
+separate, separately audited `admin_suspend_user`).
 
-`user_blocks` itself is owner scoped: select/insert/delete on
-`blocker_id = auth.uid()`, no update. A member cannot read who blocked them.
+## Account deletion (migration `0098`)
 
-## Account deletion (0093)
+Apple Guideline 5.1.1(v). Three policy-surface changes, all additive.
 
+### `account_deletions` (new table)
+
+RLS enabled, two SELECT policies, **no client write policy at all**:
+
+- `account_deletions_select_own`: `user_id = (select auth.uid())`. The deleted
+  user can still read their own receipt for the seconds between the RPC
+  returning and the client signing out.
+- `account_deletions_select_admin`: `has_role('admin')`.
+
+Every write goes through `delete_my_account()` /
+`account_deletion_mark_auth_released()`, both SECURITY DEFINER. There is no
+INSERT, UPDATE or DELETE policy, so a client cannot forge or erase a deletion
+record even with a valid token.
+
+### `is_actor_active()` widened
+
+`0096` created restrictive `<table>_active_insert` / `_active_update` /
+`_active_delete` policies calling `is_actor_active()` on **every** mutating
+table, derived from the live `pg_policies` set rather than a hand written list.
+`0098` changes only the function body:
+
+```
+status <> 'suspended'          -- 0096
+status = 'active' and deleted_at is null   -- 0098
+```
+
+Because `user_status` is still exactly `('active','suspended')`, the first
+clause is behaviour-identical for every existing row; the `deleted_at` clause is
+the new refusal. This one edit is what gates a deleted account platform wide
+without touching a single policy. The fail-OPEN posture for a missing `users`
+row is unchanged, so guests are still never bricked.
+
+Verified locally, with the control planted first so the assertion cannot pass
+vacuously: an ACTIVE user's `update public.users set bio = ...` on their own row
+returns `UPDATE 1`; the same statement by the same user after deletion returns
+`UPDATE 0`, and `is_actor_active()` returns `f`.
+
+### `coach_profiles_public` view
+
+Was `where status = 'verified'`. Now also joins `users` and requires
+`u.deleted_at is null`. The base `coach_profiles` row must survive deletion
+(`sessions.coach_id` and `training_groups.coach_id` are `ON DELETE CASCADE` off
+it), so discovery is filtered at the view instead of by mutating `status`.
+The view keeps `security_invoker = false`, unchanged, so it stays the sole
+public read surface past the owner-and-admin-only base table RLS.
+
+### Anonymised reads go through `public_profiles`, never `public.users`
+
+Worth stating explicitly, because a test got this wrong first: `users` is
+owner-and-admin only (`users_select_merged`), so a coach joining
+`chat_messages -> public.users` to render a sender name gets **zero rows**, both
+before and after any deletion. Every cross-user name/avatar read must go through
+`public_profiles`. Through that view a deleted author correctly resolves to
+`name = 'Deleted user'`, `avatar_url = null`, which is exactly the tombstone
+behaviour the retained rows depend on.
 `is_active_user()` now returns false for `status = 'suspended'` OR
 `deleted_at is not null`, so the twelve RESTRICTIVE insert policies from 0120
 cover deletion with no new policy. `custom_access_token_hook` refuses the token,

@@ -1,4 +1,12 @@
-import { computeAvailableSessionSlots, useCoaching, useGroups, type GroupMembership, type TrainingGroup } from '@atlitos/api';
+import {
+  computeAvailableSessionSlots,
+  isMembershipRenewable,
+  isMembershipUnpaid,
+  useCoaching,
+  useGroups,
+  type GroupMembership,
+  type TrainingGroup,
+} from '@atlitos/api';
 import type { ApiError, CoachProfile, SessionFrequency, SessionTypeOption, TimeSlot } from '@atlitos/types';
 import { formatINR, radii, spacing } from '@atlitos/theme';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -19,6 +27,7 @@ import { Chip } from '@/components/ui/chip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StarRating } from '@/components/ui/star-rating';
 import { Text } from '@/components/ui/text';
+import { usePendingAuthAction } from '@/hooks/use-pending-auth-action';
 import { SESSION_FREQUENCY_LABEL } from '@/lib/session-display';
 import { SPORT_LABEL } from '@/lib/sport-display';
 import { supabase } from '@/lib/supabase';
@@ -71,6 +80,14 @@ export default function CoachProfileScreen() {
   const [coach, setCoach] = useState<CoachProfile | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [gateVisible, setGateVisible] = useState(false);
+  // F8 (P5 fix pass, PRD-01 FR-4): both gated actions here only navigate to
+  // a confirm/pay screen, they never complete a charge or a state-machine
+  // transition themselves (the actual booking RPC/payment happens on the
+  // next screen, which re-verifies the price server side), so replaying the
+  // navigation after login is safe and is exactly FR-4's "return to their
+  // in-progress screen". Never extend this to a screen that itself commits
+  // money (CLAUDE.md's financial invariant).
+  const { requireAuth, clearPendingAction } = usePendingAuthAction(requiresAuthGate);
 
   const [groupsState, setGroupsState] = useState<GroupsState>('loading');
   const [coachGroups, setCoachGroups] = useState<TrainingGroup[]>([]);
@@ -156,45 +173,41 @@ export default function CoachProfileScreen() {
   }, [coach, sessionType, date, busySlots]);
 
   function handleJoinGroup(group: TrainingGroup) {
-    if (requiresAuthGate) {
-      setGateVisible(true);
-      return;
-    }
-    router.push({
-      pathname: '/(tabs)/coaching/group/join',
-      params: {
-        groupId: group.id,
-        groupName: group.name,
-        coachName: coach?.user?.name ?? 'this coach',
-        monthlyFee: String(group.monthlyFee),
-        attendancePolicy: group.attendancePolicy ?? '',
-      },
-    });
+    requireAuth(() => {
+      router.push({
+        pathname: '/(tabs)/coaching/group/join',
+        params: {
+          groupId: group.id,
+          groupName: group.name,
+          coachName: coach?.user?.name ?? 'this coach',
+          monthlyFee: String(group.monthlyFee),
+          attendancePolicy: group.attendancePolicy ?? '',
+        },
+      });
+    }, () => setGateVisible(true));
   }
 
   function handleContinue() {
     if (!coach || !sessionType || !frequency || !selectedSlot) return;
-    if (requiresAuthGate) {
-      setGateVisible(true);
-      return;
-    }
-    router.push({
-      pathname: '/(tabs)/coaching/book/pay',
-      params: {
-        coachId: coach.userId,
-        coachName: coach.user?.name ?? 'Coach',
-        sessionTypeId: sessionType.id,
-        sessionTypeName: sessionType.name,
-        durationMinutes: String(sessionType.durationMinutes),
-        frequency,
-        date,
-        slotFrom: selectedSlot.from,
-        slotTo: selectedSlot.to,
-        expectedTotal: String(sessionType.price),
-        focusArea,
-        location,
-      },
-    });
+    requireAuth(() => {
+      router.push({
+        pathname: '/(tabs)/coaching/book/pay',
+        params: {
+          coachId: coach.userId,
+          coachName: coach.user?.name ?? 'Coach',
+          sessionTypeId: sessionType.id,
+          sessionTypeName: sessionType.name,
+          durationMinutes: String(sessionType.durationMinutes),
+          frequency,
+          date,
+          slotFrom: selectedSlot.from,
+          slotTo: selectedSlot.to,
+          expectedTotal: String(sessionType.price),
+          focusArea,
+          location,
+        },
+      });
+    }, () => setGateVisible(true));
   }
 
   if (state === 'loading') {
@@ -266,7 +279,7 @@ export default function CoachProfileScreen() {
                 const spotsLeft = group.capacity - (group.activeMembers ?? 0);
                 const membership = myMemberships.find((m) => m.groupId === group.id);
                 const isMember = membership?.status === 'active' || membership?.status === 'pending';
-                const isLapsed = membership?.status === 'lapsed';
+                const canRenew = !!membership && isMembershipUnpaid(membership.status) && isMembershipRenewable(membership.status);
 
                 return (
                   <View
@@ -308,7 +321,7 @@ export default function CoachProfileScreen() {
                           {membership?.status === 'pending' ? 'Payment pending' : 'Joined'}
                         </Text>
                       </Button>
-                    ) : isLapsed && membership ? (
+                    ) : canRenew && membership ? (
                       <Button
                         size="sm"
                         onPress={() =>
@@ -448,7 +461,11 @@ export default function CoachProfileScreen() {
         </Button>
       </View>
 
-      <LoginGateModal visible={gateVisible} onClose={() => setGateVisible(false)} />
+      <LoginGateModal
+        visible={gateVisible}
+        onClose={() => setGateVisible(false)}
+        onDismiss={clearPendingAction}
+      />
     </SafeAreaView>
   );
 }

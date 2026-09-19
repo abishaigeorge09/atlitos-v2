@@ -26,6 +26,15 @@
 -- coach accept/decline push needs it and it costs nothing to close both at
 -- once, under the same RLS review.
 --
+-- RESOLVED, 0102-0106 (B1/B2). `sessions` stays published with no direct
+-- subscriber; PRD-02 FR-12's push need is met instead by `0106`'s realtime
+-- `notifications` channel, which every accept/decline/start/complete already
+-- writes to in the same transaction as the status change. A screen showing
+-- session state directly (not through the bell) still relies on
+-- pull-to-refresh, judged sufficient rather than left unwired by accident:
+-- see docs/architecture/SCHEMA.md, the paragraph starting "Is push plus
+-- pull-to-refresh enough for a session transition".
+--
 -- Order of business below, and the order matters: RLS is reviewed and hardened
 -- BEFORE either table is published. Realtime evaluates each table's SELECT
 -- policy per subscriber before delivering a row (AT-59 proved this empirically

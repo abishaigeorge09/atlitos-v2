@@ -1,0 +1,7 @@
+.claude
+.git
+**/node_modules
+**/.next
+**/dist
+apps/mobile/ios
+apps/mobile/android

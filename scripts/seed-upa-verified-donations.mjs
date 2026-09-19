@@ -15,6 +15,7 @@ import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { ATLITOS_PASSWORD, EMPOWER_PASSWORD } from "./lib/demo-credentials.mjs";
 
+import { assertWritableTarget } from './lib/guard-target.mjs';
 function readEnvFile(path) {
   const out = {};
   for (const line of readFileSync(path, "utf8").split("\n")) {
@@ -26,6 +27,8 @@ function readEnvFile(path) {
 const mobileEnv = readEnvFile("apps/mobile/.env");
 const fnEnv = readEnvFile("supabase/.env");
 const SUPABASE_URL = mobileEnv.EXPO_PUBLIC_SUPABASE_URL;
+assertWritableTarget(SUPABASE_URL, 'seed-upa-verified-donations.mjs');
+
 const ANON_KEY = mobileEnv.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 const KEY_SECRET = fnEnv.RAZORPAY_KEY_SECRET;
 

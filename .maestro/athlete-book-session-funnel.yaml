@@ -1,0 +1,135 @@
+appId: com.atlitos.app
+---
+# ATHLETE BOOKING FUNNEL, UP TO THE PAYMENT GATE AND NO FURTHER.
+#
+# SCOPE IS DELIBERATE. The founder's instruction is no money-UI test
+# automation ("no money proof, i know it works"), so this flow stops at the
+# moment the CTA becomes payable and never taps Continue. That still proves the
+# part nothing has ever tested: session type, frequency, date and slot
+# selection, and the `canBook` gate that decides when a booking is even
+# possible (coach/[id].tsx:242). The mutating step, `book-session`, is not
+# reached.
+#
+# WHY IT COULD NOT RUN BEFORE. The funnel needs a coach who is actually
+# BOOKABLE, which means an active session_type AND availability windows.
+# Measured 2026-08-14: local coach1 had a session type and ZERO windows, so the
+# CTA could never leave "Choose a type, date, and time". Production was better
+# but not clean: 3 verified coaches, only 2 bookable, so one verified coach sits
+# in browse and can be booked by nobody. reset-local-fixtures.sh now seeds the
+# windows.
+#
+# THE VERDICT IS THE CTA FLIPPING, plus the screenshot. Do NOT add an
+# assertNotVisible here: on any screen the accessibility tree cannot see
+# (task #45) a negative assertion passes vacuously, including when the app is
+# on a different page entirely.
+- launchApp:
+    clearState: true
+- runFlow:
+    when:
+      visible: "Not Now"
+    commands:
+      - tapOn: "Not Now"
+
+- openLink: atlitos://login
+- runFlow:
+    when:
+      visible: "Open in .*"
+    commands:
+      - tapOn: "Cancel"
+- extendedWaitUntil:
+    visible: "Email or phone.*"
+    timeout: 10000
+- tapOn: "Email or phone input"
+- inputText: "player@atlitos.dev"
+- tapOn: "Password input"
+- inputText: "AtlitosDemo!2026"
+- tapOn:
+    text: "Log in"
+    index: 1
+- extendedWaitUntil:
+    visible: "Hyderabad|Save Password.*"
+    timeout: 20000
+- runFlow:
+    when:
+      visible: "Save Password.*"
+    commands:
+      - tapOn: "Not Now"
+
+# coach1, the only verified and bookable coach on the local stack.
+- openLink: atlitos://trainings/coach/032cde8d-627a-4507-9afb-8df31871204e
+- runFlow:
+    when:
+      visible: "Open in .*"
+    commands:
+      - tapOn: "Cancel"
+- extendedWaitUntil:
+    visible: "Session type"
+    timeout: 15000
+- takeScreenshot: /tmp/athlete-verify/01-coach-profile
+
+# THE GATE, BEFORE ANY SELECTION. The CTA must be in its refusing state, and
+# this assertion is the one that makes the rest of the flow mean something: if
+# the button already read "Continue" here, every later step would prove nothing.
+- assertVisible: "Choose a type, date, and time"
+
+# Select the type by POSITION under its heading. The card is plainly on screen
+# (screenshot 01 shows "Batting Basics, 60 min, Rs 500") but tapping its name
+# directly is not matchable, the same partial accessibility blindness recorded
+# in task #45.
+- tapOn:
+    below: "Session type"
+- takeScreenshot: /tmp/athlete-verify/02-type-selected
+
+# Frequency only APPEARS once a type is chosen: the screen is progressive
+# disclosure (coach/[id].tsx:61), so each section is proof the previous step
+# registered.
+- extendedWaitUntil:
+    visible: "Frequency"
+    timeout: 10000
+- tapOn: "One time"
+- takeScreenshot: /tmp/athlete-verify/03-frequency-selected
+
+# NOTE: assertVisible on "Pick a date" PASSES while the section is still below
+# the fold, because the element is in the hierarchy of a scroll view. Visible to
+# the harness is not the same as visible to a person, so scroll to it before
+# interacting, and do not treat that assert alone as proof the athlete can see
+# the step.
+# Use a REAL SWIPE, not scrollUntilVisible. scrollUntilVisible reported
+# COMPLETED without moving the screen a pixel, because Maestro already
+# considered "Pick a date" visible: it is present in the scroll view's
+# hierarchy while sitting off screen. Trusting that would have hidden whether
+# the section renders at all.
+- swipe:
+    start: 50%, 70%
+    end: 50%, 30%
+- swipe:
+    start: 50%, 70%
+    end: 50%, 30%
+- takeScreenshot: /tmp/athlete-verify/04-date-step
+
+# TAP WHATEVER SLOT IS OFFERED, never a hardcoded time. Slots come from the
+# coach's availability (seeded 17:00 to 20:00, sliced per session length) MINUS
+# the times the coach is already busy, so which ones appear depends on the day.
+#
+# Hardcoding "17:00 to 18:00" broke this flow the moment the date rolled over:
+# on 2026-08-15 the seeded GROUP session sits at 17:00 to 18:00, so the funnel
+# correctly dropped that slot and offered only 18:00 and 19:00. The product was
+# right and the test was wrong. That exclusion is real behaviour worth keeping
+# proven: a coach cannot be double booked.
+- tapOn: ".*:00 to .*:00"
+- takeScreenshot: /tmp/athlete-verify/05-slot-selected
+
+# THE VERDICT. The CTA must flip out of its refusing state and name the price.
+# This is a real assertion, not a vacuous one: "Continue" appears ONLY when
+# canBook is true (coach/[id].tsx:242 requires sessionType AND frequency AND
+# selectedSlot), and it was proven to read "Choose a type, date, and time"
+# before any selection at the top of this flow.
+- extendedWaitUntil:
+    visible: "Continue.*"
+    timeout: 10000
+- assertVisible: "Continue.*"
+- takeScreenshot: /tmp/athlete-verify/06-payable
+
+# STOP HERE. Tapping Continue calls book-session and takes real money through
+# Razorpay. The founder's instruction is no money-UI automation, so the flow
+# ends at the payable gate deliberately.

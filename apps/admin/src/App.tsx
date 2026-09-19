@@ -6,14 +6,20 @@ import routerBindings, {
   UnsavedChangesNotifier,
 } from "@refinedev/react-router";
 import { dataProvider } from "@refinedev/supabase";
+import * as Sentry from "@sentry/react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import { Shell } from "./layout/Shell";
 import { BookingsList } from "./pages/bookings/list";
+import { Dashboard } from "./pages/dashboard";
 import { DrillCreate } from "./pages/drills/create";
 import { DrillShow } from "./pages/drills/show";
 import { DrillsList } from "./pages/drills/list";
 import { FeeConfigList } from "./pages/fee-config/list";
+import { GearCreate } from "./pages/gear/create";
+import { GearHealth } from "./pages/gear/health";
+import { GearShow } from "./pages/gear/show";
+import { GearList } from "./pages/gear/list";
 import { LoginPage } from "./pages/login";
 import { ModerationList } from "./pages/moderation/list";
 import { ModerationShow } from "./pages/moderation/show";
@@ -23,22 +29,40 @@ import { ReportsList } from "./pages/reports/list";
 import { ReportShow } from "./pages/reports/show";
 import { ProductShow } from "./pages/products/show";
 import { ProductsList } from "./pages/products/list";
+import { UserShow } from "./pages/users/show";
 import { UsersList } from "./pages/users/list";
+import { VenueCreate } from "./pages/venues/create";
 import { VenueShow } from "./pages/venues/show";
 import { VenuesList } from "./pages/venues/list";
 import { VerificationList } from "./pages/verification/list";
 import { VerificationShow } from "./pages/verification/show";
 import { authProvider } from "./providers/authProvider";
+import { Notifications, notificationProvider } from "./providers/notificationProvider";
 import { supabaseClient } from "./providers/supabaseClient";
+
+function ErrorFallback() {
+  return (
+    <div style={{ padding: "2rem" }}>
+      <p>Something went wrong. The team has been notified. Reload the page to continue.</p>
+    </div>
+  );
+}
 
 export function App() {
   return (
+    <Sentry.ErrorBoundary fallback={<ErrorFallback />}>
     <BrowserRouter>
       <Refine
         dataProvider={dataProvider(supabaseClient)}
         authProvider={authProvider}
+        notificationProvider={notificationProvider}
         routerProvider={routerBindings}
         resources={[
+          {
+            name: "dashboard",
+            list: "/dashboard",
+            meta: { label: "Dashboard" },
+          },
           {
             name: "verification_requests",
             list: "/verification",
@@ -48,6 +72,7 @@ export function App() {
           {
             name: "venues",
             list: "/venues",
+            create: "/venues/create",
             show: "/venues/show/:id",
             meta: { label: "Venues" },
           },
@@ -56,6 +81,13 @@ export function App() {
             list: "/products",
             show: "/products/show/:id",
             meta: { label: "Catalog" },
+          },
+          {
+            name: "affiliate_products",
+            list: "/gear",
+            create: "/gear/create",
+            show: "/gear/show/:id",
+            meta: { label: "Gear" },
           },
           {
             name: "orders",
@@ -95,6 +127,7 @@ export function App() {
           {
             name: "users",
             list: "/users",
+            show: "/users/show/:id",
             meta: { label: "Users" },
           },
         ]}
@@ -114,13 +147,19 @@ export function App() {
               </Authenticated>
             }
           >
-            <Route index element={<NavigateToResource resource="verification_requests" />} />
+            <Route index element={<NavigateToResource resource="dashboard" />} />
+            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/verification" element={<VerificationList />} />
             <Route path="/verification/show/:id" element={<VerificationShow />} />
             <Route path="/venues" element={<VenuesList />} />
+            <Route path="/venues/create" element={<VenueCreate />} />
             <Route path="/venues/show/:id" element={<VenueShow />} />
             <Route path="/products" element={<ProductsList />} />
             <Route path="/products/show/:id" element={<ProductShow />} />
+            <Route path="/gear" element={<GearList />} />
+            <Route path="/gear/create" element={<GearCreate />} />
+            <Route path="/gear/health" element={<GearHealth />} />
+            <Route path="/gear/show/:id" element={<GearShow />} />
             <Route path="/orders" element={<OrdersList />} />
             <Route path="/orders/show/:id" element={<OrderShow />} />
             <Route path="/drills" element={<DrillsList />} />
@@ -133,11 +172,14 @@ export function App() {
             <Route path="/fee-config" element={<FeeConfigList />} />
             <Route path="/bookings" element={<BookingsList />} />
             <Route path="/users" element={<UsersList />} />
+            <Route path="/users/show/:id" element={<UserShow />} />
           </Route>
         </Routes>
+        <Notifications />
         <UnsavedChangesNotifier />
         <DocumentTitleHandler />
       </Refine>
     </BrowserRouter>
+    </Sentry.ErrorBoundary>
   );
 }

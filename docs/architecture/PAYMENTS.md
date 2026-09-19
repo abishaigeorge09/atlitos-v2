@@ -114,6 +114,22 @@ Re-validates the target UPA is still `status='verified'` and, if item-specific, 
 
 **Ledger-derived read layer (AT-114, migration `0056`, no denormalized balance column).** `upa_fund_balance(account_ref)` = `sum(credit) - sum(debit)` for `account_type='upa_fund'`; `general_fund_balance()` = that at the anchor; `get_empower_stats()` (hub aggregate, anon-callable); `get_my_impact_summary()` (`auth.uid()`-scoped: total given, athletes supported, items funded, the donation list with UPA name or `General Fund`); `public_upa_profile(upa_id)` (verified-only, returns NULL otherwise). `funded_amount` stays per-item progress and the race guard, never a displayed fund total.
 
+## The shared capture gate is re-enterable (`0109`)
+
+Added 2026-08-14. Read this before `razorpay-webhook` below, because it changes what "already processed" means.
+
+The gate in `_shared/finalize-payment.ts` used to flip the intent to `captured` and then dispatch to the domain handler. That gave at-most-once, which is right, and once-only, which is not: a handler dying after the UPDATE committed left an intent no future delivery could match, because it was no longer `created`. Money taken, nothing delivered, no way back in, and no query anywhere that could produce a list of who it had happened to.
+
+The consequence was worse than the individual failures. Three repair checks carried docblocks claiming they covered precisely that case, and none of them could ever be reached: `finalize-membership-payment.ts:32` ("covers a previous run that died between"), `finalize-order-payment.ts:46` and this document's own line about `finalize-order-payment` ("a redelivered capture repairs a missing group rather than doubling a written one"), and `finalize-donation-payment.ts:94` ("a redelivery cannot double-credit the fund"). Every one of them was true of the code in front of you and false of the system, which is why nobody built the reconciliation: it looked like it was already there.
+
+**What changed.** The claim moved into `claim_payment_intent_for_finalization()` (`0109`), one atomic UPDATE, matching an intent that is `created` OR one that is `captured` with `finalized_at` still null whose `finalize_claimed_at` has aged past `finalize_reentry_after()` (fifteen minutes). Concurrent deliveries still serialise on the row lock and the loser still returns `already_processed`; what is new is that a DIED attempt becomes claimable again. Those three repair checks are now live code for the first time, and this document's claim about redelivery repairing a missing commerce group is now true.
+
+**The second axis.** `status` says whether the money moved. `finalized_at` says whether the product delivered. `status = 'captured' and finalized_at is null` is the list of charges that took money and gave nothing back, exposed as the `unfinalized_captures` view, with `finalize_last_error` saying why and `finalize_attempts` saying how many times it has been tried. That query could not be written at all before `0109`; the only signal a handler had failed was a `console.error` inside `razorpay-webhook`'s catch.
+
+**What re-entry does NOT fix.** It repairs an attempt that died. It cannot repair a delivery that arrived after its entity was already gone, because retrying that reaches the same dead entity forever. That case is a refund, and it is assessed under "Captured against a dead entity" below. For the same reason `0109`'s backfill closes out all pre-existing captured rows as finalized: leaving the seventeen known-broken production rows unfinalized would have them retried and re-failed indefinitely while still never being refunded, which is motion mistaken for repair.
+
+**Deployment order.** `0109` must be applied before these functions are deployed. The gate calls RPCs and columns that migration creates.
+
 ## `razorpay-webhook`: signature verification and idempotency
 
 ```ts
@@ -294,6 +310,31 @@ There are two KINDS of refund path in v2, and the distinction is deliberate: som
 
 These two are the ONLY self-serve refunds in v2, and they stay that way precisely because they need no judgement. Everything else is a judgement call, handled by `admin-order-refund` below.
 
+### Captured against a dead entity: the case with NO refund path at all
+
+Added 2026-08-14. This is an assessment, not a built feature. Nothing here has been implemented and no script was run against production.
+
+**The case.** A charge captures after its entity is already gone. The athlete taps Cancel while the charge is in flight, or a UPI collect takes longer than `unpaid_hold_ttl()`, which is fifteen minutes. `cancel-session-refund` runs first, reads the intent, finds it still `created`, correctly records `refund_status: not_applicable`, and cancels the session. The capture lands afterwards. The athlete has paid and has nothing. Seventeen production rows are in this end state: seven with no `refunds` row at all, ten with one stuck `pending` forever. All seventeen carry real `order_` ids under a `rzp_test_` key, so no real rupees have moved YET, and that is the only thing keeping this off an incident footing.
+
+`_shared/finalize-session-payment.ts` now refuses to report success on those, raising `SESSION_CANCELLED` and leaving the intent captured and unfinalized so it appears in `unfinalized_captures` (`0109`). That makes the debt visible and queryable. **It does not pay it back.**
+
+**Why nothing existing can pay it back.** Five separate blocks, each verified against the source rather than assumed:
+
+1. `cancel-session-refund` and `decline-session-refund` both require the session to still be `requested`. A cancelled session cannot re-enter either.
+2. `session_transition` refuses a second cancel with `INVALID_TRANSITION`, so there is no way to re-drive the state machine into the refunding branch.
+3. `admin-order-refund` is commerce by construction: `claim_order_refund` computes remaining refundable from `orders.total`, and `apps/admin/src/pages/orders/refund-api.ts:42` is hard-scoped to `.eq("domain","commerce")`. There is no admin screen anywhere that can refund a session, a court booking or a membership.
+4. `refunds_one_per_entity_non_commerce` (`0095:73`) is unique on `(domain, entity_id)` with **no status predicate**. Once any refund row exists for a session, including one permanently failed but still labelled `pending`, no second refund row can ever be inserted for it. This is stricter than `REFUND_IN_PROGRESS`, which at least clears.
+5. The `refund_status` enum has a `failed` value that no code path writes. A Razorpay 404 sets `failure_reason` and leaves the row `pending`, so the queue reads as ten refunds in flight when all ten are dead.
+
+**What building it would take.** The money machinery already exists and would be reused unchanged; this is plumbing and judgement, not new ledger design.
+
+- **One edge function**, `refund-captured-orphan`, service role, taking a `payment_intent_id`. It asserts the intent is `captured` with `finalized_at` null, proves the entity is in a terminal dead state (or gone), claims a `refunds` row, calls the existing Razorpay refund wrapper, and settles through `settle_refund`, which is already the single convergence point for the synchronous path and the `refund.processed` webhook. No new ledger logic: the reversing group is the same two legs `cancel-session-refund` already writes, and the economics are identical (no service rendered, no fee accrued, full amount back), so this can be automatic rather than a judgement call.
+- **One migration**: add `and status <> 'failed'` to `refunds_one_per_entity_non_commerce`, and start writing `failed` when a Razorpay refund attempt is terminal. Without this, every session that has ever had a failed refund is permanently unrefundable, which is a worse trap than the one being fixed.
+- **One admin surface**, reading `unfinalized_captures` and `refunds where status <> 'processed'` unscoped by domain. `PAYMENTS.md` has justified the whole `refunds` row design on an admin queue since AT-60; that queue has never been built and `refund-api.ts` cannot see anything but commerce.
+- **The reconciliation job** that `0109` deliberately did not schedule, so a stuck capture is found without waiting for a redelivery that may never come.
+
+**What cannot be done yet, honestly.** None of it can be proven end to end until the live Razorpay key lands: the seventeen affected rows carry synthetic and test-mode payment ids, and Razorpay 404s a refund against a payment that never really existed. So the correct sequencing is the one already on record, capture-gate and refund work BEFORE the `rzp_test_` to live key swap, not after. Building the refund path and declaring it proven against test-mode ids would be exactly the kind of green this project has already been burned by.
+
 ### `cancel-session-refund`, as built (AT-60)
 
 Migration `0026_session_request_cancel_refund.sql` plus `supabase/functions/cancel-session-refund/index.ts`. The client contract lives in `API-MAPPING.md`'s sessions section; what follows is the money reasoning.
@@ -330,13 +371,34 @@ A transfers-style row was chosen because `transfers` already models exactly this
 4. On the synchronous success response, writes a `ledger_entries` group reversing the appropriate portion of the original capture group (debit the account that was credited, credit back toward `platform`/the payer), and updates `payment_intents.status` to `refunded` or `partially_refunded`.
 5. The `refund.processed` webhook event is still handled (idempotently, same `webhook_events` dedupe) as the final confirmation, matching the "webhook is the source of truth" principle even though the initiating call already got a synchronous response, since Razorpay's synchronous response confirms the refund was *accepted*, not that it fully *settled*. That handler shipped in AT-60 and is shared: it resolves an event to one `refunds` row by `razorpay_refund_id`, then by payment intent, then by creating a row if the refund was issued outside this system (a dashboard refund), and calls `settle_refund` in every case. `admin-order-refund` should reuse the same `refunds` row and `settle_refund` rather than introducing a parallel record, with the one difference that a partial refund must set `partially_refunded` on the intent instead of `refunded`.
 
+### `admin-order-refund`, as built (Phase 4 LAUNCH, Track A, migration `0095_admin_order_refund.sql`)
+
+`POST { order_id (uuid), amount (rupees, 2dp), reason (non-empty) }` with the ADMIN's own JWT (`verify_jwt` true). Admin is verified by reading the caller's own `user_roles` through the caller's JWT, the `admin-order-advance` pattern, NOT `app_metadata` (GoTrue's `getUser` does not carry the minted `roles` claim; see admin-order-advance's header). 200 returns `{ refund_id, order_id, refunded_amount, remaining_refundable, payment_intent_status: 'refunded' | 'partially_refunded', refund_status: 'processed' | 'pending' }`. Errors: 401 `UNAUTHENTICATED`, 403 `FORBIDDEN` (non-admin), 400 `VALIDATION`, 404 `NOT_FOUND`, 409 `INVALID_TRANSITION`, 409 `AMOUNT_EXCEEDS_REFUNDABLE`, 409 `REFUND_IN_PROGRESS`. Exactly one `audit_log` row per success (PRD-04 FR-53).
+
+**The domain is `commerce`, not `order`.** The plan text (PHASE-4-STATUS.md decision 1) named the refund domain `'order'`, but there is no `'order'` value in `payment_domain` (the enum is session, court, commerce, donation, payout, membership). An order's capture group, its `payment_intents` row, and therefore its refund rows and reversing group all carry `domain='commerce', entity_id = orders.id`. Every index predicate and ledger check in `0095` uses `'commerce'`.
+
+**The atomic claim (`claim_order_refund(p_order_id, p_amount)`, service role only).** It locks the order's `payment_intents` row `for update`, refuses with `INVALID_TRANSITION` unless the charge is `captured` or `partially_refunded`, computes remaining refundable as `orders.total - SUM(this order's refunds that are pending or processed)` server side (never trusting the admin client's displayed number, FR-24), refuses `AMOUNT_EXCEEDS_REFUNDABLE` if the request exceeds it, then inserts the pending `refunds` row. The intent-row lock serializes two concurrent claims; the loser of a same-order race is refused `REFUND_IN_PROGRESS` by the partial unique index (below). The edge function then calls Razorpay and settles through the existing `settle_refund` convergence point, exactly as the session refunds do; it writes no ledger row itself.
+
+**The `refunds` idempotency indexes are split three ways in `0095`** (replacing the single `refunds_one_per_entity`), so an order can accumulate settled partials while every other path keeps its old guarantee:
+- `refunds_one_per_entity_non_commerce`: unique `(domain, entity_id) WHERE domain <> 'commerce'`. Session (AT-60, CO-04), court, donation, membership, payout keep exactly one refund per entity, ever, bit-for-bit.
+- `refunds_one_per_unfulfilled_capture`: unique `(payment_intent_id) WHERE domain='commerce' AND entity_id = payment_intent_id`. The AT-73 unfulfillable-capture refund (whose entity_id is the intent, because no order exists) stays one-per-intent-ever.
+- `refunds_one_pending_per_order`: unique `(domain, entity_id) WHERE domain='commerce' AND status='pending' AND entity_id <> payment_intent_id`. An admin order refund allows settled partials to accumulate but only ONE in-flight pending refund per order at a time.
+
+**`settle_refund` gains a partial arm (`0095`), and nothing else changes.** After writing the same two-leg reversing group (`debit platform` / `credit user <payer>`, balanced), it sets the charge to `refunded` when cumulative settled refunds reach the captured amount, else `partially_refunded`. A single full refund (a session refund, an AT-73 refund) reaches the captured amount in one step and still lands on `refunded`, so those paths are unchanged in outcome; the non-commerce debit-leg description is preserved character-for-character. The `case` result is cast to `payment_intent_status` explicitly (a bare text CASE does not coerce to the enum in an UPDATE assignment; caught by the local Postgres harness before apply).
+
+**Roundup on a full order refund (modeling note).** An order that carried a checkout roundup credited that roundup to the General Fund `upa_fund` account at capture (AT-113). A refund returns money to the buyer from the `platform` clearing account and does NOT claw the General Fund donation back. Every group still balances and the order still nets to zero; the platform absorbs the refunded portion of a donated roundup. This matches the generic reversing-group convention every refund path uses. Roundup clawback is a deliberate follow-up, not a silent proportional re-split.
+
+**No auto-resume of a failed Razorpay call, deliberately.** If Razorpay fails, the refund stays `pending` (with `failure_reason`), visible in the admin refunds queue, and the `refund.processed` webhook is the settle convergence path if the call actually went through. A repeated admin submission while a refund is pending is refused `REFUND_IN_PROGRESS` by `refunds_one_pending_per_order`, so the function can never issue a second Razorpay refund racing the first. Double-refunding is the one mistake this function must never make.
+
+The admin Order Detail refund panel (`apps/admin/src/pages/orders/show.tsx`, FR-25) renders the shared `BillSummary` in the confirm step: original total, previously refunded, this refund, and remaining refundable. The only mutation on that screen is the `admin-order-refund` POST; there is no `.update()` against a money row anywhere in the bundle (FR-26 holds structurally, `0032` grants apps/admin SELECT on orders and nothing else).
+
 ## Ledger as source of truth, restated for payments
 
 The read path for those sums shipped in AT-44 as two `security definer` RPCs, `get_coach_wallet_balance()` and `get_my_transactions(kind?, limit?, offset?)` (`0025_wallet_and_transactions_rpcs.sql`), both scoped by `auth.uid()` alone and both computing every figure at call time. See API-MAPPING.md's wallet section for the shapes. A coach's transferable balance is `sum(credits) - sum(debits)` for their own `coach` account, which is exactly what `razorpay-route-transfer` must re-derive server side before calling Razorpay (PRD-02 FR-28); it should call this same RPC rather than reimplementing the sum, so the number the coach was shown and the number the transfer validates against cannot differ.
 
 Nothing in this document introduces a second balance representation. `payment_intents.status` tracks one charge's lifecycle for UI polling and idempotency; `ledger_entries` is the only place a rupee amount is attributed to an account and summed. Every number this document's flows eventually surface to a user, coach earnings, court partner net payable, a donor's total given, the empower hub's aggregate raised, is a `sum(amount) FILTER (WHERE direction=...) GROUP BY account_type, account_ref` query against `ledger_entries`, exactly as specified in `SCHEMA.md`.
 
-## Capture finalization is retryable (SEC-F2, `0118`, 2026-09-04)
+## Capture finalization is retryable (SEC-F2, `0109`, 2026-09-04)
 
 The capture gate in `_shared/finalize-payment.ts` flips `payment_intents` `created -> captured` in a single guarded UPDATE and only then dispatches to the domain handler. That ordering is correct for concurrency, and was wrong for failure: if the handler threw after the flip, the intent was already `captured`, so every later delivery of that capture (Razorpay's webhook retries, the client's `verify-payment` fallback) matched zero rows and returned `already_processed` without re-entering the handler. A transient failure therefore left real captured money with no confirmed booking, no order, no activated membership, no recorded donation, or no balanced ledger group, permanently.
 

@@ -149,6 +149,28 @@ interface DrillRow {
   media_url: string | null;
 }
 
+/** One page of the drill catalog. A catalog rather than user data, so it
+ * grows slowly, but it is a public browse with no ceiling and PostgREST caps
+ * it silently either way (docs/qa/verify/SCALE-CLIENT.md). */
+const DRILL_PAGE_SIZE = 100;
+/** Ceiling on the caller's own completion set. Bounded rather than trusted:
+ * it is one row per drill the user has ever finished, it can never exceed the
+ * total drill catalog, and it only ever grows. A truncation here shows a
+ * completed drill as not completed.
+ *
+ * p6 audit correction: "above the catalog bound" previously meant above
+ * DRILL_PAGE_SIZE (100), which is a PAGE size, not the catalog's total size,
+ * and the schema places no ceiling on the catalog either, so that comparison
+ * did not actually bound anything. There is no measurable `db-max-rows` to
+ * reason from here (unmeasurable on this project, see BLOCK_LIST_MAX). The
+ * real, product-grounded bound: DRILL_PAGE_SIZE * 10, ten browse pages of
+ * admin-authored instructional content. A catalog past that size has no
+ * working way to reach its own tail today (the browse screen has no "load
+ * more" past what it currently paginates), so a completion set larger than
+ * that implies the catalog itself needs a redesign first, not a bigger
+ * constant here. */
+const DRILL_COMPLETION_MAX = DRILL_PAGE_SIZE * 10;
+
 const DRILL_SELECT = "id, title, description, sport, skill_category, difficulty, xp_value, media_url";
 
 // Postgres unique_violation. A duplicate completion (the FR-49 idempotency
@@ -235,7 +257,7 @@ function makeLearnApi(client: AtlitosClient) {
      * surface inactive drills. Ordered by ascending XP so the ladder reads low
      * to high. */
     async listDrills(filters: DrillLibraryFilters = {}): Promise<Drill[]> {
-      let query = db.from("drills").select(DRILL_SELECT).eq("active", true);
+      let query = db.from("drills").select(DRILL_SELECT).eq("active", true).limit(DRILL_PAGE_SIZE);
       if (filters.sport) query = query.eq("sport", filters.sport);
       if (filters.difficulty) query = query.eq("difficulty", filters.difficulty);
 
@@ -273,6 +295,7 @@ function makeLearnApi(client: AtlitosClient) {
         .from("drill_completions")
         .select("drill_id")
         .eq("user_id", authData.user.id)
+        .limit(DRILL_COMPLETION_MAX)
         .returns<{ drill_id: string }[]>();
       if (error) throw mapPostgrestError(error);
       return new Set((data ?? []).map((r) => r.drill_id));

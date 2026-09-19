@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AuthCta, AuthGlassCard, AuthReveal, AuthScene } from '@/components/organisms/auth/AuthScene';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { friendlyAuthMessage } from '@/lib/auth-copy';
@@ -18,18 +19,8 @@ interface FieldErrors {
   name?: string;
   email?: string;
   phone?: string;
-  dob?: string;
   password?: string;
   confirmPassword?: string;
-}
-
-/** YYYY-MM-DD mask: keep digits only, auto-insert the dashes while typing.
- * Deleting works too: the dash is re-derived from the digits every change. */
-function formatDob(raw: string): string {
-  const digits = raw.replace(/\D/g, '').slice(0, 8);
-  if (digits.length <= 4) return digits;
-  if (digits.length <= 6) return `${digits.slice(0, 4)}-${digits.slice(4)}`;
-  return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6)}`;
 }
 
 /** Accepts an optional +91 prefix plus spaces/dashes and normalizes down to
@@ -37,12 +28,6 @@ function formatDob(raw: string): string {
 function normalizePhone(raw: string): string {
   const stripped = raw.replace(/[\s-]/g, '');
   return stripped.startsWith('+91') ? stripped.slice(3) : stripped;
-}
-
-function isRealDate(iso: string): boolean {
-  const time = Date.parse(`${iso}T00:00:00Z`);
-  if (Number.isNaN(time)) return false;
-  return new Date(time).toISOString().slice(0, 10) === iso;
 }
 
 /**
@@ -55,6 +40,9 @@ function isRealDate(iso: string): boolean {
  * States: populated, error (field validation, email/phone taken),
  * submitting, confirmation pending (email confirmation on, with resend and
  * a log in shortcut).
+ *
+ * Visual: a glass form card over the shared AuthScene aurora, rows
+ * staggering in on mount. All validation and auth logic is unchanged.
  */
 export default function RegisterScreen() {
   const colors = useThemeColors();
@@ -63,7 +51,6 @@ export default function RegisterScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [dob, setDob] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -81,10 +68,6 @@ export default function RegisterScreen() {
     if (!/^\d{10}$/.test(normalizePhone(phone.trim()))) {
       errors.phone = 'Enter a 10 digit mobile number, +91 is optional';
     }
-    const dobValue = dob.trim();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dobValue) || !isRealDate(dobValue)) {
-      errors.dob = 'Enter your full date of birth, year first';
-    }
     if (password.length < 8) errors.password = 'Use at least 8 characters';
     if (password !== confirmPassword) errors.confirmPassword = 'Both passwords need to match';
     setFieldErrors(errors);
@@ -101,7 +84,6 @@ export default function RegisterScreen() {
         name: name.trim(),
         email: email.trim(),
         phone: normalizePhone(phone.trim()),
-        dob: dob.trim(),
         password,
       });
 
@@ -141,113 +123,125 @@ export default function RegisterScreen() {
 
   if (confirmationPending) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
-        <View style={{ flex: 1, padding: spacing.lg, gap: spacing.lg, alignItems: 'center', justifyContent: 'center' }}>
-          <MailCheck size={48} color={colors.accent} strokeWidth={1.5} />
-          <Text style={[textStyle('h2'), { color: colors.text, textAlign: 'center' }]}>Check your email</Text>
-          <Text style={[textStyle('body'), { color: colors.textSecondary, textAlign: 'center' }]}>
-            {`We sent a confirmation link to ${email.trim()}. Open it to finish creating your account.`}
-          </Text>
-          {resendNotice ? (
-            <Text style={[textStyle('caption'), { color: colors.success, textAlign: 'center' }]}>{resendNotice}</Text>
-          ) : null}
-          {resendError ? (
-            <Text style={[textStyle('caption'), { color: colors.danger, textAlign: 'center' }]}>{resendError}</Text>
-          ) : null}
-          <View style={{ width: '100%', maxWidth: 320, gap: spacing.sm }}>
-            <Button onPress={() => router.replace('/(auth)/login')}>
-              <Text style={[textStyle('label'), { color: colors.inkOnAccent }]}>I have confirmed, log in</Text>
-            </Button>
-            <Button variant="secondary" loading={resending} onPress={() => void handleResend()}>
-              <Text style={[textStyle('label'), { color: colors.text }]}>Resend email</Text>
-            </Button>
+      <AuthScene>
+        <SafeAreaView style={{ flex: 1 }}>
+          <View style={{ flex: 1, padding: spacing.lg, justifyContent: 'center' }}>
+            <AuthReveal index={0}>
+              <AuthGlassCard style={{ gap: spacing.lg, alignItems: 'center' }}>
+                <MailCheck size={48} color={colors.accent} strokeWidth={1.5} />
+                <Text style={[textStyle('h2'), { color: colors.text, textAlign: 'center' }]}>Check your email</Text>
+                <Text style={[textStyle('body'), { color: colors.textSecondary, textAlign: 'center' }]}>
+                  {`We sent a confirmation link to ${email.trim()}. Open it to finish creating your account.`}
+                </Text>
+                {resendNotice ? (
+                  <Text style={[textStyle('caption'), { color: colors.success, textAlign: 'center' }]}>
+                    {resendNotice}
+                  </Text>
+                ) : null}
+                {resendError ? (
+                  <Text style={[textStyle('caption'), { color: colors.danger, textAlign: 'center' }]}>
+                    {resendError}
+                  </Text>
+                ) : null}
+                <View style={{ width: '100%', gap: spacing.sm }}>
+                  <AuthCta label="I have confirmed, log in" onPress={() => router.replace('/(auth)/login')} />
+                  <Button variant="secondary" loading={resending} onPress={() => void handleResend()}>
+                    <Text style={[textStyle('label'), { color: colors.text }]}>Resend email</Text>
+                  </Button>
+                </View>
+              </AuthGlassCard>
+            </AuthReveal>
           </View>
-        </View>
-      </SafeAreaView>
+        </SafeAreaView>
+      </AuthScene>
     );
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }} keyboardShouldPersistTaps="handled">
-          <View style={{ gap: spacing.xs }}>
-            <Text style={[textStyle('h1'), { color: colors.text }]}>Create your account</Text>
-            <Text style={[textStyle('body'), { color: colors.textSecondary }]}>
-              Set up training, bookings and orders in one place.
-            </Text>
-          </View>
+    <AuthScene>
+      <SafeAreaView style={{ flex: 1 }}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }} keyboardShouldPersistTaps="handled">
+            <AuthReveal index={0}>
+              <View style={{ gap: spacing.xs }}>
+                <Text style={[textStyle('overline'), { color: colors.accent }]}>Join the team</Text>
+                <Text style={[textStyle('h1'), { color: colors.text }]}>Create your account</Text>
+                <Text style={[textStyle('body'), { color: colors.textSecondary }]}>
+                  Set up training, bookings and orders in one place.
+                </Text>
+              </View>
+            </AuthReveal>
 
-          <View style={{ gap: spacing.md }}>
-            <Input label="Full name" required value={name} onChangeText={setName} error={fieldErrors.name} editable={!submitting} />
-            <Input
-              label="Email"
-              required
-              autoCapitalize="none"
-              value={email}
-              onChangeText={setEmail}
-              error={fieldErrors.email}
-              editable={!submitting}
-            />
-            <Input
-              type="phone"
-              label="Phone"
-              required
-              value={phone}
-              onChangeText={setPhone}
-              error={fieldErrors.phone}
-              editable={!submitting}
-            />
-            <Input
-              type="pincode"
-              label="Date of birth"
-              required
-              placeholder="YYYY-MM-DD"
-              maxLength={10}
-              value={dob}
-              onChangeText={(value) => setDob(formatDob(value))}
-              error={fieldErrors.dob}
-              editable={!submitting}
-            />
-            <Input
-              type="password"
-              label="Password"
-              required
-              value={password}
-              onChangeText={setPassword}
-              error={fieldErrors.password}
-              editable={!submitting}
-            />
-            <Input
-              type="password"
-              label="Confirm password"
-              required
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              error={fieldErrors.confirmPassword}
-              editable={!submitting}
-            />
+            <AuthReveal index={1}>
+              <AuthGlassCard style={{ gap: spacing.lg }}>
+                <View style={{ gap: spacing.md }}>
+                  <Input label="Full name" required value={name} onChangeText={setName} error={fieldErrors.name} editable={!submitting} />
+                  <Input
+                    label="Email"
+                    required
+                    autoCapitalize="none"
+                    value={email}
+                    onChangeText={setEmail}
+                    error={fieldErrors.email}
+                    editable={!submitting}
+                  />
+                  <Input
+                    type="phone"
+                    label="Phone"
+                    required
+                    value={phone}
+                    onChangeText={setPhone}
+                    error={fieldErrors.phone}
+                    editable={!submitting}
+                  />
+                  <Input
+                    type="password"
+                    label="Password"
+                    required
+                    value={password}
+                    onChangeText={setPassword}
+                    error={fieldErrors.password}
+                    editable={!submitting}
+                  />
+                  <Input
+                    type="password"
+                    label="Confirm password"
+                    required
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    error={fieldErrors.confirmPassword}
+                    editable={!submitting}
+                  />
 
-            {formError ? (
-              <Text style={[textStyle('caption'), { color: colors.danger }]}>{friendlyAuthMessage(formError)}</Text>
-            ) : null}
-          </View>
+                  {formError ? (
+                    <Text style={[textStyle('caption'), { color: colors.danger }]}>{friendlyAuthMessage(formError)}</Text>
+                  ) : null}
+                </View>
 
-          <Button loading={submitting} onPress={() => void handleSubmit()}>
-            <Text style={[textStyle('label'), { color: colors.inkOnAccent }]}>Create account</Text>
-          </Button>
+                <AuthCta label="Create account" loading={submitting} onPress={() => void handleSubmit()} />
+              </AuthGlassCard>
+            </AuthReveal>
 
-          <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.xs }}>
-            <Text style={[textStyle('body'), { color: colors.textSecondary }]}>Already have an account.</Text>
-            <Link href="/(auth)/login" style={[textStyle('body'), { color: colors.accent }]}>
-              Log in
-            </Link>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+            <AuthReveal index={2}>
+              <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.xs }}>
+                <Text style={[textStyle('body'), { color: colors.textSecondary }]}>Already have an account.</Text>
+                {/* `replace`, not a push. login.tsx's afterAuth() returns the
+                    user with router.back() when there is something beneath,
+                    which is right when a gate pushed login on top of the
+                    screen they were using (PRD-01 FR-4). Pushing login on top
+                    of register made back() land them on the signup form they
+                    were escaping: "Continue as guest" returned to Register
+                    instead of Home. Replacing keeps the origin screen directly
+                    beneath login, so back() resumes it and the gate path is
+                    unaffected. */}
+                <Link href="/(auth)/login" replace style={[textStyle('body'), { color: colors.accent }]}>
+                  Log in
+                </Link>
+              </View>
+            </AuthReveal>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </AuthScene>
   );
 }

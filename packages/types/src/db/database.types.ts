@@ -71,37 +71,52 @@ export type Database = {
         Row: {
           affiliate_product_id: string
           affiliate_url: string
+          canonical_url: string | null
+          consecutive_failures: number
           created_at: string
           currency: string
           id: string
           in_stock: boolean
+          last_check_outcome: string | null
           last_checked_at: string
+          last_price_change_at: string | null
           price: number
           retailer: string
+          retailer_key: string | null
           updated_at: string
         }
         Insert: {
           affiliate_product_id: string
           affiliate_url: string
+          canonical_url?: string | null
+          consecutive_failures?: number
           created_at?: string
           currency?: string
           id?: string
           in_stock?: boolean
+          last_check_outcome?: string | null
           last_checked_at?: string
+          last_price_change_at?: string | null
           price: number
           retailer: string
+          retailer_key?: string | null
           updated_at?: string
         }
         Update: {
           affiliate_product_id?: string
           affiliate_url?: string
+          canonical_url?: string | null
+          consecutive_failures?: number
           created_at?: string
           currency?: string
           id?: string
           in_stock?: boolean
+          last_check_outcome?: string | null
           last_checked_at?: string
+          last_price_change_at?: string | null
           price?: number
           retailer?: string
+          retailer_key?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -112,7 +127,35 @@ export type Database = {
             referencedRelation: "affiliate_products"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "product_offers_retailer_key_fkey"
+            columns: ["retailer_key"]
+            isOneToOne: false
+            referencedRelation: "retailer_programmes"
+            referencedColumns: ["key"]
+          },
         ]
+      }
+      app_config: {
+        Row: {
+          key: string
+          public: boolean
+          updated_at: string
+          value: Json
+        }
+        Insert: {
+          key: string
+          public?: boolean
+          updated_at?: string
+          value: Json
+        }
+        Update: {
+          key?: string
+          public?: boolean
+          updated_at?: string
+          value?: Json
+        }
+        Relationships: []
       }
       addresses: {
         Row: {
@@ -1717,6 +1760,7 @@ export type Database = {
       group_memberships: {
         Row: {
           created_at: string
+          expiry_notified_at: string | null
           group_id: string
           id: string
           payment_intent_id: string | null
@@ -1725,12 +1769,14 @@ export type Database = {
           platform_fee: number
           player_id: string
           price: number
+          renewal_reminder_sent_at: string | null
           status: string
           total: number
           updated_at: string
         }
         Insert: {
           created_at?: string
+          expiry_notified_at?: string | null
           group_id: string
           id?: string
           payment_intent_id?: string | null
@@ -1739,12 +1785,14 @@ export type Database = {
           platform_fee: number
           player_id: string
           price: number
+          renewal_reminder_sent_at?: string | null
           status?: string
           total: number
           updated_at?: string
         }
         Update: {
           created_at?: string
+          expiry_notified_at?: string | null
           group_id?: string
           id?: string
           payment_intent_id?: string | null
@@ -1753,6 +1801,7 @@ export type Database = {
           platform_fee?: number
           player_id?: string
           price?: number
+          renewal_reminder_sent_at?: string | null
           status?: string
           total?: number
           updated_at?: string
@@ -3690,6 +3739,7 @@ export type Database = {
           name: string
           partner_user_id: string
           pincode: string
+          booking_url: string | null
           rejection_reason: string | null
           status: Database["public"]["Enums"]["venue_status"]
           updated_at: string
@@ -3705,6 +3755,7 @@ export type Database = {
           name: string
           partner_user_id: string
           pincode: string
+          booking_url?: string | null
           rejection_reason?: string | null
           status?: Database["public"]["Enums"]["venue_status"]
           updated_at?: string
@@ -3720,6 +3771,7 @@ export type Database = {
           name?: string
           partner_user_id?: string
           pincode?: string
+          booking_url?: string | null
           rejection_reason?: string | null
           status?: Database["public"]["Enums"]["venue_status"]
           updated_at?: string
@@ -4560,6 +4612,13 @@ export type Database = {
           p_city: string
           p_sports: Database["public"]["Enums"]["sport"][]
           p_state: string
+        }
+        Returns: undefined
+      }
+      set_athlete_sports: {
+        Args: {
+          p_primary: Database["public"]["Enums"]["sport"]
+          p_sports: Database["public"]["Enums"]["sport"][]
         }
         Returns: undefined
       }
@@ -5706,6 +5765,8 @@ export type Database = {
         | "verification"
         | "transfer"
         | "support"
+        | "session"
+        | "membership"
       order_status:
         | "placed"
         | "shipped"
@@ -5943,6 +6004,8 @@ export const Constants = {
         "verification",
         "transfer",
         "support",
+        "session",
+        "membership",
       ],
       order_status: [
         "placed",

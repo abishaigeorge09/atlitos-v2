@@ -6,13 +6,13 @@
 --
 -- Run order: apply AFTER scripts/seed-demo-users.mjs. Unlike
 -- supabase/seed/seed_identity.sql (safe in either order, since it only
--- upserts the two fixture coach profiles), venues.partner_user_id is NOT
--- NULL, so this file resolves partner@atlitos.dev's auth.users id by email
--- and every venue insert below is a no-op (0 rows selected, nothing
--- inserted) until that account exists. Safe to re-run any number of times
--- either way: every venue/court uses a fixed literal id with `on conflict
--- (id) do nothing`, and every dependent row (windows, pricing rules) is
--- guarded the same way or via `where not exists`.
+-- grants roles/upserts a profile), venues.partner_user_id is NOT NULL, so
+-- this file resolves partner@atlitos.dev's auth.users id by email and every
+-- venue insert below is a no-op (0 rows selected, nothing inserted) until
+-- that account exists. Safe to re-run any number of times either way: every
+-- venue/court uses a fixed literal id with `on conflict (id) do nothing`,
+-- and every dependent row (windows, pricing rules) is guarded the same way
+-- or via `where not exists`.
 --
 -- This runs with elevated (migration/service-role) privileges, so it writes
 -- venues/courts directly rather than through submit_venue_verification

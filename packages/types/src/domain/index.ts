@@ -293,16 +293,34 @@ export interface Clip {
   id: string;
   ownerId: string;
   channel: string; // users.channel_name, e.g. "Cric World"
+  /** public_profiles.avatar_url for the clip's owner, the picture beside
+   * `channel`. `CLIP_FEED_SELECT` has always fetched this column, but
+   * `mapClipRow` dropped it, so the post detail header rendered an Avatar with
+   * a name and no uri and could never show a picture no matter what was
+   * stored. Optional because the OWNER surfaces use a `*` projection with no
+   * join, where it is genuinely absent rather than null. */
+  channelAvatarUrl?: string | null;
   videoUrl?: string; // signed playback URL, minted on demand, never stored raw
   thumbUrl?: string;
   caption: string;
   sport: Sport;
   status: ClipStatus;
+  /** CT-6: why a `failed` clip failed, shown to the owner beside Retry.
+   * Absent/undefined for every other status. */
+  failureReason?: string | null;
   likes: number;
   commentCount: number;
   createdAt: string;
   likedByMe?: boolean;
+  savedByMe?: boolean; // true when the caller has this clip in their saves
   topComment?: Comment; // hydrated for feed cards
+  /** clips.comments_enabled (0101). False closes the thread to NEW comments;
+   * existing ones still read. The composer is hidden rather than allowed to
+   * fail on submit. */
+  commentsEnabled?: boolean;
+  /** clips.deleted_at (0100). Non null only when the OWNER withdrew the clip
+   * themselves; a moderator takedown lands on status removed with this null. */
+  deletedAt?: string | null;
 }
 
 export interface Comment {

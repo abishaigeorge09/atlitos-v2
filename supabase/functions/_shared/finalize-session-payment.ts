@@ -30,9 +30,46 @@
 // on-demand-transfer model. `payment_intents` remains the record that the
 // charge happened; `ledger_entries` remains the record of who is owed what.
 
+// ============================================================================
+// 0109: THE STATUS GUARD THIS FILE NEVER HAD
+//
+// It selected `id, status` from the session and then never looked at the
+// status it had just read, returning outcome "captured" on a session that was
+// already cancelled or declined. 17 production rows are in that end state.
+//
+// The window is not a microsecond race. `unpaid_hold_ttl()` is 15 minutes and
+// UPI collect routinely exceeds it, so the ordinary sequence is: athlete taps
+// Cancel, cancel-session-refund reads the intent, finds it still `created`,
+// records refund_status "not_applicable" and cancels the session (correct
+// given what it can see), and the capture lands afterwards.
+//
+// CLASS SWEEP, the other four domains:
+//   court       finalizeCourtBookingCaptured calls court_booking_confirm_payment,
+//               which raises INVALID_TRANSITION unless the booking is still
+//               pending_payment. Guarded.
+//   membership  activate_group_membership_paid (0079) is the status writer and
+//               refuses a membership that is not in an activatable state.
+//               Guarded.
+//   commerce    consume_reservation raises OUT_OF_STOCK on a lapsed hold and
+//               finalize-order-payment refunds. Guarded, and it is the only
+//               domain that already had a refund path for this shape.
+//   donation    creates its own entity; there is no prior state to contradict.
+// Session was the one domain whose handler read the status and ignored it.
+// ============================================================================
+
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { AppError } from "./app-error.ts";
 import type { CapturedIntent, FinalizeResult } from "./finalize-payment.ts";
+
+/**
+ * Statuses from which a session can never come back, so a payment landing on
+ * one has bought nothing. Deliberately an explicit list rather than "not
+ * requested": a capture arriving on an `accepted`, `in_progress`, `completed`
+ * or `rated` session is a slow but successful payment for a real session, and
+ * refusing those would invent a failure. `rescheduled` is also fine, the
+ * session still exists and the money still applies to it.
+ */
+const DEAD_SESSION_STATUSES = ["cancelled", "declined"] as const;
 
 export async function finalizeSessionCaptured(
   supabase: SupabaseClient,
@@ -62,6 +99,31 @@ export async function finalizeSessionCaptured(
       "NOT_FOUND",
       `payment_intent ${intent.id} references missing session ${sessionId}.`,
       404,
+    );
+  }
+
+  if ((DEAD_SESSION_STATUSES as readonly string[]).includes(session.status)) {
+    // The charge landed on a session that is already gone. Do NOT return
+    // outcome "captured": that told the athlete their booking succeeded while
+    // the session sat cancelled, which is the single most dishonest thing this
+    // codebase does with money.
+    //
+    // Throwing leaves the intent CAPTURED and UNFINALIZED, which is exactly
+    // right. `finalized_at` stays null, so the row appears in 0109's
+    // `unfinalized_captures` view with this message in `finalize_last_error`,
+    // and the money is visible as owed instead of silently absorbed. Before
+    // 0109 there was nowhere for that fact to live.
+    //
+    // It does NOT issue the refund, because there is no refund path for this
+    // case: cancel-session-refund and decline-session-refund both require the
+    // session to still be `requested`, session_transition refuses a second
+    // cancel with INVALID_TRANSITION, and admin-order-refund is commerce only.
+    // Building one is a separate change; see PAYMENTS.md, "Captured against a
+    // dead entity". Surfacing the debt honestly is what this guard can do.
+    throw new AppError(
+      "SESSION_CANCELLED",
+      "This session was cancelled before the payment completed, so the booking was not created. The payment has been recorded and a refund is owed.",
+      409,
     );
   }
 

@@ -1,6 +1,13 @@
 import type { Db, OrderStatus } from "@atlitos/types";
 import { BillSummary } from "@atlitos/ui-web";
-import { AlertTriangle, ArrowLeft, CircleCheck, MapPin, Truck } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CircleCheck,
+  MapPin,
+  RotateCcw,
+  Truck,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -9,6 +16,12 @@ import { Mono } from "../../components/mono";
 import { Field, Input } from "../../components/form";
 import { advanceOrder, type CommerceError } from "../commerce/api";
 import { nextStatus, orderStatusTone, statusLabel } from "../commerce/status";
+import {
+  fetchOrderRefunds,
+  refundOrder,
+  type OrderRefundRow,
+  type RefundResult,
+} from "./refund-api";
 import { supabaseClient } from "../../providers/supabaseClient";
 
 // AT-82, PRD-04 FR-21, FR-22, FR-23, FR-26. This is the admin half of
@@ -47,6 +60,16 @@ export function OrderShow() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<CommerceError | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  // Refund panel (PRD-04 FR-24, FR-25). Amounts are display only; the server
+  // re-derives the ceiling in claim_order_refund and is the authority.
+  const [refunds, setRefunds] = useState<OrderRefundRow[]>([]);
+  const [refundAmount, setRefundAmount] = useState("");
+  const [refundReason, setRefundReason] = useState("");
+  const [refundConfirming, setRefundConfirming] = useState(false);
+  const [refundBusy, setRefundBusy] = useState(false);
+  const [refundError, setRefundError] = useState<CommerceError | null>(null);
+  const [refundNotice, setRefundNotice] = useState<string | null>(null);
 
   async function load() {
     if (!id) return;
@@ -91,6 +114,15 @@ export function OrderShow() {
     setItems((itemRows as Db.OrderItemRow[]) ?? []);
     setTimeline((timelineRows as Db.OrderTimelineRow[]) ?? []);
     setBuyer((buyerRow as { name: string; phone: string | null }) ?? null);
+
+    try {
+      setRefunds(await fetchOrderRefunds(row.id));
+    } catch {
+      // A refund read failure must not blank the whole order screen; the
+      // refund panel simply shows nothing previously refunded.
+      setRefunds([]);
+    }
+
     setState("ready");
   }
 
@@ -119,6 +151,36 @@ export function OrderShow() {
       setError(err as CommerceError);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function onRefund() {
+    if (!order) return;
+    setRefundBusy(true);
+    setRefundError(null);
+    setRefundNotice(null);
+    try {
+      const result: RefundResult = await refundOrder({
+        orderId: order.id,
+        amount: Number(refundAmount),
+        reason: refundReason.trim(),
+      });
+      setRefundNotice(
+        result.refund_status === "processed"
+          ? `Refunded Rs ${result.refunded_amount.toFixed(2)}. Remaining refundable Rs ${result.remaining_refundable.toFixed(2)}.`
+          : `Refund of Rs ${result.refunded_amount.toFixed(2)} recorded and is being processed.`,
+      );
+      setRefundAmount("");
+      setRefundReason("");
+      setRefundConfirming(false);
+      await load();
+    } catch (err) {
+      // Shown verbatim, code and all: AMOUNT_EXCEEDS_REFUNDABLE,
+      // INVALID_TRANSITION, REFUND_IN_PROGRESS surface as real refusals.
+      setRefundError(err as CommerceError);
+      setRefundConfirming(false);
+    } finally {
+      setRefundBusy(false);
     }
   }
 
@@ -161,6 +223,25 @@ export function OrderShow() {
       ? [{ label: "Donation roundup", amount: Number(order.donation_roundup) }]
       : []),
   ];
+
+  // FR-24/FR-25 refund figures. "Previously refunded" counts settled and
+  // in-flight refunds (both consume the ceiling, exactly as claim_order_refund
+  // computes it server side). These are display only.
+  const previouslyRefunded = refunds
+    .filter((r) => r.status === "pending" || r.status === "processed")
+    .reduce((sum, r) => sum + Number(r.amount), 0);
+  const remainingRefundable = Number((Number(order.total) - previouslyRefunded).toFixed(2));
+  const pendingRefund = refunds.find((r) => r.status === "pending") ?? null;
+  const thisRefund = Number(refundAmount) > 0 ? Number(refundAmount) : 0;
+  const refundAmountValid =
+    thisRefund > 0 &&
+    Math.round(thisRefund * 100) === Number((thisRefund * 100).toFixed(4)) &&
+    thisRefund <= remainingRefundable;
+  const canReviewRefund =
+    remainingRefundable > 0 &&
+    pendingRefund === null &&
+    refundAmountValid &&
+    refundReason.trim().length > 0;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-lg)", maxWidth: 760 }}>
@@ -370,6 +451,145 @@ export function OrderShow() {
               >
                 <Truck size={16} strokeWidth={1.75} />
                 Move to {statusLabel(target)}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Card>
+
+      {/* FR-24, FR-25 the refund panel */}
+      <Card>
+        <p
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: "var(--color-text-tertiary)",
+            margin: "0 0 var(--space-md)",
+          }}
+        >
+          Refund this order
+        </p>
+
+        {refundError ? (
+          <div
+            style={{
+              padding: "var(--space-md)",
+              borderRadius: "var(--radius-sm)",
+              border: "1px solid var(--color-danger)",
+              backgroundColor: "var(--color-danger-tint)",
+              marginBottom: "var(--space-md)",
+            }}
+          >
+            <Mono style={{ fontSize: 12, fontWeight: 600, color: "var(--color-danger)" }}>
+              {refundError.code}
+            </Mono>
+            <p style={{ fontSize: 14, color: "var(--color-danger)", margin: "var(--space-xs) 0 0" }}>
+              {refundError.message}
+            </p>
+          </div>
+        ) : null}
+
+        {refundNotice ? (
+          <p
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "var(--space-xs)",
+              fontSize: 14,
+              color: "var(--color-success)",
+              margin: "0 0 var(--space-md)",
+            }}
+          >
+            <CircleCheck size={16} strokeWidth={1.75} />
+            {refundNotice}
+          </p>
+        ) : null}
+
+        {/* Prior refunds, so the admin sees history without leaving the page */}
+        {refunds.length > 0 ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-xs)", marginBottom: "var(--space-md)" }}>
+            {refunds.map((r) => (
+              <div
+                key={r.id}
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13 }}
+              >
+                <span style={{ color: "var(--color-text-secondary)" }}>
+                  Refund {statusLabel(r.status)}
+                </span>
+                <Mono style={{ fontSize: 13 }}>Rs {Number(r.amount).toFixed(2)}</Mono>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {refundConfirming ? (
+          // The confirm dialog renders the shared BillSummary (FR-25): original
+          // total, previously refunded, this refund, and remaining refundable.
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
+            <BillSummary
+              rows={[
+                { label: "Original total", amount: Number(order.total) },
+                ...(previouslyRefunded > 0
+                  ? [{ label: "Previously refunded", amount: -previouslyRefunded, emphasis: "muted" as const }]
+                  : []),
+                { label: "This refund", amount: -thisRefund },
+              ]}
+              total={Number((remainingRefundable - thisRefund).toFixed(2))}
+              totalLabel="Remaining refundable after this"
+              footnote={`Reason: ${refundReason.trim()}`}
+            />
+            <div style={{ display: "flex", gap: "var(--space-md)" }}>
+              <Button disabled={refundBusy} onClick={() => void onRefund()}>
+                <RotateCcw size={16} strokeWidth={1.75} />
+                Confirm refund of Rs {thisRefund.toFixed(2)}
+              </Button>
+              <button
+                type="button"
+                disabled={refundBusy}
+                onClick={() => setRefundConfirming(false)}
+                style={{
+                  border: "1px solid var(--color-border)",
+                  background: "none",
+                  color: "var(--color-text-secondary)",
+                  borderRadius: "var(--radius-sm)",
+                  padding: "var(--space-sm) var(--space-md)",
+                  fontSize: 14,
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : remainingRefundable <= 0 ? (
+          <p style={{ fontSize: 14, color: "var(--color-text-secondary)", margin: 0 }}>
+            This order is fully refunded. Nothing remains refundable.
+          </p>
+        ) : pendingRefund ? (
+          <p style={{ fontSize: 14, color: "var(--color-text-secondary)", margin: 0 }}>
+            A refund of Rs {Number(pendingRefund.amount).toFixed(2)} is already in progress. It will
+            settle shortly, then another refund can be issued.
+          </p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
+            <div style={{ display: "flex", gap: "var(--space-md)" }}>
+              <Field label="Amount to refund (Rs)" style={{ flex: 1 }}>
+                <Input value={refundAmount} onChange={setRefundAmount} placeholder="0.00" mono />
+              </Field>
+              <Field label="Reason" style={{ flex: 2 }}>
+                <Input value={refundReason} onChange={setRefundReason} placeholder="Quality complaint, returned unopened" />
+              </Field>
+            </div>
+            <p style={{ fontSize: 13, color: "var(--color-text-secondary)", margin: 0 }}>
+              Remaining refundable Rs {remainingRefundable.toFixed(2)}. A reason is required. The
+              amount and the ceiling are re-checked on the server.
+            </p>
+            <div>
+              <Button disabled={!canReviewRefund} onClick={() => setRefundConfirming(true)}>
+                <RotateCcw size={16} strokeWidth={1.75} />
+                Review refund
               </Button>
             </div>
           </div>

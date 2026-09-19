@@ -1,0 +1,77 @@
+appId: com.atlitos.app
+---
+# COACH DASHBOARD HEADER ROW AT 393pt. The width that carries the risk.
+#
+# WHY THIS FLOW EXISTS. (shell)/index.tsx:419 once put "Upcoming sessions" and
+# three sm text buttons ("Session types", "Availability", "View all") in ONE
+# flex-row with no wrap and no flexShrink, which does not fit a 393pt device.
+# It was split into two rows with flexWrap on the link row. A peer session
+# proved that holds at 440pt and correctly REFUSED to call the row clean,
+# because 440pt is not the width that overflows.
+#
+# THE VERDICT IS THE SCREENSHOT, not the assertions. assertVisible passes for
+# an element that is present in a scroll view's hierarchy while sitting off
+# screen, so it cannot tell wrapped from clipped. The asserts below only prove
+# the flow reached the right screen; a human (or a look at the PNG) decides
+# whether the row is intact.
+#
+# Login taps testID "auth-cta", NOT text and NOT coordinates. Every auth screen
+# renders its CTA label as both the heading and the button, so `tapOn: "Log in"`
+# is ambiguous and index-based taps break whenever the keyboard shifts the card.
+- launchApp:
+    clearState: true
+- runFlow:
+    when:
+      visible: "Not Now"
+    commands:
+      - tapOn: "Not Now"
+
+- openLink: atlitos://login
+- runFlow:
+    when:
+      visible: "Open in .*"
+    commands:
+      - tapOn: "Cancel"
+- extendedWaitUntil:
+    visible: "Email or phone.*"
+    timeout: 10000
+- tapOn: "Email or phone input"
+- inputText: "coach1@atlitos.dev"
+- tapOn: "Password input"
+- inputText: "AtlitosDemo!2026"
+- hideKeyboard
+- tapOn:
+    id: "auth-cta"
+- extendedWaitUntil:
+    visible: "Hyderabad|Save Password.*"
+    timeout: 20000
+- runFlow:
+    when:
+      visible: "Save Password.*"
+    commands:
+      - tapOn: "Not Now"
+
+- openLink: atlitos://trainings
+- runFlow:
+    when:
+      visible: "Open in .*"
+    commands:
+      - tapOn: "Cancel"
+- extendedWaitUntil:
+    visible: "Upcoming sessions"
+    timeout: 15000
+
+# Coach role confirmation. If this reads the player sub nav, the screenshot
+# below is of the wrong dashboard and proves nothing about the coach header.
+- assertVisible: "Trainees"
+- assertVisible: "Earnings"
+
+# The label fix: the coach tab must read "Analytics", never "Video Analytics".
+# Video analysis is not built and no surface may promise it.
+- assertVisible: "Analytics"
+
+- takeScreenshot: /tmp/header393/01-coach-dash-393
+- assertVisible: "Session types"
+- assertVisible: "Availability"
+- assertVisible: "View all"
+- takeScreenshot: /tmp/header393/02-links-row

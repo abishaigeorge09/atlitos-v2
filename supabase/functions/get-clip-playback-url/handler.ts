@@ -21,8 +21,11 @@
 //   * the caller is admin/moderator -> any NON-terminal clip.
 //   * status = 'removed'/'rejected' -> everyone EXCEPT the owner, refused.
 //
-// RATE LIMIT (CT-1, CT-2). One per-IP token bucket, `clip-playback-ip`,
-// 60 requests/60s, in FRONT of both the legacy and batch bodies. FAILS OPEN
+// RATE LIMIT (CT-1, CT-2, re-keyed by SCALE-MEDIA M-1). Two token buckets in
+// FRONT of both the legacy and batch bodies: `clip-playback-user` 60/60s for a
+// signed-in caller keyed on their verified user id, and `clip-playback-ip`
+// 600/60s for anonymous callers keyed on the client IP. See the constants
+// below for why the single per-IP bucket had to go. FAILS OPEN
 // on a rate-limit RPC error (`_shared/rate-limit.ts`): a DB hiccup on the
 // throttle itself must never turn the public playback feed into a 500. The
 // existing clip authz above is unaffected by any of this: throttling is a
@@ -45,8 +48,26 @@ import { mintSignedUrlWithTtl, THUMB_URL_TTL_SECONDS, VIDEO_URL_TTL_SECONDS } fr
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const RATE_LIMIT_BUCKET = "clip-playback-ip";
-const RATE_LIMIT_MAX = 60;
+// SCALE-MEDIA M-1. The throttle used to key EVERY caller on
+// `x-forwarded-for[0]`. Live `edge_rate_limits` rows under `clip-playback-ip`
+// are Indian carrier CGNAT addresses (49.43.218.96, 223.228.125.206 and
+// 223.228.114.206 out of the same /16), so real users share one key: at a
+// mixed 23 requests/minute/user the 60/60s budget is exhausted by THREE
+// concurrent users behind one egress IP, while global aggregate load at 10,000
+// users is only about 3.7 requests/second. It refused legitimate traffic at
+// roughly one four-hundredth of any real capacity limit.
+//
+// Signed-in callers are now keyed on their user id, which is the identity the
+// abuse limit actually cares about and which NAT cannot collide. Anonymous
+// callers still key on IP, because a guest has no id, but that bucket is sized
+// for CGNAT (600/60s = 10 requests/second from one egress address) instead of
+// for one person. The protection stays real in both cases: a single abusive
+// signed-in account is still capped at 60/60s, and a single IP can no longer
+// hide behind "it might be a NAT" for more than 10 requests a second.
+const RATE_LIMIT_USER_BUCKET = "clip-playback-user";
+const RATE_LIMIT_IP_BUCKET = "clip-playback-ip";
+const RATE_LIMIT_USER_MAX = 60;
+const RATE_LIMIT_IP_MAX = 600;
 const RATE_LIMIT_WINDOW_SECONDS = 60;
 export const BATCH_MAX_CLIP_IDS = 24;
 
@@ -99,36 +120,48 @@ function parseBody(raw: unknown): ParsedBody {
   return { mode: "legacy", clipId };
 }
 
-/** The one authz decision, shared by the legacy and batch paths (see header). */
+/**
+ * The one authz decision, shared by the legacy and batch paths (see header).
+ * Returns NULL when the caller may have a URL, or the `failed` reason string
+ * when they may not.
+ *
+ * This used to return a `{ ok: true } | { ok: false; reason }` union, which
+ * Deno's TypeScript did not narrow at the call site: `deno check` on this
+ * function has been failing with TS2339 "Property 'reason' does not exist"
+ * since the union was introduced, verified by running it against the unmodified
+ * base branch. Nothing in the repo runs `deno check` (there is no deno task in
+ * turbo.json and no CI), so a red typecheck on every edge function in this
+ * directory went unnoticed. A nullable reason has no discriminant to narrow and
+ * says exactly the same thing.
+ */
 async function resolveClipAccess(
   // deno-lint-ignore no-explicit-any
   supabase: any,
   clip: LiveClip,
   userId: string | null,
-): Promise<{ ok: true } | { ok: false; reason: string }> {
-  if (clip.status === "published") return { ok: true };
+): Promise<string | null> {
+  if (clip.status === "published") return null;
 
   const isOwner = userId !== null && userId === clip.owner_id;
-  if (isOwner) return { ok: true };
+  if (isOwner) return null;
 
   if (clip.status === "removed" || clip.status === "rejected") {
-    return { ok: false, reason: "not_available" };
+    return "not_available";
   }
   const isAdmin = await isAdminOrModerator(supabase, userId);
-  if (isAdmin) return { ok: true };
-  return { ok: false, reason: "not_available" };
+  if (isAdmin) return null;
+  return "not_available";
 }
 
 async function handleLegacy(
-  request: Request,
   // deno-lint-ignore no-explicit-any
   supabase: any,
   clipId: string,
+  userId: string | null,
 ): Promise<Response> {
   const clip = await fetchLiveClip(supabase, clipId);
 
   if (clip.status !== "published") {
-    const userId = await getOptionalUserId(request);
     const isOwner = userId !== null && userId === clip.owner_id;
     if (!isOwner) {
       if (clip.status === "removed" || clip.status === "rejected") {
@@ -170,13 +203,12 @@ interface BatchFailedEntry {
 }
 
 async function handleBatch(
-  request: Request,
   // deno-lint-ignore no-explicit-any
   supabase: any,
   clipIds: string[],
   kind: Kind,
+  userId: string | null,
 ): Promise<Response> {
-  const userId = await getOptionalUserId(request);
   const ttl = kind === "thumb" ? THUMB_URL_TTL_SECONDS : VIDEO_URL_TTL_SECONDS;
 
   const urls: BatchUrlEntry[] = [];
@@ -195,9 +227,9 @@ async function handleBatch(
         return;
       }
 
-      const access = await resolveClipAccess(supabase, clip, userId);
-      if (!access.ok) {
-        failed.push({ clip_id: clipId, reason: access.reason });
+      const refusalReason = await resolveClipAccess(supabase, clip, userId);
+      if (refusalReason !== null) {
+        failed.push({ clip_id: clipId, reason: refusalReason });
         return;
       }
 
@@ -236,14 +268,30 @@ export async function handlePlaybackRequest(request: Request): Promise<Response>
 
   const supabase = serviceRoleClient();
 
-  const ip = getClientIp(request);
-  const rl = await takeRateLimitToken(
-    supabase,
-    RATE_LIMIT_BUCKET,
-    ip,
-    RATE_LIMIT_MAX,
-    RATE_LIMIT_WINDOW_SECONDS,
-  );
+  // M-1. Resolve the caller ONCE, before the throttle, and hand the result to
+  // whichever body runs. This is the same verified `getUser` the authz already
+  // depended on, never a locally decoded `sub`: an unverified id in the key
+  // would let a caller mint a fresh bucket per forged token and remove the
+  // limit entirely. Resolving it here also means the batch path and the
+  // owner/admin legacy path each do ONE fewer round trip than before, which
+  // pays for the one a guest on the published path now adds.
+  const userId = await getOptionalUserId(request);
+
+  const rl = userId
+    ? await takeRateLimitToken(
+      supabase,
+      RATE_LIMIT_USER_BUCKET,
+      userId,
+      RATE_LIMIT_USER_MAX,
+      RATE_LIMIT_WINDOW_SECONDS,
+    )
+    : await takeRateLimitToken(
+      supabase,
+      RATE_LIMIT_IP_BUCKET,
+      getClientIp(request),
+      RATE_LIMIT_IP_MAX,
+      RATE_LIMIT_WINDOW_SECONDS,
+    );
   if (!rl.allowed) {
     // Only reached when the RPC genuinely returned false (window exhausted);
     // an RPC error takes the `failedOpen` branch above and falls through to
@@ -252,7 +300,7 @@ export async function handlePlaybackRequest(request: Request): Promise<Response>
   }
 
   if (parsed.mode === "batch") {
-    return handleBatch(request, supabase, parsed.clipIds, parsed.kind);
+    return handleBatch(supabase, parsed.clipIds, parsed.kind, userId);
   }
-  return handleLegacy(request, supabase, parsed.clipId);
+  return handleLegacy(supabase, parsed.clipId, userId);
 }

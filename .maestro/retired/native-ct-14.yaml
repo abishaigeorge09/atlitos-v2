@@ -1,0 +1,69 @@
+appId: com.atlitos.app
+---
+# CT-14 (MAESTRO, player@): native courts browse + book smoke on TEST rails.
+# Browse -> open Turf A -> pick the first open slot -> Book this slot -> reach
+# the Confirm-and-pay screen, where book-court has reserved a hold and the
+# shared BillSummary renders the price breakdown (Subtotal, GST, Platform fee,
+# Total). The flow STOPS here and never taps Pay: Pay would launch the Razorpay
+# checkout SDK (real payment), which is out of scope for this smoke. Reaching a
+# rendered BillSummary + Pay CTA without a crash is the deterministic boundary;
+# the capture -> verify tail runs on TEST rails and is covered by the web lane.
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "ATLITOS"
+    timeout: 30000
+# Deep-linking to /login right after a cold clearState launch occasionally
+# races the router before the route is registered and the link is dropped;
+# retry re-fires the openLink until the login screen actually mounts.
+- retry:
+    maxRetries: 3
+    commands:
+      - openLink: "atlitos://login"
+      - extendedWaitUntil:
+          visible: "Log in"
+          timeout: 12000
+- tapOn: "Email or phone input"
+- inputText: "player@atlitos.dev"
+- tapOn: "Password input"
+- inputText: "AtlitosDemo!2026"
+- tapOn:
+    text: "Log in"
+    index: 1
+- extendedWaitUntil:
+    visible: "ATLITOS"
+    timeout: 20000
+- openLink: "atlitos://courts"
+- extendedWaitUntil:
+    visible: "Turf A"
+    timeout: 15000
+- tapOn: "Turf A"
+- extendedWaitUntil:
+    visible: "per hour"
+    timeout: 15000
+# Scroll the slot grid into view (anchor on the "Pick a time" heading, not on a
+# " to " regex, which would match the pinned "Select a time to book" button and
+# never scroll), then pick the first open slot. getAvailableSlots only returns
+# bookable slots (e.g. "07:00 to 08:00"), so any rendered chip can be booked.
+- scrollUntilVisible:
+    element:
+      text: "Pick a time"
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    text: "\\d{1,2}:\\d{2} to \\d{1,2}:\\d{2}"
+    index: 0
+- extendedWaitUntil:
+    visible: "Book this slot"
+    timeout: 10000
+- tapOn: "Book this slot"
+# Confirm-and-pay: the hold is reserved and BillSummary renders. Do NOT pay.
+- extendedWaitUntil:
+    visible: "Confirm and pay"
+    timeout: 20000
+- assertVisible: "Subtotal"
+- assertVisible: "GST"
+- assertVisible: "Platform fee"
+- assertVisible: "Total"
+- assertVisible: "Pay.*"
+- takeScreenshot: /private/tmp/claude-501/-Users-abishaigeorgegosula/fba33c07-a222-4e4f-ab7d-4ba677415610/scratchpad/native-ct-14-billsummary

@@ -18,6 +18,7 @@ import { PriceText } from '@/components/ui/price-text';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StarRating } from '@/components/ui/star-rating';
 import { Text } from '@/components/ui/text';
+import { usePendingAuthAction } from '@/hooks/use-pending-auth-action';
 import { SPORT_ICON, SPORT_LABEL } from '@/lib/sport-display';
 import { supabase } from '@/lib/supabase';
 import { useLocationStore } from '@/store/location-store';
@@ -60,6 +61,10 @@ export default function CourtDetailScreen() {
   const [slots, setSlots] = useState<{ from: string; to: string; price: number }[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | undefined>(undefined);
   const [gateVisible, setGateVisible] = useState(false);
+  // F8 (P5 fix pass, PRD-01 FR-4): handleBook only navigates to the pay
+  // confirm screen, it never completes a charge itself (that screen
+  // re-verifies price server side), so replaying it after login is safe.
+  const { requireAuth, clearPendingAction } = usePendingAuthAction(requiresAuthGate);
 
   const loadCourt = useCallback(async () => {
     setState('loading');
@@ -108,21 +113,19 @@ export default function CourtDetailScreen() {
 
   function handleBook() {
     if (!court || !selectedSlot) return;
-    if (requiresAuthGate) {
-      setGateVisible(true);
-      return;
-    }
-    router.push({
-      pathname: '/(tabs)/courts/book/pay',
-      params: {
-        courtId: court.id,
-        courtName: court.name,
-        venueLocation: court.location,
-        date,
-        slotFrom: selectedSlot.from,
-        slotTo: selectedSlot.to,
-      },
-    });
+    requireAuth(() => {
+      router.push({
+        pathname: '/(tabs)/courts/book/pay',
+        params: {
+          courtId: court.id,
+          courtName: court.name,
+          venueLocation: court.location,
+          date,
+          slotFrom: selectedSlot.from,
+          slotTo: selectedSlot.to,
+        },
+      });
+    }, () => setGateVisible(true));
   }
 
   if (state === 'loading') {
@@ -255,7 +258,11 @@ export default function CourtDetailScreen() {
         </Button>
       </View>
 
-      <LoginGateModal visible={gateVisible} onClose={() => setGateVisible(false)} />
+      <LoginGateModal
+        visible={gateVisible}
+        onClose={() => setGateVisible(false)}
+        onDismiss={clearPendingAction}
+      />
     </SafeAreaView>
   );
 }

@@ -31,16 +31,34 @@
 //        - products: `active = true`.
 //        - athletes: `upa_applications.status = 'verified'`.
 //        - clips: `clips.status = 'published'`.
-//   The service-role client is deliberately never constructed here; search has
-//   no money leg and must not bypass RLS.
+//   The service-role client is used for exactly ONE narrow purpose (below),
+//   never for any of the reads above: search has no money leg and must not
+//   bypass RLS for the data itself.
+//
+// THROTTLE + BUDGET (LAUNCH Phase 3 Track B, P1-5; PHASE-3-STATUS.md CT-2,
+// CT-3). Before any LLM call, `evaluateAiSearchGate` (spend-guard.ts) checks a
+// per-user token bucket AND the day's spend against `ai_search_daily_budget()`.
+// Over either, the request degrades to the deterministic keyword path, never
+// an error (Settled decision 5). This is the one place this function
+// constructs a SERVICE ROLE client: `take_rate_limit_token` and
+// `record_ai_spend`/`ai_search_daily_budget`/`ai_spend_daily` are service_role
+// only grants (CT-2, CT-3), and none of them touch a data table this function
+// searches. Response gains `"mode": "llm" | "keyword"`, naming which path the
+// gate actually took.
+//
+// Phase S1 Track B (PRD-07 FR-40, FR-42; ADR-011 D1) extends the SAME gate to
+// also cover a Voyage query-embedding call and `match_affiliate_products`
+// recall (see `recallByVector` below); the response additionally gains
+// `"vector": boolean`. `mode` keeps its pre-existing meaning ("did Claude
+// actually parse/rerank"), so an existing caller sees no contract change.
 
 import { handleCorsPreflight } from "../_shared/cors.ts";
 import { jsonResponse, withErrorHandling } from "../_shared/http.ts";
 import { AppError } from "../_shared/app-error.ts";
-import { getAuthenticatedUser, userScopedClient } from "../_shared/supabase.ts";
-import { callerIp, enforceRateLimit } from "../_shared/rate-limit.ts";
+import { getAuthenticatedUser, serviceRoleClient, userScopedClient } from "../_shared/supabase.ts";
 
 import {
+  candidateKey,
   type Candidate,
   capitalize,
   ENTITY_TYPES,
@@ -53,16 +71,11 @@ import {
   scoreCandidates,
   type Sport,
   SPORTS,
+  VECTOR_SIMILARITY_FLOOR,
 } from "./search-core.ts";
 import { llmEnabled, llmParseIntent, llmRerank } from "./llm.ts";
-
-/**
- * SEC-F9 spend ceiling. 30 searches a minute is far above what a human typing
- * into a search box produces (the client debounces) and far below what a
- * scripted loop wants. Raise it if real usage ever bumps it; do not remove it
- * while a paid model sits behind this endpoint.
- */
-const SEARCH_RATE_LIMIT = { limit: 30, windowSeconds: 60 };
+import { evaluateAiSearchGate, recordAiSpend, recordVoyageSpend } from "./spend-guard.ts";
+import { embeddingsMode, embedTexts } from "../_shared/embeddings.ts";
 
 // --------------------------------------------------------------------------
 // Request
@@ -280,14 +293,32 @@ async function fetchProducts(supabase: any, intent: ParsedIntent): Promise<Candi
 // so affiliate and owned gear rank against each other in one result set; the
 // `entityId` is prefixed `affiliate:` so the client can route it to the compare
 // view rather than the owned PDP.
+// `ids`, when given, hydrates exactly those affiliate_products rows (the
+// D1 vector-recall path: `match_affiliate_products` returns ids + similarity,
+// this fetch turns them into the same Candidate shape the keyword path
+// already produces, so scoring/honesty never need a second code path). The
+// sport filter is intentionally NOT applied in that mode: the vector match
+// itself is the relevance signal for those rows (AC-11-2 names no sport
+// filter either), and re-filtering by the deterministic parse's guessed
+// sport would silently drop a correct vector hit whose sport the parser
+// missed.
 // deno-lint-ignore no-explicit-any
-async function fetchAffiliateProducts(supabase: any, intent: ParsedIntent): Promise<Candidate[]> {
+async function fetchAffiliateProducts(supabase: any, intent: ParsedIntent, ids?: string[]): Promise<Candidate[]> {
   let q = supabase
     .from("affiliate_products")
     .select("id, title, brand, sport, skill_level, age_range, description, image_url, product_offers ( price, in_stock )")
     .eq("active", true)
     .limit(50);
-  if (intent.sport !== "general") q = q.eq("sport", intent.sport);
+  if (ids) {
+    if (ids.length === 0) return [];
+    q = supabase
+      .from("affiliate_products")
+      .select("id, title, brand, sport, skill_level, age_range, description, image_url, product_offers ( price, in_stock )")
+      .eq("active", true)
+      .in("id", ids);
+  } else if (intent.sport !== "general") {
+    q = q.eq("sport", intent.sport);
+  }
 
   const { data, error } = await q;
   if (error) throw new AppError("INTERNAL", `Failed to load affiliate products: ${error.message}`, 500);
@@ -387,6 +418,103 @@ async function fetchClips(supabase: any, intent: ParsedIntent): Promise<Candidat
 }
 
 // --------------------------------------------------------------------------
+// Vector recall (ADR-011 D1): query embedding, cached, then
+// match_affiliate_products. Both the cache table and the RPC are service
+// role only (AC-11-7), so this always runs against `svc`, never the caller's
+// own JWT client.
+// --------------------------------------------------------------------------
+
+const QUERY_CACHE_TTL_MS = 10 * 60 * 1000;
+
+async function sha256Hex(text: string): Promise<string> {
+  const data = new TextEncoder().encode(text);
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", data));
+  return Array.from(digest).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+interface VectorMatch {
+  id: string;
+  similarity: number;
+}
+
+/**
+ * Embeds `query` (cache-first, 10 minute TTL, `query_embedding_cache`) and
+ * recalls candidate affiliate product ids through `match_affiliate_products`.
+ * Returns `null` on ANY failure (Voyage down, RPC error, cache read/write
+ * error) so the caller's only job is "did this succeed", never inspecting
+ * partial state; per D1/FR-42, a failure here degrades the request to
+ * vector-less results, never an error response.
+ *
+ * Records a Voyage spend entry ONLY when a fresh (non-cached) call actually
+ * ran against the real Voyage API (`embeddingsMode() === "voyage"`); a cache
+ * hit or the offline stub never costs anything and never touches the ledger.
+ */
+// deno-lint-ignore no-explicit-any
+async function recallByVector(svc: any, query: string): Promise<VectorMatch[] | null> {
+  try {
+    const hash = await sha256Hex(query.toLowerCase().trim());
+
+    let vector: number[] | null = null;
+    const { data: cached, error: cacheReadError } = await svc
+      .from("query_embedding_cache")
+      .select("embedding, created_at")
+      .eq("query_hash", hash)
+      .maybeSingle();
+    if (!cacheReadError && cached) {
+      const age = Date.now() - new Date(cached.created_at as string).getTime();
+      if (age < QUERY_CACHE_TTL_MS) {
+        try {
+          const parsed = JSON.parse(cached.embedding as string);
+          if (Array.isArray(parsed)) vector = parsed as number[];
+        } catch {
+          vector = null; // malformed cache row: fall through to a fresh embed.
+        }
+      }
+    }
+
+    let spentVoyage = false;
+    if (!vector) {
+      const modeBeforeCall = embeddingsMode();
+      const [fresh] = await embedTexts([query], "query");
+      vector = fresh;
+      spentVoyage = modeBeforeCall === "voyage";
+
+      // Best-effort cache write; a failure to cache never fails the request.
+      await svc
+        .from("query_embedding_cache")
+        .upsert(
+          { query_hash: hash, embedding: JSON.stringify(vector), created_at: new Date().toISOString() },
+          { onConflict: "query_hash" },
+        )
+        .then(
+          () => {},
+          () => {},
+        );
+    }
+
+    const { data: matches, error: matchError } = await svc.rpc("match_affiliate_products", {
+      query_embedding: JSON.stringify(vector),
+      match_threshold: VECTOR_SIMILARITY_FLOOR,
+      match_count: 20,
+    });
+    if (matchError) {
+      console.error(`[ai-search] match_affiliate_products errored, skipping vector recall: ${matchError.message}`);
+      return null;
+    }
+
+    if (spentVoyage) await recordVoyageSpend(svc);
+
+    return ((matches ?? []) as Array<{ id: string; similarity: number }>).map((m) => ({
+      id: m.id,
+      similarity: Number(m.similarity),
+    }));
+  } catch (err) {
+    console.error("[ai-search] vector recall failed, skipping:", err);
+    return null;
+  }
+}
+
+// --------------------------------------------------------------------------
 // Handler
 // --------------------------------------------------------------------------
 
@@ -401,21 +529,11 @@ Deno.serve((req) =>
 
     const body = parseRequestBody(await request.json().catch(() => null));
 
-    // SEC-F9. Enforced HERE, before the two Anthropic calls below, and keyed on
-    // BOTH the caller and their IP: 0008 lets anyone mint a fresh anonymous
-    // session, so a user key alone resets for free.
-    //
-    // Deliberately applied to the whole endpoint, not just the LLM branch. The
-    // deterministic path still runs five table scans per request, and gating
-    // only the paid branch would leave the limit off on the exact day the key
-    // is unset and the endpoint is cheapest to hammer.
-    const user = await getAuthenticatedUser(request);
-    await enforceRateLimit(
-      [`ai-search:user:${user.id}`, `ai-search:ip:${callerIp(request)}`],
-      SEARCH_RATE_LIMIT,
-    );
-
     const supabase = userScopedClient(request);
+    // Validated against GoTrue, never a client-supplied id; a guest's
+    // anonymous session still resolves to a real user id here (verify_jwt is
+    // true for this function, so there is always a session to validate).
+    const { id: userId } = await getAuthenticatedUser(request);
 
     const override: IntentOverride = {
       entityTypes: body.entityTypes,
@@ -423,12 +541,43 @@ Deno.serve((req) =>
       priceMax: body.priceMax,
     };
 
-    // Deterministic parse is always the baseline. When the LLM key is present,
-    // refine it with Claude's structured parse (guarded: null on any failure).
+    // The one narrow service-role client this function constructs (see file
+    // header): passed to the CT-2/CT-3 rate-limit and spend RPCs, and (Phase
+    // S1 Track B, ADR-011 D1) to the vector recall's cache table and
+    // `match_affiliate_products` RPC, both service-role only. Never to a
+    // data read of the entity tables `fetch*` reads above.
+    const svc = serviceRoleClient();
+
+    // The CT-2/CT-3 gate decides ONCE per request whether ANY paid AI call
+    // below MAY run (Claude's intent parse/rerank, and now Voyage's query
+    // embedding, D1: "gates the Voyage call with the same per-user throttle
+    // and daily budget it gates Claude with"). `spendAllowed` is that raw
+    // gate outcome. `useLlm` additionally requires the Anthropic key to
+    // actually be configured; `useVector` has no such extra requirement,
+    // since `embedTexts` degrades to the offline stub on its own when no
+    // Voyage key is present. The response's own `mode` field keeps its
+    // PRE-EXISTING meaning ("did Claude actually parse/rerank this request"),
+    // reported as `useLlm` below, not the raw spend gate: a Voyage-only
+    // request with no Anthropic key configured must still report
+    // `mode: "keyword"`, exactly as it did before this phase, so an existing
+    // caller reading `mode` sees no contract change (ADR-011: "ai-search's
+    // external contract is unchanged").
+    const gate = await evaluateAiSearchGate(svc, userId);
+    const spendAllowed = gate.mode === "llm";
+    const useLlm = spendAllowed && llmEnabled();
+    const useVector = spendAllowed;
+    const reportedMode = useLlm ? "llm" : "keyword";
+
+    // Deterministic parse is always the baseline. When the gate allows it,
+    // refine it with Claude's structured parse (guarded: falls back on any
+    // failure, and the fallback still records nothing since usage is null).
     let intent = parseIntent(body.query, override);
-    if (llmEnabled()) {
-      const refined = await llmParseIntent(body.query).catch(() => null);
+    if (useLlm) {
+      const { intent: refined, usage } = await llmParseIntent(body.query).catch(
+        () => ({ intent: null, usage: null }),
+      );
       intent = mergeIntent(intent, refined);
+      if (usage) await recordAiSpend(svc, usage.inputTokens, usage.outputTokens);
     }
 
     const want = new Set(intent.entityTypes);
@@ -442,21 +591,86 @@ Deno.serve((req) =>
     ]);
 
     const candidates = [...coaches, ...courts, ...products, ...affiliateProducts, ...athletes, ...clips];
+
+    // Vector recall (ADR-011 D1): ADDS candidates the keyword path missed,
+    // never re-weights or removes anything the deterministic path already
+    // found. Scoped to `gear`, the only entity type FR-40 names, and only
+    // over `affiliate_products` (the ADR's own non-goal excludes the OWNED
+    // catalogue). `vector` in the response reports whether this path
+    // actually ran (spend allowed AND the recall call itself succeeded), so a
+    // caller can tell "no vector signal at all" from "vector ran, found
+    // nothing" without inspecting results.
+    let vector = false;
+    const similarityByKey = new Map<string, number>();
+    if (useVector && want.has("gear")) {
+      const matches = await recallByVector(svc, body.query);
+      if (matches) {
+        vector = true;
+        const existingIds = new Set(affiliateProducts.map((c) => c.entityId));
+        const newIds = matches
+          .filter((m) => !existingIds.has(`affiliate:${m.id}`))
+          .map((m) => m.id);
+        const hydrated = await fetchAffiliateProducts(supabase, intent, newIds);
+        for (const c of hydrated) candidates.push(c);
+        // candidateKey shape is `${entityType}:${entityId}`, and entityId for
+        // affiliate rows is itself `affiliate:${id}` (see fetchAffiliateProducts).
+        for (const m of matches) {
+          similarityByKey.set(candidateKey({ entityType: "gear", entityId: `affiliate:${m.id}` }), m.similarity);
+        }
+      }
+    }
+
     const scored = scoreCandidates(candidates, intent).sort((a, b) => b.rankScore - a.rankScore);
 
     // FR-16 honesty gate: keep only hard-constraint-qualified, confident hits.
-    const honesty = evaluateHonesty(candidates, scored, intent);
+    // similarityByKey lets a vector-only recall (zero keyword hits) still
+    // clear the relevance floor once its cosine similarity clears
+    // VECTOR_SIMILARITY_FLOOR (D1); brand/price constraints are unaffected.
+    const honesty = evaluateHonesty(candidates, scored, intent, similarityByKey);
     if (honesty.broaden) {
-      return jsonResponse({ query: body.query, parsedIntent: intent, results: [], broaden: honesty.broaden }, 200);
+      return jsonResponse(
+        { query: body.query, parsedIntent: intent, results: [], broaden: honesty.broaden, mode: reportedMode, vector },
+        200,
+      );
     }
 
-    const qualified = scored.filter((h) => honesty.qualified.has(`${h.entityType}:${h.entityId}`));
+    const qualified = scored.filter((h) => honesty.qualified.has(candidateKey(h)));
+
+    // A vector-only hit (recalled purely via similarity, ZERO keyword hits on
+    // its own text) gets an honest rankReason naming why it is here, rather
+    // than whatever scoreCandidates's keyword-blind fallback ("Relevant")
+    // would say. Membership in `affiliateProducts` is NOT the right test
+    // here: that fetch returns every active affiliate row up to its limit
+    // regardless of keyword content (filtering happens later, at scoring/
+    // honesty), so a product can be present there and still have zero
+    // keyword overlap with THIS query. Re-derive the real signal instead:
+    // does intent have keywords, and does this candidate's own text miss
+    // every one of them, while it still cleared the vector floor.
+    const textByKey = new Map(candidates.map((c) => [candidateKey(c), c.text]));
+    for (const hit of qualified) {
+      const key = candidateKey(hit);
+      const text = textByKey.get(key) ?? "";
+      const hasKeywordHit = intent.keywords.length > 0 && intent.keywords.some((k) => text.includes(k));
+      if (similarityByKey.has(key) && (intent.keywords.length === 0 || !hasKeywordHit)) {
+        hit.rankReason = "similar to your query";
+      }
+    }
 
     // LLM rerank (guarded) refines order + rankReason over the qualified set;
-    // absent key or failure keeps the deterministic order.
-    const reranked = llmEnabled() ? await llmRerank(body.query, qualified).catch(() => qualified) : qualified;
-    const results = reranked.slice(0, body.limit);
+    // gated off (absent key, throttled, or over budget) or a call failure
+    // both keep the deterministic order.
+    let results = qualified;
+    if (useLlm) {
+      const { hits: reranked, usage } = await llmRerank(body.query, qualified).catch(
+        () => ({ hits: qualified, usage: null }),
+      );
+      results = reranked;
+      if (usage) await recordAiSpend(svc, usage.inputTokens, usage.outputTokens);
+    }
 
-    return jsonResponse({ query: body.query, parsedIntent: intent, results }, 200);
+    return jsonResponse(
+      { query: body.query, parsedIntent: intent, results: results.slice(0, body.limit), mode: reportedMode, vector },
+      200,
+    );
   })
 );

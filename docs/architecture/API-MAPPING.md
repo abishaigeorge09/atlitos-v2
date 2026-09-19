@@ -26,9 +26,16 @@ Every function in v1's `services/api.ts` contract (`PLAN-2-3-api-contract-and-ll
 | v1 fn | v1 route | v2 lane | Function / RPC | Note |
 |---|---|---|---|---|
 | `getMe` | GET `/me` | PostgREST | `users` select, left join `coach_profiles` | RLS `id = auth.uid()` |
-| `updateMe` | PATCH `/me` | PostgREST | `users` update | sport-immutable-once-verified rule enforced by a `BEFORE UPDATE` trigger on `coach_profiles`, not this call |
-| `setupPlayer` | POST `/me/setup/player` | RPC | `complete_player_setup(sports, avatar_url, city, state)` | writes `users` fields and the `player` `user_roles` row in one transaction; raises `ALREADY_SETUP` if the role already exists |
-| `setupCoach` | POST `/me/setup/coach` | RPC | `submit_coach_verification(payload jsonb)` | writes `coach_profiles`, `coach_certificates`, `session_types`, `coach_availability_windows`, and the `verification_requests` row atomically; raises `ALREADY_SETUP` if a `pending_review` or `verified` profile exists |
+| `updateMe` | PATCH `/me` | PostgREST + RPC | `users` update; `set_athlete_sports` for the sports field | non-sports fields (bio, cover, handle, city, state, theme, notification prefs) are a plain owner-scoped `users` patch. The `sports` field is the exception: it is routed through `set_athlete_sports(sports, primary)` (0088), never a bare `users.sports` write, so `athlete_sports`/`is_primary` (which Learn and the coach-search default read) stay consistent with `users.sports`. `getMe` also returns `primarySport` from `athlete_sports.is_primary` (tie break `is_primary desc, created_at asc`, same as `get_learn_home`) |
+| `setupPlayer` | POST `/me/setup/player` | RPC | `complete_player_setup(sports, avatar_url, city, state)` | writes `users` fields and the `player` `user_roles` row in one transaction; also dual-writes `athlete_sports`/`is_primary` (primary = first pick); raises `ALREADY_SETUP` if the role already exists |
+| `setAthleteSports` | POST `/me/sports` | RPC | `set_athlete_sports(sports, primary)` | SECURITY DEFINER, owner-scoped to `auth.uid()`. Rewrites `users.sports` AND rebuilds `athlete_sports` (deletes dropped sports, upserts the rest, sets `is_primary` only on `primary`) in one transaction, so the two sport models never drift after onboarding. Validates non-empty `sports` and `primary IN sports`. `authenticated` only |
+| `setupCoach` | POST `/me/setup/coach` | RPC | `submit_coach_verification(payload jsonb)` | writes `coach_profiles` and `coach_certificates``, `coach_availability_windows`, and the `verification_requests` row atomically; raises `ALREADY_SETUP` if a `pending_review` or `verified` profile exists |
+
+**Correction, 0099.** The row above claimed `submit_coach_verification` writes `session_types` and `coach_availability_windows`. It never has. `0004_player_and_coach_setup_rpc.sql` predates `0018_coaching.sql`, which creates those two tables, so it preserves the wizard's step 4 pricing and step 5 availability verbatim in `verification_requests.payload` and writes only what it can write to real columns. 0004's own header promised a later migration would backfill from that payload; none did.
+
+The consequence was not cosmetic. `sessions.session_type_id` is `NOT NULL`, and the athlete booking screen lists only `session_types` where `active`, so a coach who completed every step of onboarding and was approved had zero rows and could not receive a single booking request. `0099_backfill_coach_setup_from_verification_payload.sql` is the missing backfill, and the coach session types screen (below) is the durable fix, since a backfill cannot invent a type for a coach whose payload had none. (Renumbered from the originally authored `0088`: production had already applied three unrelated migrations at `0088` through other in-flight branches, so a fourth `0088` would have silently never run.)
+
+Nothing about the RPC's behaviour changed; only this doc was wrong.
 
 ## home
 
@@ -46,7 +53,9 @@ Every function in v1's `services/api.ts` contract (`PLAN-2-3-api-contract-and-ll
 
 `POST { query, entityTypes?, sport?, priceMax?, lat?, lng?, city?, limit? }` with the caller's own JWT (`verify_jwt` true). Search is public discovery, so a guest is a valid caller: it passes its anonymous session token, like `get-clip-playback-url`. Only `query` is required; every other field is an optional narrowing the client already holds (its location store, a tapped segment) and is advisory, the server re-derives intent from `query` regardless (`parseIntent`), so a field a client sets can never widen what it sees.
 
-Response `{ query, parsedIntent, results: SearchHit[] }` sorted `rankScore` desc. `parsedIntent` is `{ entityTypes, sport, priceMax?, timeWindow?, keywords }`.
+Response `{ query, parsedIntent, results: SearchHit[], mode: "llm" | "keyword" }` sorted `rankScore` desc. `parsedIntent` is `{ entityTypes, sport, priceMax?, timeWindow?, keywords }`. `mode` (LAUNCH Phase 3, P1-5) names which path this call actually took.
+
+**Throttle + budget (LAUNCH Phase 3, CT-2/CT-3).** Before either LLM call (intent parse, rerank), a per-user token bucket (`ai-search-user`, 10 req/60s, `take_rate_limit_token`) and the day's LLM spend (`ai_spend_daily.est_usd` vs `ai_search_daily_budget()`, feature flag `ai_search_daily_budget_usd`, default $10) are checked once per request. Over either, the whole request stays on the deterministic keyword path, `mode: "keyword"`, HTTP 200, NEVER an error (Settled decision 5, PHASE-3-STATUS.md). After a real LLM call, `record_ai_spend` upserts today's token/USD totals. Both checks default to keyword mode on any RPC/read failure (the opposite fail-direction from the playback rate limit's fail-open, deliberately: an unreadable budget must not silently permit unmetered spend). Implementation in `supabase/functions/ai-search/spend-guard.ts`.
 
 **Entity types.** The v1 `SearchEntityType` union named three: `gear` (products), `coach` (coach_profiles), `court` (courts). Track E (AT-3) extended it with two more, behind the identical `SearchHit` shape: `athlete` (verified `upa_applications`, the same view/filter `use-empower.ts`'s `listUpas` reads) and `clip` (published `clips`, the same explicit scope `hooks.ts`'s `getFeed` reads). Drills remain out of the contract, no PRD asks for them in search.
 
@@ -60,12 +69,56 @@ Response `{ query, parsedIntent, results: SearchHit[] }` sorted `rankScore` desc
 
 **Track E (athletes + clips extension).** Not yet redeployed; the integrator deploys `ai-search` via the Supabase MCP before this is live. Client side (`apps/mobile/src/app/home/search.tsx`, `SearchResults.tsx`) already routes `athlete` hits to `/home/upa/[id]` and `clip` hits to `/(tabs)/clutch/post/[id]`.
 
+### `ai-search`, hybrid vector recall extension (Phase S1 Track B, PRD-07 FR-40/FR-42, ADR-011 D1)
+
+Contract shape is otherwise unchanged (same request, same `SearchHit`); the response gains one field: `vector: boolean`, reporting whether the vector recall path actually ran for THIS request (spend gate allowed it AND the recall call itself succeeded), not whether it added a hit. `mode` keeps its pre-existing meaning ("did Claude actually parse/rerank this request"): it is decoupled from `vector`, so a request can be `mode: "keyword", vector: true` (no Anthropic key configured, Voyage ran fine) or `mode: "keyword", vector: false` (over budget or a Voyage failure), etc.
+
+After the deterministic candidates load and before scoring, when the CT-2/CT-3 gate (extended to also cover Voyage, one shared `ai_spend_daily` ledger) allows it: the query is embedded (`_shared/embeddings.ts`, cached in `query_embedding_cache` by `sha256(lower(trim(query)))`, 10 minute TTL, service role only), then `match_affiliate_products(embedding, VECTOR_SIMILARITY_FLOOR = 0.75, 20)` recalls candidate ids, hydrated through the same `fetchAffiliateProducts` path and ADDED to the candidate set (never re-scored or removed, ADR-011 D1). A candidate recalled purely by similarity (zero keyword hits) still clears `passesHardConstraints`' relevance floor once its cosine similarity clears `VECTOR_SIMILARITY_FLOOR`; brand and price hard constraints are untouched. Its `rankReason` becomes `"similar to your query"`.
+
+Over budget or on ANY Voyage failure (bad key, timeout, non-2xx): the vector step is skipped, `vector: false`, never an error (same fail-safe posture as the existing LLM gate). Scoped to `entityType: "gear"` only, over `affiliate_products` only (ADR-011's own non-goal excludes the owned catalogue from vector search).
+
+### `gear-embed`, as built (Phase S1 Track B, PRD-07 FR-43, ADR-011 D2)
+
+`POST { productId: string }` (one row) or `POST { sweep: true, limit?: number }` (every row where `embedding is null`, capped at `limit`, default 200). Auth: a service-role bearer token, OR an authenticated caller holding the `admin` role (checked through their OWN JWT, the same `requireAdmin` pattern `admin-order-advance` uses); anon and any non-admin authenticated caller are refused with 401/403. Never called by `ai-search` (component boundary) and never on a read path.
+
+Response `{ embedded: number; failed: number; mode: "voyage" | "stub" }`. Document text is `title, brand, sport, skill_level, age_range, description` (present fields only) joined with spaces, embedded via `_shared/embeddings.ts`, written to `affiliate_products.embedding` under the service role. On a per-row failure (empty document text, or a real Voyage error) the column is left `null`, the failure is reported to Sentry (`captureEdgeError`), and the row is counted in `failed`; the function itself never 500s for a single row's failure inside a sweep. Called by `apps/admin/src/pages/gear/api.ts`'s `upsertProduct` right after `admin_upsert_affiliate_product` resolves (fire-and-forget, failure ignored client side), and by the nightly backfill sweep (not yet wired to a scheduler in S1, see PHASE-S1-STATUS.md).
+
+### `gear-recheck`, as built (Phase S2 Track D, PRD-07 FR-48, FR-51, FR-52, ADR-011 D4, AC-11-4)
+
+`POST { sweep: true, limit?: number }` (every in-stock offer of an active product, oldest `last_checked_at` first, capped at `limit`, default 200, max 1000) or `POST { productId: string }` (every offer of that one product regardless of `in_stock`, the admin "Re-check now" button's own call, FR-50). Auth: a service-role bearer token, OR an authenticated caller holding the `admin` role checked through their OWN JWT, the identical `requireServiceRoleOrAdmin` shape `gear-embed` uses; anon is refused 401.
+
+Offers are grouped by `retailer_key` and fetched through the shared `_shared/fetch-page.ts` (imported, never re-implemented) with each retailer group's own pacing from `retailer_programmes.fetch_policy.maxPerMinute` (an offer with no matching programme shares one conservative 10/minute default bucket). Outcome enum (`ok | price_changed | out_of_stock | gone | blocked`) is written to `product_offers.last_check_outcome`, with a `product_fetch_log` row appended on every attempt regardless of outcome. Only `gone`/`blocked` increment `consecutive_failures`; every other outcome resets it to 0. `blocked` covers `fetchPage`'s own robots.txt/size-cap/invalid-URL refusal AND an HTTP 403/429/5xx/network failure that still fails after one retry (robots-style blocks are never retried, a retry cannot change a static rule). A 200 no extraction strategy can parse logs `unparsed` on the `product_fetch_log` row specifically (the enum on `product_offers` itself has no `unparsed` value, so the offer's own `last_check_outcome` degrades to `gone`); when that happens and `ANTHROPIC_API_KEY` is set and the shared `ai_spend_daily` daily budget (the same ledger and `ai_search_daily_budget()` RPC `ai-search`'s D1 spend guard reads) is not exceeded, a capped 6&nbsp;KB read of the fetched text is sent to Claude Haiku for a `{ stillSold, price, reason }` suggestion stored on that log row's `ai_suggestion`, never applied to any table. `recordAiSpend` (imported from `ai-search/spend-guard.ts`) records the call's usage into the same ledger; a missing key, a timeout, or any Claude failure leaves `ai_suggestion` `null` without erroring the sweep.
+
+After every offer in the request is processed, any product whose EVERY offer (queried fresh, not just the ones this call touched) now has `consecutive_failures >= 7` is delisted through `system_auto_delist_affiliate_product` under the service role (AC-11-4's "test with the counter set to 6, one more check delists"); `affiliate_products.health_status` is set to the worst outcome across that product's offers (`gone`/`blocked` worst, then `out_of_stock`, then `price_changed`, then `ok`) and `health_checked_at` to now, whether or not that product ends up delisted. One offer's fetch or extraction throwing is caught per-offer and recorded as `blocked`; it never stops the rest of the sweep.
+
+Response `{ checked: number; outcomes: Array<{ offerId, outcome }>; autoDelisted: string[]; mode: "llm" | "keyword" }`, `mode` naming whether `ANTHROPIC_API_KEY` is present the same way `ai-search`'s `mode` names whether Claude ran. Called by `.github/workflows/gear-nightly.yml` nightly (interim trigger, `docs/DEBT.md`, pending `pg_net`) and by the admin Catalog health page's per-product "Re-check now" (`{ productId }`).
+
 ## coaches
 
 | v1 fn | v1 route | v2 lane | Function / RPC | Note |
 |---|---|---|---|---|
-| `list` | GET `/coaches` | PostgREST | `coach_profiles` select, filters as query params | RLS restricts to `status = 'verified'` for non-owner readers |
+| `list` | GET `/coaches` | PostgREST | `coach_profiles_public` select, filters as query params | RLS restricts the base table to `status = 'verified'`; the public view already narrows to that status so no client-side filter is needed |
 | `get` | GET `/coaches/:id` | PostgREST + RPC | `coach_profiles` select + `get_coach_busy_slots(coach_id, from, to)` | busy slots must hide other players' session details, so it is a `SECURITY DEFINER` RPC returning only occupied `(date, slot_start)` pairs, never the session rows themselves |
+
+**`useCoaching().listCoaches` keyset pagination (CT-5, P1-3, PHASE-3-STATUS.md Phase 3, Track D).** Prior to Phase 3 this issued one unbounded `select("*")` over `coach_profiles_public`, the P1-3 meltdown item at 1000 concurrent verified coaches. It now takes `{ sport?, city?, limit?, cursor? }` and returns `{ items, nextCursor }` instead of a bare array:
+
+- Stable order `created_at desc, user_id desc` on every page, `limit` defaulting to 20 and clamped to a max of 50 (`.limit(limit + 1)` server side, the extra row decides `nextCursor` without a separate count query).
+- `cursor` is base64 of the JSON tuple `[created_at_iso, user_id]`, the exact key the order sorts by; decoded and applied as `(created_at, user_id) < (cursorCreatedAt, cursorUserId)` via a PostgREST `.or()` predicate (`created_at.lt.X,and(created_at.eq.X,user_id.lt.Y)`), since the JS client has no native tuple comparison.
+- `nextCursor` is `null` exactly on the last page. `CoachBrowseList` (`apps/mobile/src/components/organisms/coaching/CoachBrowseList.tsx`) paginates via `FlatList.onEndReached`, appending pages rather than refetching from the top; a sport/city filter change still resets to page 1 through the existing `load()` path.
+- `sport`/`city` filtering and the same-city-first client sort are unchanged; the sort only reorders items already on a page, it never moves a row across a page boundary.
+
+### session types and pricing (PRD-02 FR-4)
+
+| `packages/api` call | v2 lane | Table / policy | Note |
+|---|---|---|---|
+| `useCoachSessionTypes().listMyTypes()` | PostgREST | `session_types` select, explicit `coach_id = auth.uid()` | active first, then by name |
+| `useCoachSessionTypes().createType()` | PostgREST | `session_types` insert, `session_types_write_own` (0019) | `coach_id` comes from the caller's session, never from an argument |
+| `useCoachSessionTypes().updateType()` | PostgREST | `session_types` update, same policy | omitted fields unchanged; never touches an already booked session, which stores its own price |
+| `useCoachSessionTypes().setTypeActive()` | PostgREST | `session_types` update, same policy | deactivate, the only destructive-looking action; there is no delete because historical `sessions` reference the row by FK |
+
+Plain table writes, no RPC, and that is not a financial invariant exception. `session_types.price` is a LIST price, not a money row and not a status field. The charge is derived and re-validated server side in `book-session` (`PRICE_MISMATCH`, see below), so the client's number is never what is charged. This is the same trust level 0080 records for a coach editing `training_groups.monthly_fee`.
+
+**Online is a naming convention, deliberately.** There is no `is_online` column on `session_types` and no video call concept anywhere in the product. `isOnlineSessionTypeName` (read) and `applyOnlineSessionTypeName` (write, called only by the coach session types screen) are the two ends of it. When a real online session ships, add `session_types.is_online`, backfill it from that same predicate, and delete both functions together.
 
 ## sessions
 
@@ -89,7 +142,7 @@ The `requested` to `cancelled` edge was added 2026-07-19 by founder-approved PRD
 Shipped in `0021_session_state_machine.sql`, amended by `0026` (the `requested` cancel edge) and `0027` (AT-61's service-role gate). Exact signatures:
 
 - `session_transition(p_session_id uuid, p_action text, p_reason text default null, p_new_date date default null, p_new_slot_start time default null) returns public.sessions` — granted to `authenticated`. Signature unchanged by 0027, so no client call site moved.
-- `session_transition_internal(p_actor_id uuid, p_session_id uuid, p_action text, p_reason text default null, p_new_date date default null, p_new_slot_start time default null) returns public.sessions` — **granted to `service_role` only** (0027). Holds the whole machine. Not callable by `authenticated`, which gets a bare Postgres `permission denied for function`, and not something `packages/api` ever calls; the two edge functions are its only callers. The actor is explicit because `auth.uid()` is null under the service-role key.
+- `session_transition_internal(p_actor_id uuid, p_session_id uuid, p_action text, p_reason text default null, p_new_date date default null, p_new_slot_start time default null) returns public.sessions` — **granted to `service_role` only** (0027). Holds the whole machine. Since `0103` it also emits the athlete facing notification for `accept`, `decline`, `start` and `complete`, through `notify_session_parties`, in the same transaction as the status change. Emission lives here rather than in the edge functions because this is the one chokepoint every transition path funnels through, so no caller can move a session without notifying. Not callable by `authenticated`, which gets a bare Postgres `permission denied for function`, and not something `packages/api` ever calls; the two edge functions are its only callers. The actor is explicit because `auth.uid()` is null under the service-role key.
 - `rate_session(p_session_id uuid, p_rating smallint, p_remarks text default null) returns public.sessions`
 
 Error codes `packages/api` maps: `UNAUTHENTICATED`, `NOT_FOUND`, `FORBIDDEN`, `INVALID_TRANSITION`, `VALIDATION`, `REASON_REQUIRED`, `TOO_EARLY`, `SESSION_STARTED`, `SLOT_TAKEN`, `ALREADY_RATED`, `USE_EDGE_FUNCTION`.
@@ -172,7 +225,13 @@ Error codes: `VALIDATION` 400, `UNAUTHENTICATED` 401, `NOT_FOUND` 404 (session t
 
 **Capture is finalized by `_shared/finalize-payment.ts`, not here.** That module is the single gate both `razorpay-webhook` and `verify-payment` call; it owns the `update payment_intents ... where status = 'created'` idempotency check and then dispatches on `payment_intents.domain` to `finalize-court-booking-payment.ts` or `finalize-session-payment.ts`. Neither entry point knows which domain it is finalizing. Adding `commerce`/`donation` later means one new branch plus one new file, never a second copy of the gate.
 
+**UC-96 fix (booking confirmation notification).** `finalize-court-booking-payment.ts` calls `dispatchNotification` (`_shared/notify.ts`) right after the ledger group commits, writing a `booking` type `notifications` row for the booking's `user_id` and attempting the Expo push leg. This was the one caller of `court_booking_confirm_payment` that never told the athlete their booking confirmed; the `order`/`chat`/`transfer` notification types documented in `_shared/notify.ts` still have no writer anywhere in the repo and remain open (see `docs/qa/BUG-LEDGER.md`). Best effort: a dispatch failure is caught and logged, never thrown, so it cannot fail the payment confirmation response.
+
 `verify-payment` responds `{ domain, entity_id, booking_id, session_id, status, outcome }`, where `booking_id` and `session_id` are domain-named aliases of `entity_id` (the other is null) so a court-only or session-only caller need not switch on `domain`. `outcome` is `captured` or `already_processed`.
+
+**Correction, 2026-08-14.** The sentence above about the gate owning `update payment_intents ... where status = 'created'` is now wrong in its mechanism and was always wrong in its consequence. The gate calls `claim_payment_intent_for_finalization()` (`0109`), which matches `created` OR a `captured` intent whose `finalized_at` is still null and whose claim has gone stale, so a run that died mid-handler can be re-entered. The old form gave once-only rather than at-most-once and made three documented repair paths unreachable. See `PAYMENTS.md`, "The shared capture gate is re-enterable".
+
+**New error on the session branch: `SESSION_CANCELLED` (409).** `_shared/finalize-session-payment.ts` read the session's status and never looked at it, so a capture landing on an already cancelled or declined session returned `outcome: "captured"` and the athlete was told their booking succeeded. It now raises `SESSION_CANCELLED` with a message stating plainly that the booking was not created and a refund is owed. The client must render that message and must not collapse it to a generic payment failure: the athlete HAS been charged. The intent deliberately stays `captured` with `finalized_at` null so the debt is queryable in `unfinalized_captures`. There is still no code path that pays it back; see `PAYMENTS.md`, "Captured against a dead entity".
 
 ## courts
 
@@ -240,6 +299,29 @@ Client wiring lives in `apps/portal-court/src/lib/onboarding.ts`, one typed modu
 | RPC | `release_expired_stock_reservations()` | `service_role` | Abandonment sweep, the commerce arm AT-26 calls. Not scheduled by `0033` |
 | RPC | `order_transition(p_order_id, p_to_status, p_actor_id, p_note, p_location)` | `service_role` | The whole order machine. Raises `INVALID_TRANSITION` on any skip or illegal edge, writes one `order_timeline` row in the same transaction. `service_role` only per AT-61's rule, so `admin-order-advance` is the sole path and the shopper app never writes a transition (FR-24) |
 
+### affiliate marketplace, client reads (0086 WS4, extended Phase S3 Track F)
+
+`packages/api/src/use-shop.ts`'s `listAffiliateProducts`/`getAffiliateProduct`, the client
+side of the `/shop` grid and the `/shop/affiliate/[id]` compare screen.
+
+| Lane | Name | Callable by | Note |
+|---|---|---|---|
+| PostgREST | `listAffiliateProducts({ sport?, query? })` | `anon`, `authenticated` | `affiliate_products` select joined `product_offers` (adds `retailer_key`), `.eq("active", true)` explicit (mirrors the public browse policy per CLAUDE.md's scoping rule), ordered `created_at desc`, limit 60. Backs `/shop`'s empty-query grid (PHASE-S3-STATUS.md hard decision 3: the catalogue, newest first, never price sorted here). A typed query on `/shop` does not call this; it goes through `search.aiSearch` below instead |
+| PostgREST | `getAffiliateProduct(id)` | `anon`, `authenticated` | Same select, single row. Backs `/shop/affiliate/[id]` and hydrates a typed `/shop` query's `affiliate:`-prefixed hits (below) |
+| — (mapping only) | `AffiliateProduct.cheapest` | n/a | Client-derived, not a new column: the head of `offers` after the existing cheapest-in-stock-first sort (`{ price, retailer, lastCheckedAt }`, null when every offer is out of stock). `retailerCount` is `offers.length`. Both feed `GearResultTile` directly (FR-40, FR-41) |
+
+`/shop`'s typed query path calls `useSearch(client).search({ query, entityTypes: ["gear"], sport, priceMax })`
+(the existing `ai-search` contract above, unchanged), then hydrates each `SearchHit` through
+`getAffiliateProduct` (an `affiliate:`-prefixed `entityId`) or `getProduct` (an owned one, only
+rendered while `shop.owned_enabled` is true) rather than trusting the hit's own lean shape, so
+the grid tile always has the freshness and retailer count fields the hit itself does not carry.
+
+## config
+
+| v1 fn | v1 route | v2 lane | Function / RPC | Note |
+|---|---|---|---|---|
+| `useAppConfig(client).get(key)` / `.getBoolean(key, fallback)` | n/a (no v1 equivalent) | PostgREST | `app_config` select, explicit `.eq("public", true)` | New, Phase S3 Track F, PRD-07 FR-53. Reads `app_config`'s `value` column for a public row only; never throws (a read failure or a missing/non-public key resolves to `undefined`/`fallback`). 5 minute in-memory cache per key. The only consumer today is `shop.owned_enabled` (`shop/index.tsx`, `shop/_layout.tsx`'s owned-route redirect, `RecentlyViewedRail`), read once per mount rather than once per app start as IA-SHOP.md's phrasing suggested, since a hook has no "app start" hook of its own. The only write path is `admin_set_app_config` (`XXXX_app_config_owned_shop_flag.sql`), admin only, audited; no client write exists for this table |
+
 ## wishlist (gear)
 
 | v1 fn | v1 route | v2 lane | Function / RPC | Note |
@@ -257,10 +339,37 @@ Client wiring lives in `apps/portal-court/src/lib/onboarding.ts`, one typed modu
 | `addComment` | POST `/clutch/:id/comments` | PostgREST | `clip_comments` insert | RLS requires a non-anonymous `auth.uid()`, guest insert rejected, mapped to `403 GUEST` |
 | `upload` | POST `stream-upload-url` (edge), then a direct signed PUT, then POST `stream-webhook` (edge) | Edge Function | v1 storage adapter: `stream-upload-url` creates the own clip row at `status='uploading'` AND mints the signed Storage upload URL (bucket `clips`, private) in one call, returning `{ clipId, uploadUrl, token, path }`; the client PUTs the MP4 to `uploadUrl`, then calls `stream-webhook { clip_id }` to finalize `uploading -> ready`. See `VIDEO.md` v1 storage-adapter contracts. Row status only ever moves via `clip_transition_internal` under service role |
 | `playbackUrl` | POST `get_clip_playback_url` (edge) | Edge Function | public-callable; body `{ clip_id }` returns a 300s signed URL only for a `published` clip, the owner's own clip, or admin/moderator; refuses (403, no URL) for `removed`/`rejected`. Never stores a resolved URL. See `VIDEO.md` |
+| `playbackUrls` (Phase 3 LAUNCH CT-1, P1-1) | POST `get-clip-playback-url` (edge), batch body | Edge Function | client: `useClutch(...).getPlaybackUrls(clipIds, kind)` (`packages/api/src/hooks.ts`), CLIENT SIDE of the endpoint Track B owns and documents fully above/near CT-1 in `docs/phases/PHASE-3-STATUS.md`. Body `{ clip_ids: string[] (<= 24), kind: 'thumb' \| 'video' }`, response `{ urls: [{ clip_id, url, expires_at }], failed: [{ clip_id, reason }] }`, thumb TTL 3600s / video TTL 300s. The client chunks any longer id list into `<= 24`-id calls with `<= 4` in flight at once (never sends an oversized batch, never floods the function), so a call site never has to. Consumers: `apps/mobile/src/app/profile/index.tsx`'s own-clips/liked/saved grids (`kind: 'thumb'`), replacing the old one-`getPlaybackUrl`-call-per-tile mint. The clutch feed and post detail keep the single legacy `{ clip_id }` body (one active/prefetched card at a time is not a flood) |
 | `moderationUrl` | POST `get_clip_moderation_url` (edge) | Edge Function | admin/moderator only; the distinct grant that previews a not-yet-published clip (PRD-04 FR-28); same 300s signed URL, refuses for `removed`/`rejected` |
 | `creator` | GET `/clutch/creators/:id` | PostgREST | `public_profiles` select joined aggregate `clips`/`follows` counts (a Postgres view `creator_stats`, rebuilt over `public_profiles` in `0074`) | public read |
 | `like` | PUT `/clutch/:id/like` | RPC | `toggle_clip_like(clip_id)` | atomic toggle, maintains `clips.likes_count` via the same transaction; `403 GUEST` if anonymous |
 | `follow` | PUT `/clutch/creators/:id/follow` | RPC | `toggle_follow(followee_id)` | atomic toggle; `403 GUEST` if anonymous |
+| `retryFailedClip` (Phase 3 LAUNCH CT-6, P1-6) | tap Retry on a `failed` own clip | RPC + Edge Function | client: `useClutch(...).retryFailedClip(clip)` calls `retry_failed_clip(p_clip_id)` (Track A, `0094_clip_failed_state_and_sweep_capture.sql`; owner-scoped SECURITY DEFINER, the only client path off `failed` since clients hold no UPDATE grant on `clips`), then immediately `requestUploadUrl({ caption, sport, clipId })` against the SAME row (now back in `uploading`, the only status `stream-upload-url` will reuse rather than 409). Both are real round trips, no client-side status flip. UI: `apps/mobile/src/app/profile/index.tsx`'s own-clips grid shows `failure_reason` + a Retry tile for any `failed` clip, then routes to `(tabs)/clutch/upload` prefilled (`retryClipId`/`retryCaption`/`retrySport`) so the athlete can pick a replacement file and finish the post against the same clip id |
+
+**Phase 4 LAUNCH (CT-C, `0097_report_block.sql`): `getFeed`/`getComments` filter blocked
+authors.** Both subtract the caller's own `blocked_users` set (via `getBlockedUserIds`,
+below) from the returned rows client side; the pagination cursor is still derived from the
+UNFILTERED page so a block never causes a page to skip rows. See "moderation" below.
+
+## moderation (report + block, Phase 4 LAUNCH Track C, CT-C)
+
+PRD-04 FR-31, FR-32, FR-33; App Store 1.2 / Play UGC policy (a store approval
+requirement). `packages/api/src/hooks.ts` exports `useModeration(client)` plus a
+plain, non-hook `getBlockedUserIds(client)` both `useClutch` (above) and `useChat`
+(below) call internally to subtract the caller's own blocked set from what they
+return, since a hook's body cannot call another hook. Reports land in the SAME
+`reports` table and admin Reports Queue (`apps/admin/src/pages/reports`) that
+clip/comment reports already used (`0041-0043`), now also accepting
+`entity_type: 'chat_message' | 'user'`.
+
+| Method | v2 lane | Function / RPC | Note |
+|---|---|---|---|
+| `useModeration(...).reportEntity({ entityType, entityId, reason })` | PostgREST | `reports` insert | own-row insert (`reporter_id = auth.uid()`, `NOT is_guest()`, unchanged `reports_insert_own` policy); `entityType` is `'clip' \| 'comment' \| 'chat_message' \| 'user'`; empty-trimmed `reason` refused client side AND by the table's `btrim(reason) <> ''` check; lands `pending` in the same admin Reports Queue clip/comment reports already use |
+| `useModeration(...).getBlockedIds()` | PostgREST | `blocked_users` select | own rows (`blocker_id = auth.uid()`); empty set for a guest, no round trip cost beyond one no-op query |
+| `useModeration(...).blockUser(userId)` | PostgREST | `blocked_users` upsert | own-row (`blocker_id = auth.uid()`), `onConflict: 'blocker_id,blocked_id'` so blocking an already-blocked user is a no-op success; refuses a self-block client side (`VALIDATION`) ahead of the schema's own `check (blocker_id <> blocked_id)` |
+| `useModeration(...).unblockUser(userId)` | PostgREST | `blocked_users` delete | own-row delete; idempotent, no error if the row never existed |
+| admin: `admin_get_reported_entity(p_report_id)` | RPC | `apps/admin/src/pages/reports/api.ts`'s `fetchReportedEntity`/`fetchReportedEntitySummaries` | admin/moderator only (internal `has_role` check, `FORBIDDEN` otherwise); returns ONE reported entity's jsonb snapshot for ONE existing report; the only read path onto a chat message's content (no blanket admin SELECT policy on `chat_messages`, RLS.md Phase 4 section); also serves `clip`/`comment`/`user` report types for a single uniform admin read shape, though the Reports Queue detail screen still uses the pre-existing direct table reads for `clip`/`comment` (unchanged, already proven) |
+| admin: `resolve_report(p_report_id, p_action, p_reason)` | RPC | `apps/admin/src/pages/moderation/api.ts`'s `moderationApi.removeReport`/`dismissReport` (unchanged call sites) | `create or replace`, `0043`'s `clip`/`comment` branches byte-for-byte unchanged; gains a `chat_message` remove arm (soft-delete via `removed_at`/`removed_reason`, `chat_messages` immutability otherwise preserved) and a `user` remove arm (resolves the report `actioned`, no further mutation; account suspension is Track B's separate `admin_suspend_user`, from the User Detail screen, a deliberately separate audited step) |
 
 ## empower
 
@@ -282,6 +391,16 @@ Client wiring lives in `apps/portal-court/src/lib/onboarding.ts`, one typed modu
 | `markDrillComplete` | POST `/learn/drills/:id/complete` | PostgREST | `drill_completions` insert (own row) | the ONE client write in the XP path. The `0059` `AFTER INSERT` trigger appends the `xp_events` row (amount server-read) and unlocks milestones; a duplicate fails `UNIQUE(user_id, drill_id)` (idempotent, no redo) |
 | `adminUpsertDrill` | POST `/admin/drills` (create, `p_id` null) / PATCH `/admin/drills/:id` (edit) | RPC | `admin_upsert_drill(p_id, p_title, p_description, p_sport, p_skill_category, p_difficulty, p_xp_value, p_media_url)` (`0061`) | admin drill create/edit (PRD-04 FR-49/FR-50). SECURITY DEFINER, `has_role('admin')` inside, one `audit_log` row per accepted mutation (`drill.create` / `drill.update`, edit diff via `audit_changed_fields`). Validates `xp_value > 0` (mirrors the `0057` CHECK). Owns content fields only, never `active`. `authenticated` only; `apps/admin` calls it via `drillApi.upsertDrill`, never a direct `drills` write |
 | `adminSetDrillActive` | POST `/admin/drills/:id/active` | RPC | `admin_set_drill_active(p_id, p_active)` (`0061`) | admin activate/deactivate (PRD-04 FR-51). SECURITY DEFINER, `has_role('admin')` inside, one `audit_log` row per flip (`drill.activate` / `drill.deactivate`). A flag flip, never a delete: inactive drills stay intact for reactivation and for the `xp_events` referencing them; the consumer surface hides them via its own `active = true` filter. `authenticated` only |
+| `adminUpsertAffiliateProduct` | POST `/admin/gear` (create, `p_id` null) / PATCH `/admin/gear/:id` | RPC | `admin_upsert_affiliate_product(p_id, p_title, p_brand, p_sport, p_category_id, p_skill_level, p_age_range, p_description, p_image_url)` (`0120`) | admin gear catalog entry. SECURITY DEFINER, `has_role('admin')` inside, `audit_log` row per mutation (`affiliate_product.create` / `.update`). The tables carry no client write grant, so this RPC is the only client write path. `apps/admin` calls it via `gearApi.upsertProduct` |
+| `adminSetAffiliateProductActive` | POST `/admin/gear/:id/active` | RPC | `admin_set_affiliate_product_active(p_id, p_active)` (`0120`) | list / delist, never delete. Audited (`affiliate_product.activate` / `.deactivate`) |
+| `adminUpsertProductOffer` | PUT `/admin/gear/:id/offers/:retailer` | RPC | `admin_upsert_product_offer(p_affiliate_product_id, p_retailer, p_price, p_affiliate_url, p_in_stock, p_currency)` (`0120`) | one retailer line; `(product, retailer)` is unique so a re-entered retailer updates in place (this is how a price refresh is entered). Validates `price >= 0` and an `http(s)://` link. Audited (`product_offer.create` / `.update`) |
+| `adminDeleteProductOffer` | DELETE `/admin/gear/offers/:id` | RPC | `admin_delete_product_offer(p_id)` (`0120`) | removes a wrong retailer line. Audited (`product_offer.delete`) |
+| `ingestFetch` | POST `/admin/gear/ingest` (`action: "fetch"`) | Edge function | `gear-ingest` | FR-44, ADR-011 D3. Admin JWT forwarded. Server-side fetch of the pasted URL, extraction only, writes nothing (no product row, no offer row, no image copy). Returns `{ draft, retailerKey, warnings[] }`; 422 with `{ error: { code, message } }` on an unsupported retailer, a robots.txt disallow, or a page with no recognisable product (FR-47), read via `readFunctionError` so the admin sees the real refusal text. `apps/admin` calls it via `gearApi`-adjacent `ingestFetch` in `pages/gear/api.ts`, from the "Add from a link" section on `/gear/create` |
+| `ingestSave` | POST `/admin/gear/ingest` (`action: "save"`) | Edge function | `gear-ingest` | FR-45, FR-46, ADR-011 D3. Admin JWT forwarded, never service role, for the catalogue write: the function copies the image into the `product-images` bucket (hash-deduped) then calls `admin_upsert_affiliate_product` and `admin_upsert_product_offer` under the caller's own JWT, so `has_role('admin')` inside those RPCs stays the one gate. Returns `{ productId, offerId, imagePath }`. `apps/admin` calls it via `ingestSave`, navigates to `/gear/show/:id` on success |
+| `fetchHealth` | GET `/admin/gear/health` | PostgREST | `affiliate_products` + `product_offers` select (health columns) | FR-49, ADR-011 D4. Admin-only read (same admin SELECT policy `fetchGear` already relies on); computes worst-outcome ordering, offers-alive count, cheapest in-stock price and its age, and days since `health_checked_at` client side. Backs `/gear/health` |
+| `recheckProduct` | POST `/admin/gear/:id/recheck` | Edge function | `gear-recheck` (`{ productId }` form) | FR-50, ADR-011 D4. Admin JWT, one product, the "Re-check now" action on `/gear/health` and `/gear/show/:id`; the `{ sweep: true }` form is the nightly job's own, service role only, never called from `apps/admin`. Returns `{ checked, outcomes[] }` |
+| `fetchLatestSuggestions` | GET `/admin/gear/:id/suggestion` | PostgREST | `product_fetch_log` select (`ai_suggestion` not null, admin-only per ADR-011 D6) | FR-52. Scoped explicitly to this product's own `product_offers.id` list before reading the log (the table carries no `affiliate_product_id` column of its own), the permissive-OR rule in CLAUDE.md. Renders as a read-only "AI suggestion" card on `/gear/show/:id`; the copy states the suggestion is never applied automatically |
+| `adminCreateVenue` | POST `/admin/venues` | RPC | `admin_create_venue(p_name, p_address, p_city, p_pincode, p_lat, p_lng, p_description, p_booking_url, p_courts jsonb)` (`0120`) | one venue plus its courts in one transaction, owned by the entering admin, `status = 'verified'` by construction. Requires at least one court (the Courts tab lists courts, not venues), a six digit pincode, paired coordinates, an `http(s)://` booking link if given. Audited (`venue.admin_create`) |
 
 ## wallet / notifs / help
 
@@ -313,7 +432,7 @@ Training groups with monthly subscription fares (founder-ratified: manual renewa
 | `getGroup` | `training_groups` + `group_memberships` + `public_profiles` + `session_participants` | members list is complete for the coach, self-only for a member (RLS); attendance rate = present / (present + absent) over marked participant rows, per member and whole group |
 | `createGroup` / `updateGroup` | `create_training_group` / `update_training_group` RPCs (0080) | coach-owned; deactivate, never delete; capacity cannot drop below live members |
 | `joinGroup` | `join-group` edge function | `POST { group_id, expected_total }`, athlete JWT. Server re-prices (PRICE_MISMATCH 409), the RPC guards capacity under the group row lock (GROUP_FULL / ALREADY_MEMBER / GROUP_INACTIVE 409, all BEFORE Razorpay), returns `{ membership_id, group_id, status, razorpay_order_id, key_id, amount, currency, bill }` for the checkout sheet |
-| `renewMembership` | `renew-group-membership` edge function | `POST { membership_id, expected_total }`, same response shape; active memberships only (a lapsed member re-joins); re-snapshots the fare at today's price |
+| `renewMembership` | `renew-group-membership` edge function | `POST { membership_id, expected_total }`, same response shape; `active` or `expired` memberships (`0104`: an expired member still holds their seat and renews on the same row, a lapsed member re-joins because their seat was released); re-snapshots the fare at today's price |
 | `verifyMembershipPayment` | shared `verify-payment` | same function every domain uses; response gained a `membership_id` alias; capture activates the membership (period today .. +1 month IST, renewal extends) and writes the carve-out ledger group |
 | `myMemberships` | `group_memberships` read, player_id = me | hydrated with the member-readable group rows |
 | `groupSessions` / `sessionParticipants` | `sessions` (group_id filter) / `session_participants` | coach full, member self-scoped |
@@ -321,13 +440,35 @@ Training groups with monthly subscription fares (founder-ratified: manual renewa
 | `createGroupSession` | `create_group_session` RPC | inserted `accepted`, zero money columns, participants seeded from active members, SLOT_TAKEN on a coach slot clash |
 | `startGroupSession` / `completeGroupSession` | `session_transition` `'start'` / `'complete'` | 0077: start is coach-only from accepted, no time gate; complete via the client door is allowed ONLY for group sessions (no money half), 1:1 stays on complete-session |
 | `markAttendance` | `mark_attendance` RPC | coach-only, session must be `in_progress` (INVALID_TRANSITION), marks only active members (NOT_A_MEMBER), no money effect |
-| `getGroupThreadId` | `chat_threads` context_type 'group' | one thread per group, trigger-created; messages flow through the existing chat_messages surface, group SELECT/INSERT policies enforce membership (and Realtime enforces the SELECT per subscriber) |
+| `getGroupThreadId` | `chat_threads` context_type 'group' | one thread per group, trigger-created; messages flow through the existing chat_messages surface, group SELECT/INSERT policies enforce membership (delivery is Broadcast, see the CT-4 note below, gated by `realtime.messages` RLS) |
 | `useChat().listThreads` / `getThread` (group threads) | `chat_threads` + `training_groups` (scoped to context_ids from the caller's own thread rows) + `chat_thread_members` count | `ChatThread` gained `isGroup` / `groupName` / `memberCount` / `lastSenderName`; a group row's `participantName` holds the group's name so an unaware caller still renders something sane |
-| `useChat().listMessages` / `sendMessage` / Realtime inbound (group threads) | `chat_messages` (sender embedded via `users!sender_id`) | `ChatMessage` gained `senderName`, joined on every PostgREST read; a Realtime `postgres_changes` payload carries no join, so the thread screen backfills it from the loaded roster |
+| `useChat().listMessages` / `sendMessage` / live inbound (group threads) | `chat_messages` (sender embedded via `users!sender_id`) | `ChatMessage` gained `senderName`, joined on every PostgREST read; the Broadcast payload below carries no join, so the thread screen backfills it from the loaded roster |
 | `useChat().listThreadMembers` | `chat_thread_members` joined to `users` | group thread's seated roster for the members sheet (ChatThreadList / conversation screen, COACH-TRAININGS-GAP.md screen 17); RLS (`chat_thread_members_select_member`) scopes to threads the caller is seated in; empty list for a 1:1 thread rather than an error |
+
+**Phase 4 LAUNCH (CT-C, `0097_report_block.sql`): block + removed-message filtering.**
+`useChat().listThreads` drops a 1:1 thread whose other participant is on the caller's own
+`blocked_users` list (group threads are never dropped this way); its preview candidates
+also exclude a moderator-removed message's text and any message from a blocked sender.
+`useChat().listMessages` drops messages from a blocked sender entirely and renders "This
+message was removed." in place of a moderator-removed row's real text (`chat_messages.
+removed_at` set via `resolve_report`'s chat arm, see the "moderation" section above and
+RLS.md). The live Broadcast listener (`subscribeToUserChannel`, below) does NOT re-check
+either list mid-session, documented rather than silently promised: a screen reload
+(the next `listMessages`/`listThreads` call) closes that gap.
+
+**Chat live delivery moved to Broadcast (CT-4, P1-2, PHASE-3-STATUS.md Phase 3, Track A serves / Track D consumes).** Prior to Phase 3, `useChat().subscribeToThread`/`subscribeToInbox` each opened a `postgres_changes` subscription on `chat_messages`; the server re-evaluated `chat_messages` RLS for every subscriber on every insert, the P1-2 meltdown class at 1000 concurrent chat users. Both are gone, replaced by one method:
+
+- An `AFTER INSERT` trigger on `chat_messages` (Track A) calls `realtime.send()` once per row in `chat_thread_members` for that thread (sender included), to topic `chat:user:{member_user_id}`, event `message_new`, payload `{ thread_id, message_id, sender_id, body, created_at }` (column values as text/ISO strings).
+- `realtime.messages` RLS (Track A) allows a socket to subscribe ONLY its own `chat:user:{(select auth.uid())::text}` topic; a private channel, `{ config: { private: true } }`, is required for that policy to evaluate at all.
+- `useChat().subscribeToUserChannel(userId, threadId, onMessage, onStatusChange)` subscribes the caller's own `chat:user:{userId}` topic. `threadId` is optional: the thread screen passes its own id to filter to one conversation, the inbox omits it to see every thread's events. Multiple mounted call sites for the SAME `userId` (the inbox behind an open thread) share one physical Realtime channel via a ref-counted registry in `use-chat.ts`, since the contract calls for exactly one channel per signed-in user, not one per screen. Returns an unsubscribe function; the shared channel is only actually torn down once its last subscriber releases it.
+- `ChatThreadList` and the thread screen (`apps/mobile/src/app/(tabs)/chat/[id].tsx`) both consume this; `git grep postgres_changes` over `packages/api/src/use-chat.ts` and the chat app/component trees returns nothing as of this change.
 | `listMyTraineeNotes` / `addTraineeNote` / `deleteTraineeNote` | `coach_trainee_notes` | coach-private, insert gated by `coach_has_trainee`, no update ever |
 | `listTraineeSessions` / `listTraineePayments` | `sessions` (coach_id = me AND player_id = trainee) + memberships join | the trainee profile tabs; payments derive from coach-readable rows since payment_intents is owner-only |
 | `getTraineeProfile` | `public_profiles` | Track C, trainee profile Overview tab identity (name/handle/bio); `users` base table stays own-row/admin only so this never touches it |
+
+**Call sites, added by the coach creation layer.** `createGroup`, `updateGroup` and `createGroupSession` shipped with 0079/0080 and had ZERO callers until now, which is what the coach saw as "No training groups yet" and "No sessions scheduled for this group yet" with no affordance beside either. They are now called from `trainings/group/edit.tsx` (create and edit, keyed on an optional `id` param) and `trainings/group/schedule.tsx`. Both assert ownership explicitly on load before rendering a group, because `training_groups` carries a public browse policy and RLS is not scoping; the RPCs refuse the write regardless, but the form must never show a stranger's fee. `createGroupSession` is the only thing in the product that inserts a row with a `group_id`, so it is also what makes the group session detail, Start Session and attendance screens reachable at all.
+
+**`in_progress` in status filters.** 0077 added `in_progress` between `accepted` and `completed`, and several client filters were never updated, so a session the coach had started disappeared from the reader's world until it completed: `useCoachSessions.listUpcoming`, the `hasUpcoming` flag in `useCoachTrainees.listTrainees`, and the `LIVE_STATUSES` lists behind the athlete's bookings screen and the Trainings stat tiles (plus the Trainings payments totals, where it fell out of both delivered and booked ahead). A first pass claimed "all now include it" here and was wrong: a repeat sweep found two more survivors in files this branch itself edited, `(shell)/index.tsx`'s athlete `upcomingSessions` filter (feeding `totalUpcomingCount`, four lines above the group session filter that already had this right) and `(shell)/coaches.tsx`'s `isUpcoming` in `groupByCoach`, which dropped the next-session date off the My coaches row the moment the coach tapped Start. Both are fixed now, and a subsequent sweep over every `.status === 'accepted'` and `'accepted'` occurrence across `apps/mobile/src` found no further survivors, but the count in this doc is only as good as the last sweep, not a guarantee. Any new filter over `sessions.status` should be written as "everything except `declined` and `cancelled`" rather than by enumerating the live states, which is how this class of bug got in six times now.
 
 **Group awareness retrofitted onto `useCoachSessions` / `useCoachTrainees` (Track B).** Group session rows share `sessions` with a NULL `player_id`/`session_type_id` (0076), so every 1:1 shaped coach read now scopes them out explicitly: `listUpcoming` and `getSession` add `player_id is not null` (an accepted group session must never render as a broken 1:1 card, and a group id passed to `getSession` returns null), `listTrainees` filters them out of the roster and additionally joins `session_types.name` to flag each trainee `hasOnline` / `hasInPerson` for the Figma filter chips (`isOnlineSessionTypeName`: a session type whose name contains "online", the gap doc's representation; no flag column exists). `getStats` counts group sessions in `totalSessions` / `sessionsThisMonth` but never in `playersCoached`, and now also returns `totalSessions` plus `lifetimeEarnings` (from `get_coach_wallet_balance().lifetime_earned`, same figure as the Earnings screen) for the dashboard's Total Sessions / Total Earnings tiles.
 
@@ -345,37 +486,144 @@ PLAN.md's edge function roster includes several functions v1 never had a mock fo
 | `razorpay-route-transfer` | coach Transfer screen, admin never | creates a Route transfer, writes `transfers` + a balancing `ledger_entries` group. Built AT-43. `POST { amount }` (rupees, at most 2dp) with the caller's own JWT (`verify_jwt` true). The coach is resolved from `auth.uid()`, never from the body, and the amount is a request the server re-derives against, never an authority (PRD-02 FR-28). Returns `{ transfer_id, razorpay_transfer_id, amount, status, ledger_entry_group_id, balance_before, balance_after }` with `status: 'processing'`; `transfer.processed` moves it to `paid`. Errors `VALIDATION` 400, `UNAUTHENTICATED` 401, `NOT_COACH` 403, `PAYOUT_ACCOUNT_NOT_ACTIVE` 409, `INSUFFICIENT_BALANCE` 409, `RAZORPAY_ERROR` 502, `ROUTE_UNAVAILABLE` 503, `INTERNAL` 500. Every failure writes no `transfers` row and no `ledger_entries` row (FR-29). Route is not yet enabled on the test merchant account, so today every balance-passing call returns `ROUTE_UNAVAILABLE` 503, see `PAYMENTS.md` |
 | `stream-upload-url` | Clutch Upload screen, and scriptable for verification | v1 storage adapter (Cloudflare deferred, `VIDEO.md` line 153). `POST { caption, sport, clip_id? }` athlete JWT, returns `{ clipId, uploadUrl, token, path, bucket, status }`, clip row set to `uploading`. `sport` in football|cricket|badminton|tennis. Client PUTs the MP4 to `uploadUrl` (or supabase-js `uploadToSignedUrl(path, token, file)`) |
 | `stream-webhook` | v1: the uploader's own client, synchronously after the signed PUT (Cloudflare Stream deferred) | `POST { clip_id, thumb_path? }` flips a clip forward `processing` to `ready` via `clip_transition_internal` under service role, returns `{ clipId, status, outcome: 'finalized' \| 'already_finalized' }`, idempotent like `razorpay-webhook` (redelivery is a no-op); see `VIDEO.md` v1 storage-adapter contracts |
-| `get-clip-playback-url` | Clutch feed and post detail; public-callable (guests pass anon key) | `POST { clip_id }` returns `{ clipId, url, thumbUrl, expiresIn: 300, status }`, a short-lived signed URL checked against the LIVE clip row; 403 for removed/rejected or a non-owner's unpublished clip. Never stores a resolved URL |
+| `get-clip-playback-url` | Clutch feed and post detail; public-callable (guests pass anon key) | Legacy body `POST { clip_id }` returns `{ clipId, url, thumbUrl, expiresIn: 300, status }`, unchanged. **New (LAUNCH Phase 3, CT-1):** `POST { clip_ids: string[] (max 24), kind?: "video" \| "thumb" }` returns `{ urls: [{ clip_id, url, expires_at }], failed: [{ clip_id, reason }] }`, 200 even on partial failure (a forbidden/missing id lands in `failed`, never aborts the batch). Same live-row authz as the legacy body for every id: `published` open to anyone, owner in any status, admin/moderator for non-terminal, `removed`/`rejected` refused for everyone but the owner. TTL: `video` 300s (unchanged), `thumb` 3600s. **Rate limit (CT-2):** a per-IP token bucket (`clip-playback-ip`, 60 req/60s, Postgres-backed `take_rate_limit_token`) sits in front of BOTH bodies; over it returns `429 { "error": "RATE_LIMITED", "retry_after_seconds" }`. Fails OPEN on a rate-limit RPC error (never 500s this read path). Never stores a resolved URL. Implementation shared from `supabase/functions/get-clip-playback-url/handler.ts` |
+| `get-clip-playback-urls` (LAUNCH Phase 3, alias) | same callers as above | A second deployed function name, delegating to the SAME handler as `get-clip-playback-url` (one authz decision, one shared `clip-playback-ip` bucket, no second front door). Accepts the identical batch body `{ clip_ids, kind? }` (and the legacy `{ clip_id }` body, for symmetry). Callers should prefer POSTing the batch body to `get-clip-playback-url` directly; this alias exists because this track's build dispatch named it explicitly. See `get-clip-playback-urls/index.ts` for the recorded rationale |
 | `get-clip-moderation-url` | `apps/admin` Moderation Queue preview; admin/moderator JWT | `POST { clip_id }` same shape as playback mint but admin-gated; 403 for non-admins and for removed/rejected |
 | `coach-trainee-video-upload-url` (Track F, WRITTEN NOT DEPLOYED) | coach's trainee profile Video Analytics tab (`TraineeVideoAnalytics` organism) | Mirrors `stream-upload-url` for coach trainee video review. `POST { player_id, caption? }` coach JWT, verifies `player_id` is actually one of the caller's trainees (a `sessions` row exists), creates the `coach_trainee_videos` row, returns `{ videoId, uploadUrl, token, path, bucket }`. Client PUTs the video to `uploadUrl`. Bucket is the existing private `clips` bucket, path prefix `coach-videos/{coach_id}/{player_id}/` |
 | `get-coach-trainee-video-url` (Track F, WRITTEN NOT DEPLOYED) | `TraineeVideoAnalytics` organism (coach) and `my-videos` screen (athlete) | Mirrors `get-clip-playback-url`, scoped private (no public path at all): `POST { video_id }` returns `{ videoId, url, expiresIn: 300 }` for the video's coach or its player only; 403 for anyone else, 404 for an unknown id or a row with no `storage_path` yet |
-| `notify-dispatch` | every RPC/edge function that writes a `notifications` row, fan-out to device push | Built AT-146. SERVICE-ROLE ONLY (`verify_jwt` true; `assertServiceRoleRequest` additionally requires the bearer equal the service key, since a dispatch writes an arbitrary `user_id`). `POST { userId, type, title, body, deepLink }` or `{ notifications: [ ... ] }` (snake_case `user_id`/`deep_link` accepted). Two legs: leg 1 writes the `notifications` row (the in-app delivery, fully implemented, the only writer of that row per 0002's grant model); leg 2 is device push (APNs/FCM), STUBBED behind `deliverToDevice()` in `supabase/functions/_shared/notify.ts` and carried to P9, honoring `notification_prefs.push_enabled` per type and never reporting a push as sent. Returns `{ dispatched: [ { notificationId, userId, pushSuppressed, deviceDeliveries[] } ] }`. Callers may also import `dispatchNotification`/`parseNotificationInput` from `_shared/notify.ts` to run the same orchestration inline. SQL RPCs that already write a `notifications` row directly (`moderate_clip` 0043, `record_donation_from_draft` 0054, the verification RPCs 0066) get in-app delivery for free by that insert and do not route through this function. Errors `VALIDATION` 400, `FORBIDDEN` 403, `INTERNAL` 500 |
+| `notify-dispatch` | every RPC/edge function that writes a `notifications` row, fan-out to device push | Built AT-146, device push transport landed Phase 4 Track D (launch plan decision 7). SERVICE-ROLE ONLY (`verify_jwt` true; `assertServiceRoleRequest` additionally requires the bearer equal the service key, since a dispatch writes an arbitrary `user_id`). `POST { userId, type, title, body, deepLink }` or `{ notifications: [ ... ] }` (snake_case `user_id`/`deep_link` accepted). Two legs: leg 1 writes the `notifications` row (the in-app delivery, fully implemented, the only writer of that row per 0002's grant model); leg 2 is device push over the **Expo Push API** (`https://exp.host/--/api/v2/push/send`), batched <=100 messages per request, payload `{ to, title, body, data: { deepLink, type } }`. Prefs are reconciled across BOTH stores per decision 8: the caller is suppressed if EITHER the per-type `notification_prefs.push_enabled` (0002) OR the mapped `users.notification_prefs` jsonb category (0087; `booking` -> `sessions`, `chat` -> `messages`, all other types unmapped and governed by 0002 alone) opts out. A ticket error `DeviceNotRegistered` deletes that `push_tokens` row (service role); any other per-token failure is reported but the token is left in place. Transport failure never throws into leg 1: the in-app row is already committed. Returns `{ dispatched: [ { notificationId, userId, pushSuppressed, deviceDeliveries: [ { token, platform, status: 'sent' \| 'failed' \| 'pruned', detail? } ] } ] }`. Callers may also import `dispatchNotification`/`parseNotificationInput` from `_shared/notify.ts` to run the same orchestration inline. SQL RPCs that already write a `notifications` row directly (`moderate_clip` 0043, `record_donation_from_draft` 0054, the verification RPCs 0066) get in-app delivery for free by that insert and do not route through this function, so those paths do NOT get the Expo push leg unless/until they are moved onto `dispatchNotification`. Errors `VALIDATION` 400, `FORBIDDEN` 403, `INTERNAL` 500. Deploy: `supabase functions deploy notify-dispatch` (redeploy every function importing `_shared/notify.ts` or `_shared/supabase.ts` alongside it, orchestrator step per PHASE-4-STATUS.md dependency order). Founder/native-gated for REAL on-device delivery: FCM V1 service-account credentials (Android) and an APNs `.p8` key (iOS) loaded into EAS, plus a new native build carrying the `expo-notifications` module; buildable-now proof stops at the Expo API HTTP contract and `push_tokens` registration, see `docs/phases/PHASE-4-STATUS.md` Track D |
+| `push_tokens` registration (PostgREST, via `packages/api/src/use-push.ts`) | app start on `signed_in`, `apps/mobile/src/hooks/use-push-registration.ts` | Not an edge function: a plain owner-scoped PostgREST upsert/delete against `push_tokens` (owner-CRUD RLS since 0002, no migration needed this phase). `register({ token, platform })` upserts on the unique `token` column with `user_id = auth.uid()`; `unregister(token)` deletes the caller's own row (also called with the just-departed session's access token on sign-out, since the client's session is already cleared by the time `status` observably flips, see `apps/mobile/src/lib/push.ts` `deletePushTokenWithAccessToken`). The token itself comes from `expo-notifications`' `getExpoPushTokenAsync({ projectId })`, EAS project id `5976cc18-8fc3-4a97-9a3d-c767ad542d69`; a tap on a delivered push routes `data.deepLink` through `expo-router`'s `router.push`, the same navigation `/notifications` already uses |
 | `admin-order-advance` | `apps/admin` Order Detail | the only path that can move `orders.status` forward, writes `order_timeline` + `audit_log` |
 | `admin-order-refund` | `apps/admin` Order Detail refund action | new function beyond PLAN.md's original list (see PRD-04 open question 2), calls Razorpay refund API, writes `ledger_entries` |
 | `admin_approve_verification_request` (RPC, not an edge function) | `apps/admin` Verification Detail approve action | `SECURITY DEFINER` RPC (`supabase/migrations/0007_admin_verification_rpcs.sql`), not an edge function, since it needs no third-party call, just an atomic multi-table write under elevated privilege: admin/moderator only (`has_role`), sets `verification_requests.status='approved'`, mirrors onto `coach_profiles.status` for `applicant_type='coach'` (venue/upa branches are no-ops until those tables exist), writes exactly one `audit_log` row. Exists because `audit_log` carries no `authenticated` write policy at all (`RLS.md`), so the admin client cannot write it directly; PRD-04 FR-9/FR-53. As of `0066` it also writes one `verification` `notifications` row to the applicant (FR-9), in-app delivery |
 | `admin_reject_verification_request` (RPC) | `apps/admin` Verification Detail reject action | same shape as above, requires a non-empty `p_reason`, sets `status='rejected'` + `rejection_reason`, mirrors `coach_profiles.status='rejected'`; PRD-04 FR-10/FR-53. As of `0066` the rejection reason is delivered to the applicant as a `verification` `notifications` row (FR-10, in-app delivery), in addition to being recorded in `audit_log` |
 
-## Release hardening additions (2026-09-07)
+### The two SQL notification emitters
 
-| Surface | Call | Notes |
+Two SQL emitters were added alongside `notify-dispatch` and, like the RPCs listed in the table above (`moderate_clip`, `record_donation_from_draft`, the verification RPCs), write the `notifications` row directly rather than routing through that function:
+
+- `notify_session_parties(p_session_id uuid, p_action text) returns int` — `service_role` only (`0103`). Called by `session_transition_internal` on `accept`, `decline`, `start` and `complete`. Writes one `session` type notification per athlete party (the 1:1 `player_id`, or every `session_participants` row for a group session) and never to the acting coach. Returns the number written.
+- `sweep_group_memberships() returns jsonb` — `service_role` only (`0104`), scheduled as `membership-sweep` daily. Writes `membership` type notifications for the renewal reminder, expiry and lapse. See SCHEMA.md "The membership sweep".
+
+**That relay now exists, and it is a sweeper rather than a trigger (`0110` plus the post-deploy script that used to be `0111`, SCALE-REALTIME R-7).** The premise the paragraph above rested on, that the push leg was still the P9 stub, expired: the Expo transport in `_shared/notify.ts` is fully implemented, so "the row is written and nothing pushes" stopped being a no-op and became the P0 that an athlete whose coach starts a session is told nothing and the 03:30 IST membership reminder reaches nobody.
+
+- `notify-push-sweep` (edge function, SERVICE-ROLE ONLY, same `assertServiceRoleRequest` boundary as `notify-dispatch`). `POST {}` or `{ limit }`. Calls `claim_notification_push_batch(p_limit)`, which claims rows with `pushed_at is null` using `for update skip locked`, groups the claimed rows by identical `(type, title, body, deep_link)`, and pushes each group with `pushContentToUsers`. Rows older than 30 minutes are checkpointed without sending. Returns `{ claimed, pushed, suppressed, noDevice, retrying, expired }`. Deploy: `supabase functions deploy notify-push-sweep`.
+- `notification-push-sweep` (pg_cron job, `supabase/deploy/notification_push_sweep_schedule.sql`, moved out of `supabase/migrations/0111_*` on 2026-08-14 because it depends on two Supabase Vault secrets that a migration file cannot carry across environments) posts to it every 30 seconds over pg_net, authenticated from two Supabase Vault secrets, `project_url` and `service_role_key`. **The script REFUSES to install the job if pg_net or either secret is missing**, because a job that 403s every 30 seconds into `net._http_response` looks healthy in `cron.job` and delivers nothing. Not yet run against production as of 2026-08-14; see `docs/DEBT.md`.
+- Not a trigger, and not a database webhook, deliberately. A per-row webhook fires once per recipient (so a group of 50 is 50 single-recipient HTTP calls, which is SCALE-REALTIME R-6 reintroduced), leaves no mark when it fails so nothing can retry, and would put an outbound HTTP call inside the transaction that moves a session's status. The four-point argument is in `0110`'s header.
+
+**Batching, R-6.** `notify-dispatch`'s per-recipient sequential loop is gone. `_shared/notify.ts` now exports `pushContentToUsers(service, content, userIds)` and `dispatchNotificationFanout(service, content, userIds)`: one bulk insert, bulk prefs and `push_tokens` reads chunked at 200 users, then Expo requests of up to 100 tokens each **across recipients**, paced against Expo's 600-per-second project allowance and bounded to 6 in flight. `notify-dispatch`'s request and response shapes are unchanged; identical content is grouped internally, so a group session roster is one Expo request rather than one per athlete.
+
+When the real APNs/FCM transport lands, the relay belongs on the `notifications` table itself, one trigger covering every domain, rather than being re-plumbed per RPC.
+
+---
+
+## Bounded reads (scale, 10k target)
+
+Recorded 2026-08-14 alongside the sweep that bounded every unbounded read in
+`packages/api`. Read `docs/qa/verify/SCALE-CLIENT.md` and
+`docs/qa/verify/SCALE-DATABASE.md` for the measurements behind these numbers.
+
+**The mechanism, because it changes what "unbounded" means here.** PostgREST
+applies a silent server side row cap to every select on this project. Verified,
+not assumed: of 751 `WITH pgrst_source` statements in `pg_stat_statements`,
+**0 carry `LIMIT ALL`** and **670 carry a parameterised `LIMIT $n OFFSET $m`**.
+PostgREST emits the literal `LIMIT ALL` when a query is genuinely unbounded, so
+a numeric limit on a query the client issued with no `.limit()` proves a
+`db-max-rows` is set. The consequence is that an unbounded read is not slow, it
+is **truncated with a 200 OK**, and nothing anywhere in the stack says so. Where
+the client's `.order()` is ascending, the rows dropped are the ones the user
+actually wants.
+
+**The cap's value is still UNREAD.** It is a PostgREST environment variable, not
+a database setting, so it is not in `pg_db_role_setting` and cannot be read over
+SQL. Read it from the Supabase dashboard (Settings, API, "Max rows") and record
+it here. Every page size below is chosen to sit comfortably under any plausible
+value precisely because nobody knows the real one.
+
+### Signature changes
+
+All three are backwards compatible: every existing call site passes no
+argument and gets the default page.
+
+| Method | Before | After |
 |---|---|---|
+| `useCourts().listMyBookings()` | no args, no owner filter, unbounded | `listMyBookings(limit = 50)`, plus an explicit `.eq("user_id", auth.uid())` |
+| `useEmpower().listUpas()` | no args, unbounded, one RPC per row | `listUpas(limit = 48)`, one batched balance RPC |
+| `useNotifications().list()` | no args, unbounded | `list(limit = 50)` |
 | moderation | `useClutch().report(entityType, entityId, reason)` | Inserts `reports`. `reporter_id` comes from the session, never an argument. Reason capped at 500 chars. |
-| moderation | `useClutch().blockUser(userId)` | Upsert into `user_blocks`, idempotent. The subtraction is RLS (0122), not this call. |
+| moderation | `useClutch().blockUser(userId)` | Upsert into `user_blocks`, idempotent. The subtraction is RLS (0097, table `blocked_users`), not this call. |
 | moderation | `useClutch().unblockUser(userId)` | |
 | moderation | `useClutch().blockedUserIds()` | Owner scoped read for an unblock list. UI not yet built. |
 | account | `useProfile().deleteAccount()` | Invokes the `delete-account` edge function. Caller MUST sign out immediately after. |
 | search | `POST ai-search` | Now rate limited to 30 requests per 60s per user AND per IP, enforced before the two Anthropic calls. Returns `429 RATE_LIMITED` with a `Retry-After` header. |
-| chat | `useChat().threads()` | Previews now come from `chat_thread_previews` (0124) instead of a client-side fold over every message. |
+| chat | `useChat().threads()` | Previews now come from `chat_thread_previews` (0113) instead of a client-side fold over every message. |
 
-New error codes: `ACCOUNT_DELETED` (403), and `RATE_LIMITED` (429) is now
-actually raised. `AppError` carries an optional `retryAfterSeconds` that
-`errorResponse` emits as `Retry-After`.
+### Behaviour changes
 
-### `delete-account` edge function
+- **`useChat().listMessages(threadId)` now returns the NEWEST page, not the
+  oldest.** It still returns oldest-first within that page, so render order is
+  unchanged. The old query was `created_at ASC` with no limit, which under the
+  server cap returned the OLDEST N rows: a long thread opened to messages from
+  months ago with no way to reach today, and the message the user had just sent
+  vanished on the next open. There is no "load older" affordance yet, so a
+  thread longer than 50 messages currently starts at the 50th most recent.
+- **`useChat().listThreads()` no longer downloads every message in every
+  thread.** It calls the `chat_thread_previews` RPC and falls back to a bounded
+  batch read when that function is absent. See below.
+- **`useEmpower().listUpas()` no longer fans out one HTTP request per verified
+  UPA.** It calls `upa_fund_balances` and falls back to a bounded worker pool
+  (5 at a time) over the existing per-row RPC.
 
-POST, member's own JWT, no body. Runs `delete_my_account()` as the member (so
-the RPC's `auth.uid()` authorization applies and this cannot be pointed at
-anyone else), then scrubs the auth identity under the service role: email
-randomized to `deleted+<uid>@deleted.atlitos.invalid`, metadata cleared,
-`ban_duration` 100 years. Step 1 is idempotent, so a failure at step 2 is safe
-to retry.
+### Depends on migration 0113, which is NOT applied
+
+`0113_bounded_reads_support.sql` adds `chat_thread_previews(uuid[])`,
+`upa_fund_balances(uuid[])` and `idx_notifications_user_created`. The applied
+migration ceiling on `syzzfgaudpifwvbpycyi` is **0097** (checked in
+`supabase_migrations.schema_migrations`), so **both functions are absent in
+production today and both fallback paths are the live ones.**
+
+That is deliberate, not an oversight. Each client checks for PostgREST's
+`PGRST202` schema-cache miss (and Postgres's `42883`) and degrades; any other
+error still surfaces. So applying 0113 is an improvement, never a prerequisite,
+and the gap between merging this and applying it does not break either screen.
+
+What is already fixed without 0113, and what still waits for it:
+
+| Fix | Live now | Needs 0113 |
+|---|---|---|
+| Bookings: owner filter, Seq Scan to Index Scan | yes | no |
+| Every explicit `.limit()` | yes | no |
+| Empower: no more N-wide request fan-out | yes, via the worker pool | one-call version |
+| Chat inbox: payload cut ~100x | yes | exactly one row per thread |
+| Notifications: no more full-history sort | bounded, sort remains | sort removed by the index |
+
+The one thing the fallback does NOT fix is a blank preview on a thread quiet
+longer than the newest bounded window, because PostgREST has no `DISTINCT ON`.
+That case only disappears when 0113 is applied.
+
+### Reads deliberately left unbounded
+
+Fourteen, each checked rather than skipped. Two shapes:
+
+- **Bounded by a primary key `.in()`**, so the result is one row per id and the
+  caller's own page already sizes it: `public_profiles` (four sites),
+  `training_groups` by id (two sites), `session_types` by id, `clip_likes` and
+  `clip_saves` (unique on `(clip_id, user_id)`).
+- **Bounded by the schema, not by users or time**: `user_roles` (role enum),
+  `notification_prefs` (max 8, `unique (user_id, notification_type)` against an
+  8 value enum, both verified in the catalog), `shopper_categories` (4 rows),
+  `fee_config` (7 rows), `promo_banners` (3 active rows).
+
+One read is unbounded and **knowingly wrong to bound**: the group member count
+in `use-chat.ts`'s `fetchGroupInfo`. `.in("thread_id", ...)` on a non unique
+column returns one row per seat, so it is (threads) x (members). A `.limit()`
+there would produce a silently WRONG COUNT rather than a short list, and a wrong
+member count has already cost this project a full investigation. It needs a
+server side aggregate; that is recorded, not half-fixed.
+
+### The checker
+
+`scripts/scan-unbounded-reads.mjs` enumerates every read chain in
+`packages/api/src` and classifies it. It is negative-tested: planting one
+unbounded read moves the count and removing it moves it back. Run it before
+adding a read.

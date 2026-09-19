@@ -1,0 +1,143 @@
+name: Definition of Done
+
+# The repo had no .github directory at all until 2026-08-14, so the pre-push
+# hook was the only gate, it lived on one laptop, and the two scripts it called
+# had never existed in any commit. See docs/qa/verify/VERIFICATION-WAVE-1.md
+# P1-6.
+#
+# READ THIS BEFORE TRUSTING A GREEN TICK HERE. On the free GitHub plan a private
+# repository cannot make a status check REQUIRED, so this workflow reports but
+# cannot refuse a merge. It is a detector, not a gate. The gate is
+# scripts/hooks/pre-push, installed by scripts/install-hooks.sh. Both facts are
+# recorded with an owner in docs/DEBT.md.
+
+on:
+  push:
+    branches-ignore: []
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: dod-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  invariants:
+    name: Security invariants
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The invariants are pure grep, awk and perl. They need no install step
+      # and no node_modules, which is why they run as their own job: a broken
+      # lockfile must not be able to stop the security checks from reporting.
+      - name: Prove the gate scripts are present
+        run: |
+          test -f scripts/security-invariants.sh || { echo "security-invariants.sh is MISSING"; exit 1; }
+          test -f scripts/dod.sh || { echo "dod.sh is MISSING"; exit 1; }
+          chmod +x scripts/security-invariants.sh scripts/dod.sh
+
+      # --offline because a GitHub runner has no route to the Supabase project
+      # and no credentials. The script prints exactly what that leaves
+      # uncovered, and the gap is recorded in docs/DEBT.md rather than being
+      # allowed to read as a clean pass.
+      - name: Run invariants
+        run: ./scripts/security-invariants.sh --offline
+
+      - name: Hooks in the tree match the ones that are meant to run
+        run: |
+          test -x scripts/install-hooks.sh || chmod +x scripts/install-hooks.sh
+          test -f scripts/hooks/pre-push || { echo "the versioned pre-push hook is MISSING"; exit 1; }
+
+  workspace:
+    name: Typecheck, lint, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # CI=1 matters: pnpm install can exit 0 having done nothing when it wants
+      # a from-scratch reinstall and the terminal is non-interactive
+      # (docs/qa/CURRENT-STATE.md, environment traps).
+      - name: Install
+        run: CI=1 pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm turbo typecheck
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Build
+        run: pnpm turbo build
+
+  db-migrations:
+    name: From-scratch migration apply, invariants against a real database
+    runs-on: ubuntu-latest
+    # ubuntu-latest ships Docker natively, so `supabase start` needs no colima
+    # equivalent here the way local development on this Mac does
+    # (docs/qa/LOCAL-DEV.md). This is the first CI job on this repo that ever
+    # proves the migrations replay on a clean database rather than trusting
+    # that they do, and the first that runs security-invariants.sh in its
+    # non-offline form (docs/DEBT.md, "two invariant sub-checks that cannot
+    # fully run", item 1, db-dual-policy-drift) instead of --offline.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.75.0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # Only for the seed scripts' @supabase/supabase-js import below, not a
+      # full workspace build; the workspace job already covers typecheck,
+      # lint and build.
+      - name: Install
+        run: CI=1 pnpm install --frozen-lockfile
+
+      - name: psql (ubuntu-latest usually ships one, this is a guard, not an assumption)
+        run: command -v psql || sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: supabase start (applies every migration in supabase/migrations/)
+        run: supabase start
+
+      - name: supabase status (every service must be healthy)
+        run: supabase status
+
+      - name: Security invariants, non-offline, against the just-created database
+        run: |
+          DB_URL=$(supabase status -o json | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{console.log(JSON.parse(d).DB_URL)})")
+          ATLITOS_DB_URL="$DB_URL" ./scripts/security-invariants.sh
+
+      - name: Seed smoke test (the 7 files in supabase/seed/, verified order in docs/qa/LOCAL-DEV.md)
+        run: |
+          DB_URL=$(supabase status -o json | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{console.log(JSON.parse(d).DB_URL)})")
+          API_URL=$(supabase status -o json | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{console.log(JSON.parse(d).API_URL)})")
+          SERVICE_KEY=$(supabase status -o json | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{console.log(JSON.parse(d).SERVICE_ROLE_KEY)})")
+          export SUPABASE_URL="$API_URL"
+          export SUPABASE_SERVICE_ROLE_KEY="$SERVICE_KEY"
+          node scripts/seed-demo-users.mjs
+          psql "$DB_URL" -f supabase/seed/seed_identity.sql
+          psql "$DB_URL" -f supabase/seed/seed_p2.sql
+          psql "$DB_URL" -f supabase/seed/seed_p4_commerce.sql
+          psql "$DB_URL" -f supabase/seed/seed_p5_clutch_fixtures.sql
+          node scripts/seed-empower-upa-users.mjs
+          psql "$DB_URL" -f supabase/seed/seed_p6_empower_fixtures.sql
+          psql "$DB_URL" -f supabase/seed/seed_p7_learn.sql
+          psql "$DB_URL" -f supabase/seed/seed_promo_banners.sql

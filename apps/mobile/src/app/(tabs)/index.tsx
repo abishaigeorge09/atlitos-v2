@@ -1,4 +1,4 @@
-import { useNotifications, useShop } from '@atlitos/api';
+import { useNotifications } from '@atlitos/api';
 import { radii, spacing } from '@atlitos/theme';
 import { router, useFocusEffect } from 'expo-router';
 import { X } from 'lucide-react-native';
@@ -19,6 +19,7 @@ import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Text } from '@/components/ui/text';
+import { usePendingAuthAction } from '@/hooks/use-pending-auth-action';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
 import { useThemeColors } from '@/theme/use-theme-colors';
@@ -48,31 +49,15 @@ export default function HomeScreen() {
   // on mount, so returning from Shop after adding something shows the new
   // count instead of a stale one. Guests have no cart, so it stays 0 and the
   // button opens the login gate.
-  const shop = useShop(supabase);
-  const [cartCount, setCartCount] = useState(0);
-  useFocusEffect(
-    useCallback(() => {
-      if (status !== 'signed_in') {
-        setCartCount(0);
-        return;
-      }
-      let cancelled = false;
-      void (async () => {
-        try {
-          const lines = await shop.getCart();
-          if (!cancelled) setCartCount(lines.reduce((n, line) => n + line.qty, 0));
-        } catch {
-          // A cart read failing must never break Home; the badge just stays put.
-        }
-      })();
-      return () => {
-        cancelled = true;
-      };
-    }, [status, shop]),
-  );
+  // RECONCILIATION 2026-09-14: a cart count badge for the app bar (origin/main
+  // f1a5fa2) was NOT taken. It fetched the whole cart on every Home focus for
+  // every signed in user, purely to draw a number. Revisit with a cached count.
   const continueAsGuest = useSessionStore((state) => state.continueAsGuest);
 
   const [gateVisible, setGateVisible] = useState(false);
+  // F8 (P5 fix pass, PRD-01 FR-4): the Notifications and Profile taps below
+  // used to be dropped when the gate opened.
+  const { requireAuth, clearPendingAction } = usePendingAuthAction(requiresAuthGate);
   const [hasUnread, setHasUnread] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -149,32 +134,13 @@ export default function HomeScreen() {
         variant="brand"
         hasUnreadNotifications={hasUnread}
         avatarUri={me?.avatarUrl ?? undefined}
-        avatarName={me?.name ?? undefined}
-        cartCount={cartCount}
-        onPressCart={() => {
-          if (requiresAuthGate) {
-            openGate();
-            return;
-          }
-          router.push('/shop/cart');
-        }}
-        onPressNotifications={() => {
-          if (requiresAuthGate) {
-            openGate();
-            return;
-          }
-          router.push('/notifications');
-        }}
-        onPressProfile={() => {
-          if (requiresAuthGate) {
-            openGate();
-            return;
-          }
+        onPressNotifications={() => requireAuth(() => router.push('/notifications'), openGate)}
+        onPressProfile={() =>
           // The profile now lives on the You tab (FB-001), so the header
           // avatar switches to that tab instead of pushing a duplicate
           // /profile screen onto the Home stack.
-          router.push('/(tabs)/you');
-        }}
+          requireAuth(() => router.push('/(tabs)/you'), openGate)
+        }
       />
 
       <ScrollView
@@ -241,7 +207,11 @@ export default function HomeScreen() {
         ) : null}
       </ScrollView>
 
-      <LoginGateModal visible={gateVisible} onClose={() => setGateVisible(false)} />
+      <LoginGateModal
+        visible={gateVisible}
+        onClose={() => setGateVisible(false)}
+        onDismiss={clearPendingAction}
+      />
     </SafeAreaView>
   );
 }

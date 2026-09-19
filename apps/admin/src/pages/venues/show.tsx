@@ -46,7 +46,7 @@ export function VenueShow() {
 
     const { data: venueData, error: venueError } = await supabaseClient
       .from("venues")
-      .select("id,partner_user_id,name,address,city,pincode,lat,lng,description,status,rejection_reason,created_at,updated_at")
+      .select("id,partner_user_id,name,address,city,pincode,lat,lng,description,status,rejection_reason,booking_url,created_at,updated_at")
       .eq("id", id)
       .maybeSingle();
 
@@ -214,6 +214,14 @@ export function VenueShow() {
         {venue.description ? (
           <p style={{ marginTop: "var(--space-md)", fontSize: 14, color: "var(--color-text-secondary)" }}>
             {venue.description}
+          </p>
+        ) : null}
+        {venue.booking_url ? (
+          <p style={{ marginTop: "var(--space-sm)", fontSize: 14, margin: "var(--space-sm) 0 0" }}>
+            <span style={{ color: "var(--color-text-secondary)" }}>Books externally at </span>
+            <a href={venue.booking_url} target="_blank" rel="noreferrer" style={{ color: "var(--color-accent)" }}>
+              {venue.booking_url}
+            </a>
           </p>
         ) : null}
 

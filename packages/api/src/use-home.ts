@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { AtlitosClient } from "./client";
 import { mapPostgrestError } from "./errors";
+import { IMAGE_SIZE, sizedImageUrl } from "./image-url";
 
 /**
  * `@atlitos/api`'s Home lane. Its own small file rather than growing
@@ -49,6 +50,10 @@ export function useHome(client: AtlitosClient) {
         .from("promo_banners")
         .select("id, title, body, cta_label, cta_route, image_path, sort")
         .eq("active", true)
+        // Unbounded and safe: `promo_banners` is hand-curated marketing content,
+        // 3 active rows on the live project, and the carousel is a fixed size
+        // surface. It does not grow with users or with time. If it ever
+        // becomes a campaign table with per user targeting, this needs a bound.
         .order("sort", { ascending: true })
         .returns<PromoBannerRow[]>();
       if (error) throw mapPostgrestError(error);
@@ -59,8 +64,12 @@ export function useHome(client: AtlitosClient) {
         body: row.body,
         ctaLabel: row.cta_label,
         ctaRoute: row.cta_route,
+        // M-6: sized at the tile width it is painted at, never the origin.
         imageUrl: row.image_path
-          ? client.storage.from(PROMO_MEDIA_BUCKET).getPublicUrl(row.image_path).data.publicUrl
+          ? sizedImageUrl(
+            client.storage.from(PROMO_MEDIA_BUCKET).getPublicUrl(row.image_path).data.publicUrl,
+            { width: IMAGE_SIZE.tile, height: Math.round(IMAGE_SIZE.tile / 2) },
+          ) ?? null
           : null,
         sort: row.sort,
       }));

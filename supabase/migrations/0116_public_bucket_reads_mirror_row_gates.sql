@@ -1,26 +1,79 @@
--- 0116_public_bucket_reads_mirror_row_gates
--- P0. Every anon SELECT policy on storage.objects gated on the bucket name
--- ALONE, while each owning table correctly hid its non public rows. The
--- database refused the row and then served its photograph.
+-- ATLITOS v2 - 0116_public_bucket_reads_mirror_row_gates.sql
+-- Domain: storage, privacy. P0.
 --
--- Reproduced end to end 2026-08-14 with NO credentials at all: a 2,795,648
--- byte PNG belonging to upa_application e115d1dc (status `submitted`, an
--- unreviewed charity application) returned HTTP 200, while an anon read of
--- that same application row correctly returned [].
+-- ============================================================================
+-- THE DEFECT: the row gate and the object gate were written in different
+-- migrations, and only the row gate ever got its status condition.
+-- ============================================================================
 --
--- Each policy below now mirrors the condition its OWN table enforces, so an
--- object can never be more visible than the row it belongs to.
+-- Every anon SELECT policy on storage.objects gates on the bucket name ALONE:
 --
--- avatars is deliberately left public: profile pictures are shown to signed
--- out visitors across the Clutch feed, coach browse and public profiles, and
--- gating them would break guest browsing.
+--   avatars_public_read           (bucket_id = 'avatars')
+--   gratitude_photos_public_read  (bucket_id = 'gratitude-photos')
+--   product_media_public_read     (bucket_id = 'product-media')
+--   upa_photos_public_read        (bucket_id = 'upa-photos')
+--   venue_media_public_read       (bucket_id = 'venue-media')
 --
--- upa-photos accepts BOTH folder key schemes because both exist in the live
--- bucket right now: the INSERT policy requires auth.uid(), but the one
--- verified applicant's folder is an application id written by a privileged
--- path. Narrowing to user id alone would close the leak and break the one
--- legitimate photo.
+-- while each owning table correctly hides non public rows. The database
+-- refuses the row and then serves its photograph.
+--
+-- REPRODUCED END TO END 2026-08-14 against production, no credentials at all:
+--
+--   GET /rest/v1/upa_applications?applicant_user_id=eq.b488950f-...
+--       with the publishable key            -> 200 []          (correctly hidden)
+--   GET /storage/v1/object/public/upa-photos/b488950f-.../a8bceaac-....png
+--       with NO apikey header whatsoever    -> 200, 2,795,648 bytes,
+--                                              PNG 1672x941
+--
+-- That object belongs to application e115d1dc-166c-4c2c-be94-943b728ddc62,
+-- status `submitted`. It is the photograph of a real person who applied for
+-- charity aid, whose application has not been reviewed, published on the open
+-- internet and reachable in two commands by anyone who can list a bucket.
+--
+-- Exposure measured per bucket before writing this, rather than assumed:
+--   upa-photos       9 non verified applications ->  1 object exposed  (above)
+--   venue-media      6 pending venues            ->  0 objects
+--   product-media    4 inactive products         ->  4 product images
+--   gratitude-photos 0 unpublished posts         ->  0 objects (bucket empty)
+--
+-- So one instance carries sensitive data and the rest are latent. This fixes
+-- the CLASS, because leaving four policies with the same shape is how the same
+-- bug ships three times.
+--
+-- ============================================================================
+-- FOLDER KEY SCHEMES, established from live data, not from the docs
+-- ============================================================================
+--
+--   upa-photos        foldername[1] is the applicant's auth.uid()  PER THE
+--                     INSERT POLICY, but the one verified applicant's folder
+--                     is an APPLICATION id, written by a privileged path that
+--                     bypassed that policy. Both schemes exist in the bucket
+--                     right now, so this policy accepts EITHER. Narrowing to
+--                     user id alone would have closed the leak and broken the
+--                     one legitimate photo, which is the failure this comment
+--                     exists to prevent. The inconsistency itself is recorded
+--                     for a follow up; it is not fixed here, because renaming
+--                     a live object is a data migration, not a policy change.
+--   venue-media       foldername[1] = venues.id            (6 of 6 objects)
+--   product-media     foldername[1] = products.id          (18 of 21), plus a
+--                     literal `promo` prefix for marketing banners, which are
+--                     deliberately public and belong to no product.
+--   gratitude-photos  foldername[1] = author's auth.uid(). gratitude_posts has
+--                     no author column; it hangs off upa_id, so the join goes
+--                     through upa_applications.applicant_user_id.
+--
+-- AVATARS IS DELIBERATELY LEFT PUBLIC. A profile picture is public by design:
+-- the Clutch feed, coach browse and public profiles all show avatars to signed
+-- out visitors, and gating them would break guest browsing, which is the
+-- product's entire acquisition path. Recorded as a decision, not an oversight.
+--
+-- Each policy below mirrors the condition its OWN table already enforces, so
+-- the object can never be more visible than the row it belongs to. That is the
+-- invariant, and it is the thing to check when a sixth bucket is added.
 
+-- ---------------------------------------------------------------------------
+-- upa-photos. The P0.
+-- ---------------------------------------------------------------------------
 drop policy if exists upa_photos_public_read on storage.objects;
 
 create policy upa_photos_public_read
@@ -37,6 +90,9 @@ using (
   )
 );
 
+-- ---------------------------------------------------------------------------
+-- venue-media. Mirrors venues_select_public: status = 'verified'.
+-- ---------------------------------------------------------------------------
 drop policy if exists venue_media_public_read on storage.objects;
 
 create policy venue_media_public_read
@@ -50,6 +106,10 @@ using (
   )
 );
 
+-- ---------------------------------------------------------------------------
+-- product-media. Mirrors products_select_public: active. The `promo` prefix
+-- holds marketing banners that belong to no product and are meant to be public.
+-- ---------------------------------------------------------------------------
 drop policy if exists product_media_public_read on storage.objects;
 
 create policy product_media_public_read
@@ -66,6 +126,11 @@ using (
   )
 );
 
+-- ---------------------------------------------------------------------------
+-- gratitude-photos. Mirrors gratitude_posts_select_public, which is published
+-- AND belonging to a verified UPA. Bucket is empty today, so this is purely
+-- preventative.
+-- ---------------------------------------------------------------------------
 drop policy if exists gratitude_photos_public_read on storage.objects;
 
 create policy gratitude_photos_public_read
@@ -82,6 +147,12 @@ using (
   )
 );
 
+-- ---------------------------------------------------------------------------
+-- Prove the file achieved its purpose in the same transaction rather than
+-- trusting the DDL, the way 0115 does. Any anon-readable SELECT policy on
+-- storage.objects whose qual is nothing but a bucket_id test is the defect
+-- this migration exists to remove. `avatars` is the one documented exception.
+-- ---------------------------------------------------------------------------
 do $$
 declare
   v_bad text;

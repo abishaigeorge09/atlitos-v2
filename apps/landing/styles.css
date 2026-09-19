@@ -5,7 +5,7 @@
    1. Reveal framework: [data-reveal] variants (up, side, tilt, pop, draw) hidden ONLY
       under html.js, staggered via data-reveal-delay, re-armed when leaving the viewport
       through the bottom. Zero JS renders everything.
-   2. Sticky files: .vhero (300vh film track), .step-file (tab plus panel, one viewport,
+   2. Sticky files: .step-file (tab plus panel, one viewport,
       same offset, DOM order stacks), .incl-card (sticky pricing checklist). No JS pinning
       library anywhere, so nothing can ever scroll over a stuck stage.
    3. Seams: curved SVG edges, rounded band corners, and domes carry color across section
@@ -34,9 +34,9 @@
   --ember-tint: #FCEBE4;
   --green-tint: #DCF0E5;
 
-  --font-display: "Fraunces", Georgia, serif;
-  --font-body: "Inter", sans-serif;
-  --font-mono: "JetBrains Mono", monospace;
+  --font-display: "Fraunces", "Fraunces-fallback", Georgia, serif;
+  --font-body: "Inter", "Inter-fallback", sans-serif;
+  --font-mono: "JetBrains Mono", "JBMono-fallback", monospace;
 
   --shell: 1100px;
   --radius: 12px;
@@ -49,9 +49,88 @@
   --grain-light: radial-gradient(rgba(251, 247, 241, 0.07) 1px, transparent 1.5px);
 }
 
+/* Self-hosted variable fonts (latin subsets, one file per family/style).
+   Same-origin kills the two Google Fonts round-trips that were the LCP tail
+   on throttled mobile (C8). Files under fonts/, fetched from Google's CDN
+   once and pinned. */
+@font-face {
+  font-family: "Fraunces";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("fonts/Fraunces-var.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Fraunces";
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("fonts/Fraunces-var-italic.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("fonts/Inter-var.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("fonts/JetBrainsMono-var.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  /* the rupee sign (U+20B9) lives in latin-ext, which every price on the page
+     needs; this is the only latin-ext subset shipped */
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("fonts/JetBrainsMono-var-latinext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* Metric-tuned local fallbacks so the webfont swap does not reflow the page
+   (CLS guard, C8). size-adjust matched by measurement against the real faces. */
+@font-face {
+  font-family: "Fraunces-fallback";
+  src: local("Georgia"), local("Times New Roman");
+  size-adjust: 104%;
+  ascent-override: 92%;
+  descent-override: 24%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Inter-fallback";
+  src: local("Helvetica Neue"), local("Arial");
+  size-adjust: 100%;
+  ascent-override: 97%;
+  descent-override: 24%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "JBMono-fallback";
+  src: local("Courier New"), local("Menlo");
+  size-adjust: 111%;
+  ascent-override: 102%;
+  descent-override: 26%;
+  line-gap-override: 0%;
+}
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 html:not(.js) { scroll-behavior: smooth; }
+
+/* overflow-x: clip, NEVER hidden. hidden creates a scroll container on the
+   ancestor, which is the root cause of the historical pin overlap bug (R1 in
+   docs/MOTION-ARCHITECTURE.md). clip clips paint without creating a scroller. */
+html { overflow-x: clip; }
 
 body {
   background: var(--paper);
@@ -60,8 +139,92 @@ body {
   font-size: 1.0625rem;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
-  overflow-x: hidden;
 }
+
+/* ---------- Lenis smooth scroll required CSS ---------- */
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-smooth [data-lenis-prevent] { overscroll-behavior: contain; }
+.lenis.lenis-stopped { overflow: hidden; }
+
+/* ---------- Global overlays: grain, cursor, wipes ---------- */
+/* film grain: static SVG turbulence, one composited layer, never animated */
+.grain {
+  position: fixed; inset: 0;
+  pointer-events: none;
+  z-index: 90; /* under the header (100), above everything else */
+  opacity: 0.055;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+}
+/* target lock: broadcast corner brackets that snap around whatever
+   interactive element the pointer is over. The native cursor stays. */
+.target-lock {
+  position: fixed; top: 0; left: 0;
+  width: 60px; height: 40px;
+  pointer-events: none;
+  z-index: 95;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.target-lock.is-locked { opacity: 1; }
+.tl-corner {
+  position: absolute;
+  width: 12px; height: 12px;
+  border: 2.5px solid var(--ember);
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.25));
+}
+.tl-0 { top: 0; left: 0; border-right: none; border-bottom: none; }
+.tl-1 { top: 0; right: 0; border-left: none; border-bottom: none; }
+.tl-2 { bottom: 0; left: 0; border-right: none; border-top: none; }
+.tl-3 { bottom: 0; right: 0; border-left: none; border-top: none; }
+/* speed line wipes (elements created by motion/systems/wipe.js) */
+.wipe-wrap { position: fixed; inset: 0; pointer-events: none; z-index: 80; overflow: clip; }
+.wipe-bar {
+  position: absolute; left: -20%;
+  width: 40%; height: clamp(14px, 2vw, 26px);
+  will-change: transform;
+}
+@media (pointer: coarse) {
+  .grain { display: none; } /* blend-mode layers cost real battery on mobile */
+}
+/* chapter rail (elements created by motion/systems/rail.js) */
+.chapter-rail {
+  position: fixed; right: 18px; top: 50%;
+  transform: translateY(-50%);
+  z-index: 85;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.rail-dot {
+  position: relative;
+  width: 22px; height: 22px;
+  display: flex; align-items: center; justify-content: center;
+  background: none; border: none; cursor: pointer; padding: 0;
+}
+.rail-dot i {
+  width: 8px; height: 8px;
+  border-radius: 999px;
+  background: transparent;
+  border: 1.5px solid var(--ink-tertiary);
+  transition: background-color 0.25s ease, border-color 0.25s ease, transform 0.25s ease;
+}
+.rail-dot.is-active i { background: var(--marigold); border-color: var(--marigold); transform: scale(1.25); }
+.rail-label {
+  position: absolute; right: 26px; top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.625rem; font-weight: 700; letter-spacing: 0.16em;
+  color: var(--ink-secondary);
+  background: var(--paper);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 3px 8px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  white-space: nowrap;
+}
+.rail-dot:hover .rail-label, .rail-dot:focus-visible .rail-label { opacity: 1; }
 
 .shell { max-width: var(--shell); margin: 0 auto; padding: 0 24px; }
 
@@ -97,6 +260,11 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--ember); outline
 .js [data-reveal-delay="4"] { transition-delay: 0.4s; }
 .js [data-reveal-delay="5"] { transition-delay: 0.5s; }
 .js [data-reveal-delay="6"] { transition-delay: 0.6s; }
+/* Rich mode (motion/) owns every data-reveal element it pre-marks is-in and
+   drives with GSAP; a live CSS transition would interpolate every inline
+   write GSAP makes, which froze the step rows mid rotation. One rule kills
+   the whole conflict class. */
+.motion-rich [data-reveal] { transition: none; }
 /* draw variant: paths get dasharray from JS; is-in releases the offset */
 .js [data-reveal="draw"] .a-path { transition: stroke-dashoffset 1s cubic-bezier(0.3, 0, 0.2, 1); }
 .js [data-reveal="draw"][data-reveal-delay="1"] .a-path { transition-delay: 0.18s; }
@@ -132,7 +300,38 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--ember); outline
     backdrop-filter: blur(16px) saturate(1.5);
   }
 }
-.compact .nav-card { max-width: 340px; padding: 11px 22px 10px; border-radius: 0 0 999px 999px; }
+/* over the espresso hero (top of page, before .scrolled) the paper glass reads
+   as a grey slab; use espresso glass until scroll leaves the hero */
+html:not(.scrolled) .nav-card {
+  background: rgba(20, 16, 11, 0.62);
+  border-color: rgba(251, 247, 241, 0.16);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+html:not(.scrolled) .site-nav a { color: var(--ink-inverse); }
+html:not(.scrolled) .nav-card .btn-nav { background: var(--paper); color: var(--ink); }
+/* one transition list, one place: the size morph keeps its 460ms feel, the
+   glass swap rides along at 350ms. A separate transition-property override
+   here once desynced the card width from the link collapse and made the CTA
+   slide over the wordmark mid tuck. */
+.nav-card {
+  transition:
+    max-width 460ms cubic-bezier(0.65, 0, 0.35, 1),
+    padding 460ms ease,
+    background 350ms ease,
+    border-color 350ms ease,
+    box-shadow 350ms ease;
+}
+.site-nav a, .nav-card .btn-nav { transition: background 350ms ease, color 350ms ease; }
+/* Tucked pill: the wordmark must never read as sitting at the pill's edge
+   (founder note). Generous left padding pushes it inward, and the pair is
+   balanced with a centred gap rather than space-between extremes. */
+.compact .nav-card {
+  max-width: 372px;
+  padding: 11px 18px 10px 38px;
+  border-radius: 0 0 999px 999px;
+  justify-content: center;
+  gap: 30px;
+}
 .wordmark {
   font-family: var(--font-display);
   font-style: italic;
@@ -142,6 +341,10 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--ember); outline
   text-decoration: none;
   line-height: 1;
   white-space: nowrap;
+  /* optical: Fraunces italic carries its mass below the box centre; without
+     this the wordmark reads as sitting low next to the CTA pill */
+  display: inline-block;
+  transform: translateY(-0.05em);
 }
 .site-nav {
   display: flex; gap: 22px; margin-left: auto;
@@ -154,9 +357,9 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--ember); outline
   font-size: 0.9375rem; font-weight: 600; white-space: nowrap;
 }
 .site-nav a:hover { color: var(--ember); }
-.compact .nav-card { max-width: 380px; padding: 8px 12px; }
+/* (a second .compact .nav-card rule lived here from the options gallery era;
+   it fought the pill rule above and cramped the tucked state. Removed.) */
 .compact .site-nav { max-width: 0; opacity: 0; margin-left: 0; transition: max-width 460ms cubic-bezier(0.65, 0, 0.35, 1), opacity 200ms ease; }
-.compact .wordmark { margin-right: auto; }
 
 /* Buttons */
 .btn-pill {
@@ -168,6 +371,7 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--ember); outline
   border-radius: 999px;
   text-decoration: none;
   border: 2px solid var(--ink);
+  white-space: nowrap; /* a pill label never wraps, however tight the flex */
   transition: background-color 140ms ease, color 140ms ease, transform 140ms ease;
 }
 .btn-pill:hover { background: var(--ember); border-color: var(--ember); color: var(--ink-on-accent); }
@@ -187,52 +391,124 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--ember); outline
 .ghost-onDark { color: var(--ink-inverse); border-color: rgba(251, 247, 241, 0.35); }
 .ghost-onDark:hover { border-color: var(--ink-inverse); }
 
-/* ---------- Hero: the scoreboard film. Sticky viewport inside a 300vh
-   track; the final camera push is scrubbed by scroll. ---------- */
+/* ---------- Hero: COLD OPEN ----------
+   100svh static section, normal flow (the LCP element must not be inside a
+   sticky/pinned wrapper). Hidden states live ONLY under html.js:not(.hero-ready)
+   so zero JS, reduced motion, and the 1800ms fallback all see final states. */
 .sr-only {
   position: absolute; width: 1px; height: 1px;
   clip-path: inset(50%); overflow: hidden; white-space: nowrap;
 }
-.vhero { position: relative; height: 300vh; background: var(--espresso); }
-html:not(.js) .vhero { height: auto; }
-.vhero-sticky {
-  position: sticky; top: 0;
-  height: 100svh;
-  overflow: hidden;
+.hero {
+  position: relative;
+  min-height: 100svh;
   background: var(--espresso);
+  background-image: var(--grain-light);
+  background-size: 7px 7px;
+  overflow: clip;
+  display: flex; flex-direction: column; justify-content: center;
+  padding: calc(var(--nav-h) + 24px) clamp(24px, 6vw, 96px) 72px;
 }
-html:not(.js) .vhero-sticky { position: static; }
-.vhero-video {
-  position: absolute; inset: 0;
+/* speed lines */
+.hero-lines { position: absolute; inset: 0; pointer-events: none; }
+.hl {
+  position: absolute; left: -20%;
+  width: 140%; height: clamp(10px, 1.6vw, 22px);
+  transform: skewY(-8deg) translateX(0);
+  background: var(--ember);
+}
+.hl-1 { top: 16%; background: var(--ember); }
+.hl-2 { top: 78%; background: var(--marigold); }
+.hl-3 { top: 34%; background: var(--ember); }
+.hl-4 { top: 52%; background: var(--marigold); }
+.hl-5 { top: 86%; background: var(--ember); opacity: 0.85; }
+/* after the sweep, only hl-2 survives, thinned via scaleY. TRANSFORMS ONLY on
+   these bars, never height/top: tweening layout properties on the settle beat
+   measured 0.055 CLS on its own (found via layout-shift sources on prod). */
+html.js:not(.hero-ready) .hl { transform: skewY(-8deg) translateX(-140%); }
+.hero-ready .hl, html:not(.js) .hl { transform: skewY(-8deg) translateX(0); opacity: 0; }
+.hero-ready .hl-2, html:not(.js) .hl-2 { opacity: 1; transform: skewY(-8deg) scaleY(0.1); }
+/* duotone athlete panel */
+.hero-panel {
+  position: absolute;
+  right: clamp(-40px, -2vw, 0px); top: 8%;
+  width: clamp(300px, 42vw, 640px); height: 84%;
+  clip-path: polygon(18% 0, 100% 6%, 92% 100%, 0 94%);
+  overflow: hidden;
+  z-index: 1;
+}
+.hero-panel img {
   width: 100%; height: 100%;
   object-fit: cover;
+  filter: grayscale(1) contrast(1.15) brightness(0.82);
 }
-/* the LED matrix veil the close up dissolves into */
-.vhero-veil {
+.hero-panel::after {
+  content: "";
   position: absolute; inset: 0;
-  background-color: #0B0906;
-  background-image: radial-gradient(rgba(232, 179, 36, 0.13) 1.5px, transparent 2.1px);
-  background-size: 14px 14px;
-  opacity: 0;
-  pointer-events: none;
+  background: var(--ember);
+  mix-blend-mode: multiply;
+  opacity: 0.55;
 }
-.vhero-hint {
-  position: absolute; left: 50%; bottom: 34px;
-  transform: translateX(-50%);
-  display: flex; flex-direction: column; align-items: center; gap: 4px;
-  font-size: 0.75rem; font-weight: 600; letter-spacing: 0.18em;
-  color: rgba(251, 247, 241, 0.85);
-  opacity: 0;
-  transition: opacity 0.6s ease;
+html.js:not(.hero-ready) .hero-panel { clip-path: polygon(18% 0, 18% 0, 0 94%, 0 94%); opacity: 0; }
+.hero-ready .hero-panel, html:not(.js) .hero-panel { opacity: 1; }
+/* headline */
+.hero-headline {
+  position: relative; z-index: 2;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: clamp(3rem, 10.5vw, 9rem);
+  line-height: 0.92;
+  letter-spacing: -0.03em;
+  color: var(--ink-inverse);
+  max-width: 12ch;
 }
-html:not(.js) .vhero-hint { opacity: 1; }
-.hint-arrow { display: inline-block; font-size: 1.1rem; animation: bob 1.4s ease-in-out infinite; }
+/* the mask: descenders (y, g, p at 900 weight italic) need real headroom or
+   they clip against line-height 0.92; 0.14em pad clawed back by the margin */
+.hh-line { display: block; overflow: hidden; padding-bottom: 0.14em; margin-bottom: -0.14em; }
+.hh-inner { display: inline-block; }
+.hh-accent { color: var(--ember); font-style: italic; }
+html.js:not(.hero-ready) .hh-inner { transform: translateY(110%); }
+.hero-ready .hh-inner, html:not(.js) .hh-inner { transform: none; }
+/* kit tiles */
+.hero-tiles {
+  position: relative; z-index: 2;
+  display: flex; gap: 14px; flex-wrap: wrap;
+  margin-top: clamp(28px, 4vh, 52px);
+  perspective: 600px;
+}
+.kit-tile {
+  display: inline-block;
+  background: var(--espresso-surface);
+  border: 1.5px solid rgba(251, 247, 241, 0.28);
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 0.8125rem; font-weight: 600; letter-spacing: 0.12em;
+  color: var(--ink-inverse);
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+html.js:not(.hero-ready) .kit-tile { opacity: 0; transform: translateY(-60px) rotateX(-50deg); }
+.hero-ready .kit-tile, html:not(.js) .kit-tile { opacity: 1; transform: none; }
+/* scroll rail */
+.hero-rail {
+  position: absolute; left: clamp(24px, 6vw, 96px); bottom: 30px;
+  display: flex; align-items: center; gap: 12px;
+  font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.22em;
+  color: rgba(251, 247, 241, 0.7);
+}
+.rail-line { display: inline-block; width: 56px; height: 1px; background: var(--marigold); transform-origin: left center; animation: railgrow 1.6s ease-in-out infinite; }
+@keyframes railgrow { 0%, 100% { transform: scaleX(0.3); } 50% { transform: scaleX(1); } }
+html.js:not(.hero-ready) .hero-rail { opacity: 0; }
+.hero-ready .hero-rail, html:not(.js) .hero-rail { opacity: 1; transition: opacity 0.5s ease; }
 @keyframes bob { 50% { transform: translateY(6px); } }
 .caret { animation: blink 1s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
-/* nav stays hidden until the film settles on the resting frame */
-.js .site-header { opacity: 0; transform: translateY(-10px); transition: opacity 0.7s ease, transform 0.7s ease; }
-.js.v-rested .site-header { opacity: 1; transform: none; }
+/* nav unfolds as the last beat of the hero load choreography; hero-ready is
+   guaranteed within 1800ms by the main.js hard fallback so it can never stay
+   hidden */
+.js:not(.hero-ready) .site-header { opacity: 0; transform: translateY(-10px); }
+.site-header { transition: opacity 0.7s ease, transform 0.7s ease; }
+.hero-ready .site-header, html:not(.js) .site-header { opacity: 1; transform: none; }
 
 /* ---------- Inside the board: section 2 emerges from the LED darkness ---------- */
 .led-entry {
@@ -419,26 +695,11 @@ html:not(.js) .vhero-hint { opacity: 1; }
 .step-lede { font-weight: 600; font-size: 1.0625rem; margin-bottom: 24px; color: var(--ink); }
 .stack-list { font-size: 1.0625rem; font-weight: 500; line-height: 1.85; color: var(--ink); }
 .stack-list + .stack-list { margin-top: 26px; }
-.step-video { position: relative; }
-.step-video video {
-  width: 100%;
-  height: clamp(300px, 48vh, 480px);
-  object-fit: cover;
-  border: 2.5px solid var(--ink);
-  border-radius: 10px;
-  background: var(--surface);
-  display: block;
+.step-demo {
+  display: flex; align-items: center; justify-content: center;
+  min-height: clamp(300px, 48vh, 480px);
 }
-.slot-chip {
-  position: absolute;
-  right: clamp(24px, 3vw, 40px); bottom: clamp(22px, 2.6vw, 36px);
-  background: var(--paper);
-  border: 1.5px dashed var(--ink);
-  border-radius: 999px;
-  padding: 4px 12px;
-  font-size: 0.625rem; font-weight: 700; letter-spacing: 0.08em;
-  color: var(--ink-secondary);
-}
+.step-demo .demo-card { width: 100%; margin-top: 0; }
 
 .demo-card { margin-top: auto; width: min(430px, 100%); }
 
@@ -699,6 +960,7 @@ html:not(.js) .vhero-hint { opacity: 1; }
   stroke: var(--green); stroke-width: 3; fill: none;
   stroke-linecap: round; stroke-linejoin: round;
 }
+.d-check { width: 16px; height: 16px; margin-top: 0; }
 .plan-col { display: flex; flex-direction: column; gap: 22px; }
 .plan {
   background: var(--surface);
@@ -825,6 +1087,28 @@ html:not(.js) .vhero-hint { opacity: 1; }
   padding: 30px 0 100px;
 }
 .empower-inner { position: relative; z-index: 1; }
+/* the pin recipe, R1: own stacking context above the negative-margin band
+   (24), footer above the released pin (31). pinSpacing true always. */
+.emp-pin-wrap { position: relative; isolation: isolate; z-index: 30; }
+.emp-outro { position: relative; z-index: 1; padding-bottom: 20px; }
+/* Desktop pinned stage: everything composes into ONE viewport. The ball sits
+   behind the story in the centre; cards and stats layer over it. Mobile keeps
+   the natural stacked flow (no pin there). */
+@media (min-width: 901px) {
+  .emp-stage {
+    height: 100svh;
+    display: flex; flex-direction: column; justify-content: space-between;
+    padding-top: 12px; padding-bottom: 26px;
+    overflow: clip;
+  }
+  .emp-stage .empower-head { padding-top: 6px; gap: 32px; }
+  .emp-stage .empower-head .sticker-stack .sticker { font-size: clamp(1.5rem, 2.6vw, 2.4rem); }
+  .emp-stage .empower-note p { font-size: 0.9375rem; }
+  .emp-stage .empower-note p + p { margin-top: 6px; }
+  .emp-stage .emp-flow { position: relative; z-index: 2; margin-top: 24px; }
+  .emp-stage .emp-stats { position: relative; z-index: 2; margin-top: 26px; }
+  .emp-stage .roundup-line { position: relative; z-index: 2; margin-top: 20px; }
+}
 .empower-head {
   display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: start;
   padding-top: 30px;
@@ -849,6 +1133,7 @@ html:not(.js) .vhero-hint { opacity: 1; }
   color: var(--ink-inverse);
   padding: 84px 0 0;
   overflow: hidden;
+  z-index: 31; /* paints over the released Empower pin, R1 recipe */
 }
 .footer-top { display: flex; flex-wrap: wrap; gap: 64px; justify-content: space-between; }
 .newsletter { max-width: 420px; }
@@ -1064,15 +1349,11 @@ html:not(.js) .vhero-hint { opacity: 1; }
 .emp-arrow .a-path { stroke-width: 5; }
 .photo-slot {
   margin-top: auto;
-  min-height: 96px;
-  border: 2px dashed rgba(251, 247, 241, 0.4);
+  min-height: 180px;
+  border: 2.5px solid var(--ink);
   border-radius: 10px;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-  font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.14em;
-  color: rgba(251, 247, 241, 0.6);
   background: url("img/empower-story.jpg") center / cover;
 }
-.slot-file { opacity: 0.7; letter-spacing: 0.04em; text-transform: none; }
 .emp-stats {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px;
   margin-top: 26px;
@@ -1087,19 +1368,45 @@ html:not(.js) .vhero-hint { opacity: 1; }
 .emp-stat-val { font-size: clamp(1.75rem, 3.4vw, 2.5rem); font-weight: 700; }
 .emp-stat-label { margin-top: 4px; font-size: 0.875rem; color: rgba(251, 247, 241, 0.7); }
 .emp-stat .v-tag { top: -10px; right: 14px; }
-.emp-3d { position: relative; height: 300px; margin-top: 30px; }
-.emp-3d canvas { display: block; width: 100%; height: 100%; }
-.emp-3d-fallback {
-  position: absolute; left: 50%; top: 50%;
-  transform: translate(-50%, -50%);
-  width: 200px; height: 200px;
-  border-radius: 50%;
-  border: 4px solid rgba(251, 247, 241, 0.5);
-  background:
-    radial-gradient(circle at 34% 30%, rgba(251, 247, 241, 0.22), transparent 60%),
-    var(--espresso-surface);
+/* ---------- The coin journey (elements created by motion/sections/empower.js)
+   A dashed route threads the three flow cards; a rupee coin travels it as the
+   pin scrubs, the trail inking in behind it. Same hand-drawn language as the
+   emp arrows, no WebGL. ---------- */
+.emp-journey {
+  position: absolute; inset: -40px 0;
+  z-index: 3;
+  pointer-events: none;
+  overflow: visible;
 }
-.emp-3d.has-gl .emp-3d-fallback { display: none; }
+.emp-journey .journey-track {
+  fill: none;
+  stroke: rgba(251, 247, 241, 0.18);
+  stroke-width: 2;
+  stroke-dasharray: 3 9;
+  stroke-linecap: round;
+}
+.emp-journey .journey-trail {
+  fill: none;
+  stroke: var(--green);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+.emp-coin {
+  position: absolute; left: 0; top: 0;
+  width: 44px; height: 44px;
+  margin: -22px 0 0 -22px;
+  z-index: 4;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: var(--marigold);
+  border: 2.5px solid var(--ink);
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.45), inset 0 0 0 3px rgba(28, 23, 18, 0.18);
+  font-weight: 700; font-size: 1.125rem;
+  color: var(--ink);
+  pointer-events: none;
+  opacity: 0;
+}
+.emp-coin.is-live { opacity: 1; }
 
 /* ---------- Reduced motion: final states, no pins, pre typed text ---------- */
 @media (prefers-reduced-motion: reduce) {
@@ -1107,18 +1414,29 @@ html:not(.js) .vhero-hint { opacity: 1; }
   .caret, .hint-arrow { animation: none; }
   .marquee-track, .strip-track { animation: none; }
   .tag, .d-cta, .mini-sticker, .p-icon, .del-arrow { animation: none; }
-  .js .vhero { height: auto; }
-  .vhero-sticky { position: static; }
-  .js .site-header { opacity: 1; transform: none; }
-  .vhero-hint { opacity: 1; }
+  .rail-line { animation: none; transform: scaleX(1); }
+  /* hero: every element at its final state on first paint, no choreography */
+  .js:not(.hero-ready) .site-header,
+  .js:not(.hero-ready) .hh-inner,
+  .js:not(.hero-ready) .hero-panel,
+  .js:not(.hero-ready) .kit-tile,
+  .js:not(.hero-ready) .hero-rail { opacity: 1; transform: none; clip-path: none; transition: none; }
+  html.js:not(.hero-ready) .hl { transform: skewY(-8deg); opacity: 0; }
+  html.js:not(.hero-ready) .hl-2 { opacity: 1; transform: skewY(-8deg) scaleY(0.1); }
   .way-path { transition: opacity 0.4s ease; }
-  .emp-3d { display: none; }
+  .emp-journey, .emp-coin { display: none; }
   .js [data-reveal]:not(.is-in) { opacity: 1; transform: none; }
   .js [data-reveal] { transition: none; }
 }
 
 /* ---------- Responsive ---------- */
 @media (max-width: 900px) {
+  /* hero mobile: two tiles, two speed lines, smaller type, panel tucked low */
+  .hero-headline { font-size: clamp(2.5rem, 12vw, 4rem); max-width: none; }
+  .hero-panel { width: 74vw; height: 46%; top: auto; bottom: 0; right: -10vw; opacity: 0.55; }
+  .kit-tile:nth-child(n+3) { display: none; }
+  /* two bars on mobile: hl-1 plus the hl-2 survivor */
+  .hl-3, .hl-4, .hl-5 { display: none; }
   .problem-grid, .empower-head, .pricing-grid, .feat-grid { grid-template-columns: 1fr; gap: 36px; }
   .problem-grid h2 { justify-self: start; }
   .step-grid { grid-template-columns: 1fr; gap: 28px; }

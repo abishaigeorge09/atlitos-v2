@@ -1,6 +1,7 @@
 import { duration, easing, spacing, spring } from '@atlitos/theme';
+import type { ApiError } from '@atlitos/types';
 import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
@@ -14,8 +15,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import splashMark from '../../../assets/images/splash-icon.png';
 
-import { Button } from '@/components/ui/button';
-import { friendlyAuthMessage } from '@/lib/auth-copy';
 import { useSessionStore } from '@/store/session-store';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
@@ -38,37 +37,68 @@ import { useThemeColors } from '@/theme/use-theme-colors';
  *         shown to a signed-in user who has not set a city yet
  *         (`apps/mobile/src/app/(tabs)/index.tsx` `showFinishSetup`), plus
  *         Account and any role-specific action ("become a coach").
- *     `continueAsGuest` failing outright (e.g. anonymous sign-ins disabled
- *     on the Supabase project) is the one case this screen still shows UI
- *     for, since a guest with no working path into the app has nowhere
- *     else to go.
+ *     `continueAsGuest` retries a few times with backoff (packages/api
+ *     `useAuth`); if it STILL fails (e.g. anonymous sign-ins disabled, or
+ *     the anon mint rate limit, on the Supabase project) this screen
+ *     degrades gracefully via `enterGuestUnminted` (P0-4, Phase 3 LAUNCH)
+ *     and routes into `/(tabs)` anyway rather than raising a full-screen
+ *     login wall. Public browse works with the anon key, and any
+ *     authenticated tap already raises the LoginGateModal, so a first-time
+ *     user always lands in the app; there is no guest-to-login wall on
+ *     launch. Status sits at `guest_unminted` while a slower background
+ *     remint (session-store.ts) keeps retrying; success upgrades the
+ *     session to a real `guest` automatically, no reinstall or app restart
+ *     needed. Pure client degradation: no RLS policy or storage bucket is
+ *     widened to make this work, whatever renders is exactly what the
+ *     `anon` role already reads.
  *
- * Track D hardening carried over:
- *   - A signed-in session whose profile fetch FAILED (meError, me null) no
- *     longer routes to tabs as if fully onboarded; it shows a retry state
- *     wired to `refreshMe` instead (defect 3).
+ * Track D hardening carried over, and CORRECTED (SCALE-INGRESS.md Gap B):
+ *   - Track D made a signed-in session whose profile fetch FAILED stop on a
+ *     full screen "We could not load your profile" wall with a Try again
+ *     button and no route into the app. The half it got right is that such a
+ *     session must not be treated as fully onboarded. The half it got wrong is
+ *     the wall, and the wall is the more expensive half at launch scale: it
+ *     inverted the priority exactly backwards, degrading GUESTS gracefully
+ *     into the app while stopping RETURNING, PAYING users at the front door.
+ *
+ *     `getMe()` is five network calls (one GoTrue /auth/v1/user, then four
+ *     PostgREST reads) and throws on three of them. At 10,000 returning users
+ *     that is 10,000 GoTrue plus 40,000 PostgREST requests just to render this
+ *     screen, so a 1% transient failure rate is 100 people who cannot open the
+ *     app at all, and the 5% you would expect off a saturated 20 connection
+ *     pool is 500.
+ *
+ *     A signed-in user now enters `/(tabs)` on whatever is cached, exactly as
+ *     a guest does. `needsOnboarding()` already returns false while `me` is
+ *     null, so nothing reads the missing profile as "onboarding incomplete"
+ *     and no wizard is forced. The session store retries `getMe` in the
+ *     background with a bounded backoff, and `SessionDegradedBanner` (rendered
+ *     by the tabs layout) carries the non-blocking notice and the manual
+ *     retry. Nothing is silently swallowed; it is just no longer a door.
+ *
+ * Visual: `SplashMark` renders the same asset the native splash draws, at
+ * the same width, so the native to JS handoff has no visible jump. All
+ * routing logic below is unchanged.
  */
 export default function SplashScreen() {
   const colors = useThemeColors();
-  const [guestError, setGuestError] = useState<string | null>(null);
   const status = useSessionStore((state) => state.status);
   const hydrated = useSessionStore((state) => state.hydrated);
-  const me = useSessionStore((state) => state.me);
   const meLoading = useSessionStore((state) => state.meLoading);
-  const meError = useSessionStore((state) => state.meError);
   const continueAsGuest = useSessionStore((state) => state.continueAsGuest);
-  const refreshMe = useSessionStore((state) => state.refreshMe);
+  const enterGuestUnminted = useSessionStore((state) => state.enterGuestUnminted);
 
   // Guards against firing continueAsGuest more than once while its promise
   // is still in flight (status stays 'signed_out' until onAuthStateChange
-  // resolves it), and against retrying forever after a hard failure without
-  // the "Try again" tap below.
+  // resolves it). On persistent failure the catch below degrades to /(tabs)
+  // rather than looping, so no unbounded retry here either.
   const guestAttempted = useRef(false);
+
 
   useEffect(() => {
     if (!hydrated) return;
 
-    if (status === 'guest') {
+    if (status === 'guest' || status === 'guest_unminted') {
       guestAttempted.current = false;
       router.replace('/(tabs)');
       return;
@@ -76,29 +106,37 @@ export default function SplashScreen() {
 
     if (status === 'signed_in') {
       guestAttempted.current = false;
-      if (meLoading) return; // wait for profile to resolve before deciding
-      if (!me && meError) return; // profile fetch failed: retry state below, never route as fake-onboarded
+      // Wait for the FIRST profile attempt to settle, so the common case
+      // still lands on a fully hydrated Home. But settle means settle:
+      // failure routes into the app too (see the Gap B note above), it does
+      // not park the user here. The store keeps retrying behind them and
+      // SessionDegradedBanner explains the state.
+      if (meLoading) return;
       router.replace('/(tabs)');
       return;
     }
 
     if (status === 'signed_out' && !guestAttempted.current) {
       guestAttempted.current = true;
-      setGuestError(null);
-      continueAsGuest().catch((e: unknown) => {
-        // Surfaces infra failures (e.g. anonymous sign ins disabled on the
-        // Supabase project) instead of a silent, stuck spinner.
-        guestAttempted.current = false;
-        setGuestError(friendlyAuthMessage(e));
+      continueAsGuest().catch((error: unknown) => {
+        // P0-4: persistent guest bootstrap failure (continueAsGuest already
+        // retried with backoff). Degrade gracefully instead of a login wall:
+        // flip to "guest_unminted" (Home renders on whatever the anon role
+        // can already read, zero RLS/bucket change) and let the effect's
+        // guest/guest_unminted branch above route into the app. A slower
+        // background remint (session-store) keeps retrying; success upgrades
+        // the session to a real "guest" automatically, no reinstall needed.
+        //
+        // The error code is forwarded so the background loop can tell a
+        // rate limit apart from an outage: a RATE_LIMITED refusal waits out
+        // GoTrue's 120 s per-IP bucket refill instead of retrying in 2 s,
+        // which cannot win and starves every other user on the same IP.
+        enterGuestUnminted((error as ApiError | undefined)?.code);
       });
     }
-  }, [status, hydrated, me, meLoading, meError, continueAsGuest]);
+  }, [status, hydrated, meLoading, continueAsGuest, enterGuestUnminted]);
 
-  const showMeRetry = hydrated && status === 'signed_in' && !meLoading && !me && meError != null;
-  const showGuestRetry = hydrated && status === 'signed_out' && guestError != null;
-  const showSpinner =
-    (!hydrated || (status === 'signed_in' && meLoading) || (status === 'signed_out' && !guestError)) &&
-    !showMeRetry;
+  const showSpinner = !hydrated || (status === 'signed_in' && meLoading) || status === 'signed_out';
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
@@ -108,41 +146,7 @@ export default function SplashScreen() {
           Train, play and follow the game, all in one place.
         </Text>
 
-        {showSpinner ? (
-          <ActivityIndicator color={colors.accent} style={styles.spinner} />
-        ) : null}
-
-        {showMeRetry ? (
-          <View style={styles.actions}>
-            <Text style={[textStyle('caption'), { color: colors.danger, textAlign: 'center' }]}>
-              We could not load your profile. Check your connection and try again.
-            </Text>
-            <Button onPress={() => void refreshMe()}>
-              <Text style={[textStyle('label'), { color: colors.inkOnAccent }]}>Try again</Text>
-            </Button>
-          </View>
-        ) : null}
-
-        {showGuestRetry ? (
-          <View style={styles.actions}>
-            <Text style={[textStyle('caption'), { color: colors.danger, textAlign: 'center' }]}>{guestError}</Text>
-            <Button
-              onPress={() => {
-                guestAttempted.current = true;
-                setGuestError(null);
-                continueAsGuest().catch((e: unknown) => {
-                  guestAttempted.current = false;
-                  setGuestError(friendlyAuthMessage(e));
-                });
-              }}
-            >
-              <Text style={[textStyle('label'), { color: colors.inkOnAccent }]}>Try again</Text>
-            </Button>
-            <Button variant="text" onPress={() => router.push('/(auth)/login')}>
-              <Text style={[textStyle('label'), { color: colors.accent }]}>Log in instead</Text>
-            </Button>
-          </View>
-        ) : null}
+        {showSpinner ? <ActivityIndicator color={colors.accent} style={styles.spinner} /> : null}
       </View>
     </SafeAreaView>
   );
@@ -209,5 +213,4 @@ const styles = StyleSheet.create({
   },
   tagline: { textAlign: 'center', maxWidth: 300 },
   spinner: { marginTop: spacing.lg },
-  actions: { width: '100%', maxWidth: 320, gap: spacing.sm, marginTop: spacing.lg },
 });

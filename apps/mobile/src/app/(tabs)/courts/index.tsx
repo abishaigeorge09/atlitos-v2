@@ -2,11 +2,13 @@ import { useCourts } from '@atlitos/api';
 import type { ApiError, Court, Sport } from '@atlitos/types';
 import { radii, spacing } from '@atlitos/theme';
 import { router } from 'expo-router';
-import { CalendarClock, LandPlot, MapPin, RefreshCw, TriangleAlert } from 'lucide-react-native';
+import { CalendarClock, LandPlot, RefreshCw, TriangleAlert } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
+import { LocationStatusRow } from '@/components/molecules/LocationStatusRow';
 import { LoginGateModal } from '@/components/organisms/LoginGateModal';
 import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
@@ -14,6 +16,7 @@ import { Chip } from '@/components/ui/chip';
 import { CourtCard } from '@/components/ui/court-card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
+import { usePendingAuthAction } from '@/hooks/use-pending-auth-action';
 import { SPORT_LABEL } from '@/lib/sport-display';
 import { supabase } from '@/lib/supabase';
 import { useLocationStore } from '@/store/location-store';
@@ -26,15 +29,21 @@ const SPORT_FILTERS: Sport[] = ['football', 'cricket', 'badminton', 'tennis'];
 type LoadState = 'loading' | 'empty' | 'populated' | 'error';
 
 /**
- * BUG-03. How far "near me" may stretch before a venue stops being a real
- * option. 150 km covers a metro and its satellite towns, which is the widest
- * anyone would plausibly travel for an hour on a court, and it is far short of
- * the cross-continent distances the unbounded list was offering.
- *
- * ponytail: one constant, not a user-facing radius control. Add the control
- * when someone actually asks to widen the search, not before.
+ * F4 (P5 fix pass, P5-IOS-FINDINGS.md finding F-3): a device's resolved
+ * coordinates are real (not faked, see location-store.ts's fallback rules),
+ * but a simulator/emulator's GPS can be nowhere near the seed venues (the
+ * reported repro: real San Francisco simulator coords against real
+ * Hyderabad/Bangalore venues computed a mathematically correct but useless
+ * "13,486.1 km" readout under a header claiming "near San Francisco"). No
+ * server-side signal distinguishes "genuinely far within India" from "this
+ * location has nothing to do with the venue set", so this is a distance
+ * sanity threshold, not a location-source check: past this point a numeric
+ * distance and a "near <city>" claim are actively misleading rather than
+ * merely large, and the honest move is to say so instead of rendering the
+ * number. India's own north-south span is ~3,200 km, so 3,000 km is chosen
+ * to stay well clear of any real in-country search.
  */
-const MAX_NEARBY_KM = 150;
+const IMPLAUSIBLE_DISTANCE_KM = 3000;
 
 /**
  * Courts tab root. PRD-01 3.5 / SPEC.md 6.6: sport chips filter over a
@@ -52,8 +61,10 @@ export default function CourtsIndexScreen() {
   const requiresAuthGate = useSessionStore((state) => state.status !== 'signed_in');
   const profileCity = useSessionStore((state) => state.me?.city ?? null);
   const [gateVisible, setGateVisible] = useState(false);
+  // F8 (P5 fix pass, PRD-01 FR-4): "My bookings" navigation used to be
+  // dropped when the gate opened.
+  const { requireAuth, clearPendingAction } = usePendingAuthAction(requiresAuthGate);
 
-  const locationStatus = useLocationStore((state) => state.status);
   const locationRequested = useLocationStore((state) => state.requested);
   const city = useLocationStore((state) => state.city);
   const coords = useLocationStore((state) => state.coords);
@@ -64,6 +75,14 @@ export default function CourtsIndexScreen() {
   const [items, setItems] = useState<Court[]>([]);
   const [error, setError] = useState<ApiError | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  // F4: coords resolved but implausibly far from every result. Treat as "no
+  // meaningful nearby match" rather than claim proximity or show the number.
+  const nearestDistanceKm = items.reduce<number | null>((min, item) => {
+    if (item.distanceKm === undefined) return min;
+    return min === null ? item.distanceKm : Math.min(min, item.distanceKm);
+  }, null);
+  const locationIsMeaningful = coords === null || nearestDistanceKm === null || nearestDistanceKm <= IMPLAUSIBLE_DISTANCE_KM;
 
   const load = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -76,18 +95,12 @@ export default function CourtsIndexScreen() {
         // with a live Book button. Observed on a device located outside India:
         // venues at 13,486 km and 13,499 km, offered as bookable.
         //
-        // Sorting by distance is not the same as being near. Anyone who denies
-        // location, travels, or is simply not in the seeded city gets a list of
-        // unreachable venues, and the honest answer ("none near you") was
-        // unreachable because the empty state only fired on zero rows.
-        //
-        // A venue with no distance is KEPT: that means we could not compute one
-        // (no coords), and hiding rows we failed to measure would be worse than
-        // showing them.
-        const withinReach = result.filter(
-          (court) => court.distanceKm == null || court.distanceKm <= MAX_NEARBY_KM,
-        );
-        const sorted = [...withinReach].sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
+        // RECONCILIATION 2026-09-14: a 150 km radius filter was proposed here
+        // (origin/main f1a5fa2, BUG-03). NOT taken. It empties the list for anyone
+        // far from the seeded cities, which includes an App Review tester and
+        // every simulator with a foreign GPS. The F4 rule above handles that case
+        // honestly: show every venue, hide a distance once it is implausible.
+        const sorted = [...result].sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
         setItems(sorted);
         setState(sorted.length === 0 ? 'empty' : 'populated');
       } catch (err) {
@@ -124,46 +137,67 @@ export default function CourtsIndexScreen() {
         <Pressable
           accessibilityRole="button"
           className="min-h-11 flex-row items-center gap-xs rounded-pill px-md active:bg-surface-muted"
-          onPress={() => {
-            if (requiresAuthGate) {
-              setGateVisible(true);
-              return;
-            }
-            router.push('/(tabs)/courts/bookings');
-          }}
+          onPress={() => requireAuth(() => router.push('/(tabs)/courts/bookings'), () => setGateVisible(true))}
         >
           <CalendarClock size={18} strokeWidth={1.75} color={colors.accent} />
           <Text className="font-sans-semibold text-sm text-accent">My bookings</Text>
         </Pressable>
       </View>
 
-      <View className="flex-row items-center gap-xs">
-        <MapPin size={14} strokeWidth={1.75} color={colors.textTertiary} />
-        <Text className="font-sans text-sm text-text-secondary">
-          {locationStatus === 'loading' ? 'Finding your location...' : `Showing courts near ${city}`}
-        </Text>
-      </View>
-
-      <FlatList
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        data={SPORT_FILTERS}
-        keyExtractor={(item) => item}
-        style={{ flexGrow: 0 }}
-        contentContainerStyle={{ gap: spacing.sm, paddingVertical: spacing.xs }}
-        ListHeaderComponent={
-          <Chip label="All sports" variant="filter" selected={sport === null} onPress={() => setSport(null)} />
-        }
-        ItemSeparatorComponent={() => <View style={{ width: spacing.sm }} />}
-        renderItem={({ item }) => (
-          <Chip
-            label={SPORT_LABEL[item]}
-            variant="filter"
-            selected={sport === item}
-            onPress={() => setSport(item)}
-          />
-        )}
+      {/* Track 3: this was a two state ternary over a five state machine, and
+          `loading` had no exit, so a hung permission prompt or a simulator
+          with no location left "Finding your location..." on screen forever.
+          LocationStatusRow renders every terminal state and the ways forward;
+          the F4 rule (a resolved city with no court within a plausible
+          distance is not a claim to make) still belongs here, because only
+          this screen knows how far its results are. */}
+      <LocationStatusRow
+        resolvedLabel={locationIsMeaningful ? `Showing courts near ${city}` : 'Showing all verified courts'}
+        profileCity={profileCity}
       />
+
+      {/* Track D defect 18: the chip row overflows the viewport (5 chips
+          don't fit on a standard phone width). The list itself already
+          scrolls; what was missing is (a) trailing padding so the last chip
+          clears the screen edge with breathing room instead of sitting
+          flush against it, and (b) a visible edge fade so the cut off chip
+          reads as "more to scroll" rather than a clipped layout bug. */}
+      <View style={{ position: 'relative' }}>
+        <FlatList
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          data={SPORT_FILTERS}
+          keyExtractor={(item) => item}
+          style={{ flexGrow: 0 }}
+          contentContainerStyle={{ gap: spacing.sm, paddingVertical: spacing.xs, paddingRight: spacing.xl }}
+          ListHeaderComponent={
+            <Chip label="All sports" variant="filter" selected={sport === null} onPress={() => setSport(null)} />
+          }
+          ItemSeparatorComponent={() => <View style={{ width: spacing.sm }} />}
+          renderItem={({ item }) => (
+            <Chip
+              label={SPORT_LABEL[item]}
+              variant="filter"
+              selected={sport === item}
+              onPress={() => setSport(item)}
+            />
+          )}
+        />
+        <View
+          pointerEvents="none"
+          style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: spacing['2xl'] }}
+        >
+          <Svg width="100%" height="100%">
+            <Defs>
+              <LinearGradient id="sport-filter-fade" x1="0" y1="0" x2="1" y2="0">
+                <Stop offset="0" stopColor={colors.bg} stopOpacity={0} />
+                <Stop offset="1" stopColor={colors.bg} stopOpacity={1} />
+              </LinearGradient>
+            </Defs>
+            <Rect x="0" y="0" width="100%" height="100%" fill="url(#sport-filter-fade)" />
+          </Svg>
+        </View>
+      </View>
     </View>
   );
 
@@ -232,7 +266,7 @@ export default function CourtsIndexScreen() {
               name={item.name}
               location={item.location}
               pricePerHour={item.basePricePerHour}
-              distanceKm={item.distanceKm}
+              distanceKm={locationIsMeaningful ? item.distanceKm : undefined}
               onPress={() => router.push({ pathname: '/(tabs)/courts/court/[id]', params: { id: item.id } })}
               onBookPress={() => router.push({ pathname: '/(tabs)/courts/court/[id]', params: { id: item.id } })}
             />
@@ -240,7 +274,11 @@ export default function CourtsIndexScreen() {
         />
       )}
 
-      <LoginGateModal visible={gateVisible} onClose={() => setGateVisible(false)} />
+      <LoginGateModal
+        visible={gateVisible}
+        onClose={() => setGateVisible(false)}
+        onDismiss={clearPendingAction}
+      />
     </SafeAreaView>
   );
 }

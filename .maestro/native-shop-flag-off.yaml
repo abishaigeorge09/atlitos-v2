@@ -1,0 +1,54 @@
+appId: com.atlitos.app
+---
+# Phase S3 Track H gate: shop ownership feature flag off (AC-11-5)
+# (owned products excluded, cart/wishlist hidden, owned routes redirect to /shop).
+#
+# Asserts: when the flag getAppConfig('shop.owned_enabled') is false,
+# the owned shop cart controls are hidden, and the owned routes redirect
+# back to the search screen.
+#
+# This flow assumes the flag is OFF (false) at app start, testing the
+# guard behavior: shop-cart-button must not be visible, and deep links
+# to /cart and /orders must redirect back to /shop.
+
+- launchApp:
+    clearState: false
+
+# If presented with auth gate, skip it.
+- runFlow:
+    when:
+      visible: "Continue as guest"
+    commands:
+      - tapOn: "Continue as guest"
+      - waitForAnimationToEnd:
+          timeout: 3000
+
+# Deep link to /shop and assert the search input is visible.
+- openLink: "atlitos://shop"
+- waitForAnimationToEnd:
+    timeout: 2000
+
+- assertVisible:
+    id: shop-search-input
+
+# Assert the cart button is NOT visible when the flag is off.
+- assertNotVisible:
+    id: shop-cart-button
+
+# Now deep link to /shop/cart and assert the redirect back to /shop.
+# When the flag is off, the cart route should redirect to /shop, so
+# the search input should be visible again.
+- openLink: "atlitos://shop/cart"
+- waitForAnimationToEnd:
+    timeout: 2000
+
+- assertVisible:
+    id: shop-search-input
+
+# Deep link to /shop/orders and assert the same redirect behavior.
+- openLink: "atlitos://shop/orders"
+- waitForAnimationToEnd:
+    timeout: 2000
+
+- assertVisible:
+    id: shop-search-input

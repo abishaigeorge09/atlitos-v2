@@ -42,3 +42,6 @@ example
 /ios
 /android
 .vercel
+
+# Play Store service account key (never commit real credentials)
+google-service-account.json

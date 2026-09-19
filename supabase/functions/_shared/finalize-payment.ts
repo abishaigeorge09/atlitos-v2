@@ -18,9 +18,37 @@
 //
 // Adding a domain (donation) means adding one branch here plus one
 // finalize-<domain>-payment.ts, never a second copy of the gate. The gate is
-// deliberately domain-agnostic: it flips the intent, and only then hands a
+// deliberately domain-agnostic: it claims the intent, and only then hands a
 // captured intent to the domain handler, so no domain handler can ever be
-// reached twice for the same charge.
+// reached twice CONCURRENTLY for the same charge.
+//
+// 0109: THE GATE IS NOW RE-ENTERABLE, AND THAT IS THE POINT.
+//
+// It used to flip the intent to `captured` and dispatch. At-most-once, and
+// also once-only: a handler that died after the UPDATE committed left an
+// intent that no future delivery could ever match, because it was no longer
+// `created`. Money taken, nothing delivered, no way back in. Three repair
+// checks in the domain handlers carried docblocks claiming they covered
+// exactly that case; none of them could ever be reached.
+//
+// The claim now lives in claim_payment_intent_for_finalization() (0109) and
+// matches an intent that is `created`, OR one that is `captured` with
+// `finalized_at` still null whose claim has gone stale. Still one atomic
+// UPDATE, so concurrent deliveries still serialise and the loser still gets
+// `already_processed`. What changed is that a DIED run can be picked up again,
+// which is what makes those three repair checks live code for the first time.
+//
+// `finalized_at` is set here, after the handler returns, and only then. A
+// captured intent with `finalized_at` null is a charge that took money and
+// delivered nothing, which is the reconciliation queue that P0-1 correctly
+// said did not exist anywhere in this system. It is exposed as the
+// `unfinalized_captures` view.
+//
+// WHAT THIS DOES NOT FIX. Re-entry repairs a run that DIED. It cannot repair a
+// delivery that arrived after its entity was already gone, such as a capture
+// landing on a session the athlete cancelled during the 15 minute hold. That
+// case is a refund, and there is no refund path for it. See PAYMENTS.md,
+// "Captured against a dead entity".
 
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { AppError } from "./app-error.ts";
@@ -52,12 +80,6 @@ export interface CapturedIntent {
   domain: string;
   entity_id: string | null;
   status: string;
-  /**
-   * SEC-F2. Null on a `captured` row means the charge landed but its domain
-   * handler never finished, so the next delivery must re-enter that handler
-   * instead of reporting the charge complete. See 0088.
-   */
-  finalized_at: string | null;
 }
 
 export interface FinalizeResult {
@@ -71,94 +93,107 @@ export interface FinalizeResult {
 }
 
 /**
- * Idempotency gate. This UPDATE is a single atomic SQL statement guarded by
- * `where status = 'created'`, so exactly one caller can ever win it for a
- * given order. If razorpay-webhook and verify-payment both fire for the same
- * order (fully expected: verify-payment is a fallback, not a replacement),
- * the loser's UPDATE matches zero rows, no domain handler runs, no second
- * ledger group is written, and the loser returns `already_processed` rather
- * than an error.
+ * Idempotency gate. `claim_payment_intent_for_finalization` (0109) is a single
+ * atomic SQL statement, so exactly one caller can win a given order at any
+ * instant. If razorpay-webhook and verify-payment both fire for the same order
+ * (fully expected: verify-payment is a fallback, not a replacement), the
+ * loser's claim matches zero rows, no domain handler runs, no second ledger
+ * group is written, and the loser returns `already_processed` rather than an
+ * error.
+ *
+ * What it now also does, which it did not before: a claim that was made and
+ * never finalized becomes claimable again once it goes stale, so a run that
+ * died mid-handler is recoverable instead of permanently lost.
  */
 export async function finalizePaymentCaptured(
   supabase: SupabaseClient,
   params: { razorpayOrderId: string; razorpayPaymentId: string },
 ): Promise<FinalizeResult> {
-  const { data: updatedIntents, error: intentUpdateError } = await supabase
-    .from("payment_intents")
-    .update({
-      status: "captured",
-      razorpay_payment_id: params.razorpayPaymentId,
+  const { data: claimed, error: claimError } = await supabase
+    .rpc("claim_payment_intent_for_finalization", {
+      p_razorpay_order_id: params.razorpayOrderId,
+      p_razorpay_payment_id: params.razorpayPaymentId,
     })
-    .eq("razorpay_order_id", params.razorpayOrderId)
-    .eq("status", "created")
-    .select("id, domain, entity_id, status, finalized_at")
-    .returns<CapturedIntent[]>();
+    .maybeSingle<CapturedIntent>();
 
-  if (intentUpdateError) {
+  if (claimError) {
     throw new AppError(
       "INTERNAL",
-      `Failed to update payment_intents: ${intentUpdateError.message}`,
+      `Failed to claim payment_intent: ${claimError.message}`,
       500,
     );
   }
 
-  if (!updatedIntents || updatedIntents.length === 0) {
-    // Nobody won the flip. Either this charge is genuinely complete, or a
-    // previous attempt flipped it and then failed downstream (SEC-F2). Only
-    // the second case may re-enter a domain handler.
-    return await resumeOrDescribe(supabase, params.razorpayOrderId);
+  // The RPC returns a composite. An unmatched claim yields one whose id is
+  // null, which is not an error: another delivery holds this intent, or it is
+  // already finalized, or it does not exist. The read below tells them apart.
+  if (!claimed || !claimed.id) {
+    return await describeAlreadyProcessed(supabase, params.razorpayOrderId);
   }
 
-  return await runDomainFinalization(supabase, updatedIntents[0]);
+  const intent = claimed;
+
+  try {
+    const result = await dispatchToDomainHandler(supabase, intent);
+    await markFinalized(supabase, intent.id);
+    return result;
+  } catch (err) {
+    // Record WHY on the intent itself, then rethrow unchanged so the caller's
+    // own error handling is untouched. finalized_at deliberately stays null,
+    // so the intent remains in `unfinalized_captures` and a later delivery can
+    // re-enter it. Before 0109 this failure reached a console.error inside
+    // razorpay-webhook's catch and nowhere else, which is why nobody could
+    // produce a list of who it had happened to.
+    await recordFinalizeFailure(supabase, intent.id, err);
+    throw err;
+  }
 }
 
 /**
- * SEC-F2. Dispatch to the domain handler, then record that the downstream work
- * completed. Split out of the gate so BOTH entry points reach it: the winner of
- * the `created -> captured` flip, and a retry that finds a captured intent with
- * work still owed.
- *
- * Every handler this dispatches to is idempotent by construction. The domain
- * RPCs return the existing row untouched on a repeat, and each handler that
- * owes a ledger group checks for one before writing (courts gained that guard
- * alongside this change; sessions owe no ledger at capture at all). Re-entry
- * therefore completes whatever is missing and touches nothing that already
- * landed.
- */
-async function runDomainFinalization(
-  supabase: SupabaseClient,
-  intent: CapturedIntent,
-): Promise<FinalizeResult> {
-  const result = await dispatchDomain(supabase, intent);
-  await markFinalized(supabase, intent.id);
-  return result;
-}
-
-/**
- * Stamp `finalized_at`. Deliberately does NOT throw on failure: by the time
- * this runs the domain handler has already committed its work, and turning a
- * successful finalization into a 500 would tell Razorpay (and the athlete's
- * client) that a completed charge failed. An unstamped row surfaces in
- * `payment_finalization_backlog()` with `has_ledger_group = true`, which is the
- * signal for "work done, marker missing" rather than "work missing", and the
- * next delivery of the same capture re-runs the idempotent handler and stamps
- * it.
+ * Set `finalized_at`. Until this runs the charge counts as undelivered, so a
+ * failure here is logged rather than swallowed: it would leave a correctly
+ * delivered charge sitting in the reconciliation queue, which is a false
+ * positive, and a false positive in a money queue is how a queue gets ignored.
+ * It is not rethrown, because the domain handler already succeeded and telling
+ * the client the payment failed would be the worse lie.
  */
 async function markFinalized(supabase: SupabaseClient, intentId: string): Promise<void> {
-  const { error } = await supabase
-    .from("payment_intents")
-    .update({ finalized_at: new Date().toISOString() })
-    .eq("id", intentId)
-    .is("finalized_at", null);
-
+  const { error } = await supabase.rpc("mark_payment_intent_finalized", {
+    p_intent_id: intentId,
+  });
   if (error) {
     console.error(
-      `SEC-F2: domain finalization completed for payment_intent ${intentId} but finalized_at could not be stamped: ${error.message}`,
+      `finalize-payment: handler succeeded but mark_payment_intent_finalized failed for ${intentId}:`,
+      error.message,
     );
   }
 }
 
-async function dispatchDomain(
+/** Best effort. Never masks the original failure, which is what gets thrown. */
+async function recordFinalizeFailure(
+  supabase: SupabaseClient,
+  intentId: string,
+  err: unknown,
+): Promise<void> {
+  const message = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+  const { error } = await supabase.rpc("record_payment_intent_finalize_failure", {
+    p_intent_id: intentId,
+    p_error: message,
+  });
+  if (error) {
+    console.error(
+      `finalize-payment: could not record finalize failure for ${intentId}:`,
+      error.message,
+    );
+  }
+}
+
+/**
+ * Domain dispatch. Extracted from the gate so the gate can wrap it in the
+ * finalized/failed bookkeeping above without that bookkeeping being duplicated
+ * down every branch.
+ */
+async function dispatchToDomainHandler(
   supabase: SupabaseClient,
   intent: CapturedIntent,
 ): Promise<FinalizeResult> {
@@ -220,17 +255,18 @@ async function dispatchDomain(
 }
 
 /**
- * The UPDATE matched nothing. Three cases now, not two: no such intent
- * (NOT_FOUND), a captured intent whose downstream work is still owed (SEC-F2,
- * resume it), or a genuinely complete charge (describe it, read-only).
+ * The UPDATE matched nothing: either no such intent exists (a real problem,
+ * NOT_FOUND) or the other finalization path already captured it (expected,
+ * idempotent, not an error). Read-only, so this branch can never write a
+ * second ledger group no matter how many times it runs.
  */
-async function resumeOrDescribe(
+async function describeAlreadyProcessed(
   supabase: SupabaseClient,
   razorpayOrderId: string,
 ): Promise<FinalizeResult> {
   const { data: existing, error: lookupError } = await supabase
     .from("payment_intents")
-    .select("id, domain, entity_id, status, finalized_at")
+    .select("id, domain, entity_id, status")
     .eq("razorpay_order_id", razorpayOrderId)
     .maybeSingle<CapturedIntent>();
 
@@ -248,24 +284,6 @@ async function resumeOrDescribe(
       `No payment_intent for razorpay_order_id ${razorpayOrderId}.`,
       404,
     );
-  }
-
-  // SEC-F2, the repair path. A `captured` intent with no `finalized_at` is a
-  // charge whose domain handler never finished. Before 0088 this branch
-  // returned `already_processed` and the work was owed forever. Re-enter it.
-  //
-  // Scoped strictly to `captured`: a `refunded` or `partially_refunded` intent
-  // has moved past capture and must not have its capture-time handler re-run.
-  if (existing.status === "captured" && existing.finalized_at === null) {
-    console.warn(
-      `SEC-F2: resuming unfinished finalization for payment_intent ${existing.id} (domain ${existing.domain}).`,
-    );
-    // Returns outcome "captured", not a third value: from every caller's point
-    // of view the charge is now complete, and widening the public
-    // `"captured" | "already_processed"` contract would ripple through eight
-    // typed client call sites for an observability nicety. The server log and
-    // `finalized_at` carry the distinction.
-    return await runDomainFinalization(supabase, existing);
   }
 
   const entityId = existing.entity_id ?? "";
