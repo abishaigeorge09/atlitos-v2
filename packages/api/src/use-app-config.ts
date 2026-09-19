@@ -4,7 +4,7 @@ import type { AtlitosClient } from "./client";
 
 /**
  * `useAppConfig` (Phase S3, Track F, PRD-07 FR-53). Reads `app_config`, the
- * generic key/value/public table from `XXXX_app_config_owned_shop_flag.sql`.
+ * generic key/value/public table from `0122_app_config_owned_shop_flag.sql`.
  * RLS on that table is permissive-OR shaped in spirit even though today only
  * one policy exists (`public = true` readable by anon/authenticated), so per
  * CLAUDE.md's scoping rule every read here carries its own explicit

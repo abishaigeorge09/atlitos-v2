@@ -240,10 +240,10 @@ matching the `0070_product_media_bucket.sql` precedent:
 
 | Provisional file | Contents |
 |---|---|
-| `XXXX_gear_search_vectors.sql` | `vector` extension, `embedding` column, HNSW index, `match_affiliate_products`, `query_embedding_cache` + RLS |
-| `XXXX_product_images_bucket.sql` | `product-images` bucket, public read, service-role write only |
-| `XXXX_gear_ingest_health.sql` | `retailer_programmes`, `product_fetch_log`, `product_offers` new columns, `system_auto_delist_affiliate_product`, extended admin RPCs, column-level grant |
-| `XXXX_app_config_owned_shop_flag.sql` | `app_config` + RLS, `admin_set_app_config`, seed row |
+| `0121_gear_search_vectors.sql` | `vector` extension, `embedding` column, HNSW index, `match_affiliate_products`, `query_embedding_cache` + RLS |
+| `0124_product_images_bucket.sql` | `product-images` bucket, public read, service-role write only |
+| `0123_gear_ingest_health.sql` | `retailer_programmes`, `product_fetch_log`, `product_offers` new columns, `system_auto_delist_affiliate_product`, extended admin RPCs, column-level grant |
+| `0122_app_config_owned_shop_flag.sql` | `app_config` + RLS, `admin_set_app_config`, seed row |
 
 ## Consequences
 
