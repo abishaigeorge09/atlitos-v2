@@ -144,6 +144,10 @@ export default function ShopScreen() {
   // Guards a late response from an earlier keystroke or chip tap overwriting
   // a newer one (the same shape home/search.tsx uses for BUG-001).
   const requestSeq = useRef(0);
+  // True for the run after the shopper presses the keyboard's Search key:
+  // that run asks the server for Claude's rerank. Every keystroke run skips
+  // it (about 2 s per call, measured 2026-09-19) so results track typing.
+  const submittedRef = useRef(false);
 
   const runLoad = useCallback(async () => {
     if (ownedEnabled === undefined) return;
@@ -155,11 +159,14 @@ export default function ShopScreen() {
 
     try {
       if (trimmed.length >= 2) {
+        const rerank = submittedRef.current;
+        submittedRef.current = false;
         const res = await search.search({
           query: trimmed,
           entityTypes: ['gear'],
           sport: selectedSport ?? undefined,
           priceMax,
+          rerank,
         });
         if (seq !== requestSeq.current) return;
         const relevant = res.results.filter(
@@ -265,6 +272,10 @@ export default function ShopScreen() {
             onChangeText={setQuery}
             autoCorrect={false}
             returnKeyType="search"
+            onSubmitEditing={() => {
+              submittedRef.current = true;
+              void runLoadRef.current();
+            }}
           />
         </View>
         {state === 'loading' && items.length > 0 ? (

@@ -94,6 +94,9 @@ interface SearchRequestBody {
   lng?: number;
   city?: string;
   limit: number;
+  /** false while the shopper is still typing: skip Claude's rerank and
+   * return the deterministic order. Default true (contract unchanged). */
+  rerank: boolean;
 }
 
 function parseRequestBody(raw: unknown): SearchRequestBody {
@@ -131,7 +134,9 @@ function parseRequestBody(raw: unknown): SearchRequestBody {
   const rawLimit = numberOrUndefined(body.limit);
   if (rawLimit !== undefined) limit = Math.max(1, Math.min(50, Math.floor(rawLimit)));
 
-  return { query: body.query.trim(), entityTypes, sport, priceMax, lat, lng, city, limit };
+  const rerank = body.rerank !== false;
+
+  return { query: body.query.trim(), entityTypes, sport, priceMax, lat, lng, city, limit, rerank };
 }
 
 function numberOrUndefined(v: unknown): number | undefined {
@@ -555,30 +560,37 @@ Deno.serve((req) =>
     //      skill and age; the parse call cost about 2 s per request and its
     //      merge rarely changed a field. `llmParseIntent` stays in llm.ts for
     //      an offline evaluation, not for the hot path.
-    //   3. The Voyage embed and vector recall run IN PARALLEL with the six
-    //      table reads instead of after them.
-    // Claude's rerank stays: it is the visible AI on the screen (order and
-    // rankReason), bounded by RERANK_TIMEOUT_MS, and only runs when there is
-    // more than one hit to order.
+    //   3. The spend gate runs IN PARALLEL with the six table reads.
+    //   4. `rerank: false` in the body skips Claude's rerank. The shop screen
+    //      sends it while the shopper is typing and drops it on submit, so a
+    //      keystroke costs no Claude call and the settled query gets the
+    //      visible AI (order and rankReason) once. Second production
+    //      measurement: with the rerank on, "badminton" still took 6.0 s;
+    //      the rerank was 2.5 of it and the gate 0.9.
+    // The rerank is bounded by RERANK_TIMEOUT_MS and RERANK_MAX_CANDIDATES
+    // and only runs when there is more than one hit to order.
     const shortQuery = body.query.length < MIN_AI_QUERY_CHARS;
-    const gate = shortQuery ? { mode: "keyword" as const } : await evaluateAiSearchGate(svc, userId);
-    const spendAllowed = gate.mode === "llm";
-    const useLlm = spendAllowed && llmEnabled();
-    const useVector = spendAllowed;
-    const reportedMode = useLlm ? "llm" : "keyword";
-
     const intent = parseIntent(body.query, override);
-
     const want = new Set(intent.entityTypes);
-    const [coaches, courts, products, affiliateProducts, athletes, clips, vectorMatches] = await Promise.all([
+
+    // The spend gate (three sequential RPC round trips) and the six table
+    // reads do not depend on each other, so they run together. The Voyage
+    // recall waits for the gate because the gate is what permits the spend.
+    const [gate, coaches, courts, products, affiliateProducts, athletes, clips] = await Promise.all([
+      shortQuery ? Promise.resolve({ mode: "keyword" as const }) : evaluateAiSearchGate(svc, userId),
       want.has("coach") ? fetchCoaches(supabase, intent, body.city) : Promise.resolve([]),
       want.has("court") ? fetchCourts(supabase, intent, body.lat, body.lng) : Promise.resolve([]),
       want.has("gear") ? fetchProducts(supabase, intent) : Promise.resolve([]),
       want.has("gear") ? fetchAffiliateProducts(supabase, intent) : Promise.resolve([]),
       want.has("athlete") ? fetchAthletes(supabase, intent) : Promise.resolve([]),
       want.has("clip") ? fetchClips(supabase, intent) : Promise.resolve([]),
-      useVector && want.has("gear") ? recallByVector(svc, body.query) : Promise.resolve(null),
     ]);
+    const spendAllowed = gate.mode === "llm";
+    const useLlm = spendAllowed && llmEnabled() && body.rerank;
+    const useVector = spendAllowed;
+    const reportedMode = useLlm ? "llm" : "keyword";
+
+    const vectorMatches = useVector && want.has("gear") ? await recallByVector(svc, body.query) : null;
 
     const candidates = [...coaches, ...courts, ...products, ...affiliateProducts, ...athletes, ...clips];
 

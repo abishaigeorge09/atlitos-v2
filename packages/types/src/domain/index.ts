@@ -583,6 +583,9 @@ export interface SearchInput {
   lng?: number;
   city?: string;
   limit?: number;
+  /** false while the shopper is still typing: the server skips Claude's
+   * rerank and answers with the deterministic order. Omit (true) on submit. */
+  rerank?: boolean;
 }
 
 /**

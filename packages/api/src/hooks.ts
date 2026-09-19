@@ -559,6 +559,7 @@ export function useSearch(client: AtlitosClient) {
             lng: input.lng,
             city: input.city,
             limit: input.limit,
+            rerank: input.rerank,
           },
         });
         if (error) throw await mapEdgeFunctionError(error);

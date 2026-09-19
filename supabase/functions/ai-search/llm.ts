@@ -26,9 +26,9 @@ import { ENTITY_TYPES, SPORTS } from "./search-core.ts";
 const MODEL = "claude-haiku-4-5-20251001";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const INTENT_TIMEOUT_MS = 3500;
-const RERANK_TIMEOUT_MS = 2500; // 2026-09-19: was 4000; the rerank is the last thing before the response returns.
+const RERANK_TIMEOUT_MS = 2000; // 2026-09-19: was 4000; the rerank is the last thing before the response returns.
 /** Candidates sent to the reranker. The rest keep their deterministic order below. */
-const RERANK_MAX_CANDIDATES = 12;
+const RERANK_MAX_CANDIDATES = 8;
 
 export function llmEnabled(): boolean {
   const key = getKey();
@@ -263,7 +263,7 @@ export async function llmRerank(query: string, hits: ScoredHit[]): Promise<LlmRe
   const msg = await callClaude(
     {
       model: MODEL,
-      max_tokens: 900,
+      max_tokens: 400,
       system: RERANK_SYSTEM,
       output_config: { format: { type: "json_schema", schema: RERANK_SCHEMA } },
       messages: [
