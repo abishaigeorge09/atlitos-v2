@@ -62,7 +62,7 @@ create or replace function public.match_affiliate_products(
 $$;  -- backed by an HNSW index on embedding, vector_cosine_ops
 ```
 
-Called at `match_threshold = 0.75` (new `VECTOR_SIMILARITY_FLOOR` beside the existing
+Called at `match_threshold = VECTOR_SIMILARITY_FLOOR` (0.38, calibrated 2026-09-19 against voyage-3 on the production catalogue; the 0.75 first chosen was never cleared by a real query; see search-core.ts) beside the existing
 `CONFIDENCE_FLOOR`); results hydrate through `fetchAffiliateProducts` and fold into the same
 candidate array `scoreCandidates` scores today, only ADDING candidates the keyword path missed,
 never re-weighting the score. `passesHardConstraints` gains one more way to satisfy the
@@ -315,7 +315,7 @@ CLAUDE.md's permissive-OR warning).
 
 ```ts
 // ai-search/search-core.ts (pure, extended)
-export const VECTOR_SIMILARITY_FLOOR = 0.75;
+export const VECTOR_SIMILARITY_FLOOR = 0.38; // calibrated 2026-09-19, see search-core.ts
 export function passesHardConstraints(c: Candidate, intent: ParsedIntent, vectorSimilarity?: number): boolean;
 // gear-ingest, admin JWT only
 POST /gear-ingest { action: "fetch"; url: string }

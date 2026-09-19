@@ -348,7 +348,19 @@ export const CONFIDENCE_FLOOR = 0.3;
 // this floor. Brand and price hard constraints are untouched: a vector hit
 // still has to be the right brand and under the price ceiling like any other
 // candidate (D1: "Brand/price hard constraints are untouched").
-export const VECTOR_SIMILARITY_FLOOR = 0.75;
+//
+// CALIBRATED 2026-09-19 against the real model, not the stub. The original
+// 0.75 was chosen before any voyage-3 number existed and no production query
+// ever cleared it (the vector path ran and contributed nothing). Measured on
+// the production catalogue with `query_embedding_cache` joined to
+// `affiliate_products.embedding`: "shoes that grip an indoor court" scored
+// the two shoes 0.565 and 0.530 and every racket and bat 0.196 to 0.357;
+// "something for a beginner learning to serve in tennis" scored the beginner
+// tennis racket 0.402 and the cricket bats 0.246 to 0.270. Relevant rows sit
+// at 0.40 to 0.57, unrelated rows at or under 0.36, so 0.38 splits them with
+// margin on both sides. Re-measure when the catalogue is real and larger;
+// the number is a measurement, not a preference.
+export const VECTOR_SIMILARITY_FLOOR = 0.38;
 
 function key(c: { entityType: EntityType; entityId: string }): string {
   return `${c.entityType}:${c.entityId}`;
