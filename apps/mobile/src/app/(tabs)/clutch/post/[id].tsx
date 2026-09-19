@@ -90,7 +90,6 @@ function timeAgo(iso: string): string {
  */
 export default function ClutchPostViewerScreen() {
   const colors = useThemeColors();
-  const navInset = useNavBarInset();
   const { id } = useLocalSearchParams<{ id: string }>();
   const clutch = useClutch(supabase);
   const requiresAuthGate = useSessionStore((state) => state.status !== 'signed_in');
@@ -733,6 +732,7 @@ function ClipPage({
   onOwnerMenu,
 }: ClipPageProps) {
   const colors = useThemeColors();
+  const navInset = useNavBarInset();
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.text }}>

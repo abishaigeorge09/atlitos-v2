@@ -385,58 +385,6 @@ export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {
         : 'Clips you save show up here. Tap the bookmark on any clip to keep it.';
   const EmptyIcon = tab === 'posts' ? LayoutGrid : tab === 'liked' ? Heart : Bookmark;
 
-  if (tab === 'follows') {
-    const rows = segment === 'following' ? following : followers;
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-        {topBar}
-        <FlatList
-          key="follows"
-          data={rows}
-          keyExtractor={(item) => item.id}
-          ListHeaderComponent={header}
-          refreshControl={refreshControl}
-          contentContainerStyle={{ paddingBottom: navInset + spacing.xl }}
-          ListEmptyComponent={
-            <View style={{ padding: spacing.xl, alignItems: 'center', gap: spacing.sm }}>
-              <Users size={40} color={colors.textTertiary} strokeWidth={1.75} />
-              <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
-                {segment === 'following'
-                  ? 'You are not following anyone yet.'
-                  : 'No followers yet. Post clips to grow your channel.'}
-              </Text>
-            </View>
-          }
-          renderItem={({ item }) => (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={item.name}
-              onPress={() =>
-                router.push({ pathname: '/(tabs)/clutch/creator/[id]', params: { id: item.id } })
-              }
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: spacing.md,
-                paddingHorizontal: spacing.lg,
-                paddingVertical: spacing.sm,
-              }}
-            >
-              <Avatar uri={item.avatarUrl ?? undefined} name={item.name} size={40} />
-              <View style={{ flex: 1, gap: spacing.xs }}>
-                <Text style={[textStyle('label'), { color: colors.text }]}>{item.name}</Text>
-                {item.handle ? (
-                  <Text style={[textStyle('numericSm'), { color: colors.textSecondary }]}>@{item.handle}</Text>
-                ) : null}
-              </View>
-            </Pressable>
-          )}
-        />
-      </SafeAreaView>
-    );
-  }
-
-  const gridClips = tab === 'posts' ? clips : liked;
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       {topBar}

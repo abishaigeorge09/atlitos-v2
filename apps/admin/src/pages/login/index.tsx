@@ -3,18 +3,18 @@ import { LayoutGrid, ShieldAlert } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
 import { Button } from "../../components/ui";
-import { LOGIN_ERROR_MESSAGE } from "../../providers/authProvider";
 
 // PRD-04 3.1 Login: email/password sign in against Supabase Auth, no self
-// registration, no guest mode. States: form, submitting, error. Every failure
-// renders the same message from the same constant, so a bad credential and a
-// valid credential without the admin role are indistinguishable here (FR-1).
-// Do not branch this screen on the error name.
+// registration, no guest mode. States: form, submitting, error (invalid
+// credentials, not an admin). The "not an admin" case is distinguished from
+// a plain bad credential (authProvider.login returns error.name
+// "AccessDenied" vs "LoginError") so this screen can show the right copy.
 export function LoginPage() {
   const { mutate: login, isPending: isLoading } = useLogin<{ email: string; password: string }>();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [accessDenied, setAccessDenied] = useState(false);
 
   function showError(name: string | undefined) {
     const denied = name === "AccessDenied";
@@ -29,6 +29,7 @@ export function LoginPage() {
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setErrorMessage(null);
+    setAccessDenied(false);
 
     login(
       { email, password },
@@ -143,8 +144,8 @@ export function LoginPage() {
                 gap: "var(--space-sm)",
                 padding: "var(--space-sm) var(--space-md)",
                 borderRadius: "var(--radius-sm)",
-                backgroundColor: "var(--color-danger-tint)",
-                color: "var(--color-danger)",
+                backgroundColor: accessDenied ? "var(--color-warning-tint)" : "var(--color-danger-tint)",
+                color: accessDenied ? "var(--color-warning)" : "var(--color-danger)",
                 fontSize: 13,
               }}
             >

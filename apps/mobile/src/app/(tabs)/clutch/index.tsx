@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ClutchPostCard } from '@/components/molecules/ClutchPostCard';
 import { EmptyState } from '@/components/organisms/EmptyState';
 import { LoginGateModal } from '@/components/organisms/LoginGateModal';
+import { ModerationSheet, type ModerationTarget } from '@/components/organisms/moderation/ModerationSheet';
 import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
@@ -66,6 +67,16 @@ export default function ClutchFeedScreen() {
   const [cursor, setCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [gateVisible, setGateVisible] = useState(false);
+  /** App Store guideline 1.2: report the clip or block its author from the
+   * feed card itself, through the same ModerationSheet the viewer uses (CT-C),
+   * so the copy, the reason list and the block confirmation stay in one place. */
+  const [moderationTarget, setModerationTarget] = useState<ModerationTarget | null>(null);
+  function openReportOrBlock(clip: Clip) {
+    requireAuth(
+      () => setModerationTarget({ type: 'clip', entityId: clip.id, userId: clip.ownerId, userName: clip.channel }),
+      () => setGateVisible(true),
+    );
+  }
 
   const [containerH, setContainerH] = useState(0);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -452,6 +463,14 @@ export default function ClutchFeedScreen() {
       </View>
 
       <LoginGateModal visible={gateVisible} onClose={closeGate} onDismiss={clearPendingAction} />
+      <ModerationSheet
+        visible={moderationTarget !== null}
+        target={moderationTarget}
+        onClose={() => setModerationTarget(null)}
+        // A blocked owner's clips come out of the NEXT feed fetch (packages/api
+        // filters by blocked_users); reload so the feed reflects it now.
+        onBlocked={() => void load()}
+      />
     </View>
   );
 }
