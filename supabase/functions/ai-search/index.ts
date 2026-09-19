@@ -437,18 +437,36 @@ interface VectorMatch {
  * ran against the real Voyage API (`embeddingsMode() === "voyage"`); a cache
  * hit or the offline stub never costs anything and never touches the ledger.
  */
+/** The cache row for a query, read early so it can overlap the table reads
+ * (it is a read, not a spend; only the Voyage call waits for the gate). */
 // deno-lint-ignore no-explicit-any
-async function recallByVector(svc: any, query: string): Promise<VectorMatch[] | null> {
+async function readQueryCache(svc: any, query: string): Promise<{ hash: string; cached: { embedding: string; created_at: string } | null }> {
+  const hash = await sha256Hex(query.toLowerCase().trim());
+  const { data, error } = await svc
+    .from("query_embedding_cache")
+    .select("embedding, created_at")
+    .eq("query_hash", hash)
+    .maybeSingle();
+  return { hash, cached: !error && data ? (data as { embedding: string; created_at: string }) : null };
+}
+
+/** Runs a promise after the response is sent when the runtime allows it
+ * (`EdgeRuntime.waitUntil`), otherwise lets it float. Used for the two
+ * bookkeeping writes on the search path (cache write, spend record) that
+ * cost a Mumbai round trip each and that no response depends on. */
+function background(p: Promise<unknown>): void {
+  const rt = (globalThis as unknown as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;
+  const swallowed = p.then(() => {}, () => {});
+  if (rt?.waitUntil) rt.waitUntil(swallowed);
+}
+
+// deno-lint-ignore no-explicit-any
+async function recallByVector(svc: any, query: string, pre: { hash: string; cached: { embedding: string; created_at: string } | null }): Promise<VectorMatch[] | null> {
   try {
-    const hash = await sha256Hex(query.toLowerCase().trim());
+    const { hash, cached } = pre;
 
     let vector: number[] | null = null;
-    const { data: cached, error: cacheReadError } = await svc
-      .from("query_embedding_cache")
-      .select("embedding, created_at")
-      .eq("query_hash", hash)
-      .maybeSingle();
-    if (!cacheReadError && cached) {
+    if (cached) {
       const age = Date.now() - new Date(cached.created_at as string).getTime();
       if (age < QUERY_CACHE_TTL_MS) {
         try {
@@ -467,17 +485,16 @@ async function recallByVector(svc: any, query: string): Promise<VectorMatch[] | 
       vector = fresh;
       spentVoyage = modeBeforeCall === "voyage";
 
-      // Best-effort cache write; a failure to cache never fails the request.
-      await svc
-        .from("query_embedding_cache")
-        .upsert(
-          { query_hash: hash, embedding: JSON.stringify(vector), created_at: new Date().toISOString() },
-          { onConflict: "query_hash" },
-        )
-        .then(
-          () => {},
-          () => {},
-        );
+      // Best-effort cache write, off the response path; a failure to cache
+      // never fails the request.
+      background(
+        svc
+          .from("query_embedding_cache")
+          .upsert(
+            { query_hash: hash, embedding: JSON.stringify(vector), created_at: new Date().toISOString() },
+            { onConflict: "query_hash" },
+          ),
+      );
     }
 
     const { data: matches, error: matchError } = await svc.rpc("match_affiliate_products", {
@@ -490,7 +507,7 @@ async function recallByVector(svc: any, query: string): Promise<VectorMatch[] | 
       return null;
     }
 
-    if (spentVoyage) await recordVoyageSpend(svc);
+    if (spentVoyage) background(recordVoyageSpend(svc));
 
     return ((matches ?? []) as Array<{ id: string; similarity: number }>).map((m) => ({
       id: m.id,
@@ -560,7 +577,12 @@ Deno.serve((req) =>
     //      skill and age; the parse call cost about 2 s per request and its
     //      merge rarely changed a field. `llmParseIntent` stays in llm.ts for
     //      an offline evaluation, not for the hot path.
-    //   3. The spend gate runs IN PARALLEL with the six table reads.
+    //   3. The spend gate and the embedding cache read run IN PARALLEL with
+    //      the six table reads; the cache write and the spend records run
+    //      after the response (EdgeRuntime.waitUntil). The database is in
+    //      ap-south-1 and a caller outside India is served by another edge
+    //      region, so every sequential round trip is a cross region hop;
+    //      the client also pins `x-region: ap-south-1` (packages/api).
     //   4. `rerank: false` in the body skips Claude's rerank. The shop screen
     //      sends it while the shopper is typing and drops it on submit, so a
     //      keystroke costs no Claude call and the settled query gets the
@@ -576,7 +598,8 @@ Deno.serve((req) =>
     // The spend gate (three sequential RPC round trips) and the six table
     // reads do not depend on each other, so they run together. The Voyage
     // recall waits for the gate because the gate is what permits the spend.
-    const [gate, coaches, courts, products, affiliateProducts, athletes, clips] = await Promise.all([
+    const wantVector = !shortQuery && want.has("gear");
+    const [gate, coaches, courts, products, affiliateProducts, athletes, clips, cachePre] = await Promise.all([
       shortQuery ? Promise.resolve({ mode: "keyword" as const }) : evaluateAiSearchGate(svc, userId),
       want.has("coach") ? fetchCoaches(supabase, intent, body.city) : Promise.resolve([]),
       want.has("court") ? fetchCourts(supabase, intent, body.lat, body.lng) : Promise.resolve([]),
@@ -584,13 +607,14 @@ Deno.serve((req) =>
       want.has("gear") ? fetchAffiliateProducts(supabase, intent) : Promise.resolve([]),
       want.has("athlete") ? fetchAthletes(supabase, intent) : Promise.resolve([]),
       want.has("clip") ? fetchClips(supabase, intent) : Promise.resolve([]),
+      wantVector ? readQueryCache(svc, body.query).catch(() => null) : Promise.resolve(null),
     ]);
     const spendAllowed = gate.mode === "llm";
     const useLlm = spendAllowed && llmEnabled() && body.rerank;
     const useVector = spendAllowed;
     const reportedMode = useLlm ? "llm" : "keyword";
 
-    const vectorMatches = useVector && want.has("gear") ? await recallByVector(svc, body.query) : null;
+    const vectorMatches = useVector && wantVector && cachePre ? await recallByVector(svc, body.query, cachePre) : null;
 
     const candidates = [...coaches, ...courts, ...products, ...affiliateProducts, ...athletes, ...clips];
 
@@ -664,7 +688,7 @@ Deno.serve((req) =>
         () => ({ hits: qualified, usage: null }),
       );
       results = reranked;
-      if (usage) await recordAiSpend(svc, usage.inputTokens, usage.outputTokens);
+      if (usage) background(recordAiSpend(svc, usage.inputTokens, usage.outputTokens));
     }
 
     return jsonResponse(
