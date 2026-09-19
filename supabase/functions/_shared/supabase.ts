@@ -32,6 +32,39 @@ export function serviceRoleClient(): SupabaseClient {
   });
 }
 
+/**
+ * Is this bearer token the project's service role? Two tests, either
+ * suffices:
+ *   1. the raw token equals the `SUPABASE_SERVICE_ROLE_KEY` the runtime
+ *      injects (the cheap, exact check);
+ *   2. the token's payload carries `role: "service_role"` and
+ *      `iss: "supabase"`.
+ * Test 2 exists because the platform can hold more than one valid
+ * service_role JWT for a project at once (the key in the dashboard and the
+ * one injected into the runtime env were minted at different times and
+ * differ by `iat`), so a string compare alone refused the nightly sweep in
+ * production on 2026-09-19 with a genuine service role key. The signature
+ * itself is checked by the gateway, which is why every caller of this helper
+ * MUST be deployed with `verify_jwt = true` (the default; config.toml only
+ * turns it off for the three named webhook and playback functions). With
+ * verification off at the gateway a forged payload would pass test 2, so do
+ * not add one of those functions to this helper's callers.
+ */
+export function isServiceRoleToken(token: string | null): boolean {
+  if (!token) return false;
+  const injected = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (injected && token === injected) return true;
+  const parts = token.split(".");
+  if (parts.length !== 3) return false;
+  try {
+    const json = atob(parts[1].replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(parts[1].length / 4) * 4, "="));
+    const payload = JSON.parse(json) as Record<string, unknown>;
+    return payload.role === "service_role" && payload.iss === "supabase";
+  } catch {
+    return false;
+  }
+}
+
 export interface AuthenticatedUser {
   id: string;
   /**

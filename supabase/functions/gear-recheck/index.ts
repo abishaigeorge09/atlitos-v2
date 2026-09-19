@@ -53,7 +53,7 @@
 import { handleCorsPreflight } from "../_shared/cors.ts";
 import { jsonResponse, withErrorHandling } from "../_shared/http.ts";
 import { AppError } from "../_shared/app-error.ts";
-import { serviceRoleClient, userScopedClient } from "../_shared/supabase.ts";
+import { isServiceRoleToken, serviceRoleClient, userScopedClient } from "../_shared/supabase.ts";
 import { captureEdgeError } from "../_shared/sentry.ts";
 import { fetchPage, type FetchPageResult } from "../_shared/fetch-page.ts";
 import { extractProduct, type ProductDraft, type RetailerExtractorMap } from "../_shared/extract-product.ts";
@@ -104,10 +104,8 @@ function bearerToken(req: Request): string | null {
 }
 
 async function requireServiceRoleOrAdmin(req: Request): Promise<void> {
-  const token = bearerToken(req);
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (token && serviceRoleKey && token === serviceRoleKey) {
-    return; // service role: the nightly Actions sweep, or a trusted server caller.
+  if (isServiceRoleToken(bearerToken(req))) {
+    return; // service role: the nightly sweep, or a trusted server caller.
   }
 
   const userClient = userScopedClient(req);

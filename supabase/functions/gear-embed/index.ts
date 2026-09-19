@@ -31,7 +31,7 @@
 import { handleCorsPreflight } from "../_shared/cors.ts";
 import { jsonResponse, withErrorHandling } from "../_shared/http.ts";
 import { AppError } from "../_shared/app-error.ts";
-import { serviceRoleClient, userScopedClient } from "../_shared/supabase.ts";
+import { isServiceRoleToken, serviceRoleClient, userScopedClient } from "../_shared/supabase.ts";
 import { captureEdgeError } from "../_shared/sentry.ts";
 import { embeddingsMode, embedTexts } from "../_shared/embeddings.ts";
 
@@ -66,9 +66,7 @@ function bearerToken(req: Request): string | null {
  * admin-order-advance/index.ts's `requireAdmin`.
  */
 async function requireServiceRoleOrAdmin(req: Request): Promise<void> {
-  const token = bearerToken(req);
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (token && serviceRoleKey && token === serviceRoleKey) {
+  if (isServiceRoleToken(bearerToken(req))) {
     return; // service role: the nightly sweep, or a trusted server caller.
   }
 
