@@ -228,6 +228,21 @@ async function main() {
     const anonRes = await callGearEmbed(ANON_KEY, { productId: goodId });
     check('gear-embed (anon) refused', anonRes.status === 401, `status ${anonRes.status}, ${JSON.stringify(anonRes.json)}`);
 
+    // A token whose payload CLAIMS service_role but carries no valid signature
+    // must be refused before the function runs (isServiceRoleToken trusts the
+    // role claim only because the gateway verifies the signature). Build one
+    // from the real key's header and payload with a garbage signature, and a
+    // second one re-minted with a different iat, also unsigned.
+    const [hdr, payload] = SERVICE_ROLE_KEY.split('.');
+    const forged = `${hdr}.${payload}.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA`;
+    const forgedRes = await callGearEmbed(forged, { productId: goodId });
+    check('gear-embed (forged service_role, bad signature) refused', forgedRes.status === 401, `status ${forgedRes.status}, ${JSON.stringify(forgedRes.json)}`);
+    const claims = JSON.parse(Buffer.from(payload.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));
+    const reissued = Buffer.from(JSON.stringify({ ...claims, iat: claims.iat + 1 })).toString('base64url');
+    const forged2 = `${hdr}.${reissued}.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA`;
+    const forged2Res = await callGearEmbed(forged2, { productId: goodId });
+    check('gear-embed (re-minted service_role claim, unsigned) refused', forged2Res.status === 401, `status ${forged2Res.status}, ${JSON.stringify(forged2Res.json)}`);
+
     console.log('\nPhase 2: broken Voyage key (VOYAGE_API_KEY=bad, VOYAGE_STUB unset)');
     await startServe({ VOYAGE_API_KEY: 'bad-key-atlitos-verify' });
 

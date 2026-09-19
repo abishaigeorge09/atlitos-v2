@@ -1,4 +1,4 @@
--- ATLITOS v2 — XXXX_coach_trainee_video_path_lock.sql (provisional, numbered at merge; was 0119 on prasanth/main, never applied to production)
+-- ATLITOS v2 — 0125_coach_trainee_video_path_lock.sql
 -- SEC-F3 (P1, security audit 2026-09-04): coach_trainee_videos rows can inject
 -- arbitrary storage paths and trainee relationships.
 --

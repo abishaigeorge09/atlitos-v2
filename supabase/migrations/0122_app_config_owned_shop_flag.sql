@@ -1,4 +1,4 @@
--- ATLITOS v2 — XXXX_app_config_owned_shop_flag.sql
+-- ATLITOS v2 — 0122_app_config_owned_shop_flag.sql
 -- Domain: shop search (PRD-07 FR-53). Phase S1, Track A.
 --
 -- A single flag, `shop.owned_enabled`, false at launch, that hides the owned

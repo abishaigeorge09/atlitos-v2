@@ -1,4 +1,4 @@
--- ATLITOS v2 — XXXX_gear_ingest_health.sql
+-- ATLITOS v2 — 0123_gear_ingest_health.sql
 -- Domain: shop search, ingest and health (PRD-07 section 11, FR-44 to FR-52).
 -- Phase S2, Track C. See docs/architecture/ADR-011-shop-search-ingest-health.md
 -- D3 (ingest), D4 (health), D6 (RLS), D7 (this file's slot in the numbering

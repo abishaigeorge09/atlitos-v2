@@ -29,7 +29,7 @@ export type ProductOfferRow = Db.ProductOfferRow;
 
 // ---- shop search: ingest + catalog health (Phase S2, PRD-07 section 11) --
 // FR-44, FR-45, FR-49, FR-50, FR-52; ADR-011 D3, D4. The `_health` suffixed
-// types below carry the columns Track C's `XXXX_gear_ingest_health.sql`
+// types below carry the columns Track C's `0123_gear_ingest_health.sql`
 // lands on `affiliate_products` and `product_offers` (health_status,
 // health_checked_at, auto_delisted_at, image_path; canonical_url,
 // retailer_key, last_check_outcome, consecutive_failures,

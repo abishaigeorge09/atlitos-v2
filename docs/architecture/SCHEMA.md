@@ -686,7 +686,7 @@ Rows with `public = true` are readable by `anon`/`authenticated` (`app_config_se
 
 Seeded by `scripts/seed-affiliate-catalog.mjs` (8 products, 17 offers across four retailers), including a Babolat racket offered under 2000 at one retailer and higher at another for the WS3 price-comparison proof.
 
-### Ingest and health (Phase S2, PRD-07 FR-44 to FR-52, `XXXX_gear_ingest_health.sql`, `XXXX_product_images_bucket.sql`)
+### Ingest and health (Phase S2, PRD-07 FR-44 to FR-52, `0123_gear_ingest_health.sql`, `0124_product_images_bucket.sql`)
 
 `docs/architecture/ADR-011-shop-search-ingest-health.md` D3 (ingest), D4 (health), D6 (RLS). Extends `affiliate_products`/`product_offers` (0086) and the `admin_upsert_affiliate_product`/`admin_upsert_product_offer` RPCs (0120) rather than replacing either.
 
@@ -700,7 +700,7 @@ Seeded by `scripts/seed-affiliate-catalog.mjs` (8 products, 17 offers across fou
 | `health_checked_at` | `timestamptz` | nullable, when `gear-recheck` last evaluated this product's overall health |
 | `auto_delisted_at` | `timestamptz` | nullable, set only by `system_auto_delist_affiliate_product` (FR-51) |
 
-All five are public-safe the same way `title`/`brand`/`image_url` already are; the column-level grant from Phase S1's `XXXX_gear_search_vectors.sql` (which excludes only `embedding`) is re-asserted with these five columns added.
+All five are public-safe the same way `title`/`brand`/`image_url` already are; the column-level grant from Phase S1's `0121_gear_search_vectors.sql` (which excludes only `embedding`) is re-asserted with these five columns added.
 
 `product_offers` gains five columns:
 
@@ -758,7 +758,7 @@ Both dropped and recreated under the same name with two new trailing, defaulted 
 
 #### `product-images` Storage bucket
 
-`XXXX_product_images_bucket.sql`. Public read (product photos render unauthenticated in the guest-browsable shop); no insert/update/delete policy for anon or authenticated at all, since the only writer is `gear-ingest`'s service-role client (see RLS.md). Path convention `product-images/<retailer_key>/<sha256-16>.<ext>`, hash-deduped: re-ingesting the same image skips the upload when that path already exists.
+`0124_product_images_bucket.sql`. Public read (product photos render unauthenticated in the guest-browsable shop); no insert/update/delete policy for anon or authenticated at all, since the only writer is `gear-ingest`'s service-role client (see RLS.md). Path convention `product-images/<retailer_key>/<sha256-16>.<ext>`, hash-deduped: re-ingesting the same image skips the upload when that path already exists.
 
 #### `gear-ingest` edge function (ADR-011 D3, AC-11-3)
 

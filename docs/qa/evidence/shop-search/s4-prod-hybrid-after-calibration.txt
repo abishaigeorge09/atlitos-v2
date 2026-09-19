@@ -1,0 +1,11 @@
+
+== "lightweight frame for smashing in badminton" -> 200 mode=llm vector=true keywords=["lightweight","frame","smashing"]
+   0.489  Asics Gel Rocket Court Shoes  [Badminton specific shoes for court performance]
+   0.518  Babolat Boost Drive Tennis Racket  [Tennis racket, not badminton equipment]
+
+== "shoes that grip an indoor court" -> 200 mode=llm vector=true keywords=["that","grip","indoor"]
+   0.622  Asics Gel Rocket Court Shoes  [Designed for indoor court grip performance]
+   0.358  Nike Court Lite Tennis Shoes  [Tennis court shoes with solid grip]
+
+== "something for a beginner learning to serve in tennis" -> 200 mode=llm vector=true keywords=["something","learning","serve"]
+   0.382  Babolat Boost Drive Tennis Racket  [Quality racket for beginner serve practice]

@@ -62,7 +62,7 @@ create or replace function public.match_affiliate_products(
 $$;  -- backed by an HNSW index on embedding, vector_cosine_ops
 ```
 
-Called at `match_threshold = 0.75` (new `VECTOR_SIMILARITY_FLOOR` beside the existing
+Called at `match_threshold = VECTOR_SIMILARITY_FLOOR` (0.38, calibrated 2026-09-19 against voyage-3 on the production catalogue; the 0.75 first chosen was never cleared by a real query; see search-core.ts) beside the existing
 `CONFIDENCE_FLOOR`); results hydrate through `fetchAffiliateProducts` and fold into the same
 candidate array `scoreCandidates` scores today, only ADDING candidates the keyword path missed,
 never re-weighting the score. `passesHardConstraints` gains one more way to satisfy the
@@ -240,10 +240,10 @@ matching the `0070_product_media_bucket.sql` precedent:
 
 | Provisional file | Contents |
 |---|---|
-| `XXXX_gear_search_vectors.sql` | `vector` extension, `embedding` column, HNSW index, `match_affiliate_products`, `query_embedding_cache` + RLS |
-| `XXXX_product_images_bucket.sql` | `product-images` bucket, public read, service-role write only |
-| `XXXX_gear_ingest_health.sql` | `retailer_programmes`, `product_fetch_log`, `product_offers` new columns, `system_auto_delist_affiliate_product`, extended admin RPCs, column-level grant |
-| `XXXX_app_config_owned_shop_flag.sql` | `app_config` + RLS, `admin_set_app_config`, seed row |
+| `0121_gear_search_vectors.sql` | `vector` extension, `embedding` column, HNSW index, `match_affiliate_products`, `query_embedding_cache` + RLS |
+| `0124_product_images_bucket.sql` | `product-images` bucket, public read, service-role write only |
+| `0123_gear_ingest_health.sql` | `retailer_programmes`, `product_fetch_log`, `product_offers` new columns, `system_auto_delist_affiliate_product`, extended admin RPCs, column-level grant |
+| `0122_app_config_owned_shop_flag.sql` | `app_config` + RLS, `admin_set_app_config`, seed row |
 
 ## Consequences
 
@@ -315,7 +315,7 @@ CLAUDE.md's permissive-OR warning).
 
 ```ts
 // ai-search/search-core.ts (pure, extended)
-export const VECTOR_SIMILARITY_FLOOR = 0.75;
+export const VECTOR_SIMILARITY_FLOOR = 0.38; // calibrated 2026-09-19, see search-core.ts
 export function passesHardConstraints(c: Candidate, intent: ParsedIntent, vectorSimilarity?: number): boolean;
 // gear-ingest, admin JWT only
 POST /gear-ingest { action: "fetch"; url: string }

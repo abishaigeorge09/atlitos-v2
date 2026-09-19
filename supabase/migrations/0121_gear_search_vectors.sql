@@ -1,4 +1,4 @@
--- ATLITOS v2 — XXXX_gear_search_vectors.sql
+-- ATLITOS v2 — 0121_gear_search_vectors.sql
 -- Domain: shop search (PRD-07 section 11, FR-40, FR-43). Phase S1, Track A.
 --
 -- Installs pgvector, adds the embedding column that D2 (gear-embed) writes and

@@ -1,4 +1,4 @@
--- ATLITOS v2 — XXXX_product_images_bucket.sql
+-- ATLITOS v2 — 0124_product_images_bucket.sql
 -- Domain: shop search, ingest (PRD-07 FR-46). Phase S2, Track C.
 --
 -- The `product-images` bucket holds Atlitos's OWN copy of a retailer's
