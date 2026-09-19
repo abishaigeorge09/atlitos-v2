@@ -13,7 +13,7 @@ import { SPORTS } from '@atlitos/types';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ChevronLeft, Heart, RefreshCw, ShoppingBag, ShoppingCart, TriangleAlert } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { FlatList, Pressable, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/organisms/EmptyState';
@@ -165,18 +165,33 @@ export default function ShopScreen() {
         const relevant = res.results.filter(
           (hit: SearchHit) => hit.entityType === 'gear' && (ownedEnabled || hit.entityId.startsWith('affiliate:')),
         );
-        const hydrated = await Promise.all(
-          relevant.map(async (hit): Promise<GridItem | null> => {
-            if (hit.entityId.startsWith('affiliate:')) {
-              const product = await shop.getAffiliateProduct(hit.entityId.slice('affiliate:'.length)).catch(() => null);
-              return product ? { kind: 'affiliate', product } : null;
-            }
-            const product = await shop.getProduct(hit.entityId).catch(() => null);
-            return product ? { kind: 'owned', product } : null;
-          }),
-        );
+        // One batched read for the affiliate hits (order preserved by the
+        // helper); owned hits are hydrated one by one only while the owned
+        // shop is enabled, which it is not at launch.
+        const affiliateIds = relevant
+          .filter((hit) => hit.entityId.startsWith('affiliate:'))
+          .map((hit) => hit.entityId.slice('affiliate:'.length));
+        const [affiliateRows, ownedRows] = await Promise.all([
+          shop.getAffiliateProducts(affiliateIds),
+          Promise.all(
+            relevant
+              .filter((hit) => !hit.entityId.startsWith('affiliate:'))
+              .map((hit) => shop.getProduct(hit.entityId).catch(() => null)),
+          ),
+        ]);
         if (seq !== requestSeq.current) return;
-        const grid = hydrated.filter((item): item is GridItem => item !== null);
+        const affiliateById = new Map(affiliateRows.map((product) => [product.id, product]));
+        const ownedById = new Map(ownedRows.filter((p): p is NonNullable<typeof p> => p !== null).map((product) => [product.id, product]));
+        const grid: GridItem[] = [];
+        for (const hit of relevant) {
+          if (hit.entityId.startsWith('affiliate:')) {
+            const product = affiliateById.get(hit.entityId.slice('affiliate:'.length));
+            if (product) grid.push({ kind: 'affiliate', product });
+          } else {
+            const product = ownedById.get(hit.entityId);
+            if (product) grid.push({ kind: 'owned', product });
+          }
+        }
         setItems(grid);
         setBroaden(res.broaden ?? null);
         setState(grid.length === 0 ? 'empty' : 'populated');
@@ -241,14 +256,21 @@ export default function ShopScreen() {
 
   const header = (
     <View style={{ padding: spacing.lg, gap: spacing.md }}>
-      <SearchBar
-        variant="ai"
-        testID="shop-search-input"
-        value={query}
-        onChangeText={setQuery}
-        autoCorrect={false}
-        returnKeyType="search"
-      />
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+        <View style={{ flex: 1 }}>
+          <SearchBar
+            variant="ai"
+            testID="shop-search-input"
+            value={query}
+            onChangeText={setQuery}
+            autoCorrect={false}
+            returnKeyType="search"
+          />
+        </View>
+        {state === 'loading' && items.length > 0 ? (
+          <ActivityIndicator testID="shop-searching" size="small" color={colors.textSecondary} />
+        ) : null}
+      </View>
 
       <View className="flex-row flex-wrap items-center gap-sm">
         {SPORTS.map((sport) => (
@@ -277,7 +299,12 @@ export default function ShopScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       <ShopHeaderBar ownedEnabled={ownedEnabled} />
       <FlatList
-        data={state === 'loading' ? [] : items}
+        // While a new query loads, the previous grid stays on screen and the
+        // header shows a small spinner (below); the skeleton only appears when
+        // there is nothing to keep showing. Blanking the grid on every
+        // keystroke was the largest part of "rendering is very slow"
+        // (2026-09-19), on top of the server latency fixed the same day.
+        data={state === 'loading' && items.length === 0 ? [] : items}
         key="shop-grid"
         numColumns={2}
         keyExtractor={(item) => `${item.kind}:${item.product.id}`}

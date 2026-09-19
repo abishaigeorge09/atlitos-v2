@@ -73,13 +73,17 @@ import {
   SPORTS,
   VECTOR_SIMILARITY_FLOOR,
 } from "./search-core.ts";
-import { llmEnabled, llmParseIntent, llmRerank } from "./llm.ts";
+import { llmEnabled, llmRerank } from "./llm.ts";
 import { evaluateAiSearchGate, recordAiSpend, recordVoyageSpend } from "./spend-guard.ts";
 import { embeddingsMode, embedTexts } from "../_shared/embeddings.ts";
 
 // --------------------------------------------------------------------------
 // Request
 // --------------------------------------------------------------------------
+
+/** Below this length the query takes the deterministic path only (see the
+ * LATENCY note in the handler). The shop screen sends from 2 characters. */
+const MIN_AI_QUERY_CHARS = 3;
 
 interface SearchRequestBody {
   query: string;
@@ -137,27 +141,6 @@ function numberOrUndefined(v: unknown): number | undefined {
 // --------------------------------------------------------------------------
 // Intent: deterministic parse, optionally refined by the LLM (hybrid)
 // --------------------------------------------------------------------------
-
-/**
- * Merge a partial LLM intent OVER the deterministic parse. The deterministic
- * parse is always the baseline (so results are stable and cheap when the key is
- * absent or the model fails); LLM fields only overwrite where the model
- * returned a usable value. A brand the model finds re-derives nounHint via the
- * deterministic parse's own nounHint, which the model does not compute.
- */
-function mergeIntent(base: ParsedIntent, llm: Partial<ParsedIntent> | null): ParsedIntent {
-  if (!llm) return base;
-  return {
-    ...base,
-    entityTypes: llm.entityTypes && llm.entityTypes.length > 0 ? llm.entityTypes : base.entityTypes,
-    sport: llm.sport ?? base.sport,
-    priceMax: llm.priceMax ?? base.priceMax,
-    brand: llm.brand ?? base.brand,
-    skillLevel: llm.skillLevel ?? base.skillLevel,
-    ageHint: llm.ageHint ?? base.ageHint,
-    keywords: llm.keywords && llm.keywords.length > 0 ? llm.keywords : base.keywords,
-  };
-}
 
 // --------------------------------------------------------------------------
 // Fetch layer — every query publicly-scoped (see file header)
@@ -562,32 +545,39 @@ Deno.serve((req) =>
     // `mode: "keyword"`, exactly as it did before this phase, so an existing
     // caller reading `mode` sees no contract change (ADR-011: "ai-search's
     // external contract is unchanged").
-    const gate = await evaluateAiSearchGate(svc, userId);
+    // LATENCY (2026-09-19, measured on production: 4.5 to 8.0 s per keystroke,
+    // the REST catalogue read is 0.3 s). Three changes, each earning its place:
+    //   1. A query shorter than MIN_AI_QUERY_CHARS is a keystroke, not a
+    //      question. It takes the deterministic path only: no gate RPCs, no
+    //      Voyage, no Claude. Nothing semantic can be read from "ba".
+    //   2. Claude no longer parses intent on the request path. The
+    //      deterministic parser already reads sport, brand, price ceiling,
+    //      skill and age; the parse call cost about 2 s per request and its
+    //      merge rarely changed a field. `llmParseIntent` stays in llm.ts for
+    //      an offline evaluation, not for the hot path.
+    //   3. The Voyage embed and vector recall run IN PARALLEL with the six
+    //      table reads instead of after them.
+    // Claude's rerank stays: it is the visible AI on the screen (order and
+    // rankReason), bounded by RERANK_TIMEOUT_MS, and only runs when there is
+    // more than one hit to order.
+    const shortQuery = body.query.length < MIN_AI_QUERY_CHARS;
+    const gate = shortQuery ? { mode: "keyword" as const } : await evaluateAiSearchGate(svc, userId);
     const spendAllowed = gate.mode === "llm";
     const useLlm = spendAllowed && llmEnabled();
     const useVector = spendAllowed;
     const reportedMode = useLlm ? "llm" : "keyword";
 
-    // Deterministic parse is always the baseline. When the gate allows it,
-    // refine it with Claude's structured parse (guarded: falls back on any
-    // failure, and the fallback still records nothing since usage is null).
-    let intent = parseIntent(body.query, override);
-    if (useLlm) {
-      const { intent: refined, usage } = await llmParseIntent(body.query).catch(
-        () => ({ intent: null, usage: null }),
-      );
-      intent = mergeIntent(intent, refined);
-      if (usage) await recordAiSpend(svc, usage.inputTokens, usage.outputTokens);
-    }
+    const intent = parseIntent(body.query, override);
 
     const want = new Set(intent.entityTypes);
-    const [coaches, courts, products, affiliateProducts, athletes, clips] = await Promise.all([
+    const [coaches, courts, products, affiliateProducts, athletes, clips, vectorMatches] = await Promise.all([
       want.has("coach") ? fetchCoaches(supabase, intent, body.city) : Promise.resolve([]),
       want.has("court") ? fetchCourts(supabase, intent, body.lat, body.lng) : Promise.resolve([]),
       want.has("gear") ? fetchProducts(supabase, intent) : Promise.resolve([]),
       want.has("gear") ? fetchAffiliateProducts(supabase, intent) : Promise.resolve([]),
       want.has("athlete") ? fetchAthletes(supabase, intent) : Promise.resolve([]),
       want.has("clip") ? fetchClips(supabase, intent) : Promise.resolve([]),
+      useVector && want.has("gear") ? recallByVector(svc, body.query) : Promise.resolve(null),
     ]);
 
     const candidates = [...coaches, ...courts, ...products, ...affiliateProducts, ...athletes, ...clips];
@@ -602,21 +592,18 @@ Deno.serve((req) =>
     // nothing" without inspecting results.
     let vector = false;
     const similarityByKey = new Map<string, number>();
-    if (useVector && want.has("gear")) {
-      const matches = await recallByVector(svc, body.query);
-      if (matches) {
-        vector = true;
-        const existingIds = new Set(affiliateProducts.map((c) => c.entityId));
-        const newIds = matches
-          .filter((m) => !existingIds.has(`affiliate:${m.id}`))
-          .map((m) => m.id);
-        const hydrated = await fetchAffiliateProducts(supabase, intent, newIds);
-        for (const c of hydrated) candidates.push(c);
-        // candidateKey shape is `${entityType}:${entityId}`, and entityId for
-        // affiliate rows is itself `affiliate:${id}` (see fetchAffiliateProducts).
-        for (const m of matches) {
-          similarityByKey.set(candidateKey({ entityType: "gear", entityId: `affiliate:${m.id}` }), m.similarity);
-        }
+    if (vectorMatches) {
+      vector = true;
+      const existingIds = new Set(affiliateProducts.map((c) => c.entityId));
+      const newIds = vectorMatches
+        .filter((m) => !existingIds.has(`affiliate:${m.id}`))
+        .map((m) => m.id);
+      const hydrated = await fetchAffiliateProducts(supabase, intent, newIds);
+      for (const c of hydrated) candidates.push(c);
+      // candidateKey shape is `${entityType}:${entityId}`, and entityId for
+      // affiliate rows is itself `affiliate:${id}` (see fetchAffiliateProducts).
+      for (const m of vectorMatches) {
+        similarityByKey.set(candidateKey({ entityType: "gear", entityId: `affiliate:${m.id}` }), m.similarity);
       }
     }
 
@@ -660,7 +647,7 @@ Deno.serve((req) =>
     // gated off (absent key, throttled, or over budget) or a call failure
     // both keep the deterministic order.
     let results = qualified;
-    if (useLlm) {
+    if (useLlm && qualified.length > 1) {
       const { hits: reranked, usage } = await llmRerank(body.query, qualified).catch(
         () => ({ hits: qualified, usage: null }),
       );
