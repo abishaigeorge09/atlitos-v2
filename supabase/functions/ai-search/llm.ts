@@ -26,7 +26,9 @@ import { ENTITY_TYPES, SPORTS } from "./search-core.ts";
 const MODEL = "claude-haiku-4-5-20251001";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const INTENT_TIMEOUT_MS = 3500;
-const RERANK_TIMEOUT_MS = 4000;
+const RERANK_TIMEOUT_MS = 2000; // 2026-09-19: was 4000; the rerank is the last thing before the response returns.
+/** Candidates sent to the reranker. The rest keep their deterministic order below. */
+const RERANK_MAX_CANDIDATES = 8;
 
 export function llmEnabled(): boolean {
   const key = getKey();
@@ -248,7 +250,9 @@ export interface LlmRerankResult {
 export async function llmRerank(query: string, hits: ScoredHit[]): Promise<LlmRerankResult> {
   if (hits.length === 0) return { hits, usage: null };
 
-  const candidates = hits.map((h) => ({
+  const head = hits.slice(0, RERANK_MAX_CANDIDATES);
+  const tail = hits.slice(RERANK_MAX_CANDIDATES);
+  const candidates = head.map((h) => ({
     id: `${h.entityType}:${h.entityId}`,
     type: h.entityType,
     title: h.title,
@@ -259,7 +263,7 @@ export async function llmRerank(query: string, hits: ScoredHit[]): Promise<LlmRe
   const msg = await callClaude(
     {
       model: MODEL,
-      max_tokens: 900,
+      max_tokens: 400,
       system: RERANK_SYSTEM,
       output_config: { format: { type: "json_schema", schema: RERANK_SCHEMA } },
       messages: [
@@ -278,7 +282,7 @@ export async function llmRerank(query: string, hits: ScoredHit[]): Promise<LlmRe
   const ranking = (parsed as Record<string, unknown>).ranking;
   if (!Array.isArray(ranking)) return { hits, usage };
 
-  const byKey = new Map(hits.map((h) => [`${h.entityType}:${h.entityId}`, h]));
+  const byKey = new Map(head.map((h) => [`${h.entityType}:${h.entityId}`, h]));
   const ordered: ScoredHit[] = [];
   const used = new Set<string>();
 
@@ -294,10 +298,10 @@ export async function llmRerank(query: string, hits: ScoredHit[]): Promise<LlmRe
 
   // Append any hit the model omitted, preserving the deterministic order, so
   // the LLM can reorder but never silently drop a real result.
-  for (const h of hits) {
+  for (const h of head) {
     const k = `${h.entityType}:${h.entityId}`;
     if (!used.has(k)) ordered.push(h);
   }
 
-  return { hits: ordered, usage };
+  return { hits: [...ordered, ...tail], usage };
 }

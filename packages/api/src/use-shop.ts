@@ -725,6 +725,25 @@ export function useShop(client: AtlitosClient) {
       return (data ?? []).map(mapAffiliateProductRow);
     },
 
+    /** One read for a set of ids (the typed search path: `ai-search` returns
+     * hit ids and the grid needs the full card rows). Returns rows in the
+     * order the ids were given, skipping any id that is delisted or missing,
+     * so the ranker's order survives hydration. One round trip instead of
+     * one per hit (2026-09-19: the per hit version added up to 20 sequential
+     * PostgREST calls after an already slow search). */
+    async getAffiliateProducts(ids: string[]): Promise<AffiliateProduct[]> {
+      if (ids.length === 0) return [];
+      const { data, error } = await client
+        .from("affiliate_products")
+        .select(AFFILIATE_SELECT)
+        .in("id", ids)
+        .eq("active", true)
+        .returns<AffiliateProductQueryRow[]>();
+      if (error) throw mapPostgrestError(error);
+      const byId = new Map((data ?? []).map((row) => [row.id, mapAffiliateProductRow(row)]));
+      return ids.map((id) => byId.get(id)).filter((p): p is AffiliateProduct => p !== undefined);
+    },
+
     /** Affiliate PDP + compare view read. Returns null for a delisted or
      * missing product so the screen routes to its not found state. The offer
      * list comes back cheapest in-stock first, which is exactly the order the

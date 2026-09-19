@@ -550,6 +550,13 @@ export function useSearch(client: AtlitosClient) {
           return { query: input.query, parsedIntent: { entityTypes: [], sport: "general", keywords: [] }, results: [] };
         }
         const { data, error } = await client.functions.invoke("ai-search", {
+          // The database lives in ap-south-1. Without this the function runs
+          // in the edge region nearest the CALLER, and for anyone outside
+          // India every one of its sequential database round trips becomes a
+          // cross region hop (measured 2026-09-19 from the US: 3.4 s typing,
+          // 0.3 s for a plain REST read). Pinning keeps the function next to
+          // the data wherever the shopper is.
+          headers: { "x-region": "ap-south-1" },
           body: {
             query: input.query.trim(),
             entityTypes: input.entityTypes,
@@ -559,6 +566,7 @@ export function useSearch(client: AtlitosClient) {
             lng: input.lng,
             city: input.city,
             limit: input.limit,
+            rerank: input.rerank,
           },
         });
         if (error) throw await mapEdgeFunctionError(error);

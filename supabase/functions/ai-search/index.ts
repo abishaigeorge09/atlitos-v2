@@ -73,13 +73,17 @@ import {
   SPORTS,
   VECTOR_SIMILARITY_FLOOR,
 } from "./search-core.ts";
-import { llmEnabled, llmParseIntent, llmRerank } from "./llm.ts";
+import { llmEnabled, llmRerank } from "./llm.ts";
 import { evaluateAiSearchGate, recordAiSpend, recordVoyageSpend } from "./spend-guard.ts";
 import { embeddingsMode, embedTexts } from "../_shared/embeddings.ts";
 
 // --------------------------------------------------------------------------
 // Request
 // --------------------------------------------------------------------------
+
+/** Below this length the query takes the deterministic path only (see the
+ * LATENCY note in the handler). The shop screen sends from 2 characters. */
+const MIN_AI_QUERY_CHARS = 3;
 
 interface SearchRequestBody {
   query: string;
@@ -90,6 +94,9 @@ interface SearchRequestBody {
   lng?: number;
   city?: string;
   limit: number;
+  /** false while the shopper is still typing: skip Claude's rerank and
+   * return the deterministic order. Default true (contract unchanged). */
+  rerank: boolean;
 }
 
 function parseRequestBody(raw: unknown): SearchRequestBody {
@@ -127,7 +134,9 @@ function parseRequestBody(raw: unknown): SearchRequestBody {
   const rawLimit = numberOrUndefined(body.limit);
   if (rawLimit !== undefined) limit = Math.max(1, Math.min(50, Math.floor(rawLimit)));
 
-  return { query: body.query.trim(), entityTypes, sport, priceMax, lat, lng, city, limit };
+  const rerank = body.rerank !== false;
+
+  return { query: body.query.trim(), entityTypes, sport, priceMax, lat, lng, city, limit, rerank };
 }
 
 function numberOrUndefined(v: unknown): number | undefined {
@@ -137,27 +146,6 @@ function numberOrUndefined(v: unknown): number | undefined {
 // --------------------------------------------------------------------------
 // Intent: deterministic parse, optionally refined by the LLM (hybrid)
 // --------------------------------------------------------------------------
-
-/**
- * Merge a partial LLM intent OVER the deterministic parse. The deterministic
- * parse is always the baseline (so results are stable and cheap when the key is
- * absent or the model fails); LLM fields only overwrite where the model
- * returned a usable value. A brand the model finds re-derives nounHint via the
- * deterministic parse's own nounHint, which the model does not compute.
- */
-function mergeIntent(base: ParsedIntent, llm: Partial<ParsedIntent> | null): ParsedIntent {
-  if (!llm) return base;
-  return {
-    ...base,
-    entityTypes: llm.entityTypes && llm.entityTypes.length > 0 ? llm.entityTypes : base.entityTypes,
-    sport: llm.sport ?? base.sport,
-    priceMax: llm.priceMax ?? base.priceMax,
-    brand: llm.brand ?? base.brand,
-    skillLevel: llm.skillLevel ?? base.skillLevel,
-    ageHint: llm.ageHint ?? base.ageHint,
-    keywords: llm.keywords && llm.keywords.length > 0 ? llm.keywords : base.keywords,
-  };
-}
 
 // --------------------------------------------------------------------------
 // Fetch layer — every query publicly-scoped (see file header)
@@ -449,18 +437,36 @@ interface VectorMatch {
  * ran against the real Voyage API (`embeddingsMode() === "voyage"`); a cache
  * hit or the offline stub never costs anything and never touches the ledger.
  */
+/** The cache row for a query, read early so it can overlap the table reads
+ * (it is a read, not a spend; only the Voyage call waits for the gate). */
 // deno-lint-ignore no-explicit-any
-async function recallByVector(svc: any, query: string): Promise<VectorMatch[] | null> {
+async function readQueryCache(svc: any, query: string): Promise<{ hash: string; cached: { embedding: string; created_at: string } | null }> {
+  const hash = await sha256Hex(query.toLowerCase().trim());
+  const { data, error } = await svc
+    .from("query_embedding_cache")
+    .select("embedding, created_at")
+    .eq("query_hash", hash)
+    .maybeSingle();
+  return { hash, cached: !error && data ? (data as { embedding: string; created_at: string }) : null };
+}
+
+/** Runs a promise after the response is sent when the runtime allows it
+ * (`EdgeRuntime.waitUntil`), otherwise lets it float. Used for the two
+ * bookkeeping writes on the search path (cache write, spend record) that
+ * cost a Mumbai round trip each and that no response depends on. */
+function background(p: Promise<unknown>): void {
+  const rt = (globalThis as unknown as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;
+  const swallowed = p.then(() => {}, () => {});
+  if (rt?.waitUntil) rt.waitUntil(swallowed);
+}
+
+// deno-lint-ignore no-explicit-any
+async function recallByVector(svc: any, query: string, pre: { hash: string; cached: { embedding: string; created_at: string } | null }): Promise<VectorMatch[] | null> {
   try {
-    const hash = await sha256Hex(query.toLowerCase().trim());
+    const { hash, cached } = pre;
 
     let vector: number[] | null = null;
-    const { data: cached, error: cacheReadError } = await svc
-      .from("query_embedding_cache")
-      .select("embedding, created_at")
-      .eq("query_hash", hash)
-      .maybeSingle();
-    if (!cacheReadError && cached) {
+    if (cached) {
       const age = Date.now() - new Date(cached.created_at as string).getTime();
       if (age < QUERY_CACHE_TTL_MS) {
         try {
@@ -479,17 +485,16 @@ async function recallByVector(svc: any, query: string): Promise<VectorMatch[] | 
       vector = fresh;
       spentVoyage = modeBeforeCall === "voyage";
 
-      // Best-effort cache write; a failure to cache never fails the request.
-      await svc
-        .from("query_embedding_cache")
-        .upsert(
-          { query_hash: hash, embedding: JSON.stringify(vector), created_at: new Date().toISOString() },
-          { onConflict: "query_hash" },
-        )
-        .then(
-          () => {},
-          () => {},
-        );
+      // Best-effort cache write, off the response path; a failure to cache
+      // never fails the request.
+      background(
+        svc
+          .from("query_embedding_cache")
+          .upsert(
+            { query_hash: hash, embedding: JSON.stringify(vector), created_at: new Date().toISOString() },
+            { onConflict: "query_hash" },
+          ),
+      );
     }
 
     const { data: matches, error: matchError } = await svc.rpc("match_affiliate_products", {
@@ -502,7 +507,7 @@ async function recallByVector(svc: any, query: string): Promise<VectorMatch[] | 
       return null;
     }
 
-    if (spentVoyage) await recordVoyageSpend(svc);
+    if (spentVoyage) background(recordVoyageSpend(svc));
 
     return ((matches ?? []) as Array<{ id: string; similarity: number }>).map((m) => ({
       id: m.id,
@@ -562,33 +567,54 @@ Deno.serve((req) =>
     // `mode: "keyword"`, exactly as it did before this phase, so an existing
     // caller reading `mode` sees no contract change (ADR-011: "ai-search's
     // external contract is unchanged").
-    const gate = await evaluateAiSearchGate(svc, userId);
-    const spendAllowed = gate.mode === "llm";
-    const useLlm = spendAllowed && llmEnabled();
-    const useVector = spendAllowed;
-    const reportedMode = useLlm ? "llm" : "keyword";
-
-    // Deterministic parse is always the baseline. When the gate allows it,
-    // refine it with Claude's structured parse (guarded: falls back on any
-    // failure, and the fallback still records nothing since usage is null).
-    let intent = parseIntent(body.query, override);
-    if (useLlm) {
-      const { intent: refined, usage } = await llmParseIntent(body.query).catch(
-        () => ({ intent: null, usage: null }),
-      );
-      intent = mergeIntent(intent, refined);
-      if (usage) await recordAiSpend(svc, usage.inputTokens, usage.outputTokens);
-    }
-
+    // LATENCY (2026-09-19, measured on production: 4.5 to 8.0 s per keystroke,
+    // the REST catalogue read is 0.3 s). Three changes, each earning its place:
+    //   1. A query shorter than MIN_AI_QUERY_CHARS is a keystroke, not a
+    //      question. It takes the deterministic path only: no gate RPCs, no
+    //      Voyage, no Claude. Nothing semantic can be read from "ba".
+    //   2. Claude no longer parses intent on the request path. The
+    //      deterministic parser already reads sport, brand, price ceiling,
+    //      skill and age; the parse call cost about 2 s per request and its
+    //      merge rarely changed a field. `llmParseIntent` stays in llm.ts for
+    //      an offline evaluation, not for the hot path.
+    //   3. The spend gate and the embedding cache read run IN PARALLEL with
+    //      the six table reads; the cache write and the spend records run
+    //      after the response (EdgeRuntime.waitUntil). The database is in
+    //      ap-south-1 and a caller outside India is served by another edge
+    //      region, so every sequential round trip is a cross region hop;
+    //      the client also pins `x-region: ap-south-1` (packages/api).
+    //   4. `rerank: false` in the body skips Claude's rerank. The shop screen
+    //      sends it while the shopper is typing and drops it on submit, so a
+    //      keystroke costs no Claude call and the settled query gets the
+    //      visible AI (order and rankReason) once. Second production
+    //      measurement: with the rerank on, "badminton" still took 6.0 s;
+    //      the rerank was 2.5 of it and the gate 0.9.
+    // The rerank is bounded by RERANK_TIMEOUT_MS and RERANK_MAX_CANDIDATES
+    // and only runs when there is more than one hit to order.
+    const shortQuery = body.query.length < MIN_AI_QUERY_CHARS;
+    const intent = parseIntent(body.query, override);
     const want = new Set(intent.entityTypes);
-    const [coaches, courts, products, affiliateProducts, athletes, clips] = await Promise.all([
+
+    // The spend gate (three sequential RPC round trips) and the six table
+    // reads do not depend on each other, so they run together. The Voyage
+    // recall waits for the gate because the gate is what permits the spend.
+    const wantVector = !shortQuery && want.has("gear");
+    const [gate, coaches, courts, products, affiliateProducts, athletes, clips, cachePre] = await Promise.all([
+      shortQuery ? Promise.resolve({ mode: "keyword" as const }) : evaluateAiSearchGate(svc, userId),
       want.has("coach") ? fetchCoaches(supabase, intent, body.city) : Promise.resolve([]),
       want.has("court") ? fetchCourts(supabase, intent, body.lat, body.lng) : Promise.resolve([]),
       want.has("gear") ? fetchProducts(supabase, intent) : Promise.resolve([]),
       want.has("gear") ? fetchAffiliateProducts(supabase, intent) : Promise.resolve([]),
       want.has("athlete") ? fetchAthletes(supabase, intent) : Promise.resolve([]),
       want.has("clip") ? fetchClips(supabase, intent) : Promise.resolve([]),
+      wantVector ? readQueryCache(svc, body.query).catch(() => null) : Promise.resolve(null),
     ]);
+    const spendAllowed = gate.mode === "llm";
+    const useLlm = spendAllowed && llmEnabled() && body.rerank;
+    const useVector = spendAllowed;
+    const reportedMode = useLlm ? "llm" : "keyword";
+
+    const vectorMatches = useVector && wantVector && cachePre ? await recallByVector(svc, body.query, cachePre) : null;
 
     const candidates = [...coaches, ...courts, ...products, ...affiliateProducts, ...athletes, ...clips];
 
@@ -602,21 +628,18 @@ Deno.serve((req) =>
     // nothing" without inspecting results.
     let vector = false;
     const similarityByKey = new Map<string, number>();
-    if (useVector && want.has("gear")) {
-      const matches = await recallByVector(svc, body.query);
-      if (matches) {
-        vector = true;
-        const existingIds = new Set(affiliateProducts.map((c) => c.entityId));
-        const newIds = matches
-          .filter((m) => !existingIds.has(`affiliate:${m.id}`))
-          .map((m) => m.id);
-        const hydrated = await fetchAffiliateProducts(supabase, intent, newIds);
-        for (const c of hydrated) candidates.push(c);
-        // candidateKey shape is `${entityType}:${entityId}`, and entityId for
-        // affiliate rows is itself `affiliate:${id}` (see fetchAffiliateProducts).
-        for (const m of matches) {
-          similarityByKey.set(candidateKey({ entityType: "gear", entityId: `affiliate:${m.id}` }), m.similarity);
-        }
+    if (vectorMatches) {
+      vector = true;
+      const existingIds = new Set(affiliateProducts.map((c) => c.entityId));
+      const newIds = vectorMatches
+        .filter((m) => !existingIds.has(`affiliate:${m.id}`))
+        .map((m) => m.id);
+      const hydrated = await fetchAffiliateProducts(supabase, intent, newIds);
+      for (const c of hydrated) candidates.push(c);
+      // candidateKey shape is `${entityType}:${entityId}`, and entityId for
+      // affiliate rows is itself `affiliate:${id}` (see fetchAffiliateProducts).
+      for (const m of vectorMatches) {
+        similarityByKey.set(candidateKey({ entityType: "gear", entityId: `affiliate:${m.id}` }), m.similarity);
       }
     }
 
@@ -660,12 +683,12 @@ Deno.serve((req) =>
     // gated off (absent key, throttled, or over budget) or a call failure
     // both keep the deterministic order.
     let results = qualified;
-    if (useLlm) {
+    if (useLlm && qualified.length > 1) {
       const { hits: reranked, usage } = await llmRerank(body.query, qualified).catch(
         () => ({ hits: qualified, usage: null }),
       );
       results = reranked;
-      if (usage) await recordAiSpend(svc, usage.inputTokens, usage.outputTokens);
+      if (usage) background(recordAiSpend(svc, usage.inputTokens, usage.outputTokens));
     }
 
     return jsonResponse(

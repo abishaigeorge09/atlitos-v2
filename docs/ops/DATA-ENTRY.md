@@ -17,7 +17,7 @@ creates accounts.
 
    ```sql
    insert into public.user_roles (user_id, role)
-   select id, 'admin' from public.users where email = 'person@example.com';
+   select id, 'admin' from auth.users where email = 'person@example.com';
    ```
 
    The role reaches their session on the next sign in (it is stamped into the token by
