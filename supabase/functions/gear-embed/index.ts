@@ -128,11 +128,18 @@ async function fetchRows(svc: AnySupabaseClient, ids: string[]): Promise<Affilia
   return (data ?? []) as AffiliateProductDocRow[];
 }
 
+/** Voyage accepts up to 128 inputs per call; 64 keeps a request well under
+ * the token ceiling for long descriptions. */
+const EMBED_BATCH_SIZE = 64;
+
 /**
- * Embeds and writes each row's document text one call at a time so a single
- * bad row (empty document text, Voyage rejecting one item) never blocks the
- * rest of a sweep batch. Returns counts, never throws for a per-row failure
- * (that failure is reported and counted, per D2's own failure mode).
+ * Embeds the rows in batches of EMBED_BATCH_SIZE (one Voyage call per batch,
+ * not one per row: the first production sweep on 2026-09-19 embedded 3 of 8
+ * and lost the other 5 to Voyage's per-minute request limit with a call per
+ * row) and writes each row on its own. A row with empty document text is
+ * counted failed without a call. A batch whose Voyage call fails counts every
+ * row in it as failed and leaves their columns null (D2); the rest of the
+ * sweep continues. Never throws for a per-row or per-batch failure.
  */
 async function embedAndWrite(
   svc: AnySupabaseClient,
@@ -141,6 +148,7 @@ async function embedAndWrite(
   let embedded = 0;
   let failed = 0;
 
+  const withText: Array<{ row: AffiliateProductDocRow; text: string }> = [];
   for (const row of rows) {
     const text = documentText(row);
     if (!text) {
@@ -148,19 +156,36 @@ async function embedAndWrite(
       await captureEdgeError(new Error("Empty document text"), { fn: "gear-embed", productId: row.id });
       continue;
     }
+    withText.push({ row, text });
+  }
+
+  for (let start = 0; start < withText.length; start += EMBED_BATCH_SIZE) {
+    const batch = withText.slice(start, start + EMBED_BATCH_SIZE);
+    let vectors: number[][];
     try {
-      const [vector] = await embedTexts([text], "document");
-      if (!vector || vector.length === 0) throw new Error("embedTexts returned no vector");
-      const { error } = await svc
-        .from("affiliate_products")
-        .update({ embedding: JSON.stringify(vector) })
-        .eq("id", row.id);
-      if (error) throw new Error(error.message);
-      embedded++;
+      vectors = await embedTexts(batch.map((b) => b.text), "document");
+      if (vectors.length !== batch.length) throw new Error(`embedTexts returned ${vectors.length} vectors for ${batch.length} texts`);
     } catch (err) {
-      failed++;
-      await captureEdgeError(err, { fn: "gear-embed", productId: row.id });
-      // Embedding stays null (D2): no partial write, no retry inside this call.
+      failed += batch.length;
+      await captureEdgeError(err, { fn: "gear-embed", stage: "batch-embed", productIds: batch.map((b) => b.row.id) });
+      continue;
+    }
+    for (let i = 0; i < batch.length; i++) {
+      const vector = vectors[i];
+      const row = batch[i].row;
+      try {
+        if (!vector || vector.length === 0) throw new Error("embedTexts returned no vector");
+        const { error } = await svc
+          .from("affiliate_products")
+          .update({ embedding: JSON.stringify(vector) })
+          .eq("id", row.id);
+        if (error) throw new Error(error.message);
+        embedded++;
+      } catch (err) {
+        failed++;
+        await captureEdgeError(err, { fn: "gear-embed", productId: row.id });
+        // Embedding stays null (D2): no partial write, no retry inside this call.
+      }
     }
   }
 
