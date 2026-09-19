@@ -309,6 +309,31 @@ async function main() {
     const anonRes = await callGearRecheck(ANON_KEY, { productId });
     check('gear-recheck (anon) refused', anonRes.status === 401, `status ${anonRes.status}, ${JSON.stringify(anonRes.json)}`);
 
+    console.log('\nScenario: an offer with no programme is skipped, never fetched, never struck');
+    const { data: offerC, error: offerCError } = await svc
+      .from('product_offers')
+      .insert({
+        affiliate_product_id: productId,
+        retailer: 'Verify Health Hand Entered Retailer',
+        price: HEALTHY_PRICE,
+        currency: 'INR',
+        affiliate_url: `${FIXTURE_ORIGIN}/product/healthy`,
+        retailer_key: null,
+        in_stock: true,
+      })
+      .select('id')
+      .single();
+    if (offerCError) throw new Error(`[verify-gear-health] offer C insert failed: ${offerCError.message}`);
+    const skipRes = await callGearRecheck(SERVICE_ROLE_KEY, { productId });
+    check('recheck returns 200 with a skipped list', skipRes.status === 200 && Array.isArray(skipRes.json?.skipped), `status ${skipRes.status}`);
+    check('offer C is in skipped', (skipRes.json?.skipped ?? []).some((s) => s.offerId === offerC.id), JSON.stringify(skipRes.json?.skipped));
+    check('offer C is not in outcomes', !(skipRes.json?.outcomes ?? []).some((o) => o.offerId === offerC.id), JSON.stringify(skipRes.json?.outcomes));
+    const offerC1 = await getOffer(svc, offerC.id);
+    check('offer C consecutive_failures stays 0', offerC1.consecutive_failures === 0, offerC1.consecutive_failures);
+    check('offer C last_check_outcome stays null', offerC1.last_check_outcome === null, offerC1.last_check_outcome);
+    check('offer C has no fetch log row', (await latestFetchLog(svc, offerC.id)) === null, 'fetch log');
+    await svc.from('product_offers').delete().eq('id', offerC.id);
+
     console.log('\nScenario: ok on a healthy page');
     let res = await callGearRecheck(SERVICE_ROLE_KEY, { productId });
     check('recheck returns 200', res.status === 200, `status ${res.status}, ${JSON.stringify(res.json)}`);

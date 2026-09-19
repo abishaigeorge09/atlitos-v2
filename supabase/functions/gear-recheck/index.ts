@@ -176,6 +176,11 @@ async function loadSweepOffers(svc: AnySupabaseClient, limit: number): Promise<O
     )
     .eq("in_stock", true)
     .in("affiliate_product_id", activeIds)
+    // An offer with no programme (entered by hand for a retailer that has no
+    // retailer_programmes row) is never fetched, so it is not a candidate:
+    // striking it nightly would auto-delist a hand-entered catalogue that was
+    // never observed to be gone (found 2026-09-19 on the 17 production offers).
+    .not("retailer_key", "is", null)
     .order("last_checked_at", { ascending: true, nullsFirst: true })
     .limit(limit);
   if (error) throw new AppError("INTERNAL", `Failed to load offers for the sweep: ${error.message}`, 500);
@@ -257,8 +262,6 @@ class RetailerLimiter {
 function isTransientFailureStatus(status: number): boolean {
   return status === 0 || status === 403 || status === 429 || status >= 500;
 }
-
-class TargetRefused extends Error {}
 
 async function fetchWithRetry(url: string, allowedHosts: string[]): Promise<FetchPageResult> {
   const first = await fetchPage(url, allowedHosts);
@@ -398,11 +401,24 @@ interface ProcessResult {
   outcome: Outcome;
 }
 
+/** `{ skipped: true }` when the offer has no programme: not fetched, not
+ * written, not a strike. The response lists it so the admin's "Re-check now"
+ * says why nothing changed. */
+type ProcessOutcome = ProcessResult | { offerId: string; skipped: true; reason: string };
+
 async function processOffer(
   svc: AnySupabaseClient,
   offer: OfferRow,
   programme: RetailerProgrammeRow | undefined,
-): Promise<ProcessResult> {
+): Promise<ProcessOutcome> {
+  // Red team 2026-09-18: a stored URL is only ever re-fetched against the
+  // hosts of the programme it belongs to. An offer with no programme is
+  // never fetched (CWE-918); since nothing was observed, it is also not a
+  // strike and its row is left untouched.
+  if (!programme || !(programme.url_patterns ?? []).length) {
+    return { offerId: offer.id, skipped: true, reason: "No retailer programme for this offer; not fetched." };
+  }
+
   const url = offer.canonical_url ?? offer.affiliate_url;
   let logOutcome: LogOutcome = "blocked";
   let offerOutcome: Outcome = "blocked";
@@ -413,12 +429,6 @@ async function processOffer(
   let aiSuggestion: AiSuggestion | null = null;
 
   try {
-    // Red team 2026-09-18: a stored URL is only ever re-fetched against the
-    // hosts of the programme it belongs to; an offer with no programme is a
-    // `blocked` outcome, never a fetch (CWE-918).
-    if (!programme || !(programme.url_patterns ?? []).length) {
-      throw new TargetRefused("No retailer programme for this offer; not fetched.");
-    }
     const page = await fetchWithRetry(url, programme.url_patterns ?? []);
     httpStatus = page.status > 0 ? page.status : null;
 
@@ -632,6 +642,7 @@ Deno.serve((req) =>
     }
 
     const outcomes: Array<{ offerId: string; outcome: Outcome }> = [];
+    const skipped: Array<{ offerId: string; reason: string }> = [];
     const touchedProductIds = new Set<string>();
 
     for (const [bucket, bucketOffers] of byRetailer) {
@@ -639,6 +650,10 @@ Deno.serve((req) =>
       for (const offer of bucketOffers) {
         await limiter.waitForTurn(bucket);
         const result = await processOffer(svc, offer, programme);
+        if ("skipped" in result) {
+          skipped.push({ offerId: result.offerId, reason: result.reason });
+          continue;
+        }
         outcomes.push({ offerId: result.offerId, outcome: result.outcome });
         touchedProductIds.add(result.affiliateProductId);
       }
@@ -649,6 +664,7 @@ Deno.serve((req) =>
     return jsonResponse({
       checked: outcomes.length,
       outcomes,
+      skipped,
       autoDelisted,
       mode: llmEnabled() ? "llm" : "keyword",
     });
