@@ -1,3 +1,4 @@
+import { formatINR } from "@atlitos/theme";
 import { AlertTriangle, ImageOff, Link2, Package, Plus, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
@@ -54,7 +55,7 @@ const gearColumns: DataTableColumn<SampleGearRow>[] = [
       <span className="ak-kitchen-gear-meta">{row.brand} - {row.sport}</span>
     </div>
   ) },
-  { key: "price", header: "Price", numeric: true, render: (row) => `Rs ${row.priceInr.toLocaleString("en-IN")}` },
+  { key: "price", header: "Price", numeric: true, render: (row) => formatINR(row.priceInr) },
   { key: "offers", header: "Offers", numeric: true, render: (row) => row.offerCount },
   { key: "status", header: "Status", render: (row) => <Badge tone={statusTone(row.status)}>{statusLabel(row.status)}</Badge> },
   { key: "checked", header: "Freshness", render: (row) => <span className="ak-kitchen-gear-freshness">{row.checkedAgo}</span> },
@@ -72,8 +73,6 @@ export function KitchenSink() {
 
   const [formTitle, setFormTitle] = useState("");
   const [formPriceTouched, setFormPriceTouched] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const dirty = formTitle.length > 0;
 
   return (
     <div className="ak-kitchen">
@@ -222,9 +221,9 @@ export function KitchenSink() {
                     <tr><th>Retailer</th><th style={{ textAlign: "right" }}>Price</th><th>Stock</th></tr>
                   </thead>
                   <tbody>
-                    <tr><td>Amazon.in</td><td style={{ textAlign: "right" }}><Mono>Rs 1,899</Mono></td><td><Badge tone="success">In stock</Badge></td></tr>
-                    <tr><td>Flipkart</td><td style={{ textAlign: "right" }}><Mono>Rs 1,949</Mono></td><td><Badge tone="success">In stock</Badge></td></tr>
-                    <tr><td>Decathlon</td><td style={{ textAlign: "right" }}><Mono>Rs 2,099</Mono></td><td><Badge tone="warning">Out of stock</Badge></td></tr>
+                    <tr><td>Amazon.in</td><td style={{ textAlign: "right" }}><Mono>{formatINR(1899)}</Mono></td><td><Badge tone="success">In stock</Badge></td></tr>
+                    <tr><td>Flipkart</td><td style={{ textAlign: "right" }}><Mono>{formatINR(1949)}</Mono></td><td><Badge tone="success">In stock</Badge></td></tr>
+                    <tr><td>Decathlon</td><td style={{ textAlign: "right" }}><Mono>{formatINR(2099)}</Mono></td><td><Badge tone="warning">Out of stock</Badge></td></tr>
                   </tbody>
                 </table>
               </Card>
@@ -232,7 +231,7 @@ export function KitchenSink() {
                 <h3 className="ak-kitchen-subhead" style={{ marginTop: 0 }}>Fetch log</h3>
                 <ul className="ak-kitchen-fetch-log">
                   <li><Mono>2026-09-20 03:00</Mono> Re-checked, price unchanged</li>
-                  <li><Mono>2026-09-19 03:00</Mono> Re-checked, price dropped Rs 1,999 to Rs 1,899</li>
+                  <li><Mono>2026-09-19 03:00</Mono> Re-checked, price dropped {formatINR(1999)} to {formatINR(1899)}</li>
                 </ul>
               </Card>
             </>
@@ -260,7 +259,7 @@ export function KitchenSink() {
               <table className="ak-kitchen-offers-table">
                 <thead><tr><th>Retailer</th><th style={{ textAlign: "right" }}>Price</th><th>Stock</th></tr></thead>
                 <tbody>
-                  <tr><td>Amazon.in</td><td style={{ textAlign: "right" }}><Mono>Rs 2,499</Mono></td><td><Badge tone="success">In stock</Badge></td></tr>
+                  <tr><td>Amazon.in</td><td style={{ textAlign: "right" }}><Mono>{formatINR(2499)}</Mono></td><td><Badge tone="success">In stock</Badge></td></tr>
                 </tbody>
               </table>
             </Card>
@@ -332,22 +331,43 @@ export function KitchenSink() {
           </div>
         </Card>
         <p className="ak-kitchen-pair-label" style={{ marginTop: "var(--space-md)" }}>
-          Clean: no bar below. Dirty: type in the title above, the bar appears. Invalid: leave
-          the price blank after touching it, Save disables. Saving: click Save.
+          Live demo: type in the title above, then touch the price field, to drive the card's
+          own dirty and invalid states.
         </p>
-        <SaveBar
-          dirty={dirty}
-          saving={saving}
-          errorCount={formPriceTouched ? 1 : 0}
-          onDiscard={() => {
-            setFormTitle("");
-            setFormPriceTouched(false);
-          }}
-          onSave={() => {
-            setSaving(true);
-            window.setTimeout(() => setSaving(false), 1200);
-          }}
-        />
+
+        <h3 className="ak-kitchen-subhead">Save bar, all four states</h3>
+        <p className="ak-kitchen-section-note">
+          Rendered statically below, one per state, so every state is visible in a single
+          screenshot. In a real form the bar is sticky to the viewport bottom; here each is
+          pinned to the bottom of its own labelled block instead, so a full page capture shows
+          all four rather than only the last one.
+        </p>
+        <div className="ak-kitchen-savebar-grid">
+          <div className="ak-kitchen-savebar-block">
+            <p className="ak-kitchen-pair-label">Clean, no bar</p>
+            <div className="ak-kitchen-savebar-static">
+              <SaveBar dirty={false} onDiscard={() => {}} onSave={() => {}} />
+            </div>
+          </div>
+          <div className="ak-kitchen-savebar-block">
+            <p className="ak-kitchen-pair-label">Dirty</p>
+            <div className="ak-kitchen-savebar-static">
+              <SaveBar dirty onDiscard={() => {}} onSave={() => {}} />
+            </div>
+          </div>
+          <div className="ak-kitchen-savebar-block">
+            <p className="ak-kitchen-pair-label">Invalid, Save disabled</p>
+            <div className="ak-kitchen-savebar-static">
+              <SaveBar dirty errorCount={1} onDiscard={() => {}} onSave={() => {}} />
+            </div>
+          </div>
+          <div className="ak-kitchen-savebar-block">
+            <p className="ak-kitchen-pair-label">Saving</p>
+            <div className="ak-kitchen-savebar-static">
+              <SaveBar dirty saving onDiscard={() => {}} onSave={() => {}} />
+            </div>
+          </div>
+        </div>
       </Section>
 
       <Section id="badges" title="6. Badge vocabulary" note="Every resource status maps to one of these four, per src/lib/status.ts.">
@@ -359,6 +379,7 @@ export function KitchenSink() {
       </Section>
 
       <Section id="confirm" title="7. Confirm dialog" note="Native dialog, showModal, Esc closes, danger primary.">
+        <p className="ak-kitchen-pair-label">Trigger, live</p>
         <Button variant="danger" onClick={() => confirmRef.current?.open()}>
           <Trash2 size={16} strokeWidth={1.75} /> Delete offer
         </Button>
@@ -366,10 +387,31 @@ export function KitchenSink() {
           ref={confirmRef}
           title="Delete this offer"
           body="This removes the offer from the product page. This cannot be undone for"
-          recordName="Amazon.in, Rs 1,899"
+          recordName={`Amazon.in, ${formatINR(1899)}`}
           confirmLabel="Delete offer"
           onConfirm={() => confirmRef.current?.close()}
         />
+
+        <p className="ak-kitchen-pair-label" style={{ marginTop: "var(--space-xl)" }}>
+          Open, static copy for the capture (the real dialog above is a native
+          {" "}
+          <code>{"<dialog>"}</code>, invisible in a static screenshot until clicked; this is
+          the identical markup and CSS classes, rendered inline instead of in the browser's top
+          layer so the founder sees it without a click)
+        </p>
+        <div className="ak-kitchen-confirm-preview">
+          <div className="ak-confirm-dialog" role="none">
+            <h2 className="ak-confirm-title">Delete this offer</h2>
+            <p className="ak-confirm-body">
+              This removes the offer from the product page. This cannot be undone for
+              <strong className="ak-confirm-record"> Amazon.in, {formatINR(1899)}</strong>
+            </p>
+            <div className="ak-confirm-actions">
+              <Button variant="secondary">Cancel</Button>
+              <Button variant="danger">Delete offer</Button>
+            </div>
+          </div>
+        </div>
       </Section>
 
       <Section id="dashboard" title="8. Dashboard KPI row" note="Four tiles, mono numbers, sample data only.">
@@ -377,7 +419,7 @@ export function KitchenSink() {
           {[
             { label: "Pending verification", value: "6" },
             { label: "Orders this week", value: "42" },
-            { label: "GMV this week", value: "Rs 4,18,900" },
+            { label: "GMV this week", value: formatINR(418900) },
             { label: "Open reports", value: "2" },
           ].map((kpi) => (
             <Card key={kpi.label} className="ak-kitchen-kpi-card">

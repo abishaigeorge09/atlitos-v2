@@ -255,6 +255,42 @@
   margin: var(--space-sm) 0 0 0;
 }
 
+.ak-kitchen-savebar-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-xl);
+}
+
+.ak-kitchen-savebar-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  min-height: 96px;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+}
+
+/* Full page kitchen sink capture is not a scroll container, so a sticky
+ * SaveBar would pin to the real viewport bottom instead of each labelled
+ * block. Overriding to static here is the one place the sink deliberately
+ * disagrees with the real component's own positioning, so all four states
+ * are visible in one screenshot. */
+.ak-kitchen-savebar-static .ak-save-bar {
+  position: static;
+  margin-top: 0;
+}
+
+/* Confirm dialog, static capture copy */
+
+.ak-kitchen-confirm-preview {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-2xl);
+  background-color: var(--color-overlay);
+  border-radius: var(--radius-lg);
+}
+
 /* Dashboard */
 
 .ak-kitchen-kpi-row {
@@ -276,7 +312,8 @@
 
 @media (max-width: 1024px) {
   .ak-kitchen-pair,
-  .ak-kitchen-link-outcomes {
+  .ak-kitchen-link-outcomes,
+  .ak-kitchen-savebar-grid {
     grid-template-columns: 1fr;
   }
 

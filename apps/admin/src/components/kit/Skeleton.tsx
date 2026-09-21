@@ -6,6 +6,9 @@ export function Skeleton({ width, height = 16, radius = "sm" }: { width?: string
   return (
     <span
       className={`ak-skeleton ak-skeleton-${radius}`}
+      // Exception to kit/'s no-inline-style rule: width/height are per-call
+      // dynamic content dimensions (matching the real content's shape), not
+      // a design decision, so there is no token to route this through.
       style={{ width: width ?? "100%", height }}
       aria-hidden="true"
     />
