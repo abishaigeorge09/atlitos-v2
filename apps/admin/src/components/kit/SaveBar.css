@@ -1,0 +1,26 @@
+.ak-save-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  padding: var(--space-md) var(--space-xl);
+  margin-top: var(--space-xl);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border-strong);
+  box-shadow: var(--shadow-lg);
+}
+
+.ak-save-bar-message {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  color: var(--color-text-secondary);
+}
+
+.ak-save-bar-actions {
+  display: flex;
+  gap: var(--space-sm);
+}

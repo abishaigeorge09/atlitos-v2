@@ -1,0 +1,38 @@
+.ak-confirm-dialog {
+  border: none;
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl);
+  width: 400px;
+  max-width: calc(100vw - var(--space-2xl));
+  background-color: var(--color-card);
+  color: var(--color-text);
+  box-shadow: var(--shadow-lg);
+}
+
+.ak-confirm-dialog::backdrop {
+  background-color: var(--color-overlay);
+}
+
+.ak-confirm-title {
+  font-family: var(--font-sans);
+  font-size: var(--type-h2-size);
+  font-weight: var(--weight-semibold);
+  margin: 0 0 var(--space-sm) 0;
+}
+
+.ak-confirm-body {
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--space-xl) 0;
+}
+
+.ak-confirm-record {
+  color: var(--color-text);
+}
+
+.ak-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+}

@@ -1,0 +1,67 @@
+.ak-command-dialog[cmdk-dialog] {
+  position: fixed;
+  top: 15%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 560px;
+  max-width: calc(100vw - var(--space-2xl));
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  z-index: 1000;
+}
+
+.ak-command-input[cmdk-input] {
+  width: 100%;
+  padding: var(--space-lg);
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--text-lg);
+  outline: none;
+  box-sizing: border-box;
+}
+
+.ak-command-list[cmdk-list] {
+  max-height: 360px;
+  overflow-y: auto;
+  padding: var(--space-sm);
+}
+
+.ak-command-empty[cmdk-empty] {
+  padding: var(--space-lg);
+  text-align: center;
+  color: var(--color-text-tertiary);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+}
+
+.ak-command-group[cmdk-group] [cmdk-group-heading] {
+  padding: var(--space-sm) var(--space-md);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-text-tertiary);
+}
+
+.ak-command-item[cmdk-item] {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  cursor: pointer;
+}
+
+.ak-command-item[cmdk-item][data-selected="true"] {
+  background-color: var(--color-accent-tint);
+  color: var(--color-accent);
+}

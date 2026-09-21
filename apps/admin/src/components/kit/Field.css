@@ -1,0 +1,62 @@
+.ak-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.ak-field-label {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-secondary);
+}
+
+.ak-field-hint {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+}
+
+.ak-field-error {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--color-danger);
+}
+
+.ak-input,
+.ak-select,
+.ak-textarea {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background-color: var(--color-surface-muted);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.ak-input.ak-input-mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.ak-input:focus-visible,
+.ak-select:focus-visible,
+.ak-textarea:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+  border-color: var(--color-accent);
+}
+
+.ak-field-invalid .ak-input,
+.ak-field-invalid .ak-select,
+.ak-field-invalid .ak-textarea {
+  border-color: var(--color-danger);
+}
+
+.ak-textarea {
+  resize: vertical;
+  min-height: 88px;
+}

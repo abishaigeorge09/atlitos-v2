@@ -1,6 +1,7 @@
 import type { NotificationProvider, OpenNotificationParams } from "@refinedev/core";
-import { CheckCircle2, ShieldAlert } from "lucide-react";
 import { useSyncExternalStore } from "react";
+
+import { Toast, ToastViewport, type ToastType } from "../components/kit/Toast";
 
 // BUG-014 fix. apps/admin had no notificationProvider registered, so
 // useLogin's built in open notification on a failed sign in (see
@@ -56,50 +57,15 @@ export function Notifications() {
   if (active.length === 0) return null;
 
   return (
-    <div
-      aria-live="assertive"
-      style={{
-        position: "fixed",
-        top: "var(--space-lg)",
-        right: "var(--space-lg)",
-        display: "flex",
-        flexDirection: "column",
-        gap: "var(--space-sm)",
-        zIndex: 1000,
-        maxWidth: 380,
-      }}
-    >
-      {active.map((toast) => {
-        const isError = toast.type === "error";
-        return (
-          <div
-            key={toast.key}
-            role="alert"
-            style={{
-              display: "flex",
-              alignItems: "flex-start",
-              gap: "var(--space-sm)",
-              padding: "var(--space-md) var(--space-lg)",
-              borderRadius: "var(--radius-sm)",
-              backgroundColor: isError ? "var(--color-danger-tint)" : "var(--color-surface)",
-              color: isError ? "var(--color-danger)" : "var(--color-text)",
-              border: `1px solid ${isError ? "var(--color-danger)" : "var(--color-border)"}`,
-              fontSize: 13,
-              boxShadow: "0 6px 20px rgba(0, 0, 0, 0.12)",
-            }}
-          >
-            {isError ? (
-              <ShieldAlert size={16} strokeWidth={1.75} />
-            ) : (
-              <CheckCircle2 size={16} strokeWidth={1.75} />
-            )}
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-xs)" }}>
-              <span style={{ fontWeight: 600 }}>{toast.message}</span>
-              {toast.description ? <span>{toast.description}</span> : null}
-            </div>
-          </div>
-        );
-      })}
-    </div>
+    <ToastViewport>
+      {active.map((toast) => (
+        <Toast
+          key={toast.key}
+          type={(toast.type as ToastType) ?? "success"}
+          message={toast.message}
+          description={toast.description}
+        />
+      ))}
+    </ToastViewport>
   );
 }

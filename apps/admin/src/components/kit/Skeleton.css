@@ -1,0 +1,59 @@
+.ak-skeleton {
+  display: inline-block;
+  background: linear-gradient(90deg, var(--color-surface-muted) 25%, var(--color-border) 37%, var(--color-surface-muted) 63%);
+  background-size: 400% 100%;
+  animation: ak-shimmer 1.4s ease infinite;
+}
+
+.ak-skeleton-sm {
+  border-radius: var(--radius-sm);
+}
+
+.ak-skeleton-md {
+  border-radius: var(--radius-md);
+}
+
+.ak-skeleton-pill {
+  border-radius: var(--radius-pill);
+}
+
+@keyframes ak-shimmer {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ak-skeleton {
+    animation: none;
+    background: var(--color-surface-muted);
+  }
+}
+
+.ak-detail-skeleton {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: var(--space-xl);
+}
+
+.ak-detail-skeleton-main,
+.ak-detail-skeleton-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.ak-detail-skeleton-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+@media (max-width: 1024px) {
+  .ak-detail-skeleton {
+    grid-template-columns: 1fr;
+  }
+}
