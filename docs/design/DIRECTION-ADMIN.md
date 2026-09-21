@@ -75,9 +75,12 @@ Every kit component, per Part B section B4 (A1-T3): `PageHeader`, `FilterBar`, `
 (all four variants, both sizes, loading, disabled), `Field`, `Input`, `Select`, `Textarea`,
 `Skeleton` / `TableSkeleton` / `DetailSkeleton`, `EmptyState`, `ConfirmDialog`, `SaveBar` (clean,
 dirty, invalid, saving), `DetailLayout` (populated and sparse), `Card`, `Mono` KPI tiles,
-`CommandPalette` (Cmd K, not screenshotted open because native `<dialog>` capture requires a
-focused keypress the capture script does not simulate; verified manually in the browser
-instead, see the report). The Add from a link block covers its three named outcomes (fetched
+`CommandPalette` (Cmd K over the grouped nav, cmdk backed; not screenshotted open by
+`capture-kitchen.mjs` since it is a shell level overlay rather than a kitchen sink section, but
+verified open in a real browser during this task, which caught and fixed a real bug: cmdk's
+`Command.Dialog` puts a passed `className` on its inner `[cmdk-root]`, not on the Radix dialog
+content it renders, so the palette first shipped unstyled and inline rather than as a centered
+overlay). The Add from a link block covers its three named outcomes (fetched
 draft, `NO_PRODUCT_FOUND` partial prefill, the Amazon locked URL message) as static sample
 states, not a live ingest call.
 
