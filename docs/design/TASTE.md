@@ -62,3 +62,27 @@ What we do not take: the pure white ground and Google's blue, the rating stars (
 ratings and will not invent them), the "Free delivery" lines (we do not know delivery), and
 the dense chip row of retailer names as filters (our retailer set is small; sport and price
 ceiling are the useful chips).
+
+## Reference 6: Stripe dashboard (Mobbin captures, docs/design/references/admin/)
+
+2026-09-21, for the admin portal rebuild (`docs/design/DIRECTION-ADMIN.md`). Six captures of
+the live Stripe dashboard: `stripe-home.png`, `stripe-overview-dashboard.png`,
+`stripe-transactions-list.png`, `stripe-payment-link-detail.png`, `stripe-billing-tabs.png`,
+`stripe-data-table.png`.
+
+- **The grouped sidebar with section labels, a search-first header.** Plain top level items
+  (Home, Balances) above labelled groups (Products, then each product's own sub items), a
+  search field left of the chrome controls rather than a page level search. We take the
+  grouping and the header placement; Atlitos has no "Test mode" toggle or app marketplace icon
+  to carry alongside it.
+- **Status count tabs above a filter chip row, above a dense table with right aligned mono
+  amounts.** The transactions list counts each status in the tab itself ("Failed, 3") rather
+  than a separate summary row, and every numeric column right aligns. We take both: `Tabs`
+  carries a count per item, and `DataTable`'s `numeric` column flag right aligns through
+  `<Mono>` (CLAUDE.md's numeric readout rule, not new for Atlitos, just newly enforced by one
+  shared component).
+- **The 2fr/1fr detail layout, sectioned cards left, a sticky preview and metadata card
+  right.** The payment link detail's `Products` / `Payment methods` / `Details` cards read top
+  to bottom on the left while a `Preview` card stays pinned on the right as the page scrolls.
+  We take the shape as `DetailLayout`; we do not take Stripe's live device preview, since gear
+  detail has no equivalent artifact to preview.
