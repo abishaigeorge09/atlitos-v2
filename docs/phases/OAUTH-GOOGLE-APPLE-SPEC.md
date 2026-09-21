@@ -1,6 +1,6 @@
 # Google and Apple sign-in: scope and prerequisites
 
-Status: APPROVED, NOT STARTED
+Status: PROVIDERS CONFIGURED 2026-09-21 (Google + Apple live on production)
 Decided: 2026-08-11
 Scope: `apps/mobile` only
 Sequencing: begins after launch Phase 5 (native QA) closes
@@ -70,6 +70,38 @@ verified end to end until they exist.
 
 ### Supabase
 5. Add the app's redirect URL to the allowed redirect list.
+
+## Provider state, verified 2026-09-21
+
+- Code: `apps/mobile/src/lib/oauth.ts` uses the BROWSER flow for Google
+  (`signInWithOAuth` + PKCE, redirect `atlitos://auth/callback`) and the
+  NATIVE flow for Apple. So no iOS or Android Google client id is needed;
+  only the Web client that Supabase holds.
+- Google Cloud: project `atlitos-vision` (personal Google account, not
+  Synth). Consent screen: app Atlitos, External, Testing. Web client
+  `atlitos-supabase`, id `921281225396-h1ok6jac1000d52n3mohl68hg9f0h5ek.apps.googleusercontent.com`,
+  redirect `https://syzzfgaudpifwvbpycyi.supabase.co/auth/v1/callback`.
+  The secret lives only in Supabase.
+- Supabase: `GET /auth/v1/settings` returns `google: true` and `apple: true`.
+  Redirect URL allow list: `atlitos://auth/callback`, `atlitos://**`,
+  `https://atlitos-app.vercel.app/auth/callback`,
+  `exp://127.0.0.1:8081/--/auth/callback`. Site URL is still
+  `http://localhost:3000` (email link fallback); change when atlitos.com
+  has a web auth landing.
+- Proof of the server chain: `GET /auth/v1/authorize?provider=google&redirect_to=atlitos://auth/callback`
+  answers 302 to accounts.google.com with the client id above and
+  `redirect_uri=.../auth/v1/callback`.
+- Before 8 Oct: move the consent screen from Testing to In production
+  (Testing caps at 100 users and shows a warning page).
+- Apple: `com.atlitos.app` already has Sign In with Apple enabled as a
+  primary App ID (team 4U493SXP52). Supabase Apple provider enabled with
+  Client IDs `com.atlitos.app`, NO secret key: the app uses the native
+  sheet + `signInWithIdToken`, which verifies against the bundle id. A
+  Services ID and .p8 are only needed if a web (portal) Apple flow is ever
+  added. Note the App ID has Push Notifications UNCHECKED; separate item.
+- Not yet proven on a device: Google needs a Google sign in inside the
+  simulator browser; Apple needs an Apple ID on the device. Evidence goes
+  to `docs/qa/evidence/oauth/` when a person runs it.
 
 ## Implementation outline
 
