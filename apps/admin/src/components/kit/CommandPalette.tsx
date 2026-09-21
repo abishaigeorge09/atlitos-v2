@@ -31,7 +31,8 @@ export function CommandPalette({ groups }: { groups: NavGroup[] }) {
       open={open}
       onOpenChange={setOpen}
       label="Command palette"
-      className="ak-command-dialog"
+      contentClassName="ak-command-dialog"
+      overlayClassName="ak-command-overlay"
     >
       <Command.Input placeholder="Jump to a page" className="ak-command-input" />
       <Command.List className="ak-command-list">

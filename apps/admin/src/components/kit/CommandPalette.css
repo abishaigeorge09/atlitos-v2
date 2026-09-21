@@ -1,4 +1,11 @@
-.ak-command-dialog[cmdk-dialog] {
+.ak-command-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: var(--color-overlay);
+  z-index: 999;
+}
+
+.ak-command-dialog {
   position: fixed;
   top: 15%;
   left: 50%;
