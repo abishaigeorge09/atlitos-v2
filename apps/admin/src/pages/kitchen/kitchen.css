@@ -1,0 +1,286 @@
+.ak-kitchen {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding-bottom: var(--space-4xl);
+}
+
+.ak-kitchen-eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--type-overline-size);
+  letter-spacing: var(--type-overline-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  margin: 0;
+}
+
+.ak-kitchen-title {
+  font-family: var(--font-sans);
+  font-size: var(--type-title-size);
+  line-height: var(--type-title-line);
+  letter-spacing: var(--type-title-tracking);
+  margin: var(--space-sm) 0;
+}
+
+.ak-kitchen-lead {
+  color: var(--color-text-secondary);
+  max-width: 65ch;
+}
+
+.ak-kitchen-section {
+  border-top: 1px solid var(--color-border);
+  padding: var(--space-2xl) 0;
+}
+
+.ak-kitchen-section-title {
+  font-family: var(--font-sans);
+  font-size: var(--type-h2-size);
+  font-weight: var(--weight-semibold);
+  margin: 0;
+}
+
+.ak-kitchen-section-note {
+  color: var(--color-text-secondary);
+  max-width: 65ch;
+  margin: var(--space-xs) 0 0 0;
+}
+
+.ak-kitchen-section-body {
+  margin-top: var(--space-xl);
+}
+
+.ak-kitchen-subhead {
+  font-family: var(--font-sans);
+  font-size: var(--type-h3-size);
+  font-weight: var(--weight-semibold);
+  margin: var(--space-xl) 0 var(--space-md) 0;
+}
+
+.ak-kitchen-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.ak-kitchen-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-xl);
+}
+
+.ak-kitchen-pair-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.ak-kitchen-pair-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-tertiary);
+  margin: 0;
+}
+
+.ak-kitchen-form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+/* Tokens section */
+
+.ak-kitchen-swatch-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--space-md);
+}
+
+.ak-kitchen-swatch {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.ak-kitchen-swatch-chip {
+  height: 40px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+}
+
+.ak-kitchen-swatch code {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+.ak-kitchen-swatch-value {
+  color: var(--color-text-tertiary) !important;
+}
+
+.ak-kitchen-type-scale {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.ak-kitchen-type-row code {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  margin-left: var(--space-sm);
+}
+
+.ak-kitchen-radii,
+.ak-kitchen-shadows {
+  display: flex;
+  gap: var(--space-lg);
+}
+
+.ak-kitchen-radius-item,
+.ak-kitchen-shadow-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.ak-kitchen-radius-item code,
+.ak-kitchen-shadow-item code {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+}
+
+.ak-kitchen-radius-box {
+  width: 64px;
+  height: 64px;
+  background-color: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+}
+
+.ak-kitchen-shadow-box {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-md);
+  background-color: var(--color-card);
+}
+
+/* Gear list */
+
+.ak-kitchen-gear-title {
+  display: flex;
+  flex-direction: column;
+}
+
+.ak-kitchen-gear-meta {
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+}
+
+.ak-kitchen-gear-freshness {
+  color: var(--color-text-tertiary);
+  font-size: var(--text-sm);
+}
+
+/* Gear detail */
+
+.ak-kitchen-image-tile {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--color-surface-muted);
+  color: var(--color-text-tertiary);
+}
+
+.ak-kitchen-image-tile-empty {
+  border: 1px dashed var(--color-border-strong);
+}
+
+.ak-kitchen-offers-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-base);
+}
+
+.ak-kitchen-offers-table th {
+  text-align: left;
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+  padding-bottom: var(--space-sm);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.ak-kitchen-offers-table td {
+  padding: var(--space-sm) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.ak-kitchen-fetch-log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--text-base);
+}
+
+/* Gear create */
+
+.ak-kitchen-link-outcomes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-lg);
+}
+
+.ak-kitchen-error-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+  margin: var(--space-sm) 0 0 0;
+}
+
+.ak-kitchen-note-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  margin: var(--space-sm) 0 0 0;
+}
+
+/* Dashboard */
+
+.ak-kitchen-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-lg);
+}
+
+.ak-kitchen-kpi-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.ak-kitchen-kpi-label {
+  color: var(--color-text-tertiary);
+  font-size: var(--text-sm);
+}
+
+@media (max-width: 1024px) {
+  .ak-kitchen-pair,
+  .ak-kitchen-link-outcomes {
+    grid-template-columns: 1fr;
+  }
+
+  .ak-kitchen-kpi-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

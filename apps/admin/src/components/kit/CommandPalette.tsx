@@ -2,7 +2,7 @@ import { Command } from "cmdk";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import type { NavGroup, NavItem } from "../../layout/nav";
+import type { NavGroup } from "../../layout/nav";
 import "./CommandPalette.css";
 
 /**
