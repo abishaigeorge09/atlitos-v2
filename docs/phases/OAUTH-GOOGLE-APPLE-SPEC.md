@@ -14,6 +14,19 @@ email/password for now.
 Admin was explicitly excluded. Staff login is safer without a
 third-party identity provider in the path.
 
+**Reversed for admin on 2026-09-22, at the founder's request**, so the
+team can sign in with their work Google accounts. The reason for the
+original exclusion still stands, so the reversal is paired with a
+control rather than taken on trust: `0128_admin_email_allowlist.sql`
+names every address that may hold the `admin` role, the table is
+writable by the service role alone (an admin who can extend the list
+can promote anyone, which would make it decorative), and the grant
+requires a CONFIRMED address so nobody can claim a colleague's email
+with a password of their own choosing. Everyone else who completes the
+Google flow meets the same "This account does not have admin access."
+refusal as an unauthorised password login. Proven by
+`scripts/verify-admin-allowlist.mjs`.
+
 ## Why both, not just Google
 
 App Store Review Guideline 4.8 requires Sign in with Apple to be

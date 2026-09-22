@@ -31,7 +31,7 @@ function loginFailure(): AuthActionResponse {
 // has_role admin via user_roles select"). user_roles_select_own (0001_identity.sql)
 // lets any authenticated user read their own rows, admin or not, so this
 // query succeeds before the admin gate decision is made.
-async function hasAdminRole(userId: string): Promise<boolean> {
+export async function hasAdminRole(userId: string): Promise<boolean> {
   const { data, error } = await supabaseClient
     .from("user_roles")
     .select("role")
