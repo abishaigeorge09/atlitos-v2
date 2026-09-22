@@ -11,6 +11,7 @@ import { Tabs } from "../../components/kit/Tabs";
 import { Badge } from "../../components/kit/Badge";
 import { statusLabel, statusTone } from "../../lib/status";
 import { supabaseClient } from "../../providers/supabaseClient";
+import { nameFromPayload, resolveApplicantNames } from "./applicant";
 import "./verification.css";
 
 // PRD-04 3.3 Verification Queue / FR-7, FR-12: tabbed list (by review status)
@@ -64,17 +65,11 @@ export function VerificationList() {
       const rows = (data as Db.VerificationRequestRow[]) ?? [];
       setRequests(rows);
 
-      // applicant name resolution: coach applicant_id is a public.users id
-      // (== coach_profiles.user_id); venue/upa tables don't exist yet (see
-      // 0007_admin_verification_rpcs.sql header), so those fall back to the
-      // payload's own name field, checked at render time.
-      const coachIds = rows.filter((r) => r.applicant_type === "coach").map((r) => r.applicant_id);
-      if (coachIds.length > 0) {
-        const { data: users } = await supabaseClient.from("users").select("id,name").in("id", coachIds);
-        if (!cancelled && users) {
-          setApplicantNames(Object.fromEntries(users.map((u) => [u.id, u.name as string])));
-        }
-      }
+      // One resolver for the queue and the detail screen, so the two cannot
+      // drift again (see ./applicant.ts). Every applicant type is covered,
+      // not only coaches.
+      const names = await resolveApplicantNames(rows);
+      if (!cancelled) setApplicantNames(names);
 
       setState("ready");
     }
@@ -86,9 +81,7 @@ export function VerificationList() {
   }, []);
 
   function applicantName(row: Db.VerificationRequestRow): string {
-    if (row.applicant_type === "coach") return applicantNames[row.applicant_id] ?? row.applicant_id;
-    const payloadName = (row.payload as Record<string, unknown>)?.name;
-    return typeof payloadName === "string" ? payloadName : row.applicant_id;
+    return applicantNames[row.applicant_id] ?? nameFromPayload(row) ?? row.applicant_id;
   }
 
   const byTypeFilter = useMemo(

@@ -15,6 +15,7 @@ import { PageHeader } from "../../components/kit/PageHeader";
 import { Textarea } from "../../components/kit/Textarea";
 import { statusLabel, statusTone } from "../../lib/status";
 import { supabaseClient } from "../../providers/supabaseClient";
+import { resolveApplicantName } from "./applicant";
 import "./verification.css";
 
 // PRD-04 3.3 Verification Detail / FR-8 through FR-11: renders every
@@ -34,39 +35,6 @@ function formatFieldLabel(key: string): string {
 
 function isDocumentUrl(value: unknown): value is string {
   return typeof value === "string" && /^https?:\/\//.test(value);
-}
-
-/**
- * Who applied, by name. The list page resolves coach applicants against
- * public.users; this screen used to fall straight back to the raw uuid, so a
- * venue or UPA request was titled with a uuid while its own name sat one card
- * over in the evidence. No payload carries a `name` key: a venue carries
- * `venue_name`, a UPA application carries `school`. Found by the ux-critic on
- * the A2 gate, 2026-09-22.
- *
- * `applicant_id` points at a different table per type, so the lookup is keyed
- * on the type rather than guessed.
- */
-async function resolveApplicantName(row: Db.VerificationRequestRow): Promise<string | null> {
-  const payload = (row.payload ?? {}) as Record<string, unknown>;
-  for (const key of ["name", "venue_name", "school", "organisation", "title"]) {
-    const value = payload[key];
-    if (typeof value === "string" && value.trim()) return value.trim();
-  }
-  try {
-    if (row.applicant_type === "venue") {
-      const { data } = await supabaseClient.from("venues").select("name").eq("id", row.applicant_id).maybeSingle();
-      const name = (data as { name?: string } | null)?.name;
-      if (name) return name;
-    } else {
-      const { data } = await supabaseClient.from("users").select("name").eq("id", row.applicant_id).maybeSingle();
-      const name = (data as { name?: string } | null)?.name;
-      if (name) return name;
-    }
-  } catch {
-    // Fall through to the id: a missing lookup is not worth failing the page.
-  }
-  return null;
 }
 
 export function VerificationShow() {
