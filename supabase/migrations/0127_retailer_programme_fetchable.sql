@@ -1,4 +1,4 @@
--- ATLITOS v2 - XXXX_retailer_programme_fetchable.sql
+-- ATLITOS v2 - 0127_retailer_programme_fetchable.sql
 -- Phase A3 of the admin UX rebuild (docs/PLAN-ADMIN-UX.md, A3-T2).
 --
 -- `fetchable` records, as data, whether gear-ingest can read a retailer's
