@@ -1,0 +1,12 @@
+.ak-card {
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl);
+  box-shadow: var(--shadow-sm);
+}
+
+[data-theme="dark"] .ak-card {
+  border-color: transparent;
+  box-shadow: none;
+}

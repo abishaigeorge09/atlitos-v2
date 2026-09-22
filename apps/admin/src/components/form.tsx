@@ -1,14 +1,15 @@
+// Re exports from the admin kit (apps/admin/src/components/kit/). Kept so
+// existing commerce pages (venues/show.tsx's reject textarea etc.) keep
+// compiling; new pages should import Field/Input/Select/Textarea from ./kit
+// directly. inputStyle stays here as a plain object for the one or two call
+// sites that read it directly rather than through <Input>.
 import type { CSSProperties, ReactNode } from "react";
 
-// Shared form primitives for the commerce admin surfaces. Same posture as
-// components/ui.tsx: apps/admin has no shadcn/Tailwind pipeline, so these are
-// plain elements reading CSS vars from src/styles/tokens.css (generated from
-// @atlitos/theme). No hardcoded colors, radii or spacing.
-//
-// Before this file, every admin form control was styled inline at its call
-// site (see venues/show.tsx's reject textarea). Commerce adds roughly a dozen
-// controls across two screens, which is the point at which repeating that
-// block stops being cheaper than naming it.
+export { Input } from "./kit/Input";
+export { Select } from "./kit/Select";
+export { Textarea } from "./kit/Textarea";
+
+import { Field as KitField } from "./kit/Field";
 
 export const inputStyle: CSSProperties = {
   padding: "var(--space-sm) var(--space-md)",
@@ -16,19 +17,15 @@ export const inputStyle: CSSProperties = {
   border: "1px solid var(--color-border)",
   backgroundColor: "var(--color-surface-muted)",
   color: "var(--color-text)",
+  fontFamily: "var(--font-sans)",
   fontSize: 14,
   width: "100%",
   boxSizing: "border-box",
-  fontFamily: "inherit",
 };
 
-/** Numeric inputs get JetBrains Mono with tabular figures, per CLAUDE.md. */
-const monoInputStyle: CSSProperties = {
-  ...inputStyle,
-  fontFamily: "JetBrains Mono, monospace",
-  fontVariantNumeric: "tabular-nums",
-};
-
+/** Pre-kit call sites pass `style`; the kit Field has no style prop, so it
+ * is accepted here and ignored (none of the existing call sites relied on
+ * anything besides layout spacing, which the kit Field already provides). */
 export function Field({
   label,
   children,
@@ -38,32 +35,6 @@ export function Field({
   children: ReactNode;
   style?: CSSProperties;
 }) {
-  return (
-    <label style={{ display: "flex", flexDirection: "column", gap: "var(--space-xs)", ...style }}>
-      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-secondary)" }}>{label}</span>
-      {children}
-    </label>
-  );
-}
-
-export function Input({
-  value,
-  onChange,
-  placeholder,
-  mono = false,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-  /** Set for prices, counts and SKUs. */
-  mono?: boolean;
-}) {
-  return (
-    <input
-      value={value}
-      placeholder={placeholder}
-      onChange={(event) => onChange(event.target.value)}
-      style={mono ? monoInputStyle : inputStyle}
-    />
-  );
+  void style;
+  return <KitField label={label}>{children}</KitField>;
 }

@@ -1,0 +1,35 @@
+import "./Field.css";
+
+export function Input({
+  value,
+  onChange,
+  placeholder,
+  mono = false,
+  disabled,
+  invalid,
+  id,
+  type = "text",
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  /** Set for prices, counts and SKUs. */
+  mono?: boolean;
+  disabled?: boolean;
+  invalid?: boolean;
+  id?: string;
+  type?: string;
+}) {
+  return (
+    <input
+      id={id}
+      type={type}
+      value={value}
+      placeholder={placeholder}
+      disabled={disabled}
+      onChange={(event) => onChange(event.target.value)}
+      className={`ak-input${mono ? " ak-input-mono" : ""}`}
+      aria-invalid={invalid || undefined}
+    />
+  );
+}

@@ -92,21 +92,29 @@ The auth and onboarding surface (`AuthScene`) renders a slow, warm animated auro
 
 ## Typography
 
-**Inter** for UI text. **JetBrains Mono** for every numeric readout (prices, scores, timers, stat counters, XP, distances), always with tabular figures (`font-variant-numeric: tabular-nums` on web, tabular lining figures on mobile) so digits don't reflow as values tick.
+**CHANGED(2026-09-10):** the UI face moved **Inter -> Urbanist** per the founder's brand
+direction; see `packages/theme/src/typography.ts` for the source of truth and the "CHANGED"
+note there. Every table below reflects Urbanist, not Inter. **JetBrains Mono** for every
+numeric readout (prices, scores, timers, stat counters, XP, distances), always with tabular
+figures (`font-variant-numeric: tabular-nums` on web, tabular lining figures on mobile) so
+digits don't reflow as values tick. The admin kit (`apps/admin/src/components/kit/`, Part B
+of `snappy-foraging-meadow.md`) is where this pairing is enforced by shared components rather
+than left to each screen: `<Mono>` for readouts, `--font-sans`/`--font-mono` (self hosted via
+`@fontsource-variable/urbanist` and `@fontsource-variable/jetbrains-mono`) for everything else.
 
-Headings carry negative letter spacing (tighter as size increases) for a denser, more athletic feel than default Inter tracking.
+Headings carry negative letter spacing (tighter as size increases) for a denser, more athletic feel than default Urbanist tracking.
 
 | Variant | Family | Weight | Size | Line height | Letter spacing | Notes |
 |---|---|---|---|---|---|---|
-| `display` | Inter | Bold (700) | 40 | 46 | -1.0 | Hero numerals/headlines, sparingly |
-| `title` | Inter | Bold (700) | 32 | 40 | -0.8 | Screen/page titles |
-| `h1` | Inter | Bold (700) | 28 | 34 | -0.6 | Section headers |
-| `h2` | Inter | Semibold (600) | 24 | 30 | -0.4 | Card/group titles |
-| `h3` | Inter | Semibold (600) | 20 | 26 | -0.2 | Subsection titles |
-| `body` | Inter | Regular (400) | 16 | 24 | 0 | Default copy |
-| `callout` | Inter | Regular (400) | 15 | 22 | 0 | Secondary copy, list rows |
-| `label` | Inter | Semibold (600) | 13 | 18 | 0.1 | Form labels, chip text, buttons |
-| `caption` | Inter | Regular (400) | 12 | 16 | 0 | Meta, timestamps, helper text |
+| `display` | Urbanist | Bold (700) | 40 | 46 | -1.0 | Hero numerals/headlines, sparingly |
+| `title` | Urbanist | Bold (700) | 32 | 40 | -0.8 | Screen/page titles |
+| `h1` | Urbanist | Bold (700) | 28 | 34 | -0.6 | Section headers |
+| `h2` | Urbanist | Semibold (600) | 24 | 30 | -0.4 | Card/group titles |
+| `h3` | Urbanist | Semibold (600) | 20 | 26 | -0.2 | Subsection titles |
+| `body` | Urbanist | Regular (400) | 16 | 24 | 0 | Default copy |
+| `callout` | Urbanist | Regular (400) | 15 | 22 | 0 | Secondary copy, list rows |
+| `label` | Urbanist | Semibold (600) | 13 | 18 | 0.1 | Form labels, chip text, buttons |
+| `caption` | Urbanist | Regular (400) | 12 | 16 | 0 | Meta, timestamps, helper text |
 | `overline` | JetBrains Mono | Semibold (600) | 11 | 14 | 0.22em, UPPERCASE | Eyebrow section labels (SRM signature move) |
 
 Numeric variants (all JetBrains Mono, tabular figures):
@@ -197,7 +205,7 @@ Lucide only, everywhere, always. No emoji, ever, as an icon substitute (this is 
 - **Buttons**: primary uses `color.accent` fill + `ink.onAccent` label at `radius.sm`; secondary uses `surface` fill + `borderStrong` outline + `text` label at `radius.sm`; destructive uses `danger` fill + white label at `radius.sm`. Button height 48 (mobile primary tap target), 40 (web/compact/secondary).
 - **Inputs**: `surfaceMuted` fill, `radius.sm`, `border` outline, `accent` outline on focus (2px), `danger` outline on error.
 - **Money surfaces**: every screen touching money renders a `BillSummary` component (line items in `body`/`callout`, totals in `numericLg` mono), never a bare number. This mirrors the biased-approver's hard rule and is a design requirement, not just a build one. On mobile this is `apps/mobile/src/components/molecules/BillSummary.tsx`; on the web portals it is `@atlitos/ui-web`'s `BillSummary` (added in the Courts vertical slice pass), same rows-plus-total shape, expressed as vanilla CSS reading the same token set instead of nativewind classNames.
-- **Portals (court, life, admin)**: shadcn/ui component bones, same token values expressed as HSL CSS variables (see `packages/theme/src/index.ts` `hslVar`/`toCssVars` helpers), warm-light default with a dark toggle. GMV's sidebar-dashboard structure, not GMV's pink/cyan palette.
+- **Portals (court, life, admin)**: shadcn/ui component bones, same token values expressed as HSL CSS variables (see `packages/theme/src/index.ts` `hslVar`/`toCssVars` helpers), warm-light default with a dark toggle. GMV's sidebar-dashboard structure, not GMV's pink/cyan palette. **ADR-012 drift, admin only:** `apps/admin` has no Tailwind/shadcn pipeline, so it does not use shadcn primitives; its component bones live at `apps/admin/src/components/kit/` instead, same token values, plain CSS classes prefixed `ak-`. Revisit when `packages/ui-web` grows a shared shadcn set.
 
 ## Shop tiles and compare rows (direction C)
 

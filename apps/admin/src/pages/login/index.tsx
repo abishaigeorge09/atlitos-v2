@@ -60,7 +60,7 @@ export function LoginPage() {
         justifyContent: "center",
         backgroundColor: "var(--color-bg)",
         color: "var(--color-text)",
-        fontFamily: "Inter, sans-serif",
+        fontFamily: "var(--font-sans)",
       }}
     >
       <div

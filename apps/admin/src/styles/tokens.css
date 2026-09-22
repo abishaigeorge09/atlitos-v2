@@ -3,12 +3,14 @@
  * Do not hand edit the token values below, see docs/design/DESIGN-LANGUAGE.md. */
 
 :root {
+  color-scheme: light dark;
+
   /* Atlitos tokens, from @atlitos/theme colors.light ("Paper") */
   --color-bg: hsl(0 0% 100%);
   --color-surface: hsl(0 0% 98%);
   --color-surface-muted: hsl(0 0% 93%);
   --color-card: hsl(0 0% 100%);
-  --color-overlay: hsl(rgba(0,0,0,0.45));
+  --color-overlay: rgba(0,0,0,0.45);
   --color-text: hsl(0 0% 5%);
   --color-text-secondary: hsl(0 0% 36%);
   --color-text-tertiary: hsl(0 0% 56%);
@@ -42,17 +44,103 @@
   --space-lg: 16px;
   --space-xl: 20px;
   --space-2xl: 24px;
+  --space-3xl: 32px;
+  --space-4xl: 40px;
+
+  /* Typography, from @atlitos/theme typography.ts. Urbanist for UI text,
+   * JetBrains Mono for every numeric readout (CLAUDE.md "Tokens only"). */
+  --font-sans: "Urbanist Variable", "Urbanist", -apple-system, sans-serif;
+  --font-mono: "JetBrainsMono Variable", "JetBrainsMono", ui-monospace, monospace;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-md: 15px;
+  --text-callout: 15px;
+  --text-button: 15px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 28px;
+  --text-4xl: 32px;
+  --text-5xl: 40px;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --weight-extrabold: 800;
+  --type-display-size: 40px;
+  --type-display-line: 46px;
+  --type-display-tracking: -1px;
+  --type-title-size: 32px;
+  --type-title-line: 40px;
+  --type-title-tracking: -0.8px;
+  --type-h1-size: 28px;
+  --type-h1-line: 34px;
+  --type-h1-tracking: -0.6px;
+  --type-h2-size: 24px;
+  --type-h2-line: 30px;
+  --type-h2-tracking: -0.4px;
+  --type-h3-size: 20px;
+  --type-h3-line: 26px;
+  --type-h3-tracking: -0.2px;
+  --type-body-size: 16px;
+  --type-body-line: 24px;
+  --type-body-tracking: 0px;
+  --type-callout-size: 15px;
+  --type-callout-line: 22px;
+  --type-callout-tracking: 0px;
+  --type-button-size: 15px;
+  --type-button-line: 22px;
+  --type-button-tracking: 0px;
+  --type-label-size: 13px;
+  --type-label-line: 18px;
+  --type-label-tracking: 0.1px;
+  --type-caption-size: 12px;
+  --type-caption-line: 16px;
+  --type-caption-tracking: 0px;
+  --type-overline-size: 11px;
+  --type-overline-line: 14px;
+  --type-overline-tracking: 0.22em;
+  --type-numericDisplay-size: 40px;
+  --type-numericDisplay-line: 46px;
+  --type-numericDisplay-tracking: 0px;
+  --type-numericLg-size: 24px;
+  --type-numericLg-line: 30px;
+  --type-numericLg-tracking: 0px;
+  --type-numericBase-size: 16px;
+  --type-numericBase-line: 22px;
+  --type-numericBase-tracking: 0px;
+  --type-numericSm-size: 13px;
+  --type-numericSm-line: 18px;
+  --type-numericSm-tracking: 0px;
+
+  /* Elevation, from @atlitos/theme elevation.ts. Warm tinted, never flat black. */
+  --shadow-sm: 0px 2px 8px 0px rgba(28, 23, 18, 0.06);
+  --shadow-md: 0px 6px 16px 0px rgba(28, 23, 18, 0.08);
+  --shadow-lg: 0px 12px 28px 0px rgba(28, 23, 18, 0.14);
+
+  /* Motion, from @atlitos/theme motion.ts. */
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 320ms;
+  --duration-slower: 480ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-decelerate: cubic-bezier(0, 0, 0.2, 1);
+  --ease-accelerate: cubic-bezier(0.4, 0, 1, 1);
+  --ease-srm: cubic-bezier(0.3, 1, 0.3, 1);
 }
 
-/* Dark ("Espresso") tokens, ready for a future admin theme toggle; the
- * shell itself defaults to the warm light sidebar per PRD-04/DESIGN-LANGUAGE
- * and does not switch this class today. */
-.dark {
+/* Dark ("Espresso") tokens. Toggled by ThemeToggle.tsx via
+ * data-theme="dark" on <html>, persisted to localStorage with a
+ * prefers-color-scheme default; .dark kept alongside for any legacy
+ * class-based consumer. */
+.dark,
+[data-theme="dark"] {
   --color-bg: hsl(0 0% 8%);
   --color-surface: hsl(0 0% 11%);
   --color-surface-muted: hsl(0 0% 15%);
   --color-card: hsl(0 0% 11%);
-  --color-overlay: hsl(rgba(0,0,0,0.6));
+  --color-overlay: rgba(0,0,0,0.6);
   --color-text: hsl(0 0% 100%);
   --color-text-secondary: hsl(0 0% 66%);
   --color-text-tertiary: hsl(0 0% 48%);
@@ -78,7 +166,7 @@
 body {
   background-color: var(--color-bg);
   color: var(--color-text);
-  font-family: Inter, sans-serif;
+  font-family: var(--font-sans);
 }
 
 * {

@@ -20,6 +20,7 @@ import { GearCreate } from "./pages/gear/create";
 import { GearHealth } from "./pages/gear/health";
 import { GearShow } from "./pages/gear/show";
 import { GearList } from "./pages/gear/list";
+import { KitchenSink } from "./pages/kitchen";
 import { LoginPage } from "./pages/login";
 import { ModerationList } from "./pages/moderation/list";
 import { ModerationShow } from "./pages/moderation/show";
@@ -173,6 +174,10 @@ export function App() {
             <Route path="/bookings" element={<BookingsList />} />
             <Route path="/users" element={<UsersList />} />
             <Route path="/users/show/:id" element={<UserShow />} />
+            {/* Gate 1 kitchen sink: admin auth gated, deliberately absent
+                from resources/nav.ts so it never appears in the sidebar or
+                command palette. */}
+            <Route path="/_kitchen" element={<KitchenSink />} />
           </Route>
         </Routes>
         <Notifications />
