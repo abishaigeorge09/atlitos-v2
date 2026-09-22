@@ -1,0 +1,134 @@
+<title>Atlitos Data Entry</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  :root{
+    --ground:#FBF7F1; --raised:#FFFFFF; --muted:#F2EBE0; --ink:#1C1712; --ink-2:#5A4F45; --ink-3:#8A7C6E;
+    --rule:#E6DBCA; --accent:#FF4200; --accent-tint:#FFE3CE; --ok:#2F7A55; --ok-tint:#DDEDE3;
+    --sans:'Inter',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;
+    --display:'Archivo','Inter',ui-sans-serif,system-ui,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --ground:#14100B; --raised:#1E1810; --muted:#241D14; --ink:#F6F0E7; --ink-2:#BFB2A2; --ink-3:#8B8073;
+      --rule:#332A1E; --accent:#FF6636; --accent-tint:#3A1B0C; --ok:#7CC29B; --ok-tint:#173322;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#14100B; --raised:#1E1810; --muted:#241D14; --ink:#F6F0E7; --ink-2:#BFB2A2; --ink-3:#8B8073;
+    --rule:#332A1E; --accent:#FF6636; --accent-tint:#3A1B0C; --ok:#7CC29B; --ok-tint:#173322;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
+  .page{max-width:900px;margin:0 auto;padding-block:48px 80px;padding-inline:24px}
+  @media(max-width:640px){.page{padding-block:32px 60px;padding-inline:16px}}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);margin:0 0 12px}
+  h1{font-family:var(--display);font-weight:700;font-size:clamp(32px,5vw,44px);letter-spacing:-.025em;line-height:1.05;margin:0;text-wrap:balance}
+  .lede{font-size:18px;color:var(--ink-2);margin:16px 0 0;max-width:62ch}
+  h2{font-family:var(--display);font-weight:700;font-size:24px;letter-spacing:-.015em;margin:0 0 6px}
+  h3{font-family:var(--display);font-weight:600;font-size:16px;margin:0 0 6px}
+  section{padding:40px 0;border-top:1px solid var(--rule)}
+  .sec-head{display:flex;gap:16px;align-items:baseline;margin-bottom:20px;flex-wrap:wrap}
+  .who{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);background:var(--accent-tint);padding:3px 8px;border-radius:2px}
+  p{margin:0 0 12px;color:var(--ink-2);max-width:66ch}
+  p b,li b{color:var(--ink);font-weight:600}
+  ol,ul{margin:0 0 16px;padding-left:22px;color:var(--ink-2);max-width:66ch}
+  li{margin:6px 0}
+  code{font-family:var(--mono);font-size:13px;background:var(--muted);padding:1px 6px;border-radius:3px;color:var(--ink)}
+  a{color:var(--accent)}
+  figure{margin:20px 0 28px;background:var(--raised);border:1px solid var(--rule);border-radius:4px;overflow:hidden}
+  figure img{display:block;width:100%;max-width:100%;height:auto}
+  figcaption{padding:10px 14px;font-size:13.5px;color:var(--ink-2);border-top:1px solid var(--rule)}
+  figcaption b{color:var(--ink);font-weight:600}
+  .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:0 0 20px}
+  .step{background:var(--raised);border:1px solid var(--rule);border-radius:4px;padding:14px 16px}
+  .step .n{font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:.1em;margin-bottom:4px}
+  .step p{font-size:14.5px;margin:0}
+  .note{background:var(--muted);border-radius:4px;padding:14px 18px;margin:16px 0}
+  .note p{margin:0}
+  .rules li{margin:8px 0}
+  footer{margin-top:40px;font-family:var(--mono);font-size:11.5px;color:var(--ink-3)}
+</style>
+
+<div class="page">
+  <p class="eyebrow">Atlitos admin</p>
+  <h1>How the launch catalog gets entered</h1>
+  <p class="lede">Three kinds of records, two tools. Gear and courts are entered in the admin. Coaches are entered in the app itself, because a coach is an account, not a row. Every screen below is the real admin, photographed on a test database.</p>
+
+  <section>
+    <div class="sec-head"><h2>Before you start</h2><span class="who">Once, per person</span></div>
+    <div class="steps">
+      <div class="step"><div class="n">STEP 1</div><p>Register a normal account at <a href="https://atlitos-app.vercel.app">atlitos-app.vercel.app</a> with your own email. Pick <b>Player</b>.</p></div>
+      <div class="step"><div class="n">STEP 2</div><p>Send Abishai that email. He switches on admin access for it.</p></div>
+      <div class="step"><div class="n">STEP 3</div><p>Sign out and back in once, then open <a href="https://atlitos-admin.vercel.app">atlitos-admin.vercel.app</a> with the same email and password.</p></div>
+    </div>
+    <p>The sidebar shows Gear and Venues. Everything you save is recorded with your name in the audit log, so there is no need to keep a separate list of what you entered.</p>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>Gear</h2><span class="who">Sidebar, Gear</span></div>
+    <p>The shop works on the affiliate model: Atlitos does not sell the item. It shows the price at several retailers and sends the shopper to the cheapest one. So one gear item is <b>a product plus one line per retailer</b>.</p>
+    <figure><img src="img/01-gear-list-empty.png" alt="The Gear page before anything is entered, with filters by sport and state and a New gear item button"><figcaption><b>The Gear list.</b> Filter by sport or by Listed and Delisted. Click New gear item.</figcaption></figure>
+
+    <h3>Entering one item</h3>
+    <ol>
+      <li><b>Retailers first.</b> Retailer name (Amazon, Decathlon, Tennis Hub), the price in rupees as a plain number (<code>15999</code>, no commas or symbol), and the affiliate link. The link has to start with <code>http://</code> or <code>https://</code>. Add retailer for each extra one. Untick In stock if the retailer is out of stock but you want the line kept.</li>
+      <li><b>Then the product.</b> Title, brand, sport (or Any sport for something like a water bottle), category if one fits, skill level and age range in plain words, an image URL if you have one.</li>
+      <li>Create gear item. The button only turns on when every retailer line is complete.</li>
+    </ol>
+    <figure><img src="img/02-gear-create-filled.png" alt="The New gear item form filled with two retailers and the product details"><figcaption><b>New gear item, filled.</b> Two retailers (Amazon at 15999, Tennis Hub at 14500) and the product below.</figcaption></figure>
+    <figure><img src="img/03-gear-show-after-create.png" alt="The saved gear item showing both retailers sorted cheapest first"><figcaption><b>After saving.</b> Retailers sort cheapest first. Each has an Open link check and a bin to remove a wrong line.</figcaption></figure>
+
+    <h3>Updating a price</h3>
+    <p>Open the item, type the retailer's name exactly as before with the new price and link, and Save retailer. It <b>replaces that retailer's line</b> rather than adding a second one. This is how a weekly price check is entered.</p>
+    <figure><img src="img/04-gear-show-price-refresh.png" alt="The gear item after re-entering Amazon at 15499, showing the line updated in place"><figcaption><b>Price refresh.</b> Amazon re-entered at 15499: still one Amazon line, now second behind Tennis Hub.</figcaption></figure>
+    <figure><img src="img/05-gear-list-one-item.png" alt="The Gear list with one item showing brand, sport, retailer count, cheapest price and Listed state"><figcaption><b>Back on the list.</b> Retailer count, the cheapest in stock price, and whether shoppers can see it.</figcaption></figure>
+    <div class="note"><p><b>Delist</b> hides an item from shoppers without deleting it. <b>List</b> brings it back. Nothing in the catalog is ever deleted, only hidden.</p></div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>Courts</h2><span class="who">Sidebar, Venues, New venue</span></div>
+    <p>For now a court is an affiliate link as well: the venue's own booking page (Playo, Hudle, the venue's site). The venue is entered with its courts, and the booking link is where the app will send the athlete.</p>
+    <ol>
+      <li>Name, address, city, <b>six digit pincode</b>.</li>
+      <li>Latitude and longitude are optional, but the Courts tab sorts by distance, so a venue without them sorts last. In Google Maps, right click the pin; the two numbers at the top of the menu are the ones.</li>
+      <li>Booking link: the page where an athlete books this venue today.</li>
+      <li>Description: surface, floodlights, parking, changing rooms, whatever an athlete asks before booking.</li>
+      <li><b>At least one court.</b> Sport, the name the venue itself uses (Box 1, Court A), capacity if known, price per hour in rupees. Add court for each.</li>
+      <li>Create venue. It is verified on save and visible in the app straight away.</li>
+    </ol>
+    <figure><img src="img/06-venue-create-filled.png" alt="The New venue form filled with address, coordinates, booking link and two courts"><figcaption><b>New venue, filled.</b> Play Arena Sarjapur with a booking link and two courts (Box 1 at 1200 per hour, Court A at 400).</figcaption></figure>
+    <figure><img src="img/07-venue-show-after-create.png" alt="The saved venue showing Verified status, the external booking link and both courts"><figcaption><b>After saving.</b> Verified, the booking link shown as Books externally at, both courts listed with their prices.</figcaption></figure>
+    <figure><img src="img/08-venue-create-validation.png" alt="The New venue form refusing a five digit pincode with the Create button disabled"><figcaption><b>Mistakes are caught before saving.</b> A five digit pincode keeps the Create button off and says why. The same happens for a booking link without https, a missing court, or a negative price.</figcaption></figure>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>Coaches</h2><span class="who">The app, atlitos-app.vercel.app</span></div>
+    <p>A coach is a real account with a profile the coach normally fills in themselves. When entering one on a coach's behalf, use <b>the coach's real email</b>, because that is the account they will take over.</p>
+    <ol>
+      <li>Register with the coach's email and a temporary password. At role select choose <b>Coach</b>.</li>
+      <li>The coach setup has seven steps: <b>Sport, Photo, Experience, Certificates, Pricing, Availability, About</b>. Fill all of them from what the coach gave you. Pricing and Availability are what athletes book against, so get those exactly right.</li>
+      <li>Submitting the last step creates a verification request. An admin approves it under <b>Verification queue</b>. Until approved the coach is not listed.</li>
+      <li>Send the coach their login and ask them to change the password in Settings.</li>
+    </ol>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>What to have ready</h2></div>
+    <ul>
+      <li><b>Gear:</b> for each item, a product page on each retailer you want listed. Until the affiliate programme approval arrives, the plain product URL is fine and gets replaced in place later.</li>
+      <li><b>Courts:</b> the venue's booking page, address, prices per hour per court, and the coordinates.</li>
+      <li><b>Coaches:</b> sport, years of experience, a photo, certificates as images, session prices, weekly availability, a short bio, city and state.</li>
+    </ul>
+    <div class="sec-head" style="margin-top:28px"><h2>Rules</h2></div>
+    <ul class="rules">
+      <li><b>Never invent a price, a rating or a count.</b> If a retailer has no price shown, leave that retailer out.</li>
+      <li>Copy the venue's and coach's own names and spellings.</li>
+      <li>No emojis anywhere. Descriptions are plain sentences.</li>
+    </ul>
+  </section>
+
+  <footer>Atlitos data entry guide. Screens captured 17 September 2026 from the admin build carrying migration 0120. The same text lives in the repo at docs/ops/DATA-ENTRY.md.</footer>
+</div>

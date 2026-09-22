@@ -25,7 +25,7 @@ and dont stop till all screens are done".
 | A2-T3 community and settings | done, merged | `pages/{moderation,reports,drills,users,fee-config,products}/*` |
 | A2-T4 e2e sync | done | `apps/e2e/specs/money/admin.spec.ts` now expects `/dashboard` after sign in |
 | A3-T1 ingest client | built | `pages/gear/create.tsx` rewritten as one form, `pages/gear/api.ts`, new `pages/gear/ingest-guidance.ts` |
-| A3-T2 ingest server | built and proven | `supabase/functions/gear-ingest/index.ts`, `supabase/migrations/XXXX_retailer_programme_fetchable.sql` |
+| A3-T2 ingest server | built and proven | `supabase/functions/gear-ingest/index.ts`, `supabase/migrations/0127_retailer_programme_fetchable.sql` |
 | A3-T3 evidence | written | `docs/qa/evidence/admin-ux/walkthrough-a3.mjs` |
 | Screenshot matrix and axe | GREEN | 110 PNGs in `docs/qa/evidence/admin-ux/phase-A2/matrix/`, `axe.json` empty |
 | A3 walkthrough | GREEN, 13 of 13 | `docs/qa/evidence/admin-ux/phase-A2/a3/` |
@@ -71,8 +71,8 @@ and dont stop till all screens are done".
 
 1. The ux-critic verdict, and any blocking finding fixed.
 2. PR from `admin-ux/integration-a2` to main, diff checked for the expected files, merged.
-3. Number the `XXXX_retailer_programme_fetchable.sql` migration per `docs/BRANCHING.md`, then
-   deploy it and `gear-ingest` to production.
+3. Deploy `0127_retailer_programme_fetchable.sql` and `gear-ingest` to production. The migration
+   took its number at merge, per `docs/BRANCHING.md`.
 4. Phase A4, bulk catalogue data entry: `docs/PLAN-CATALOGUE-ENTRY.md` on
    `docs/architecture/ADR-013-catalogue-data-entry.md`. Its design gate waits on the founder's
    GMV inventory reference, which needs a sign in this session will not perform.

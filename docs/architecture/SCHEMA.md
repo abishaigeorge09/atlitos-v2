@@ -727,7 +727,7 @@ Which retailers `gear-ingest`/`gear-recheck` know how to read, and how. Admin-re
 | `extractor` | `jsonb` | nullable, a `RetailerExtractorMap` (see `supabase/functions/_shared/extract-product.ts`): field name to a small CSS-selector-like string, the last-resort extraction strategy after JSON-LD and Open Graph both miss |
 | `fetch_policy` | `jsonb` | not null default `{"maxPerMinute": 10}`, the nightly sweep's per-retailer rate limit |
 | `active` | `boolean` | not null default `true` |
-| `fetchable` | `boolean` | not null default `true` (`XXXX_retailer_programme_fetchable`, admin UX A3-T2). False when the retailer answers the edge runtime's fetch with a bot wall; `gear-ingest` then returns `RETAILER_UNAVAILABLE` without a round trip and the admin form keeps the pasted URL as the offer link. `amazon_in` is false (503 observed 2026-09-18) |
+| `fetchable` | `boolean` | not null default `true` (`0127_retailer_programme_fetchable`, admin UX A3-T2). False when the retailer answers the edge runtime's fetch with a bot wall; `gear-ingest` then returns `RETAILER_UNAVAILABLE` without a round trip and the admin form keeps the pasted URL as the offer link. `amazon_in` is false (503 observed 2026-09-18) |
 
 Seeded with `amazon_in` (Amazon India, `amazon.in`, `fetchable = false`), `flipkart` (Flipkart, `flipkart.com`), `decathlon_in` (Decathlon India, `decathlon.in`), every `affiliate_tag_template` null.
 
