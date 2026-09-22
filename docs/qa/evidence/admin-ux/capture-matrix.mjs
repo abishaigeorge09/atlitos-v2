@@ -104,11 +104,14 @@ async function settle(page) {
 
 async function main() {
   const browser = await chromium.launch();
+  // AxeBuilder refuses a page from browser.newPage(); it needs an explicit
+  // context. One context, reduced motion forced, for every page here.
+  const ctx = await browser.newContext({ reducedMotion: "reduce" });
   const failures = [];
   const axeReport = {};
 
   // Resolve dynamic ids once, in a light session.
-  const probe = await browser.newPage({ reducedMotion: "reduce" });
+  const probe = await ctx.newPage();
   await login(probe);
   const routes = [...STATIC_ROUTES];
   for (const [list, label] of [["/gear", "gear show"], ["/drills", "drills show"], ["/moderation", "moderation show"], ["/reports", "reports show"], ["/users", "users show"], ["/products", "products show"]]) {
@@ -119,7 +122,7 @@ async function main() {
   await probe.close();
 
   for (const theme of ["light", "dark"]) {
-    const page = await browser.newPage({ reducedMotion: "reduce" });
+    const page = await ctx.newPage();
     await login(page);
     await setTheme(page, theme);
 
@@ -159,7 +162,7 @@ async function main() {
   // Login page, both themes, no session.
   if (!AXE_ONLY) {
     for (const theme of ["light", "dark"]) {
-      const page = await browser.newPage({ reducedMotion: "reduce" });
+      const page = await ctx.newPage();
       await page.goto(`${BASE}/login`);
       await setTheme(page, theme);
       await page.reload();
@@ -170,6 +173,7 @@ async function main() {
     }
   }
 
+  await ctx.close();
   await browser.close();
   writeFileSync(join(OUT, "axe.json"), JSON.stringify(axeReport, null, 2));
 

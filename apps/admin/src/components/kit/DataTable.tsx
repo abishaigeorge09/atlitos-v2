@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { Mono } from "../mono";
 import { EmptyState } from "./EmptyState";
@@ -80,22 +80,37 @@ export function DataTable<T>({
             return (
               <tr
                 key={rowKey(row)}
-                tabIndex={href ? 0 : undefined}
                 className={href ? "ak-table-row-link" : undefined}
-                onClick={href ? () => navigate(href) : undefined}
-                onKeyDown={
+                onClick={
                   href
                     ? (event) => {
-                        if (event.key === "Enter") navigate(href);
+                        // The first cell carries a real anchor. Let its own
+                        // click (and cmd click, middle click, open in new tab)
+                        // do the work; the row click is only the convenience
+                        // of hitting anywhere else in the row.
+                        if ((event.target as HTMLElement).closest("a")) return;
+                        navigate(href);
                       }
                     : undefined
                 }
               >
-                {columns.map((col) => (
-                  <td key={col.key} className={col.numeric ? "ak-table-td-numeric" : undefined}>
-                    {col.numeric ? <Mono>{col.render(row)}</Mono> : col.render(row)}
-                  </td>
-                ))}
+                {columns.map((col, index) => {
+                  const content = col.numeric ? <Mono>{col.render(row)}</Mono> : col.render(row);
+                  return (
+                    <td key={col.key} className={col.numeric ? "ak-table-td-numeric" : undefined}>
+                      {href && index === 0 ? (
+                        // A real link, not a click handler on a <tr>: it is what
+                        // gives the row a keyboard stop, an accessible name, and
+                        // open in a new tab. The row handler above cannot.
+                        <Link className="ak-table-cell-link" to={href}>
+                          {content}
+                        </Link>
+                      ) : (
+                        content
+                      )}
+                    </td>
+                  );
+                })}
               </tr>
             );
           })}

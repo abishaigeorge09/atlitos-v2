@@ -69,3 +69,18 @@
   border-radius: var(--radius-lg);
   background-color: var(--color-card);
 }
+
+/* The first cell of a linked row carries a real anchor: it inherits the cell's
+   type so the table still reads as a table, and it is what gives the row its
+   keyboard stop and open in a new tab. */
+.ak-table-cell-link {
+  color: inherit;
+  text-decoration: none;
+  display: block;
+}
+
+.ak-table-cell-link:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
