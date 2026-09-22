@@ -1,28 +1,26 @@
+import { formatINR } from "@atlitos/theme";
 import type { Db, OrderStatus } from "@atlitos/types";
 import { BillSummary } from "@atlitos/ui-web";
-import {
-  AlertTriangle,
-  ArrowLeft,
-  CircleCheck,
-  MapPin,
-  RotateCcw,
-  Truck,
-} from "lucide-react";
-import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNotification } from "@refinedev/core";
+import { AlertTriangle, MapPin, Truck } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { useParams } from "react-router-dom";
 
-import { Badge, Button, Card, EmptyState } from "../../components/ui";
+import { Badge } from "../../components/kit/Badge";
+import { Button } from "../../components/kit/Button";
+import { Card } from "../../components/kit/Card";
+import { ConfirmDialog, type ConfirmDialogHandle } from "../../components/kit/ConfirmDialog";
+import { DetailLayout } from "../../components/kit/DetailLayout";
+import { DetailSkeleton } from "../../components/kit/Skeleton";
+import { EmptyState } from "../../components/kit/EmptyState";
+import { Field } from "../../components/kit/Field";
+import { Input } from "../../components/kit/Input";
+import { PageHeader } from "../../components/kit/PageHeader";
 import { Mono } from "../../components/mono";
-import { Field, Input } from "../../components/form";
 import { advanceOrder, type CommerceError } from "../commerce/api";
 import { nextStatus, orderStatusTone, statusLabel } from "../commerce/status";
-import {
-  fetchOrderRefunds,
-  refundOrder,
-  type OrderRefundRow,
-  type RefundResult,
-} from "./refund-api";
 import { supabaseClient } from "../../providers/supabaseClient";
+import "./orders.css";
 
 // AT-82, PRD-04 FR-21, FR-22, FR-23, FR-26. This is the admin half of
 // PHASE-4-STATUS.md gate clause 2.
@@ -35,19 +33,23 @@ import { supabaseClient } from "../../providers/supabaseClient";
 // was charged (trap list item 4, "snapshot, do not recompute").
 //
 // The donation roundup row is suppressed when it is zero, matching the founder
-// decision recorded in PHASE-4-STATUS.md open question 2: a cart total already
-// on a multiple of 10 produces no roundup and writes no donation ledger leg,
-// so rendering "Rs 0.00" here would imply a leg that does not exist.
+// decision recorded in PHASE-4-STATUS.md open question 2.
 //
 // FR-26 holds structurally: the only mutation on this screen is
 // `advanceOrder`, which posts to the admin-order-advance edge function. There
 // is no `.update()` against orders anywhere in this bundle.
+//
+// Refunds are explicitly out of PRD-04's scope for this rebuild
+// (docs/PLAN-ADMIN-UX.md "not in scope") and are removed from this screen;
+// `refund-api.ts` is left in place, unused, for whichever future phase picks
+// refunds up.
 
 type LoadState = "loading" | "error" | "ready" | "not_found";
 
 export function OrderShow() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
+  const { open } = useNotification();
+  const confirmRef = useRef<ConfirmDialogHandle>(null);
 
   const [order, setOrder] = useState<Db.OrderRow | null>(null);
   const [items, setItems] = useState<Db.OrderItemRow[]>([]);
@@ -59,17 +61,6 @@ export function OrderShow() {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<CommerceError | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-
-  // Refund panel (PRD-04 FR-24, FR-25). Amounts are display only; the server
-  // re-derives the ceiling in claim_order_refund and is the authority.
-  const [refunds, setRefunds] = useState<OrderRefundRow[]>([]);
-  const [refundAmount, setRefundAmount] = useState("");
-  const [refundReason, setRefundReason] = useState("");
-  const [refundConfirming, setRefundConfirming] = useState(false);
-  const [refundBusy, setRefundBusy] = useState(false);
-  const [refundError, setRefundError] = useState<CommerceError | null>(null);
-  const [refundNotice, setRefundNotice] = useState<string | null>(null);
 
   async function load() {
     if (!id) return;
@@ -115,25 +106,17 @@ export function OrderShow() {
     setTimeline((timelineRows as Db.OrderTimelineRow[]) ?? []);
     setBuyer((buyerRow as { name: string; phone: string | null }) ?? null);
 
-    try {
-      setRefunds(await fetchOrderRefunds(row.id));
-    } catch {
-      // A refund read failure must not blank the whole order screen; the
-      // refund panel simply shows nothing previously refunded.
-      setRefunds([]);
-    }
-
     setState("ready");
   }
 
   useEffect(() => {
     void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  async function onAdvance(to: OrderStatus) {
+  async function onConfirmAdvance(to: OrderStatus) {
     setBusy(true);
     setError(null);
-    setNotice(null);
     try {
       const result = await advanceOrder({
         orderId: id as string,
@@ -141,74 +124,54 @@ export function OrderShow() {
         location: location.trim() || null,
         note: note.trim() || null,
       });
-      setNotice(`Order moved to ${statusLabel(result.status)}.`);
+      confirmRef.current?.close();
+      open?.({ type: "success", message: `Order moved to ${statusLabel(result.status)}.`, key: "order-advance" });
       setLocation("");
       setNote("");
       await load();
     } catch (err) {
-      // Shown verbatim, code and all. AT-82: the refusal is surfaced as a real
-      // error, never swallowed into a generic failure.
       setError(err as CommerceError);
     } finally {
       setBusy(false);
     }
   }
 
-  async function onRefund() {
-    if (!order) return;
-    setRefundBusy(true);
-    setRefundError(null);
-    setRefundNotice(null);
-    try {
-      const result: RefundResult = await refundOrder({
-        orderId: order.id,
-        amount: Number(refundAmount),
-        reason: refundReason.trim(),
-      });
-      setRefundNotice(
-        result.refund_status === "processed"
-          ? `Refunded Rs ${result.refunded_amount.toFixed(2)}. Remaining refundable Rs ${result.remaining_refundable.toFixed(2)}.`
-          : `Refund of Rs ${result.refunded_amount.toFixed(2)} recorded and is being processed.`,
-      );
-      setRefundAmount("");
-      setRefundReason("");
-      setRefundConfirming(false);
-      await load();
-    } catch (err) {
-      // Shown verbatim, code and all: AMOUNT_EXCEEDS_REFUNDABLE,
-      // INVALID_TRANSITION, REFUND_IN_PROGRESS surface as real refusals.
-      setRefundError(err as CommerceError);
-      setRefundConfirming(false);
-    } finally {
-      setRefundBusy(false);
-    }
-  }
-
   if (state === "loading") {
-    return <div style={{ fontSize: 14, color: "var(--color-text-secondary)" }}>Loading order...</div>;
+    return (
+      <div className="ak-page-stack">
+        <PageHeader breadcrumbs={[{ label: "Orders", to: "/orders" }]} title="Loading order" />
+        <DetailSkeleton />
+      </div>
+    );
   }
 
   if (state === "not_found") {
     return (
-      <Card>
-        <EmptyState
-          icon={<AlertTriangle size={32} strokeWidth={1.75} />}
-          title="Order not found"
-          description="This order does not exist or was removed."
-        />
-      </Card>
+      <div className="ak-page-stack">
+        <PageHeader breadcrumbs={[{ label: "Orders", to: "/orders" }]} title="Order not found" />
+        <Card>
+          <EmptyState
+            icon={<AlertTriangle size={32} strokeWidth={1.75} />}
+            title="Order not found"
+            body="This order does not exist or was removed."
+          />
+        </Card>
+      </div>
     );
   }
 
   if (state === "error" || !order) {
     return (
-      <Card>
-        <EmptyState
-          icon={<AlertTriangle size={32} strokeWidth={1.75} />}
-          title="Could not load this order"
-          description="Something went wrong reading this order. Try again."
-        />
-      </Card>
+      <div className="ak-page-stack">
+        <PageHeader breadcrumbs={[{ label: "Orders", to: "/orders" }]} title="Could not load this order" />
+        <Card>
+          <EmptyState
+            icon={<AlertTriangle size={32} strokeWidth={1.75} />}
+            title="Could not load this order"
+            body="Something went wrong reading this order. Try again."
+          />
+        </Card>
+      </div>
     );
   }
 
@@ -224,418 +187,146 @@ export function OrderShow() {
       : []),
   ];
 
-  // FR-24/FR-25 refund figures. "Previously refunded" counts settled and
-  // in-flight refunds (both consume the ceiling, exactly as claim_order_refund
-  // computes it server side). These are display only.
-  const previouslyRefunded = refunds
-    .filter((r) => r.status === "pending" || r.status === "processed")
-    .reduce((sum, r) => sum + Number(r.amount), 0);
-  const remainingRefundable = Number((Number(order.total) - previouslyRefunded).toFixed(2));
-  const pendingRefund = refunds.find((r) => r.status === "pending") ?? null;
-  const thisRefund = Number(refundAmount) > 0 ? Number(refundAmount) : 0;
-  const refundAmountValid =
-    thisRefund > 0 &&
-    Math.round(thisRefund * 100) === Number((thisRefund * 100).toFixed(4)) &&
-    thisRefund <= remainingRefundable;
-  const canReviewRefund =
-    remainingRefundable > 0 &&
-    pendingRefund === null &&
-    refundAmountValid &&
-    refundReason.trim().length > 0;
+  const canAdvance = target !== null && (location.trim().length > 0 || note.trim().length > 0);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-lg)", maxWidth: 760 }}>
-      <button
-        type="button"
-        onClick={() => navigate("/orders")}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "var(--space-xs)",
-          border: "none",
-          background: "none",
-          color: "var(--color-text-secondary)",
-          fontSize: 14,
-          cursor: "pointer",
-          padding: 0,
-          alignSelf: "flex-start",
-        }}
-      >
-        <ArrowLeft size={16} strokeWidth={1.75} />
-        Back to orders
-      </button>
+    <div className="ak-page-stack">
+      <PageHeader
+        breadcrumbs={[{ label: "Orders", to: "/orders" }]}
+        title={order.order_number}
+        description={`${buyer?.name ?? order.user_id}${buyer?.phone ? `, ${buyer.phone}` : ""}`}
+      />
 
-      <Card>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "var(--space-md)" }}>
-          <div>
-            <p
-              style={{
-                fontSize: 12,
-                fontWeight: 600,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                color: "var(--color-text-tertiary)",
-                margin: 0,
-              }}
-            >
-              Order
-            </p>
-            <h1 style={{ fontSize: 20, fontWeight: 700, margin: "var(--space-xs) 0 0" }}>
-              <Mono>{order.order_number}</Mono>
-            </h1>
-            <p style={{ fontSize: 14, color: "var(--color-text-secondary)", margin: "var(--space-xs) 0 0" }}>
-              {buyer?.name ?? order.user_id}
-              {buyer?.phone ? `, ${buyer.phone}` : ""}
-            </p>
-          </div>
-          <Badge tone={orderStatusTone(order.status)}>{statusLabel(order.status)}</Badge>
-        </div>
-      </Card>
+      <DetailLayout
+        main={
+          <>
+            <Card className="ak-orders-card-flush">
+              <div className="ak-orders-card-heading">Items</div>
+              <table className="ak-orders-table">
+                <tbody>
+                  {items.map((item) => (
+                    <tr key={item.id}>
+                      <td>
+                        <div className="ak-orders-item-title">{item.product_title_snapshot}</div>
+                        <div className="ak-orders-item-variant">{item.variant_label_snapshot}</div>
+                      </td>
+                      <td className="ak-orders-td-numeric">
+                        <Mono>x{item.qty}</Mono>
+                      </td>
+                      <td className="ak-orders-td-numeric">
+                        <Mono>{formatINR(Number(item.unit_price))}</Mono>
+                      </td>
+                      <td className="ak-orders-td-numeric">
+                        <Mono>{formatINR(Number(item.unit_price) * item.qty)}</Mono>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Card>
 
-      {/* FR-21 line items */}
-      <Card style={{ padding: 0 }}>
-        <div style={{ padding: "var(--space-lg)" }}>
-          <p
-            style={{
-              fontSize: 12,
-              fontWeight: 600,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-              color: "var(--color-text-tertiary)",
-              margin: 0,
-            }}
-          >
-            Items
-          </p>
-        </div>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <tbody>
-            {items.map((item) => (
-              <tr key={item.id} style={{ borderTop: "1px solid var(--color-border)" }}>
-                <td style={{ padding: "var(--space-md) var(--space-lg)", fontSize: 14, fontWeight: 600 }}>
-                  {item.product_title_snapshot}
-                  <span style={{ display: "block", fontSize: 13, fontWeight: 400, color: "var(--color-text-secondary)" }}>
-                    {item.variant_label_snapshot}
-                  </span>
-                </td>
-                <td style={{ padding: "var(--space-md) var(--space-lg)", width: 80 }}>
-                  <Mono style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>x{item.qty}</Mono>
-                </td>
-                <td style={{ padding: "var(--space-md) var(--space-lg)", width: 140, textAlign: "right" }}>
-                  <Mono style={{ fontSize: 13 }}>Rs {Number(item.unit_price).toFixed(2)}</Mono>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Card>
-
-      {/* FR-21 delivery address. Read from the order's own ship_to_* snapshot
-       * (0038, AT-72), never the address_id join: that row is editable and
-       * ON DELETE SET NULL, so joining it would let a shopper's later address
-       * edit rewrite where a dispatched parcel says it is going. */}
-      <Card>
-        <p
-          style={{
-            fontSize: 12,
-            fontWeight: 600,
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-            color: "var(--color-text-tertiary)",
-            margin: "0 0 var(--space-md)",
-          }}
-        >
-          Delivery address
-        </p>
-        <div style={{ display: "flex", alignItems: "flex-start", gap: "var(--space-sm)" }}>
-          <MapPin size={18} strokeWidth={1.75} color="var(--color-text-secondary)" />
-          <div>
-            <p style={{ fontSize: 14, fontWeight: 600, margin: 0 }}>
-              {order.ship_to_line1}
-              {order.ship_to_line2 ? `, ${order.ship_to_line2}` : ""}
-            </p>
-            <p style={{ fontSize: 13, color: "var(--color-text-secondary)", margin: "var(--space-xs) 0 0" }}>
-              {order.ship_to_city}, {order.ship_to_state}
-            </p>
-            <Mono style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>{order.ship_to_pincode}</Mono>
-          </div>
-        </div>
-      </Card>
-
-      {/* FR-21 money breakdown, through the shared BillSummary */}
-      <Card>
-        <p
-          style={{
-            fontSize: 12,
-            fontWeight: 600,
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-            color: "var(--color-text-tertiary)",
-            margin: "0 0 var(--space-md)",
-          }}
-        >
-          Bill
-        </p>
-        <BillSummary rows={billRows} total={Number(order.total)} totalLabel="Total paid" />
-      </Card>
-
-      {/* FR-22, FR-23 the advance action */}
-      <Card>
-        <p
-          style={{
-            fontSize: 12,
-            fontWeight: 600,
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-            color: "var(--color-text-tertiary)",
-            margin: "0 0 var(--space-md)",
-          }}
-        >
-          Advance this order
-        </p>
-
-        {error ? (
-          <div
-            style={{
-              padding: "var(--space-md)",
-              borderRadius: "var(--radius-sm)",
-              border: "1px solid var(--color-danger)",
-              backgroundColor: "var(--color-danger-tint)",
-              marginBottom: "var(--space-md)",
-            }}
-          >
-            <Mono style={{ fontSize: 12, fontWeight: 600, color: "var(--color-danger)" }}>{error.code}</Mono>
-            <p style={{ fontSize: 14, color: "var(--color-danger)", margin: "var(--space-xs) 0 0" }}>
-              {error.message}
-            </p>
-          </div>
-        ) : null}
-
-        {notice ? (
-          <p
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "var(--space-xs)",
-              fontSize: 14,
-              color: "var(--color-success)",
-              margin: "0 0 var(--space-md)",
-            }}
-          >
-            <CircleCheck size={16} strokeWidth={1.75} />
-            {notice}
-          </p>
-        ) : null}
-
-        {target === null ? (
-          <p style={{ fontSize: 14, color: "var(--color-text-secondary)", margin: 0 }}>
-            This order has reached {statusLabel(order.status)} and cannot be advanced further.
-          </p>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
-            <div style={{ display: "flex", gap: "var(--space-md)" }}>
-              <Field label="Location" style={{ flex: 1 }}>
-                <Input value={location} onChange={setLocation} placeholder="Bengaluru hub" />
-              </Field>
-              <Field label="Note" style={{ flex: 1 }}>
-                <Input value={note} onChange={setNote} placeholder="Handed to courier" />
-              </Field>
-            </div>
-            <p style={{ fontSize: 13, color: "var(--color-text-secondary)", margin: 0 }}>
-              A location or a note is required. It is recorded on the timeline the shopper sees.
-            </p>
-            <div>
-              <Button
-                disabled={busy || (location.trim().length === 0 && note.trim().length === 0)}
-                onClick={() => onAdvance(target)}
-              >
-                <Truck size={16} strokeWidth={1.75} />
-                Move to {statusLabel(target)}
-              </Button>
-            </div>
-          </div>
-        )}
-      </Card>
-
-      {/* FR-24, FR-25 the refund panel */}
-      <Card>
-        <p
-          style={{
-            fontSize: 12,
-            fontWeight: 600,
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-            color: "var(--color-text-tertiary)",
-            margin: "0 0 var(--space-md)",
-          }}
-        >
-          Refund this order
-        </p>
-
-        {refundError ? (
-          <div
-            style={{
-              padding: "var(--space-md)",
-              borderRadius: "var(--radius-sm)",
-              border: "1px solid var(--color-danger)",
-              backgroundColor: "var(--color-danger-tint)",
-              marginBottom: "var(--space-md)",
-            }}
-          >
-            <Mono style={{ fontSize: 12, fontWeight: 600, color: "var(--color-danger)" }}>
-              {refundError.code}
-            </Mono>
-            <p style={{ fontSize: 14, color: "var(--color-danger)", margin: "var(--space-xs) 0 0" }}>
-              {refundError.message}
-            </p>
-          </div>
-        ) : null}
-
-        {refundNotice ? (
-          <p
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "var(--space-xs)",
-              fontSize: 14,
-              color: "var(--color-success)",
-              margin: "0 0 var(--space-md)",
-            }}
-          >
-            <CircleCheck size={16} strokeWidth={1.75} />
-            {refundNotice}
-          </p>
-        ) : null}
-
-        {/* Prior refunds, so the admin sees history without leaving the page */}
-        {refunds.length > 0 ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-xs)", marginBottom: "var(--space-md)" }}>
-            {refunds.map((r) => (
-              <div
-                key={r.id}
-                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13 }}
-              >
-                <span style={{ color: "var(--color-text-secondary)" }}>
-                  Refund {statusLabel(r.status)}
-                </span>
-                <Mono style={{ fontSize: 13 }}>Rs {Number(r.amount).toFixed(2)}</Mono>
-              </div>
-            ))}
-          </div>
-        ) : null}
-
-        {refundConfirming ? (
-          // The confirm dialog renders the shared BillSummary (FR-25): original
-          // total, previously refunded, this refund, and remaining refundable.
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
-            <BillSummary
-              rows={[
-                { label: "Original total", amount: Number(order.total) },
-                ...(previouslyRefunded > 0
-                  ? [{ label: "Previously refunded", amount: -previouslyRefunded, emphasis: "muted" as const }]
-                  : []),
-                { label: "This refund", amount: -thisRefund },
-              ]}
-              total={Number((remainingRefundable - thisRefund).toFixed(2))}
-              totalLabel="Remaining refundable after this"
-              footnote={`Reason: ${refundReason.trim()}`}
-            />
-            <div style={{ display: "flex", gap: "var(--space-md)" }}>
-              <Button disabled={refundBusy} onClick={() => void onRefund()}>
-                <RotateCcw size={16} strokeWidth={1.75} />
-                Confirm refund of Rs {thisRefund.toFixed(2)}
-              </Button>
-              <button
-                type="button"
-                disabled={refundBusy}
-                onClick={() => setRefundConfirming(false)}
-                style={{
-                  border: "1px solid var(--color-border)",
-                  background: "none",
-                  color: "var(--color-text-secondary)",
-                  borderRadius: "var(--radius-sm)",
-                  padding: "var(--space-sm) var(--space-md)",
-                  fontSize: 14,
-                  cursor: "pointer",
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        ) : remainingRefundable <= 0 ? (
-          <p style={{ fontSize: 14, color: "var(--color-text-secondary)", margin: 0 }}>
-            This order is fully refunded. Nothing remains refundable.
-          </p>
-        ) : pendingRefund ? (
-          <p style={{ fontSize: 14, color: "var(--color-text-secondary)", margin: 0 }}>
-            A refund of Rs {Number(pendingRefund.amount).toFixed(2)} is already in progress. It will
-            settle shortly, then another refund can be issued.
-          </p>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
-            <div style={{ display: "flex", gap: "var(--space-md)" }}>
-              <Field label="Amount to refund (Rs)" style={{ flex: 1 }}>
-                <Input value={refundAmount} onChange={setRefundAmount} placeholder="0.00" mono />
-              </Field>
-              <Field label="Reason" style={{ flex: 2 }}>
-                <Input value={refundReason} onChange={setRefundReason} placeholder="Quality complaint, returned unopened" />
-              </Field>
-            </div>
-            <p style={{ fontSize: 13, color: "var(--color-text-secondary)", margin: 0 }}>
-              Remaining refundable Rs {remainingRefundable.toFixed(2)}. A reason is required. The
-              amount and the ceiling are re-checked on the server.
-            </p>
-            <div>
-              <Button disabled={!canReviewRefund} onClick={() => setRefundConfirming(true)}>
-                <RotateCcw size={16} strokeWidth={1.75} />
-                Review refund
-              </Button>
-            </div>
-          </div>
-        )}
-      </Card>
-
-      {/* FR-21 full timeline history */}
-      <Card style={{ padding: 0 }}>
-        <div style={{ padding: "var(--space-lg)" }}>
-          <p
-            style={{
-              fontSize: 12,
-              fontWeight: 600,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-              color: "var(--color-text-tertiary)",
-              margin: 0,
-            }}
-          >
-            Timeline
-          </p>
-        </div>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <tbody>
-            {timeline.map((entry) => (
-              <tr key={entry.id} style={{ borderTop: "1px solid var(--color-border)" }}>
-                <td style={{ padding: "var(--space-md) var(--space-lg)", width: 150 }}>
-                  <Badge tone={orderStatusTone(entry.status)}>{statusLabel(entry.status)}</Badge>
-                </td>
-                <td style={{ padding: "var(--space-md) 0", fontSize: 14 }}>
-                  {entry.location ? <span style={{ fontWeight: 600 }}>{entry.location}</span> : null}
-                  {entry.location && entry.note ? ", " : null}
-                  {entry.note ? (
-                    <span style={{ color: "var(--color-text-secondary)" }}>{entry.note}</span>
-                  ) : null}
-                </td>
-                <td style={{ padding: "var(--space-md) var(--space-lg)", width: 190, textAlign: "right" }}>
-                  <Mono style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
-                    {new Date(entry.created_at).toLocaleString()}
+            {/* FR-21 delivery address, read from the order's own ship_to_*
+             * snapshot (0038, AT-72), never the address_id join: that row is
+             * editable and ON DELETE SET NULL, so joining it would let a
+             * shopper's later address edit rewrite where a dispatched parcel
+             * says it is going. */}
+            <Card>
+              <div className="ak-orders-card-heading">Shipping address</div>
+              <div className="ak-orders-address">
+                <MapPin size={18} strokeWidth={1.75} />
+                <div>
+                  <p className="ak-orders-address-line">
+                    {order.ship_to_line1}
+                    {order.ship_to_line2 ? `, ${order.ship_to_line2}` : ""}
+                  </p>
+                  <p className="ak-orders-address-city">
+                    {order.ship_to_city}, {order.ship_to_state}
+                  </p>
+                  <Mono style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)" }}>
+                    {order.ship_to_pincode}
                   </Mono>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Card>
+                </div>
+              </div>
+            </Card>
+
+            <Card className="ak-orders-card-flush">
+              <div className="ak-orders-card-heading">Timeline</div>
+              <table className="ak-orders-table">
+                <tbody>
+                  {timeline.map((entry) => (
+                    <tr key={entry.id}>
+                      <td style={{ width: 150 }}>
+                        <Badge tone={orderStatusTone(entry.status)}>{statusLabel(entry.status)}</Badge>
+                      </td>
+                      <td>
+                        {entry.location ? <span className="ak-orders-timeline-location">{entry.location}</span> : null}
+                        {entry.location && entry.note ? ", " : null}
+                        {entry.note ? <span className="ak-orders-timeline-note">{entry.note}</span> : null}
+                      </td>
+                      <td className="ak-orders-td-numeric">
+                        <Mono style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)" }}>
+                          {new Date(entry.created_at).toLocaleString()}
+                        </Mono>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Card>
+          </>
+        }
+        side={
+          <>
+            <Card>
+              <div className="ak-orders-side-header">
+                <Badge tone={orderStatusTone(order.status)}>{statusLabel(order.status)}</Badge>
+              </div>
+              <BillSummary rows={billRows} total={Number(order.total)} totalLabel="Total paid" />
+            </Card>
+
+            <Card>
+              <div className="ak-orders-card-heading">Advance this order</div>
+
+              {error ? (
+                <div className="ak-orders-error-box">
+                  <Mono style={{ fontSize: "var(--text-sm)", fontWeight: "var(--weight-semibold)", color: "var(--color-danger)" }}>
+                    {error.code}
+                  </Mono>
+                  <p className="ak-orders-error-message">{error.message}</p>
+                </div>
+              ) : null}
+
+              {target === null ? (
+                <p className="ak-orders-muted">
+                  This order has reached {statusLabel(order.status)} and cannot be advanced further.
+                </p>
+              ) : (
+                <div className="ak-orders-advance-form">
+                  <Field label="Location"><Input value={location} onChange={setLocation} placeholder="Bengaluru hub" /></Field>
+                  <Field label="Note"><Input value={note} onChange={setNote} placeholder="Handed to courier" /></Field>
+                  <p className="ak-orders-muted">
+                    A location or a note is required. It is recorded on the timeline the shopper sees.
+                  </p>
+                  <Button disabled={!canAdvance} onClick={() => confirmRef.current?.open()}>
+                    <Truck size={16} strokeWidth={1.75} />
+                    Advance this order
+                  </Button>
+                  <ConfirmDialog
+                    ref={confirmRef}
+                    title="Advance this order"
+                    body="This is visible to the shopper on their order timeline immediately, moving"
+                    recordName={target ? `${order.order_number} to ${statusLabel(target)}` : order.order_number}
+                    confirmLabel={target ? `Move to ${statusLabel(target)}` : "Confirm"}
+                    danger={false}
+                    loading={busy}
+                    onConfirm={() => target && void onConfirmAdvance(target)}
+                  />
+                </div>
+              )}
+            </Card>
+          </>
+        }
+      />
     </div>
   );
 }
