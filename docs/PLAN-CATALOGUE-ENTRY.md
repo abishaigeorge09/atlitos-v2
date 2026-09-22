@@ -19,8 +19,24 @@ Answers given at intake, treated as fixed:
   components. ADR-013 D5 and D6 are shaped so the second pass needs no new decision.
 - **Landing state.** Imported rows are never live. They land `draft`, are submitted, and a tester
   account (`catalogue_reviewer`) approves before a shopper can see them.
-- **Reference.** The GMV inventory admin, pending: the site needs a sign in this session will not
-  perform. Gate 1 below does not open until either those screens or the founder's word arrive.
+- **Reference: GMV's own product import, read from the shipped code.** The GMV admin cannot be
+  signed into at all, because the Supabase project it points at (`cessjdrdqicjbuqedtgd`) no longer
+  resolves in DNS, so every sign in fails with a network error. The compiled app is public,
+  though, and `assets/AdminDashboard-*.js`, `NewProduct-*.js` and `MultiImageUploader-*.js` carry
+  the real surface. What it does, and what this plan takes from it:
+
+  | GMV does | Taken? |
+  |---|---|
+  | A "download template" button that builds `gmv-store-template.csv` in the browser, header row plus two realistic example rows | Yes. A sample file that is generated from the same column list the parser reads cannot go stale. |
+  | One row per product, multi values pipe separated inside a quoted cell (`"TikTok\|Instagram"`, `"url1\|url2"`) | Yes for images. Not for offers: an Atlitos offer is a retailer, a price and a link together, and three parallel pipe lists would silently misalign the moment one has a gap. Offers stay one row each, grouped by `external_ref`. |
+  | Required column: `title` alone, everything else optional | Mostly. `title` plus, for an offer row, `retailer`, `price` and `affiliate_url`, because an offer without them is not an offer. |
+  | Accepts `.csv`, `.tsv`, `.txt` from one picker | Yes, which is also how the paste surface and the file share one parser. |
+  | Copy: "Click to select a CSV file", "Make sure your CSV has a 'title' column header.", "No valid rows found", "Import failed", "{n} products imported!", "You can now add images to each product." | Yes, adapted. Naming the missing column rather than saying the file is invalid is the good instinct in it. |
+  | Images: a multi select file picker with thumbnail previews, remove per tile, an add tile, plus "Paste image URL and press Enter" | Yes, both paths. The URL paste matters when a data entry person has a retailer image and no file. |
+  | "Delete Duplicates", keeping the newest of each duplicate title, behind a confirm that says it cannot be undone | No. Atlitos delists rather than deletes (ADR-011, the audit trail), and `external_ref` makes a re import update in place rather than duplicate. A duplicate finder can come later if the data needs one. |
+  | Empty state: "Create your first product or import via CSV" | Yes. |
+
+  Gate 1 judges the kitchen sink against these screens. The founder can still redirect it.
 
 ## Gates
 
