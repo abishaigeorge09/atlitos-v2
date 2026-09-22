@@ -61,7 +61,7 @@
   --color-overlay: rgba(0,0,0,0.45);
   --color-text: 0 0% 5%;
   --color-text-secondary: 0 0% 36%;
-  --color-text-tertiary: 0 0% 56%;
+  --color-text-tertiary: 0 0% 42%;
   --color-text-inverse: 0 0% 100%;
   --color-border: 0 0% 90%;
   --color-border-strong: 0 0% 82%;
@@ -69,6 +69,8 @@
   --color-accent-pressed: 18 100% 43%;
   --color-accent-tint: 18 100% 95%;
   --color-ink-on-accent: 0 0% 100%;
+  --color-accent-ink: 0 0% 5%;
+  --color-accent-on-tint: 17 100% 35%;
   --color-brand-orange: 18 100% 50%;
   --color-brand-ember: 15 76% 55%;
   --color-success: 154 67% 32%;
@@ -79,6 +81,10 @@
   --color-info-tint: 214 78% 93%;
   --color-danger: 352 70% 50%;
   --color-danger-tint: 353 76% 93%;
+  --color-success-ink: 154 68% 27%;
+  --color-warning-ink: 37 86% 29%;
+  --color-danger-ink: 352 71% 42%;
+  --color-info-ink: 211 74% 37%;
 
   /* shadcn slots, mapped to the Atlitos tokens above */
   --background: hsl(var(--color-bg));
@@ -125,7 +131,7 @@
   --color-overlay: rgba(0,0,0,0.6);
   --color-text: 0 0% 100%;
   --color-text-secondary: 0 0% 66%;
-  --color-text-tertiary: 0 0% 48%;
+  --color-text-tertiary: 0 0% 58%;
   --color-text-inverse: 0 0% 8%;
   --color-border: 0 0% 18%;
   --color-border-strong: 0 0% 24%;
@@ -133,6 +139,8 @@
   --color-accent-pressed: 18 100% 43%;
   --color-accent-tint: 17 84% 12%;
   --color-ink-on-accent: 0 0% 100%;
+  --color-accent-ink: 0 0% 5%;
+  --color-accent-on-tint: 18 100% 50%;
   --color-brand-orange: 18 100% 50%;
   --color-brand-ember: 15 76% 55%;
   --color-success: 154 59% 49%;
@@ -143,6 +151,10 @@
   --color-info-tint: 212 45% 16%;
   --color-danger: 354 83% 66%;
   --color-danger-tint: 354 49% 15%;
+  --color-success-ink: 154 59% 49%;
+  --color-warning-ink: 39 75% 56%;
+  --color-danger-ink: 354 83% 66%;
+  --color-info-ink: 211 75% 63%;
 
   /* shadcn slots, mapped to the Atlitos tokens above */
   --background: hsl(var(--color-bg));
