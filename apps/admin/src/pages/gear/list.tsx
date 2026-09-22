@@ -100,7 +100,7 @@ export function GearList() {
         </div>
       ),
     },
-    { key: "sport", header: "Sport", render: (item) => item.sport ?? "Any" },
+    { key: "sport", header: "Sport", render: (item) => item.sport ?? "any" },
     { key: "offers", header: "Retailers", numeric: true, render: (item) => item.offers.length },
     {
       key: "price",

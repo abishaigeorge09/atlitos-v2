@@ -36,11 +36,45 @@ function isDocumentUrl(value: unknown): value is string {
   return typeof value === "string" && /^https?:\/\//.test(value);
 }
 
+/**
+ * Who applied, by name. The list page resolves coach applicants against
+ * public.users; this screen used to fall straight back to the raw uuid, so a
+ * venue or UPA request was titled with a uuid while its own name sat one card
+ * over in the evidence. No payload carries a `name` key: a venue carries
+ * `venue_name`, a UPA application carries `school`. Found by the ux-critic on
+ * the A2 gate, 2026-09-22.
+ *
+ * `applicant_id` points at a different table per type, so the lookup is keyed
+ * on the type rather than guessed.
+ */
+async function resolveApplicantName(row: Db.VerificationRequestRow): Promise<string | null> {
+  const payload = (row.payload ?? {}) as Record<string, unknown>;
+  for (const key of ["name", "venue_name", "school", "organisation", "title"]) {
+    const value = payload[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  try {
+    if (row.applicant_type === "venue") {
+      const { data } = await supabaseClient.from("venues").select("name").eq("id", row.applicant_id).maybeSingle();
+      const name = (data as { name?: string } | null)?.name;
+      if (name) return name;
+    } else {
+      const { data } = await supabaseClient.from("users").select("name").eq("id", row.applicant_id).maybeSingle();
+      const name = (data as { name?: string } | null)?.name;
+      if (name) return name;
+    }
+  } catch {
+    // Fall through to the id: a missing lookup is not worth failing the page.
+  }
+  return null;
+}
+
 export function VerificationShow() {
   const { id } = useParams<{ id: string }>();
   const { open } = useNotification();
 
   const [request, setRequest] = useState<Db.VerificationRequestRow | null>(null);
+  const [applicantName, setApplicantName] = useState<string | null>(null);
   const [state, setState] = useState<LoadState>("loading");
   const [rejectReason, setRejectReason] = useState("");
   const [showRejectForm, setShowRejectForm] = useState(false);
@@ -64,8 +98,10 @@ export function VerificationShow() {
       setState("not_found");
       return;
     }
-    setRequest(data as Db.VerificationRequestRow);
+    const row = data as Db.VerificationRequestRow;
+    setRequest(row);
     setState("ready");
+    void resolveApplicantName(row).then(setApplicantName);
   }
 
   useEffect(() => {
@@ -154,16 +190,13 @@ export function VerificationShow() {
   const payloadEntries = Object.entries(request.payload ?? {});
   const documentEntries = payloadEntries.filter(([, value]) => isDocumentUrl(value));
   const fieldEntries = payloadEntries.filter(([key]) => !documentEntries.some(([docKey]) => docKey === key));
-  const applicantName = (() => {
-    const payloadName = (request.payload as Record<string, unknown>)?.name;
-    return typeof payloadName === "string" ? payloadName : request.applicant_id;
-  })();
+  const title = applicantName ?? request.applicant_id;
 
   return (
     <div className="ak-page-stack">
       <PageHeader
         breadcrumbs={[{ label: "Verification queue", to: "/verification" }]}
-        title={applicantName}
+        title={title}
         description={`${formatFieldLabel(request.applicant_type)} application`}
       />
 

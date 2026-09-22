@@ -136,7 +136,11 @@ export function OrdersList() {
 
   return (
     <div className="ak-page-stack">
-      <PageHeader title="Orders" description="Every gear order and where it has reached." />
+      <PageHeader
+        breadcrumbs={[{ label: "Operations" }, { label: "Orders" }]}
+        title="Orders"
+        description="Every gear order and where it has reached."
+      />
 
       <Tabs
         items={statusTabs.map((tab) => ({

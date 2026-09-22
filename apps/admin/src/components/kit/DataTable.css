@@ -51,6 +51,15 @@
   text-align: right;
 }
 
+/* A squeezed cell used to clip its own content: at 1024 the products variant
+   table cut "Adjust stock" to "Adjust stoc" with nothing to scroll, because
+   the table is width 100% and the cell simply shrank. These columns keep
+   their intrinsic width and the wrapper scrolls instead. Found by the
+   ux-critic on the A2 gate, 2026-09-22. */
+.ak-table-nowrap {
+  white-space: nowrap;
+}
+
 .ak-table-row-link {
   cursor: pointer;
 }

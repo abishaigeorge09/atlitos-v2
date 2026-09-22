@@ -120,6 +120,7 @@ export function VerificationList() {
   return (
     <div className="ak-page-stack">
       <PageHeader
+        breadcrumbs={[{ label: "Operations" }, { label: "Verification" }]}
         title="Verification queue"
         description="Review coach, venue, and UPA applications before they reach the marketplace."
       />

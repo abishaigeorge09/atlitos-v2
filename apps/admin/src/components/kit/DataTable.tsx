@@ -11,6 +11,10 @@ export interface DataTableColumn<T> {
   header: string;
   /** Right aligned mono numeric columns (CLAUDE.md numeric readout rule). */
   numeric?: boolean;
+  /** Never wrap or clip this column. Use for action buttons and short codes:
+      the wrapper scrolls instead of squeezing the cell. Numeric columns get
+      it automatically. */
+  nowrap?: boolean;
   render: (row: T) => ReactNode;
   width?: string;
 }
@@ -66,7 +70,7 @@ export function DataTable<T>({
               <th
                 key={col.key}
                 scope="col"
-                className={col.numeric ? "ak-table-th-numeric" : undefined}
+                className={[col.numeric ? "ak-table-th-numeric" : "", col.nowrap || col.numeric ? "ak-table-nowrap" : ""].filter(Boolean).join(" ") || undefined}
                 style={col.width ? { width: col.width } : undefined}
               >
                 {col.header}
@@ -97,7 +101,10 @@ export function DataTable<T>({
                 {columns.map((col, index) => {
                   const content = col.numeric ? <Mono>{col.render(row)}</Mono> : col.render(row);
                   return (
-                    <td key={col.key} className={col.numeric ? "ak-table-td-numeric" : undefined}>
+                    <td
+                      key={col.key}
+                      className={[col.numeric ? "ak-table-td-numeric" : "", col.nowrap || col.numeric ? "ak-table-nowrap" : ""].filter(Boolean).join(" ") || undefined}
+                    >
                       {href && index === 0 ? (
                         // A real link, not a click handler on a <tr>: it is what
                         // gives the row a keyboard stop, an accessible name, and

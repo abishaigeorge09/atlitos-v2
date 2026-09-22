@@ -172,6 +172,7 @@ export function BookingsList() {
   return (
     <div className="ak-page-stack">
       <PageHeader
+        breadcrumbs={[{ label: "Operations" }, { label: "Bookings" }]}
         title="Bookings"
         description="Every court booking with its payment status, read only, for support. The most recent 200 bookings."
       />

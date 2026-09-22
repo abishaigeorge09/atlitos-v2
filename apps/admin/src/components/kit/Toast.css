@@ -1,6 +1,10 @@
+/* Clear of the sticky header. Pinned at the header's own top edge, a toast
+   sat on top of the search field, the Cmd K entry and the theme toggle and,
+   because nothing dismissed it, stayed there. Found by the ux-critic on the
+   A2 gate, 2026-09-22. */
 .ak-toast-viewport {
   position: fixed;
-  top: var(--space-lg);
+  top: 72px;
   right: var(--space-lg);
   display: flex;
   flex-direction: column;

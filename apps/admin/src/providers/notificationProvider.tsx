@@ -15,7 +15,14 @@ import { Toast, ToastViewport, type ToastType } from "../components/kit/Toast";
 
 type Toast = OpenNotificationParams & { key: string };
 
+// An outcome toast has to leave on its own. Nothing here ever called `close`
+// for a success, so "Request approved." stayed on screen for the rest of the
+// session, covering the header controls it was painted over. An error stays
+// until it is replaced, because the reader may need to act on it.
+const AUTO_DISMISS_MS = 8000;
+
 let toasts: Toast[] = [];
+const timers = new Map<string, ReturnType<typeof setTimeout>>();
 const listeners = new Set<() => void>();
 
 function emit() {
@@ -40,9 +47,22 @@ export const notificationProvider: NotificationProvider = {
     // "login-error" key across attempts) so the surface never stacks stale
     // copies of the same error.
     toasts = [...toasts.filter((toast) => toast.key !== key), { ...params, key }];
+    const existing = timers.get(key);
+    if (existing) clearTimeout(existing);
+    if (params.type !== "error") {
+      timers.set(
+        key,
+        setTimeout(() => {
+          notificationProvider.close?.(key);
+        }, AUTO_DISMISS_MS),
+      );
+    }
     emit();
   },
   close: (key) => {
+    const timer = timers.get(key);
+    if (timer) clearTimeout(timer);
+    timers.delete(key);
     toasts = toasts.filter((toast) => toast.key !== key);
     emit();
   },

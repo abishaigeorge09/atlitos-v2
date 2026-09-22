@@ -208,6 +208,7 @@ export function ProductShow() {
     {
       key: "actions",
       header: "",
+      nowrap: true,
       render: (v) => (
         <div style={{ display: "flex", gap: "var(--space-xs)" }}>
           <Button
