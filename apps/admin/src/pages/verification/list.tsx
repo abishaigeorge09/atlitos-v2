@@ -1,33 +1,49 @@
 import type { Db } from "@atlitos/types";
-import { AlertTriangle, ShieldCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 
-import { Badge, Card, EmptyState } from "../../components/ui";
+import { DataTable, type DataTableColumn } from "../../components/kit/DataTable";
+import { EmptyState } from "../../components/kit/EmptyState";
+import { FilterBar } from "../../components/kit/FilterBar";
+import { PageHeader } from "../../components/kit/PageHeader";
+import { Select } from "../../components/kit/Select";
+import { Tabs } from "../../components/kit/Tabs";
+import { Badge } from "../../components/kit/Badge";
+import { statusLabel, statusTone } from "../../lib/status";
 import { supabaseClient } from "../../providers/supabaseClient";
+import { nameFromPayload, resolveApplicantNames } from "./applicant";
+import "./verification.css";
 
-// PRD-04 3.3 Verification Queue / FR-7, FR-12: tabbed list (Coach, Venue,
-// UPA) of pending verification_requests, each tab with its own distinct
-// empty state. Reads public.verification_requests (RLS:
+// PRD-04 3.3 Verification Queue / FR-7, FR-12: tabbed list (by review status)
+// of verification_requests, filterable by applicant type and searchable by
+// applicant name. Reads public.verification_requests (RLS:
 // verification_requests_select_admin, admin/moderator reads all).
-type Tab = Db.VerificationRequestRow["applicant_type"];
+type Tab = Db.VerificationRequestRow["status"];
+type ApplicantType = Db.VerificationRequestRow["applicant_type"];
 
-const tabs: { key: Tab; label: string }[] = [
-  { key: "coach", label: "Coach" },
-  { key: "venue", label: "Venue" },
-  { key: "upa", label: "UPA" },
+const statusTabs: { key: Tab; label: string }[] = [
+  { key: "pending_review", label: "Pending" },
+  { key: "approved", label: "Approved" },
+  { key: "rejected", label: "Rejected" },
 ];
+
+const typeLabel: Record<ApplicantType, string> = {
+  coach: "Coach",
+  venue: "Venue",
+  upa: "UPA",
+};
 
 type LoadState = "loading" | "error" | "ready";
 
 export function VerificationList() {
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = (searchParams.get("type") as Tab | null) ?? "coach";
+  const activeTab = (searchParams.get("status") as Tab | null) ?? "pending_review";
 
   const [requests, setRequests] = useState<Db.VerificationRequestRow[]>([]);
   const [applicantNames, setApplicantNames] = useState<Record<string, string>>({});
   const [state, setState] = useState<LoadState>("loading");
+  const [typeFilter, setTypeFilter] = useState("");
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -49,17 +65,11 @@ export function VerificationList() {
       const rows = (data as Db.VerificationRequestRow[]) ?? [];
       setRequests(rows);
 
-      // applicant name resolution: coach applicant_id is a public.users id
-      // (== coach_profiles.user_id); venue/upa tables don't exist yet (see
-      // 0007_admin_verification_rpcs.sql header), so those fall back to the
-      // payload's own name field, checked at render time.
-      const coachIds = rows.filter((r) => r.applicant_type === "coach").map((r) => r.applicant_id);
-      if (coachIds.length > 0) {
-        const { data: users } = await supabaseClient.from("users").select("id,name").in("id", coachIds);
-        if (!cancelled && users) {
-          setApplicantNames(Object.fromEntries(users.map((u) => [u.id, u.name as string])));
-        }
-      }
+      // One resolver for the queue and the detail screen, so the two cannot
+      // drift again (see ./applicant.ts). Every applicant type is covered,
+      // not only coaches.
+      const names = await resolveApplicantNames(rows);
+      if (!cancelled) setApplicantNames(names);
 
       setState("ready");
     }
@@ -70,136 +80,87 @@ export function VerificationList() {
     };
   }, []);
 
-  const rowsForTab = useMemo(
-    () => requests.filter((r) => r.applicant_type === activeTab && r.status === "pending_review"),
-    [requests, activeTab],
-  );
-
   function applicantName(row: Db.VerificationRequestRow): string {
-    if (row.applicant_type === "coach") return applicantNames[row.applicant_id] ?? row.applicant_id;
-    const payloadName = (row.payload as Record<string, unknown>)?.name;
-    return typeof payloadName === "string" ? payloadName : row.applicant_id;
+    return applicantNames[row.applicant_id] ?? nameFromPayload(row) ?? row.applicant_id;
   }
 
+  const byTypeFilter = useMemo(
+    () => requests.filter((r) => typeFilter === "" || r.applicant_type === typeFilter),
+    [requests, typeFilter],
+  );
+
+  const rowsForTab = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return byTypeFilter.filter((r) => {
+      if (r.status !== activeTab) return false;
+      if (q.length === 0) return true;
+      return applicantName(r).toLowerCase().includes(q);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [byTypeFilter, activeTab, search, applicantNames]);
+
+  const columns: DataTableColumn<Db.VerificationRequestRow>[] = [
+    { key: "applicant", header: "Applicant", render: (row) => applicantName(row) },
+    { key: "type", header: "Type", render: (row) => typeLabel[row.applicant_type] },
+    { key: "submitted", header: "Submitted", render: (row) => new Date(row.created_at).toLocaleDateString() },
+    {
+      key: "status",
+      header: "Status",
+      render: (row) => <Badge tone={statusTone(row.status)}>{statusLabel(row.status)}</Badge>,
+    },
+  ];
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-lg)" }}>
-      <div>
-        <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0, letterSpacing: "-0.4px" }}>
-          Verification queue
-        </h1>
-        <p style={{ fontSize: 14, color: "var(--color-text-secondary)", margin: "var(--space-xs) 0 0" }}>
-          Review coach, venue, and UPA applications before they reach the marketplace.
-        </p>
-      </div>
+    <div className="ak-page-stack">
+      <PageHeader
+        breadcrumbs={[{ label: "Operations" }, { label: "Verification" }]}
+        title="Verification queue"
+        description="Review coach, venue, and UPA applications before they reach the marketplace."
+      />
 
-      <div style={{ display: "flex", gap: "var(--space-xs)", borderBottom: "1px solid var(--color-border)" }}>
-        {tabs.map((tab) => {
-          const isActive = tab.key === activeTab;
-          const count = requests.filter((r) => r.applicant_type === tab.key && r.status === "pending_review").length;
-          return (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setSearchParams({ type: tab.key })}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "var(--space-xs)",
-                padding: "var(--space-sm) var(--space-lg)",
-                border: "none",
-                borderBottom: isActive ? "2px solid var(--color-accent)" : "2px solid transparent",
-                backgroundColor: "transparent",
-                color: isActive ? "var(--color-accent)" : "var(--color-text-secondary)",
-                fontSize: 14,
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
-            >
-              {tab.label}
-              <span
-                style={{
-                  fontFamily: "JetBrains Mono, monospace",
-                  fontSize: 12,
-                  padding: "0 6px",
-                  borderRadius: "var(--radius-pill)",
-                  backgroundColor: "var(--color-surface-muted)",
-                  color: "var(--color-text-secondary)",
-                }}
-              >
-                {count}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+      <Tabs
+        items={statusTabs.map((tab) => ({
+          key: tab.key,
+          label: tab.label,
+          count: byTypeFilter.filter((r) => r.status === tab.key).length,
+        }))}
+        active={activeTab}
+        onChange={(key) => setSearchParams(key === "pending_review" ? {} : { status: key })}
+      />
 
-      <Card style={{ padding: 0 }}>
-        {state === "loading" ? (
-          <div style={{ padding: "var(--space-2xl)", color: "var(--color-text-secondary)", fontSize: 14 }}>
-            Loading verification requests...
-          </div>
-        ) : state === "error" ? (
-          <EmptyState
-            icon={<AlertTriangle size={32} strokeWidth={1.75} />}
-            title="Could not load the queue"
-            description="Something went wrong reading verification_requests. Try again."
+      <FilterBar
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search by applicant name"
+        filters={
+          <Select
+            value={typeFilter}
+            onChange={setTypeFilter}
+            placeholder="All applicant types"
+            options={[
+              { value: "coach", label: "Coach" },
+              { value: "venue", label: "Venue" },
+              { value: "upa", label: "UPA" },
+            ]}
           />
-        ) : rowsForTab.length === 0 ? (
-          <EmptyState
-            icon={<ShieldCheck size={32} strokeWidth={1.75} />}
-            title={`No pending ${tabs.find((t) => t.key === activeTab)?.label.toLowerCase()} requests`}
-            description="Nothing is waiting for review in this tab right now."
-          />
-        ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ textAlign: "left", borderBottom: "1px solid var(--color-border)" }}>
-                {["Applicant", "Submitted", "Status"].map((heading) => (
-                  <th
-                    key={heading}
-                    style={{
-                      padding: "var(--space-sm) var(--space-lg)",
-                      fontSize: 12,
-                      fontWeight: 600,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.04em",
-                      color: "var(--color-text-tertiary)",
-                    }}
-                  >
-                    {heading}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rowsForTab.map((row) => (
-                <tr
-                  key={row.id}
-                  onClick={() => navigate(`/verification/show/${row.id}`)}
-                  style={{ borderBottom: "1px solid var(--color-border)", cursor: "pointer" }}
-                >
-                  <td style={{ padding: "var(--space-md) var(--space-lg)", fontSize: 14, fontWeight: 600 }}>
-                    {applicantName(row)}
-                  </td>
-                  <td
-                    style={{
-                      padding: "var(--space-md) var(--space-lg)",
-                      fontSize: 13,
-                      fontFamily: "JetBrains Mono, monospace",
-                      color: "var(--color-text-secondary)",
-                    }}
-                  >
-                    {new Date(row.created_at).toLocaleDateString()}
-                  </td>
-                  <td style={{ padding: "var(--space-md) var(--space-lg)" }}>
-                    <Badge tone="warning">{row.status}</Badge>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </Card>
+        }
+        resultCount={rowsForTab.length}
+        resultNoun="requests"
+      />
+
+      {state === "error" ? (
+        <EmptyState title="Could not load the queue" body="Something went wrong reading verification_requests. Try again." />
+      ) : (
+        <DataTable
+          columns={columns}
+          rows={rowsForTab}
+          rowKey={(row) => row.id}
+          rowHref={(row) => `/verification/show/${row.id}`}
+          loading={state === "loading"}
+          emptyTitle={`No ${statusTabs.find((t) => t.key === activeTab)?.label.toLowerCase()} requests`}
+          emptyBody="Nothing matches this tab, type, and search right now."
+        />
+      )}
     </div>
   );
 }

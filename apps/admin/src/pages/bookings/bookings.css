@@ -1,0 +1,14 @@
+.ak-page-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+
+.ak-bookings-venue-name {
+  font-weight: var(--weight-semibold);
+}
+
+.ak-bookings-court-name {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}

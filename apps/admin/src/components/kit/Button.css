@@ -36,13 +36,19 @@
   font-size: var(--text-sm);
 }
 
+/* Near-black ink, not white: the button label is 13px, and white on the logo
+   orange is 3.33:1 where normal-size text needs 4.5:1. The orange itself is
+   untouched; accentInk on it reads 5.84:1. */
 .ak-button-primary {
   background-color: var(--color-accent);
-  color: var(--color-ink-on-accent);
+  color: var(--color-accent-ink);
 }
 
+/* Lighter on hover, not darker. The shared `accentPressed` is a deeper orange,
+   and neither white (4.48) nor near-black (4.33) clears 4.5:1 against it, so
+   the hover state would fail where the resting state passes. */
 .ak-button-primary:hover:not(:disabled) {
-  background-color: var(--color-accent-pressed);
+  filter: brightness(1.1);
 }
 
 .ak-button-secondary {

@@ -1,0 +1,107 @@
+.ak-page-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+
+.ak-orders-card-flush {
+  padding: 0;
+}
+
+.ak-orders-card-heading {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  padding: var(--space-lg) var(--space-lg) 0;
+}
+
+.ak-orders-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.ak-orders-table td {
+  padding: var(--space-md) var(--space-lg);
+  border-top: 1px solid var(--color-border);
+  font-size: var(--text-base);
+  vertical-align: middle;
+}
+
+.ak-orders-table tr:first-child td {
+  border-top: none;
+  margin-top: var(--space-md);
+}
+
+.ak-orders-td-numeric {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.ak-orders-item-title {
+  font-weight: var(--weight-semibold);
+}
+
+.ak-orders-item-variant {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.ak-orders-address {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  color: var(--color-text-secondary);
+}
+
+.ak-orders-address-line {
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text);
+  margin: 0;
+}
+
+.ak-orders-address-city {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin: var(--space-xs) 0 0;
+}
+
+.ak-orders-timeline-location {
+  font-weight: var(--weight-semibold);
+}
+
+.ak-orders-timeline-note {
+  color: var(--color-text-secondary);
+}
+
+.ak-orders-side-header {
+  margin-bottom: var(--space-lg);
+}
+
+.ak-orders-error-box {
+  padding: var(--space-md);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-danger);
+  background-color: var(--color-danger-tint);
+  margin-bottom: var(--space-md);
+}
+
+.ak-orders-error-message {
+  font-size: var(--text-base);
+  color: var(--color-danger);
+  margin: var(--space-xs) 0 0;
+}
+
+.ak-orders-muted {
+  font-size: var(--text-base);
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.ak-orders-advance-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}

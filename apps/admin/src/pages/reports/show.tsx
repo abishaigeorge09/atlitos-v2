@@ -1,8 +1,18 @@
-import { AlertTriangle, ArrowLeft, CircleCheck, MessageCircleOff, Trash2, User, X } from "lucide-react";
-import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNotification } from "@refinedev/core";
+import { MessageCircleOff, Trash2, User, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { useParams } from "react-router-dom";
 
-import { Badge, Button, Card, EmptyState } from "../../components/ui";
+import { Badge } from "../../components/kit/Badge";
+import { Button } from "../../components/kit/Button";
+import { Card } from "../../components/kit/Card";
+import { ConfirmDialog, type ConfirmDialogHandle } from "../../components/kit/ConfirmDialog";
+import { DetailLayout } from "../../components/kit/DetailLayout";
+import { EmptyState } from "../../components/kit/EmptyState";
+import { Field } from "../../components/kit/Field";
+import { PageHeader } from "../../components/kit/PageHeader";
+import { DetailSkeleton } from "../../components/kit/Skeleton";
+import { Textarea } from "../../components/kit/Textarea";
 import { Mono } from "../../components/mono";
 import { fetchModerationUrl, moderationApi, type ClipQueueRow, type CommerceError, type ModerationUrl } from "../moderation/api";
 import { clipStatusLabel, clipStatusTone, reportStatusLabel, reportStatusTone } from "../moderation/status";
@@ -14,35 +24,33 @@ import {
   type ReportedUser,
   type ReportQueueRow,
 } from "./api";
+import "./reports.css";
 
 // AT-103, PRD-04 FR-31, FR-32, FR-53. Reports Detail: review the report and the
 // content it targets, then resolve by takedown or dismissal, both with a
-// required reason.
+// required reason. Each action's final step is a kit ConfirmDialog naming the
+// reported item, per this track's plan row; the reason is gathered first (an
+// inline reveal, since ConfirmDialog has no slot for a textarea) and only the
+// already-validated reason is carried into the dialog's onConfirm.
 //
 // Takedown routes through resolve_report's `remove` action, which reuses
-// moderate_clip to set the clip `removed` and writes the audit_log row. A
-// takedown makes the clip unplayable at once: playback is a fresh signed URL
-// minted against the LIVE row (Track B), so the instant it is `removed` the
-// public, owner, and moderation mints all refuse. Dismissal leaves the content
-// untouched and only resolves the report row. This screen never sets a status
-// itself; the RPC is the only write path (PRD-04 FR-26 analogue for clutch).
+// moderate_clip to set the clip `removed` and writes the audit_log row.
+// Dismissal leaves the content untouched and only resolves the report row.
+// This screen never sets a status itself; the RPC is the only write path.
 //
 // Phase 4 LAUNCH Track C (CT-C, 0097_report_block.sql): a chat_message report
 // resolves through admin_get_reported_entity (the only read path onto a chat
 // message's content, Settled decision 6) and its `remove` action soft-deletes
-// the message (removed_at/removed_reason) rather than reusing moderate_clip's
-// takedown, which only knows about clips. A user report's `remove` action
-// resolves the report as actioned with no further mutation here; account
-// enforcement (suspend/ban) is Track B's separate admin_suspend_user action
-// from the User Detail screen, intentionally a second, independently audited
-// step (see 0097's header comment on resolve_report).
+// the message. A user report's `remove` action resolves the report as
+// actioned with no further mutation here; account enforcement is a separate,
+// independently audited step from the User Detail screen.
 
 type LoadState = "loading" | "error" | "ready" | "not_found";
 type ResolveAction = "remove" | "dismiss";
 
 export function ReportShow() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
+  const { open } = useNotification();
 
   const [report, setReport] = useState<ReportQueueRow | null>(null);
   const [reporter, setReporter] = useState<string | null>(null);
@@ -56,9 +64,9 @@ export function ReportShow() {
 
   const [action, setAction] = useState<ResolveAction | null>(null);
   const [reason, setReason] = useState("");
+  const [reasonError, setReasonError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [actionError, setActionError] = useState<CommerceError | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const dialogRef = useRef<ConfirmDialogHandle>(null);
 
   async function load() {
     if (!id) return;
@@ -114,11 +122,6 @@ export function ReportShow() {
         .maybeSingle();
       setCommentText((comment as { text: string } | null)?.text ?? null);
     } else {
-      // chat_message / user: the ONLY read path is admin_get_reported_entity
-      // (0097, Settled decision 6). A refusal (non-admin, malformed report)
-      // surfaces as the existing "could not be loaded" fallback below rather
-      // than a screen-level error, same swallow-and-fallback shape the
-      // clip/comment arms already use for a since-deleted row.
       try {
         const entity = await fetchReportedEntity(row.id);
         if (entity?.entity_type === "chat_message") setChatMessage(entity);
@@ -135,321 +138,229 @@ export function ReportShow() {
     void load();
   }, [id]);
 
-  async function onResolve() {
-    if (!report || !action) return;
+  function reportedItemName(): string {
+    if (!report) return "";
+    if (report.entity_type === "clip") return clip?.caption ?? report.entity_id;
+    if (report.entity_type === "comment") return commentText ?? report.entity_id;
+    if (report.entity_type === "chat_message") return chatMessage?.text ?? report.entity_id;
+    return reportedUser?.name ?? report.entity_id;
+  }
+
+  function startAction(next: ResolveAction) {
+    setAction(next);
+    setReason("");
+    setReasonError(null);
+  }
+
+  function continueToConfirm() {
     if (reason.trim().length === 0) {
-      setActionError({ code: "VALIDATION", message: "A reason is required to resolve a report." });
+      setReasonError("A reason is required to resolve a report.");
       return;
     }
+    setReasonError(null);
+    dialogRef.current?.open();
+  }
+
+  async function onConfirmResolve() {
+    if (!report || !action) return;
     setBusy(true);
-    setActionError(null);
-    setNotice(null);
     try {
       if (action === "remove") {
         await moderationApi.removeReport(report.id, reason.trim());
-        setNotice("Content taken down. It is no longer playable and the creator has been notified.");
+        open?.({ type: "success", message: "Content taken down. The creator has been notified." });
       } else {
         await moderationApi.dismissReport(report.id, reason.trim());
-        setNotice("Report dismissed. The content was left in place.");
+        open?.({ type: "success", message: "Report dismissed. The content was left in place." });
       }
+      dialogRef.current?.close();
       setAction(null);
       setReason("");
       await load();
     } catch (err) {
-      setActionError(err as CommerceError);
+      const e = err as CommerceError;
+      open?.({ type: "error", message: e.code, description: e.message });
     } finally {
       setBusy(false);
     }
   }
 
   if (state === "loading") {
-    return <div style={{ fontSize: 14, color: "var(--color-text-secondary)" }}>Loading report...</div>;
-  }
-
-  if (state === "not_found") {
     return (
-      <Card>
-        <EmptyState
-          icon={<AlertTriangle size={32} strokeWidth={1.75} />}
-          title="Report not found"
-          description="This report does not exist or was removed."
-        />
-      </Card>
+      <div>
+        <PageHeader breadcrumbs={[{ label: "Community", to: "/reports" }, { label: "Reports" }]} title="Loading report" />
+        <DetailSkeleton />
+      </div>
     );
   }
 
-  if (state === "error" || !report) {
+  if (state === "not_found" || state === "error" || !report) {
     return (
-      <Card>
-        <EmptyState
-          icon={<AlertTriangle size={32} strokeWidth={1.75} />}
-          title="Could not load this report"
-          description="Something went wrong reading this report. Try again."
-        />
-      </Card>
+      <div>
+        <PageHeader breadcrumbs={[{ label: "Community", to: "/reports" }, { label: "Reports" }]} title="Report" />
+        <Card>
+          <EmptyState
+            title={state === "not_found" ? "Report not found" : "Could not load this report"}
+            body={
+              state === "not_found"
+                ? "This report does not exist or was removed."
+                : "Something went wrong reading this report. Try again."
+            }
+          />
+        </Card>
+      </div>
     );
   }
 
   const isPending = report.status === "pending";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-lg)", maxWidth: 640 }}>
-      <button
-        type="button"
-        onClick={() => navigate("/reports")}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "var(--space-xs)",
-          border: "none",
-          background: "none",
-          color: "var(--color-text-secondary)",
-          fontSize: 14,
-          cursor: "pointer",
-          padding: 0,
-          alignSelf: "flex-start",
-        }}
-      >
-        <ArrowLeft size={16} strokeWidth={1.75} />
-        Back to queue
-      </button>
+    <div>
+      <PageHeader
+        breadcrumbs={[{ label: "Community", to: "/reports" }, { label: "Reports", to: "/reports" }]}
+        title={report.reason}
+        description={`Report on a ${entityTypeLabel[report.entity_type].toLowerCase()}, filed by ${reporter ?? report.reporter_id}`}
+      />
 
-      <Card>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "var(--space-md)" }}>
-          <div>
-            <p
-              style={{
-                fontSize: 12,
-                fontWeight: 600,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                color: "var(--color-text-tertiary)",
-                margin: 0,
-              }}
-            >
-              Report on a {entityTypeLabel[report.entity_type].toLowerCase()}
-            </p>
-            <h1 style={{ fontSize: 20, fontWeight: 700, margin: "var(--space-xs) 0 0" }}>{report.reason}</h1>
-            <p style={{ fontSize: 14, color: "var(--color-text-secondary)", margin: "var(--space-xs) 0 0" }}>
-              Filed by {reporter ?? report.reporter_id} on{" "}
-              <Mono>{new Date(report.created_at).toLocaleString()}</Mono>
-            </p>
-          </div>
-          <Badge tone={reportStatusTone(report.status)}>{reportStatusLabel(report.status)}</Badge>
-        </div>
-      </Card>
+      <DetailLayout
+        main={
+          <Card>
+            <p className="ak-report-eyebrow">Reported content</p>
 
-      {/* The reported content */}
-      <Card>
-        <p
-          style={{
-            fontSize: 12,
-            fontWeight: 600,
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-            color: "var(--color-text-tertiary)",
-            margin: "0 0 var(--space-md)",
-          }}
-        >
-          Reported content
-        </p>
-
-        {report.entity_type === "clip" ? (
-          clip ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--space-md)" }}>
-                <span style={{ fontSize: 15, fontWeight: 600 }}>{clip.caption}</span>
-                <Badge tone={clipStatusTone(clip.status)}>{clipStatusLabel(clip.status)}</Badge>
-              </div>
-              {preview ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
-                  <video
-                    src={preview.url}
-                    poster={preview.thumbUrl ?? undefined}
-                    controls
-                    playsInline
-                    style={{
-                      width: "100%",
-                      maxHeight: 420,
-                      borderRadius: "var(--radius-md)",
-                      backgroundColor: "var(--color-surface-muted)",
-                    }}
-                  />
-                  <p style={{ fontSize: 13, color: "var(--color-text-secondary)", margin: 0 }}>
-                    Signed preview link, expires in <Mono>{preview.expiresIn}</Mono> seconds. Fixture clips carry
-                    placeholder video, so the player may show nothing.
-                  </p>
+            {report.entity_type === "clip" ? (
+              clip ? (
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--space-md)" }}>
+                    <span style={{ fontSize: "var(--text-md)", fontWeight: "var(--weight-semibold)" }}>{clip.caption}</span>
+                    <Badge tone={clipStatusTone(clip.status)}>{clipStatusLabel(clip.status)}</Badge>
+                  </div>
+                  {preview ? (
+                    <div style={{ marginTop: "var(--space-sm)" }}>
+                      <video src={preview.url} poster={preview.thumbUrl ?? undefined} controls playsInline className="ak-report-preview-video" />
+                      <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)", marginTop: "var(--space-sm)" }}>
+                        Signed preview link, expires in <Mono>{preview.expiresIn}</Mono> seconds. Fixture clips carry
+                        placeholder video, so the player may show nothing.
+                      </p>
+                    </div>
+                  ) : (
+                    <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)", marginTop: "var(--space-sm)" }}>
+                      {clip.status === "removed" ? "This clip is already removed, so no preview link is minted." : "Preview link unavailable for this clip."}
+                    </p>
+                  )}
                 </div>
               ) : (
-                <p style={{ fontSize: 14, color: "var(--color-text-secondary)", margin: 0 }}>
-                  {clip.status === "removed"
-                    ? "This clip is already removed, so no preview link is minted."
-                    : "Preview link unavailable for this clip."}
+                <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)" }}>
+                  The reported clip could not be loaded. It may have been deleted.
                 </p>
-              )}
-            </div>
-          ) : (
-            <p style={{ fontSize: 14, color: "var(--color-text-secondary)", margin: 0 }}>
-              The reported clip could not be loaded. It may have been deleted.
-            </p>
-          )
-        ) : report.entity_type === "comment" ? (
-          commentText ? (
-            <p style={{ fontSize: 15, margin: 0 }}>{commentText}</p>
-          ) : (
-            <p style={{ fontSize: 14, color: "var(--color-text-secondary)", margin: 0 }}>
-              The reported comment could not be loaded. It may have been removed already.
-            </p>
-          )
-        ) : report.entity_type === "chat_message" ? (
-          chatMessage ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "var(--space-xs)", color: "var(--color-text-tertiary)" }}>
-                <MessageCircleOff size={14} strokeWidth={1.75} />
-                <span style={{ fontSize: 12 }}>
-                  Thread <Mono>{chatMessage.thread_id}</Mono>, sender <Mono>{chatMessage.sender_id}</Mono>
-                </span>
-              </div>
-              {chatMessage.removed_at ? (
-                <p style={{ fontSize: 14, color: "var(--color-text-secondary)", margin: 0 }}>
-                  This message was already removed on{" "}
-                  <Mono>{new Date(chatMessage.removed_at).toLocaleString()}</Mono>.
-                </p>
+              )
+            ) : report.entity_type === "comment" ? (
+              commentText ? (
+                <p style={{ fontSize: "var(--text-md)" }}>{commentText}</p>
               ) : (
-                <p style={{ fontSize: 15, margin: 0 }}>{chatMessage.text}</p>
-              )}
-            </div>
-          ) : (
-            <p style={{ fontSize: 14, color: "var(--color-text-secondary)", margin: 0 }}>
-              The reported message could not be loaded, or you do not have access to it.
-            </p>
-          )
-        ) : reportedUser ? (
-          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
-            <User size={18} strokeWidth={1.75} color="var(--color-text-tertiary)" />
-            <span style={{ fontSize: 15, fontWeight: 600 }}>{reportedUser.name}</span>
-            <Mono style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>{reportedUser.id}</Mono>
-          </div>
-        ) : (
-          <p style={{ fontSize: 14, color: "var(--color-text-secondary)", margin: 0 }}>
-            The reported account could not be loaded. It may have been deleted.
-          </p>
-        )}
-      </Card>
-
-      {report.entity_type === "user" && reportedUser ? (
-        <Card>
-          <p style={{ fontSize: 13, color: "var(--color-text-secondary)", margin: 0 }}>
-            Resolving this report does not suspend the account. Suspend or reinstate from the User Detail
-            screen after reviewing this report.
-          </p>
-        </Card>
-      ) : null}
-
-      {/* FR-32 resolve: takedown or dismissal, both with a required reason */}
-      {isPending ? (
-        <Card>
-          {actionError ? (
-            <div
-              style={{
-                padding: "var(--space-md)",
-                borderRadius: "var(--radius-sm)",
-                border: "1px solid var(--color-danger)",
-                backgroundColor: "var(--color-danger-tint)",
-                marginBottom: "var(--space-md)",
-              }}
-            >
-              <Mono style={{ fontSize: 12, fontWeight: 600, color: "var(--color-danger)" }}>{actionError.code}</Mono>
-              <p style={{ fontSize: 14, color: "var(--color-danger)", margin: "var(--space-xs) 0 0" }}>
-                {actionError.message}
-              </p>
-            </div>
-          ) : null}
-
-          {notice ? (
-            <p
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "var(--space-xs)",
-                fontSize: 14,
-                color: "var(--color-success)",
-                margin: "0 0 var(--space-md)",
-              }}
-            >
-              <CircleCheck size={16} strokeWidth={1.75} />
-              {notice}
-            </p>
-          ) : null}
-
-          {action === null ? (
-            <div style={{ display: "flex", gap: "var(--space-sm)" }}>
-              <Button variant="destructive" onClick={() => setAction("remove")} disabled={busy}>
-                <Trash2 size={16} strokeWidth={1.75} />
-                Take down
-              </Button>
-              <Button variant="secondary" onClick={() => setAction("dismiss")} disabled={busy}>
-                <X size={16} strokeWidth={1.75} />
-                Dismiss report
-              </Button>
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
-              <label style={{ display: "flex", flexDirection: "column", gap: "var(--space-xs)" }}>
-                <span style={{ fontSize: 13, fontWeight: 600 }}>
-                  {action === "remove" ? "Takedown reason, required" : "Dismissal reason, required"}
-                </span>
-                <textarea
-                  value={reason}
-                  onChange={(event) => setReason(event.target.value)}
-                  rows={3}
-                  style={{
-                    padding: "var(--space-sm) var(--space-md)",
-                    borderRadius: "var(--radius-sm)",
-                    border: "1px solid var(--color-border)",
-                    backgroundColor: "var(--color-surface-muted)",
-                    color: "var(--color-text)",
-                    fontSize: 14,
-                    resize: "vertical",
-                    fontFamily: "inherit",
-                  }}
-                />
-              </label>
-              <p style={{ fontSize: 13, color: "var(--color-text-secondary)", margin: 0 }}>
-                {action === "remove"
-                  ? report.entity_type === "clip"
-                    ? "The clip becomes unplayable at once and the creator is notified. The reason is recorded in the audit log."
-                    : report.entity_type === "chat_message"
-                      ? "The message is replaced with a removed placeholder for every thread member. The reason is recorded in the audit log."
-                      : report.entity_type === "user"
-                        ? "The report is marked actioned. This does not suspend the account, that is a separate step from the User Detail screen. The reason is recorded in the audit log."
-                        : "The comment is deleted. The reason is recorded in the audit log."
-                  : "The content stays in place. The reason is recorded in the audit log."}
-              </p>
-              <div style={{ display: "flex", gap: "var(--space-sm)" }}>
-                <Button variant={action === "remove" ? "destructive" : "primary"} onClick={onResolve} disabled={busy}>
-                  {action === "remove" ? "Confirm takedown" : "Confirm dismissal"}
-                </Button>
-                <Button variant="secondary" onClick={() => setAction(null)} disabled={busy}>
-                  Cancel
-                </Button>
+                <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)" }}>
+                  The reported comment could not be loaded. It may have been removed already.
+                </p>
+              )
+            ) : report.entity_type === "chat_message" ? (
+              chatMessage ? (
+                <div>
+                  <span className="ak-report-meta-row">
+                    <MessageCircleOff size={14} strokeWidth={1.75} />
+                    Thread <Mono>{chatMessage.thread_id}</Mono>, sender <Mono>{chatMessage.sender_id}</Mono>
+                  </span>
+                  {chatMessage.removed_at ? (
+                    <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)", marginTop: "var(--space-sm)" }}>
+                      This message was already removed on <Mono>{new Date(chatMessage.removed_at).toLocaleString()}</Mono>.
+                    </p>
+                  ) : (
+                    <p style={{ fontSize: "var(--text-md)", marginTop: "var(--space-sm)" }}>{chatMessage.text}</p>
+                  )}
+                </div>
+              ) : (
+                <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)" }}>
+                  The reported message could not be loaded, or you do not have access to it.
+                </p>
+              )
+            ) : reportedUser ? (
+              <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
+                <User size={18} strokeWidth={1.75} color="var(--color-text-tertiary)" />
+                <span style={{ fontSize: "var(--text-md)", fontWeight: "var(--weight-semibold)" }}>{reportedUser.name}</span>
+                <Mono style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)" }}>{reportedUser.id}</Mono>
               </div>
-            </div>
-          )}
-        </Card>
-      ) : (
-        <Card>
-          <p style={{ fontSize: 14, color: "var(--color-text-secondary)", margin: 0 }}>
-            This report was already resolved as {reportStatusLabel(report.status).toLowerCase()}
-            {report.resolved_at ? (
-              <>
-                {" "}on <Mono>{new Date(report.resolved_at).toLocaleString()}</Mono>
-              </>
+            ) : (
+              <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)" }}>
+                The reported account could not be loaded. It may have been deleted.
+              </p>
+            )}
+
+            {report.entity_type === "user" && reportedUser ? (
+              <p style={{ fontSize: "var(--text-xs)", color: "var(--color-text-secondary)", marginTop: "var(--space-md)" }}>
+                Resolving this report does not suspend the account. Account enforcement is a separate step.
+              </p>
             ) : null}
-            . Resolution actions are only available while a report is pending.
-          </p>
-        </Card>
-      )}
+          </Card>
+        }
+        side={
+          <Card>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <p className="ak-report-eyebrow">Status</p>
+              <Badge tone={reportStatusTone(report.status)}>{reportStatusLabel(report.status)}</Badge>
+            </div>
+
+            {isPending ? (
+              action === null ? (
+                <div style={{ display: "flex", gap: "var(--space-sm)", marginTop: "var(--space-lg)" }}>
+                  <Button variant="danger" onClick={() => startAction("remove")}>
+                    <Trash2 size={16} strokeWidth={1.75} />
+                    Take down
+                  </Button>
+                  <Button variant="secondary" onClick={() => startAction("dismiss")}>
+                    <X size={16} strokeWidth={1.75} />
+                    Dismiss report
+                  </Button>
+                </div>
+              ) : (
+                <div className="ak-report-resolve-stack" style={{ marginTop: "var(--space-lg)" }}>
+                  <Field
+                    label={action === "remove" ? "Takedown reason, required" : "Dismissal reason, required"}
+                    error={reasonError ?? undefined}
+                  >
+                    <Textarea value={reason} onChange={setReason} />
+                  </Field>
+                  <div style={{ display: "flex", gap: "var(--space-sm)" }}>
+                    <Button variant={action === "remove" ? "danger" : "primary"} onClick={continueToConfirm}>
+                      Continue
+                    </Button>
+                    <Button variant="secondary" onClick={() => setAction(null)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )
+            ) : (
+              <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)", marginTop: "var(--space-lg)" }}>
+                This report was already resolved as {reportStatusLabel(report.status).toLowerCase()}
+                {report.resolved_at ? <> on <Mono>{new Date(report.resolved_at).toLocaleString()}</Mono></> : null}.
+              </p>
+            )}
+          </Card>
+        }
+      />
+
+      <ConfirmDialog
+        ref={dialogRef}
+        title={action === "remove" ? "Take this content down" : "Dismiss this report"}
+        body={
+          action === "remove"
+            ? "The content becomes unplayable or is removed at once, and this is recorded in the audit log, for"
+            : "The content stays in place and this is recorded in the audit log, for"
+        }
+        recordName={reportedItemName()}
+        confirmLabel={action === "remove" ? "Confirm takedown" : "Confirm dismissal"}
+        cancelLabel="Cancel"
+        danger={action === "remove"}
+        loading={busy}
+        onConfirm={onConfirmResolve}
+      />
     </div>
   );
 }

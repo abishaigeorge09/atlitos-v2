@@ -1,45 +1,44 @@
-import type { Db } from "@atlitos/types";
-import { AlertTriangle, CalendarClock, Search } from "lucide-react";
+import { formatINR } from "@atlitos/theme";
+import type { CourtBookingStatus, Db } from "@atlitos/types";
 import { useEffect, useMemo, useState } from "react";
 
-import { Badge, Card, EmptyState } from "../../components/ui";
+import { Badge } from "../../components/kit/Badge";
+import { DataTable, type DataTableColumn } from "../../components/kit/DataTable";
+import { EmptyState } from "../../components/kit/EmptyState";
+import { FilterBar } from "../../components/kit/FilterBar";
+import { PageHeader } from "../../components/kit/PageHeader";
+import { Select } from "../../components/kit/Select";
+import { Tabs } from "../../components/kit/Tabs";
+import { statusTone } from "../../lib/status";
 import { supabaseClient } from "../../providers/supabaseClient";
+import "./bookings.css";
 
 // Admin additions task (AT-4, AT-11, AT-10): Bookings, read only, for
 // support. Reads public.court_bookings (RLS: court_bookings_select_admin,
 // 0013_admin_courts_bookings.sql, admin/moderator read all) joined to
 // public.courts / public.venues for a human readable location, and
 // public.payment_intents (RLS: payment_intents_select_admin,
-// 0010_payments_core.sql) for payment status. No mutating action anywhere
-// on this page: booking status transitions stay behind
+// 0010_payments_core.sql) for payment status, kept on this page as a
+// tooltip on the total rather than a full column. No mutating action
+// anywhere on this page: booking status transitions stay behind
 // court_booking_transition / court_booking_confirm_payment /
 // court_booking_expire_payment (all RPC gated already), matching CLAUDE.md's
 // financial invariant and this resource's own read only scope.
-//
-// court_bookings.status can also be 'pending_payment' or 'expired'
-// (0011_courts_payment_state.sql added these enum values after
-// packages/types's hand authored CourtBookingStatus union was written;
-// known, pre-existing type package debt, not in this task's scope to fix).
-// Status is rendered generically here rather than narrowed to that union so
-// this page does not need to wait on that fix.
 type BookingListRow = Db.CourtBookingRow & {
   courts: { name: string; sport: string; venue_id: string } | null;
 };
 
 type LoadState = "loading" | "error" | "ready";
 
-function bookingStatusTone(status: string): "neutral" | "success" | "warning" | "danger" {
-  if (status === "confirmed" || status === "completed") return "success";
-  if (status === "cancelled" || status === "expired" || status === "no_show") return "danger";
-  return "warning";
-}
-
-function paymentStatusTone(status: string | null): "neutral" | "success" | "warning" | "danger" {
-  if (!status) return "neutral";
-  if (status === "captured") return "success";
-  if (status === "failed") return "danger";
-  return "warning";
-}
+const statusTabs: { key: "all" | CourtBookingStatus; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "confirmed", label: "Confirmed" },
+  { key: "completed", label: "Completed" },
+  { key: "pending_payment", label: "Pending payment" },
+  { key: "cancelled", label: "Cancelled" },
+  { key: "no_show", label: "No show" },
+  { key: "expired", label: "Expired" },
+];
 
 export function BookingsList() {
   const [rows, setRows] = useState<BookingListRow[]>([]);
@@ -48,6 +47,8 @@ export function BookingsList() {
   const [paymentStatuses, setPaymentStatuses] = useState<Record<string, string>>({});
   const [state, setState] = useState<LoadState>("loading");
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | CourtBookingStatus>("all");
+  const [venueFilter, setVenueFilter] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -107,153 +108,108 @@ export function BookingsList() {
     };
   }, []);
 
+  function bookedByFor(row: BookingListRow): string {
+    if (row.user_id) return userNames[row.user_id] ?? row.user_id;
+    return row.walk_in_name ? `${row.walk_in_name}, walk in` : "Walk in";
+  }
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return rows;
     return rows.filter((row) => {
+      if (statusFilter !== "all" && row.status !== statusFilter) return false;
       const venueName = row.courts ? venueNames[row.courts.venue_id] ?? "" : "";
-      const bookedBy = row.user_id ? userNames[row.user_id] ?? "" : row.walk_in_name ?? "";
+      if (venueFilter && (row.courts?.venue_id ?? "") !== venueFilter) return false;
+      if (q.length === 0) return true;
+      const bookedBy = bookedByFor(row);
       return (
         venueName.toLowerCase().includes(q) ||
         (row.courts?.name ?? "").toLowerCase().includes(q) ||
         bookedBy.toLowerCase().includes(q)
       );
     });
-  }, [rows, search, venueNames, userNames]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, search, statusFilter, venueFilter, venueNames, userNames]);
+
+  const venueOptions = useMemo(() => {
+    const ids = Array.from(new Set(rows.map((r) => r.courts?.venue_id).filter((v): v is string => Boolean(v))));
+    return ids.map((id) => ({ value: id, label: venueNames[id] ?? id }));
+  }, [rows, venueNames]);
+
+  const columns: DataTableColumn<BookingListRow>[] = [
+    {
+      key: "when",
+      header: "Date / slot",
+      render: (row) => `${row.date}, ${row.slot_start}, ${row.slot_end}`,
+    },
+    {
+      key: "venue",
+      header: "Venue",
+      render: (row) => (
+        <div>
+          <div className="ak-bookings-venue-name">{row.courts ? venueNames[row.courts.venue_id] ?? "Unknown venue" : "Unknown venue"}</div>
+          <div className="ak-bookings-court-name">{row.courts?.name ?? row.court_id}</div>
+        </div>
+      ),
+    },
+    { key: "customer", header: "Customer", render: (row) => bookedByFor(row) },
+    { key: "source", header: "Source", render: (row) => row.booking_source },
+    {
+      key: "total",
+      header: "Total",
+      numeric: true,
+      render: (row) => {
+        const paymentStatus = row.payment_intent_id ? paymentStatuses[row.payment_intent_id] : undefined;
+        return <span title={paymentStatus ? `Payment ${paymentStatus}` : undefined}>{formatINR(Number(row.total))}</span>;
+      },
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: (row) => <Badge tone={statusTone(row.status)}>{row.status.replace(/_/g, " ")}</Badge>,
+    },
+  ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-lg)" }}>
-      <div>
-        <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0, letterSpacing: "-0.4px" }}>Bookings</h1>
-        <p style={{ fontSize: 14, color: "var(--color-text-secondary)", margin: "var(--space-xs) 0 0" }}>
-          Every court booking with its payment status, read only, for support. The most recent 200 bookings.
-        </p>
-      </div>
+    <div className="ak-page-stack">
+      <PageHeader
+        breadcrumbs={[{ label: "Operations" }, { label: "Bookings" }]}
+        title="Bookings"
+        description="Every court booking with its payment status, read only, for support. The most recent 200 bookings."
+      />
 
-      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", maxWidth: 320 }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "var(--space-sm)",
-            padding: "var(--space-sm) var(--space-md)",
-            borderRadius: "var(--radius-sm)",
-            border: "1px solid var(--color-border)",
-            backgroundColor: "var(--color-surface-muted)",
-            width: "100%",
-          }}
-        >
-          <Search size={16} strokeWidth={1.75} color="var(--color-text-tertiary)" />
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search by venue, court, or player"
-            style={{
-              border: "none",
-              outline: "none",
-              backgroundColor: "transparent",
-              fontSize: 14,
-              color: "var(--color-text)",
-              width: "100%",
-            }}
-          />
-        </div>
-      </div>
+      <Tabs
+        items={statusTabs.map((tab) => ({
+          key: tab.key,
+          label: tab.label,
+          count: tab.key === "all" ? rows.length : rows.filter((r) => r.status === tab.key).length,
+        }))}
+        active={statusFilter}
+        onChange={(key) => setStatusFilter(key as "all" | CourtBookingStatus)}
+      />
 
-      <Card style={{ padding: 0 }}>
-        {state === "loading" ? (
-          <div style={{ padding: "var(--space-2xl)", color: "var(--color-text-secondary)", fontSize: 14 }}>
-            Loading bookings...
-          </div>
-        ) : state === "error" ? (
-          <EmptyState
-            icon={<AlertTriangle size={32} strokeWidth={1.75} />}
-            title="Could not load bookings"
-            description="Something went wrong reading the court_bookings table. Try again."
-          />
-        ) : filtered.length === 0 ? (
-          <EmptyState
-            icon={<CalendarClock size={32} strokeWidth={1.75} />}
-            title="No bookings found"
-            description="No bookings match this search."
-          />
-        ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ textAlign: "left", borderBottom: "1px solid var(--color-border)" }}>
-                  {["Venue / Court", "Booked by", "Date / slot", "Total", "Booking status", "Payment status"].map(
-                    (heading) => (
-                      <th
-                        key={heading}
-                        style={{
-                          padding: "var(--space-sm) var(--space-lg)",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          textTransform: "uppercase",
-                          letterSpacing: "0.04em",
-                          color: "var(--color-text-tertiary)",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {heading}
-                      </th>
-                    ),
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((row) => {
-                  const venueName = row.courts ? venueNames[row.courts.venue_id] ?? "Unknown venue" : "Unknown venue";
-                  const bookedBy = row.user_id
-                    ? userNames[row.user_id] ?? row.user_id
-                    : row.walk_in_name
-                      ? `${row.walk_in_name}, walk in`
-                      : "Walk in";
-                  const paymentStatus = row.payment_intent_id ? paymentStatuses[row.payment_intent_id] ?? null : null;
+      <FilterBar
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search by venue, court, or player"
+        filters={
+          <Select value={venueFilter} onChange={setVenueFilter} placeholder="All venues" options={venueOptions} />
+        }
+        resultCount={filtered.length}
+        resultNoun="bookings"
+      />
 
-                  return (
-                    <tr key={row.id} style={{ borderBottom: "1px solid var(--color-border)" }}>
-                      <td style={{ padding: "var(--space-md) var(--space-lg)", fontSize: 14 }}>
-                        <div style={{ fontWeight: 600 }}>{venueName}</div>
-                        <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>{row.courts?.name ?? row.court_id}</div>
-                      </td>
-                      <td style={{ padding: "var(--space-md) var(--space-lg)", fontSize: 14, color: "var(--color-text-secondary)" }}>
-                        {bookedBy}
-                      </td>
-                      <td
-                        style={{
-                          padding: "var(--space-md) var(--space-lg)",
-                          fontSize: 13,
-                          fontFamily: "JetBrains Mono, monospace",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {row.date}, {row.slot_start}, {row.slot_end}
-                      </td>
-                      <td
-                        style={{
-                          padding: "var(--space-md) var(--space-lg)",
-                          fontSize: 14,
-                          fontFamily: "JetBrains Mono, monospace",
-                        }}
-                      >
-                        Rs {Number(row.total).toFixed(2)}
-                      </td>
-                      <td style={{ padding: "var(--space-md) var(--space-lg)" }}>
-                        <Badge tone={bookingStatusTone(row.status)}>{row.status}</Badge>
-                      </td>
-                      <td style={{ padding: "var(--space-md) var(--space-lg)" }}>
-                        <Badge tone={paymentStatusTone(paymentStatus)}>{paymentStatus ?? "no payment intent"}</Badge>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
+      {state === "error" ? (
+        <EmptyState title="Could not load bookings" body="Something went wrong reading the court_bookings table. Try again." />
+      ) : (
+        <DataTable
+          columns={columns}
+          rows={filtered}
+          rowKey={(row) => row.id}
+          loading={state === "loading"}
+          emptyTitle="No bookings found"
+          emptyBody="No bookings match this tab, filter, and search."
+        />
+      )}
     </div>
   );
 }

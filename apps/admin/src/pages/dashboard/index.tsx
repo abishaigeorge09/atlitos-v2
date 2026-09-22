@@ -1,25 +1,23 @@
-import { AlertTriangle, IndianRupee, ListChecks, TrendingUp, Users as UsersIcon } from "lucide-react";
+import { formatINR } from "@atlitos/theme";
+import { AlertTriangle, ChevronRight, FileWarning, Flag, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
-import { Card } from "../../components/ui";
+import { Card } from "../../components/kit/Card";
+import { PageHeader } from "../../components/kit/PageHeader";
+import { Skeleton } from "../../components/kit/Skeleton";
 import { Mono } from "../../components/mono";
 import { dashboardApi, type KpiActivity, type KpiMoney, type KpiQueues, type KpiUsers } from "./api";
+import "./dashboard.css";
 
-// PRD-04 FR-4, FR-5. Dashboard Overview: KPI tiles for total users by role,
-// bookings this week (courts plus sessions combined), orders this week, GMV
-// this week, pending verification count, pending moderation count, and open
-// support ticket count (PHASE-4-STATUS.md CT-B / decision 9).
+// PRD-04 FR-4, FR-5. Dashboard Overview: KPI tiles for total users, GMV this
+// week, bookings this week, orders this week, plus queue counts. FR-5 ("each
+// KPI tile loads and errors independently; a failure to compute one tile
+// does not block the others from rendering") is why this page runs FOUR
+// independent fetches, one per `useTileCluster` call below, rather than one
+// Promise.all that would fail the whole page on a single RPC error.
 //
-// FR-5 ("each KPI tile loads and errors independently; a failure to compute
-// one tile does not block the others from rendering") is why this page runs
-// FOUR separate fetches, one per `useTileCluster` call below, each with its
-// own loading/error state, rather than one Promise.all that would fail the
-// whole page on a single RPC error. A cluster that throws renders its own
-// inline error card; the other three still render their real numbers.
-//
-// "This week" is a rolling 7 days, matching 0096's window definition
-// (documented there and in RLS.md) rather than a calendar week that would
-// reset visibly to 0 every Monday with no incident behind it.
+// "This week" is a rolling 7 days, matching 0096's window definition.
 
 type ClusterState<T> =
   | { status: "loading" }
@@ -53,56 +51,68 @@ function useTileCluster<T>(fetcher: () => Promise<T>): ClusterState<T> {
   return state;
 }
 
-function ClusterCard({
-  title,
-  icon,
+function KpiTile<T>({
+  label,
   state,
-  render,
+  value,
 }: {
-  title: string;
-  icon: React.ReactNode;
-  state: ClusterState<unknown>;
-  render: (data: unknown) => React.ReactNode;
+  label: string;
+  state: ClusterState<T>;
+  value: (data: T) => React.ReactNode;
 }) {
   return (
-    <Card>
-      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", marginBottom: "var(--space-lg)" }}>
-        <span style={{ color: "var(--color-text-tertiary)" }}>{icon}</span>
-        <p
-          style={{
-            fontSize: 12,
-            fontWeight: 600,
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-            color: "var(--color-text-tertiary)",
-            margin: 0,
-          }}
-        >
-          {title}
-        </p>
-      </div>
+    <Card className="ak-dashboard-kpi-card">
       {state.status === "loading" ? (
-        <p style={{ fontSize: 14, color: "var(--color-text-secondary)", margin: 0 }}>Loading...</p>
+        <>
+          <Skeleton width={70} height={22} />
+          <Skeleton width={110} height={12} />
+        </>
       ) : state.status === "error" ? (
-        <div style={{ display: "flex", alignItems: "flex-start", gap: "var(--space-sm)" }}>
-          <AlertTriangle size={16} strokeWidth={1.75} color="var(--color-danger)" />
-          <p style={{ fontSize: 13, color: "var(--color-danger)", margin: 0 }}>
-            Could not load this cluster. {state.message}
-          </p>
-        </div>
+        <>
+          <span className="ak-dashboard-kpi-error">
+            <AlertTriangle size={16} strokeWidth={1.75} />
+          </span>
+          <span className="ak-dashboard-kpi-label">{label}, could not load</span>
+        </>
       ) : (
-        render(state.data)
+        <>
+          <Mono style={{ fontSize: "var(--text-lg)", fontWeight: "var(--weight-semibold)" }}>
+            {value(state.data)}
+          </Mono>
+          <span className="ak-dashboard-kpi-label">{label}</span>
+        </>
       )}
     </Card>
   );
 }
 
-function Tile({ label, value }: { label: string; value: number | string }) {
+function AttentionRow({
+  icon,
+  label,
+  state,
+  count,
+  to,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  state?: ClusterState<unknown>;
+  count?: (data: unknown) => number;
+  to: string;
+}) {
   return (
-    <div>
-      <Mono style={{ fontSize: 24, fontWeight: 700, display: "block" }}>{value}</Mono>
-      <p style={{ fontSize: 12, color: "var(--color-text-secondary)", margin: "var(--space-xs) 0 0" }}>{label}</p>
-    </div>
+    <Link to={to} className="ak-dashboard-attention-row">
+      <span className="ak-dashboard-attention-icon">{icon}</span>
+      <span className="ak-dashboard-attention-label">{label}</span>
+      {!state || !count ? (
+        <ChevronRight size={16} strokeWidth={1.75} />
+      ) : state.status === "ready" ? (
+        <Mono style={{ fontWeight: "var(--weight-semibold)" }}>{count(state.data)}</Mono>
+      ) : state.status === "error" ? (
+        <span className="ak-dashboard-kpi-error">Unavailable</span>
+      ) : (
+        <Skeleton width={24} height={14} />
+      )}
+    </Link>
   );
 }
 
@@ -113,89 +123,73 @@ export function Dashboard() {
   const activity = useTileCluster(dashboardApi.activity);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-lg)" }}>
-      <div>
-        <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0, letterSpacing: "-0.4px" }}>Dashboard</h1>
-        <p style={{ fontSize: 14, color: "var(--color-text-secondary)", margin: "var(--space-xs) 0 0" }}>
-          Platform activity over the last 7 days.
-        </p>
+    <div className="ak-dashboard">
+      <PageHeader title="Dashboard" description="Platform activity over the last 7 days." />
+
+      <div className="ak-dashboard-kpi-row">
+        <KpiTile label="GMV, gross captured" state={money} value={(m: KpiMoney) => formatINR(Number(m.gmv_captured_7d))} />
+        <KpiTile label="Total users" state={users} value={(u: KpiUsers) => u.total_users} />
+        <KpiTile label="Bookings this week" state={activity} value={(a: KpiActivity) => a.bookings_7d} />
+        <KpiTile label="Orders this week" state={activity} value={(a: KpiActivity) => a.orders_7d} />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "var(--space-lg)" }}>
-        <ClusterCard
-          title="Money"
-          icon={<IndianRupee size={16} strokeWidth={1.75} />}
-          state={money}
-          render={(data) => {
-            const m = data as KpiMoney;
-            return <Tile label="GMV, gross captured" value={`Rs ${Number(m.gmv_captured_7d).toFixed(2)}`} />;
-          }}
-        />
+      <div className="ak-dashboard-cards-row">
+        <Card>
+          <h2 className="ak-dashboard-card-title">Needs attention</h2>
+          <div className="ak-dashboard-attention-list">
+            <AttentionRow
+              icon={<ShieldCheck size={16} strokeWidth={1.75} />}
+              label="Pending verification"
+              state={queues}
+              count={(d) => (d as KpiQueues).pending_verifications}
+              to="/verification"
+            />
+            <AttentionRow
+              icon={<FileWarning size={16} strokeWidth={1.75} />}
+              label="Clip moderation queue"
+              to="/moderation"
+            />
+            <AttentionRow
+              icon={<Flag size={16} strokeWidth={1.75} />}
+              label="Open reports"
+              state={queues}
+              count={(d) => (d as KpiQueues).pending_reports}
+              to="/reports"
+            />
+          </div>
+        </Card>
 
-        <ClusterCard
-          title="Users"
-          icon={<UsersIcon size={16} strokeWidth={1.75} />}
-          state={users}
-          render={(data) => {
-            const u = data as KpiUsers;
-            return (
-              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
-                <div style={{ display: "flex", gap: "var(--space-xl)" }}>
-                  <Tile label="Total users" value={u.total_users} />
-                  <Tile label="Signups" value={u.signups_7d} />
-                </div>
-                <div style={{ display: "flex", gap: "var(--space-sm)", flexWrap: "wrap" }}>
-                  {Object.entries(u.by_role).map(([role, count]) => (
-                    <span
-                      key={role}
-                      style={{
-                        fontSize: 12,
-                        padding: "2px var(--space-sm)",
-                        borderRadius: "var(--radius-pill)",
-                        backgroundColor: "var(--color-surface-muted)",
-                        color: "var(--color-text-secondary)",
-                      }}
-                    >
-                      {role}: <Mono style={{ fontWeight: 600 }}>{count}</Mono>
-                    </span>
-                  ))}
-                </div>
+        <Card>
+          <h2 className="ak-dashboard-card-title">Recent</h2>
+          {activity.status === "loading" ? (
+            <div className="ak-dashboard-recent-list">
+              <Skeleton width="90%" height={14} />
+              <Skeleton width="80%" height={14} />
+              <Skeleton width="70%" height={14} />
+            </div>
+          ) : activity.status === "error" ? (
+            <p className="ak-dashboard-kpi-error">Could not load recent activity. {activity.message}</p>
+          ) : (
+            <div className="ak-dashboard-recent-list">
+              <div className="ak-dashboard-recent-row">
+                <span>Court bookings</span>
+                <Mono>{activity.data.court_bookings_7d}</Mono>
               </div>
-            );
-          }}
-        />
-
-        <ClusterCard
-          title="Queues"
-          icon={<ListChecks size={16} strokeWidth={1.75} />}
-          state={queues}
-          render={(data) => {
-            const q = data as KpiQueues;
-            return (
-              <div style={{ display: "flex", gap: "var(--space-xl)", flexWrap: "wrap" }}>
-                <Tile label="Pending refunds" value={q.pending_refunds} />
-                <Tile label="Pending verifications" value={q.pending_verifications} />
-                <Tile label="Pending reports" value={q.pending_reports} />
+              <div className="ak-dashboard-recent-row">
+                <span>Coach sessions</span>
+                <Mono>{activity.data.sessions_7d}</Mono>
               </div>
-            );
-          }}
-        />
-
-        <ClusterCard
-          title="Activity"
-          icon={<TrendingUp size={16} strokeWidth={1.75} />}
-          state={activity}
-          render={(data) => {
-            const a = data as KpiActivity;
-            return (
-              <div style={{ display: "flex", gap: "var(--space-xl)", flexWrap: "wrap" }}>
-                <Tile label="Bookings" value={a.bookings_7d} />
-                <Tile label="Orders" value={a.orders_7d} />
-                <Tile label="Open support tickets" value={a.open_support_tickets} />
+              <div className="ak-dashboard-recent-row">
+                <span>Orders placed</span>
+                <Mono>{activity.data.orders_7d}</Mono>
               </div>
-            );
-          }}
-        />
+              <div className="ak-dashboard-recent-row">
+                <span>Open support tickets</span>
+                <Mono>{activity.data.open_support_tickets}</Mono>
+              </div>
+            </div>
+          )}
+        </Card>
       </div>
     </div>
   );

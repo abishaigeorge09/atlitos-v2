@@ -4,6 +4,12 @@
 // all confirmed against apps/admin/src source before writing this file) with
 // direct RPC/edge-function probes for the server-side-enforcement cases,
 // per the same "UI green is not proof" discipline as the other money specs.
+//
+// 2026-09-22 (admin UX phase A1): signing in now lands on /dashboard, not
+// /verification. Dashboard became the first nav resource when the shell was
+// rebuilt, so `NavigateToResource` resolves the index route there. The five
+// post-login URL assertions below follow it; every other selector in this
+// file is a frozen copy string listed in docs/PLAN-ADMIN-UX.md.
 
 import { callFunction } from "../../helpers/money.mjs";
 import { ATLITOS_PASSWORD, personaSession } from "../../helpers/persona.mjs";
@@ -26,12 +32,12 @@ const VARIANT_GLOVES = "30000000-0000-0000-0000-000000000003";
 const PLAYER_ADDRESS_ID = "c8971c75-5b0f-4a8f-824f-3b90857fdfd0";
 
 test.describe("AD: admin UI gates @money", () => {
-  test("AD-01 admin@ signs in to the verification queue; player@ is rejected with no role hint @smoke", async ({ page, consoleGuard }) => {
+  test("AD-01 admin@ signs in to the dashboard; player@ is rejected with no role hint @smoke", async ({ page, consoleGuard }) => {
     await page.goto("/login");
     await page.getByLabel("Email").fill("admin@atlitos.dev");
     await page.getByLabel("Password").fill(ATLITOS_PASSWORD);
     await page.getByRole("button", { name: "Sign in" }).click();
-    await expect(page).toHaveURL(/\/verification/, { timeout: 15_000 });
+    await expect(page).toHaveURL(/\/dashboard/, { timeout: 15_000 });
 
     await page.getByRole("button", { name: /sign ?out/i }).click({ trial: true }).catch(() => {});
     // Fresh context: player@ (a real, valid Supabase account, just not an
@@ -72,7 +78,7 @@ test.describe("AD: admin UI gates @money", () => {
     await page.getByLabel("Email").fill("admin@atlitos.dev");
     await page.getByLabel("Password").fill(ATLITOS_PASSWORD);
     await page.getByRole("button", { name: "Sign in" }).click();
-    await expect(page).toHaveURL(/\/verification/, { timeout: 15_000 });
+    await expect(page).toHaveURL(/\/dashboard/, { timeout: 15_000 });
 
     // Approve: publishes, notice shown, status badge flips.
     await page.goto(`/moderation/show/${approveClipId}`);
@@ -133,7 +139,7 @@ test.describe("AD: admin UI gates @money", () => {
     await page.getByLabel("Email").fill("admin@atlitos.dev");
     await page.getByLabel("Password").fill(ATLITOS_PASSWORD);
     await page.getByRole("button", { name: "Sign in" }).click();
-    await expect(page).toHaveURL(/\/verification/, { timeout: 15_000 });
+    await expect(page).toHaveURL(/\/dashboard/, { timeout: 15_000 });
 
     await page.goto(`/verification/show/${request.id}`);
     await expect(page.getByRole("button", { name: "Approve" })).toBeVisible({ timeout: 15_000 });
@@ -202,7 +208,7 @@ test.describe("AD: admin UI gates @money", () => {
     await page.getByLabel("Email").fill("admin@atlitos.dev");
     await page.getByLabel("Password").fill(ATLITOS_PASSWORD);
     await page.getByRole("button", { name: "Sign in" }).click();
-    await expect(page).toHaveURL(/\/verification/, { timeout: 15_000 });
+    await expect(page).toHaveURL(/\/dashboard/, { timeout: 15_000 });
     await page.goto("/orders");
     const firstOrderLink = page.locator('a[href^="/orders/show/"]').first();
     const hasOrder = await firstOrderLink.count();
@@ -233,7 +239,7 @@ test.describe("AD: admin UI gates @money", () => {
     await page.getByLabel("Email").fill("admin@atlitos.dev");
     await page.getByLabel("Password").fill(ATLITOS_PASSWORD);
     await page.getByRole("button", { name: "Sign in" }).click();
-    await expect(page).toHaveURL(/\/verification/, { timeout: 15_000 });
+    await expect(page).toHaveURL(/\/dashboard/, { timeout: 15_000 });
 
     await page.goto("/users");
     await expect(page.getByRole("button", { name: /suspend/i })).toHaveCount(0);

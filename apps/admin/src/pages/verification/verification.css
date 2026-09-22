@@ -1,0 +1,87 @@
+.ak-page-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+
+.ak-verification-subhead {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  margin: 0 0 var(--space-lg);
+}
+
+.ak-verification-muted {
+  font-size: var(--text-base);
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.ak-verification-fields {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  row-gap: var(--space-md);
+  column-gap: var(--space-lg);
+  margin: 0;
+}
+
+.ak-verification-field-row {
+  display: contents;
+}
+
+.ak-verification-field-row dt {
+  font-size: var(--text-base);
+  color: var(--color-text-secondary);
+}
+
+.ak-verification-field-row dd {
+  font-size: var(--text-base);
+  margin: 0;
+  word-break: break-word;
+}
+
+.ak-verification-documents {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.ak-verification-document-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  /* accent on a white card is 3.32:1; this link is body size. */
+  color: var(--color-accent-on-tint);
+  font-size: var(--text-base);
+  text-decoration: none;
+}
+
+.ak-verification-document-link:hover {
+  text-decoration: underline;
+}
+
+.ak-verification-side-header {
+  margin-bottom: var(--space-lg);
+}
+
+.ak-verification-meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.ak-verification-actions {
+  margin-top: var(--space-lg);
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--color-border);
+}
+
+.ak-verification-action-row {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.ak-verification-reject-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}

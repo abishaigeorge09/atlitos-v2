@@ -1,0 +1,16 @@
+.ak-fee-domain-group {
+  margin-bottom: var(--space-xl);
+}
+
+.ak-fee-domain-label {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  margin: 0 0 var(--space-sm);
+}
+
+.ak-fee-edit-card {
+  margin-top: var(--space-lg);
+}

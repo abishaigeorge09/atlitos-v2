@@ -1,32 +1,19 @@
 import { Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 
-const STORAGE_KEY = "atlitos-admin-theme";
+import { applyTheme, resolveTheme, storeTheme, type Theme } from "../lib/theme";
 
-type Theme = "light" | "dark";
-
-function resolveInitialTheme(): Theme {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (stored === "light" || stored === "dark") return stored;
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-}
-
-function applyTheme(theme: Theme) {
-  document.documentElement.dataset.theme = theme;
-  document.documentElement.classList.toggle("dark", theme === "dark");
-}
-
-/** data-theme on <html> from localStorage, prefers-color-scheme default. */
+/**
+ * Flips the theme. It does NOT own it: `main.tsx` applies the stored
+ * preference before the first render, so every screen including /login is
+ * themed whether or not this toggle is on it.
+ */
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>(() => {
-    const initial = resolveInitialTheme();
-    applyTheme(initial);
-    return initial;
-  });
+  const [theme, setTheme] = useState<Theme>(() => resolveTheme());
 
   useEffect(() => {
     applyTheme(theme);
-    localStorage.setItem(STORAGE_KEY, theme);
+    storeTheme(theme);
   }, [theme]);
 
   return (

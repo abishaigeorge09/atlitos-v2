@@ -1,3 +1,4 @@
+import { useFieldControl } from "./Field";
 import "./Field.css";
 
 export function Input({
@@ -20,16 +21,18 @@ export function Input({
   id?: string;
   type?: string;
 }) {
+  const field = useFieldControl(id);
   return (
     <input
-      id={id}
+      id={field.id}
       type={type}
       value={value}
       placeholder={placeholder}
       disabled={disabled}
       onChange={(event) => onChange(event.target.value)}
       className={`ak-input${mono ? " ak-input-mono" : ""}`}
-      aria-invalid={invalid || undefined}
+      aria-invalid={invalid || field.invalid || undefined}
+      aria-describedby={field.describedBy}
     />
   );
 }

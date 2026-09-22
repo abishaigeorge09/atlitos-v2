@@ -13,6 +13,11 @@ export type StatusTone = "neutral" | "success" | "warning" | "danger";
 export const STATUS_TONE: Record<string, StatusTone> = {
   // Verification / moderation / reports
   pending: "warning",
+  // The verification_status enum's real pending value, and the venue/coach
+  // "verified" terminal state. Both were missing at A2 integration and made
+  // a pending badge render neutral, which reads as "nothing to do here".
+  pending_review: "warning",
+  verified: "success",
   approved: "success",
   rejected: "danger",
   under_review: "warning",
