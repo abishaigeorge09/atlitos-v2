@@ -1,37 +1,37 @@
+import { useNotification } from "@refinedev/core";
 import type { Db } from "@atlitos/types";
-import { AlertTriangle, ArrowLeft, Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 
-import { Badge, Button, Card, EmptyState } from "../../components/ui";
+import { Badge } from "../../components/kit/Badge";
+import { Button } from "../../components/kit/Button";
+import { Card } from "../../components/kit/Card";
+import { DetailLayout } from "../../components/kit/DetailLayout";
+import { EmptyState } from "../../components/kit/EmptyState";
+import { DetailSkeleton } from "../../components/kit/Skeleton";
+import { PageHeader } from "../../components/kit/PageHeader";
 import { Mono } from "../../components/mono";
 import { drillApi, fetchDrill, type CommerceError, type DrillInput } from "./api";
 import { DrillForm } from "./form";
 
-// AT-133, PRD-04 FR-50 (edit) and FR-51 (activate/deactivate). Every mutation
-// goes through a 0061 admin RPC, never a direct table write, because each needs
-// an audit_log row the client has no grant to write. Editing content and
-// flipping active are two separate audited actions: the form calls
-// admin_upsert_drill (drill.update), the toggle calls admin_set_drill_active
-// (drill.activate / drill.deactivate).
+// AT-133, PRD-04 FR-50 (edit) and FR-51 (activate/deactivate). Every
+// mutation goes through a 0061 admin RPC, never a direct table write,
+// because each needs an audit_log row the client has no grant to write.
+// Editing content and flipping active are two separate audited actions: the
+// form calls admin_upsert_drill (drill.update), the toggle calls
+// admin_set_drill_active (drill.activate / drill.deactivate).
 
 type LoadState = "loading" | "error" | "ready" | "not_found";
 type DrillRow = Db.DrillRow;
 
-function errorMessage(err: unknown): string {
-  const e = err as CommerceError;
-  return e?.message ?? "Something went wrong. Try again.";
-}
-
 export function DrillShow() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
+  const { open } = useNotification();
 
   const [drill, setDrill] = useState<DrillRow | null>(null);
   const [state, setState] = useState<LoadState>("loading");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
 
   async function load() {
     if (!id) return;
@@ -53,46 +53,44 @@ export function DrillShow() {
     void load();
   }, [id]);
 
-  async function run(action: () => Promise<unknown>, successNotice: string) {
+  async function run(action: () => Promise<unknown>, successMessage: string) {
     setBusy(true);
-    setError(null);
-    setNotice(null);
     try {
       await action();
-      setNotice(successNotice);
+      open?.({ type: "success", message: successMessage });
       await load();
     } catch (err) {
-      setError(errorMessage(err));
+      const e = err as CommerceError;
+      open?.({ type: "error", message: e.code ?? "Something went wrong", description: e.message });
     } finally {
       setBusy(false);
     }
   }
 
   if (state === "loading") {
-    return <div style={{ fontSize: 14, color: "var(--color-text-secondary)" }}>Loading drill...</div>;
-  }
-
-  if (state === "not_found") {
     return (
-      <Card>
-        <EmptyState
-          icon={<AlertTriangle size={32} strokeWidth={1.75} />}
-          title="Drill not found"
-          description="This drill does not exist or was removed."
-        />
-      </Card>
+      <div>
+        <PageHeader breadcrumbs={[{ label: "Community", to: "/drills" }, { label: "Drills" }]} title="Loading drill" />
+        <DetailSkeleton />
+      </div>
     );
   }
 
-  if (state === "error" || !drill) {
+  if (state === "not_found" || state === "error" || !drill) {
     return (
-      <Card>
-        <EmptyState
-          icon={<AlertTriangle size={32} strokeWidth={1.75} />}
-          title="Could not load this drill"
-          description="Something went wrong reading this drill. Try again."
-        />
-      </Card>
+      <div>
+        <PageHeader breadcrumbs={[{ label: "Community", to: "/drills" }, { label: "Drills" }]} title="Drill" />
+        <Card>
+          <EmptyState
+            title={state === "not_found" ? "Drill not found" : "Could not load this drill"}
+            body={
+              state === "not_found"
+                ? "This drill does not exist or was removed."
+                : "Something went wrong reading this drill. Try again."
+            }
+          />
+        </Card>
+      </div>
     );
   }
 
@@ -101,87 +99,15 @@ export function DrillShow() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-lg)", maxWidth: 720 }}>
-      <button
-        type="button"
-        onClick={() => navigate("/drills")}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "var(--space-xs)",
-          border: "none",
-          background: "none",
-          color: "var(--color-text-secondary)",
-          fontSize: 14,
-          cursor: "pointer",
-          padding: 0,
-          alignSelf: "flex-start",
-        }}
-      >
-        <ArrowLeft size={16} strokeWidth={1.75} />
-        Back to drills
-      </button>
+    <div>
+      <PageHeader
+        breadcrumbs={[{ label: "Community", to: "/drills" }, { label: "Drills", to: "/drills" }]}
+        title={drill.title}
+        description={`Worth ${drill.xp_value} XP on completion.`}
+      />
 
-      {error ? (
-        <Card style={{ borderColor: "var(--color-danger)", padding: "var(--space-md) var(--space-lg)" }}>
-          <p style={{ fontSize: 14, color: "var(--color-danger)", margin: 0 }}>{error}</p>
-        </Card>
-      ) : null}
-      {notice ? (
-        <Card style={{ borderColor: "var(--color-success)", padding: "var(--space-md) var(--space-lg)" }}>
-          <p style={{ fontSize: 14, color: "var(--color-success)", margin: 0 }}>{notice}</p>
-        </Card>
-      ) : null}
-
-      <Card>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "var(--space-md)" }}>
-          <div>
-            <p
-              style={{
-                fontSize: 12,
-                fontWeight: 600,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                color: "var(--color-text-tertiary)",
-                margin: 0,
-              }}
-            >
-              Drill
-            </p>
-            <h1 style={{ fontSize: 20, fontWeight: 700, margin: "var(--space-xs) 0 0" }}>{drill.title}</h1>
-            <p style={{ fontSize: 13, color: "var(--color-text-secondary)", margin: "var(--space-xs) 0 0" }}>
-              Worth <Mono style={{ fontWeight: 600 }}>{drill.xp_value}</Mono> XP on completion.
-            </p>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
-            <Badge tone={drill.active ? "success" : "neutral"}>
-              {drill.active ? "active" : "inactive"}
-            </Badge>
-            <Button
-              variant="secondary"
-              disabled={busy}
-              onClick={() =>
-                run(
-                  () => drillApi.setDrillActive(drill.id, !drill.active),
-                  drill.active
-                    ? "Drill hidden from players."
-                    : "Drill restored and visible to players.",
-                )
-              }
-            >
-              {drill.active ? <EyeOff size={16} strokeWidth={1.75} /> : <Eye size={16} strokeWidth={1.75} />}
-              {drill.active ? "Deactivate" : "Activate"}
-            </Button>
-          </div>
-        </div>
-
-        <div
-          style={{
-            marginTop: "var(--space-lg)",
-            paddingTop: "var(--space-lg)",
-            borderTop: "1px solid var(--color-border)",
-          }}
-        >
+      <DetailLayout
+        main={
           <DrillForm
             key={drill.updated_at}
             initial={{
@@ -197,8 +123,35 @@ export function DrillShow() {
             busy={busy}
             onSubmit={saveDrill}
           />
-        </div>
-      </Card>
+        }
+        side={
+          <Card>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: "var(--text-xs)", fontWeight: "var(--weight-semibold)", textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--color-text-tertiary)" }}>
+                State
+              </span>
+              <Badge tone={drill.active ? "success" : "neutral"}>{drill.active ? "active" : "inactive"}</Badge>
+            </div>
+            <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)", marginTop: "var(--space-sm)" }}>
+              XP value <Mono style={{ fontWeight: "var(--weight-semibold)" }}>{drill.xp_value}</Mono>
+            </p>
+            <Button
+              variant="secondary"
+              disabled={busy}
+              style={{ marginTop: "var(--space-lg)", width: "100%" }}
+              onClick={() =>
+                run(
+                  () => drillApi.setDrillActive(drill.id, !drill.active),
+                  drill.active ? "Drill hidden from players." : "Drill restored and visible to players.",
+                )
+              }
+            >
+              {drill.active ? <EyeOff size={16} strokeWidth={1.75} /> : <Eye size={16} strokeWidth={1.75} />}
+              {drill.active ? "Deactivate" : "Activate"}
+            </Button>
+          </Card>
+        }
+      />
     </div>
   );
 }
