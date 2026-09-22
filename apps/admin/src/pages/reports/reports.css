@@ -1,0 +1,43 @@
+.ak-report-entity-label {
+  display: block;
+  font-weight: var(--weight-semibold);
+}
+
+.ak-report-entity-type {
+  display: block;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-regular);
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ak-report-eyebrow {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  margin: 0 0 var(--space-md);
+}
+
+.ak-report-preview-video {
+  width: 100%;
+  max-height: 420px;
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-muted);
+}
+
+.ak-report-meta-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  color: var(--color-text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.ak-report-resolve-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
