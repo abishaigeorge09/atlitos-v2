@@ -11,7 +11,6 @@ import { DataTable, type DataTableColumn } from "../../components/kit/DataTable"
 import { Field } from "../../components/kit/Field";
 import { Input } from "../../components/kit/Input";
 import { PageHeader } from "../../components/kit/PageHeader";
-import { Mono } from "../../components/mono";
 import { supabaseClient } from "../../providers/supabaseClient";
 import "./fee-config.css";
 
