@@ -210,4 +210,14 @@ before Gate 2 as A2 pages start shipping.
 
 ## Gate 1 response
 
-(pending founder review)
+**2026-09-22, founder, verbatim: "resume and dont stop till all screens are done".**
+
+Read as: the direction stands, build every page on it. No change was requested to the signature
+move, the grouping, the density default or the accent. The standing autonomy directive for Atlitos
+(founder will not test; founder fingers are replaced by scripted real proofs) applies from here, so
+Gate 2 (`docs/PLAN-ADMIN-UX.md`) is self gated on the same rule and each phase gate is re derived
+by the approver from the running app, not asserted.
+
+Batched founder inputs the plan asked for, resolved by default and reversible in a line each:
+signature move as written above; nav grouping as in `IA-ADMIN.md` (Venues stays under
+Operations); density default `comfortable`, `compact` behind the toggle, persisted.
