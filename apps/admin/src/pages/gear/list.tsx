@@ -1,12 +1,19 @@
+import { formatINR } from "@atlitos/theme";
 import { SPORTS, type Sport } from "@atlitos/types";
-import { AlertTriangle, Plus, Tag } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
-import { Badge, Button, Card, EmptyState } from "../../components/ui";
-import { Mono } from "../../components/mono";
+import { Badge } from "../../components/kit/Badge";
+import { Button } from "../../components/kit/Button";
+import { DataTable, type DataTableColumn } from "../../components/kit/DataTable";
+import { FilterBar } from "../../components/kit/FilterBar";
+import { PageHeader } from "../../components/kit/PageHeader";
+import { Select } from "../../components/kit/Select";
+import { Tabs } from "../../components/kit/Tabs";
 import { fetchGear, worstOutcomeOf, type GearListFilters, type GearWithOffers } from "./api";
 import { outcomeLabel, outcomeTone, relativeDays } from "./format";
+import "./gear.css";
 
 // The affiliate gear catalog: every item with brand, sport, retailer count and
 // cheapest in stock price. This admin list is the ONE surface that sees
@@ -15,13 +22,11 @@ import { outcomeLabel, outcomeTone, relativeDays } from "./format";
 
 type LoadState = "loading" | "error" | "ready";
 
-const ACTIVE_TABS = [
+const ACTIVE_TABS: Array<{ key: string; label: string }> = [
   { key: "all", label: "All" },
   { key: "active", label: "Listed" },
   { key: "inactive", label: "Delisted" },
-] as const;
-
-const cell: React.CSSProperties = { padding: "var(--space-md) var(--space-lg)", fontSize: 14 };
+];
 
 function cheapest(item: GearWithOffers): number | null {
   const inStock = item.offers.filter((o) => o.in_stock);
@@ -34,6 +39,7 @@ export function GearList() {
   const [searchParams, setSearchParams] = useSearchParams();
   const sportParam = (searchParams.get("sport") as Sport | null) ?? null;
   const activeParam = searchParams.get("active") ?? "all";
+  const [search, setSearch] = useState("");
 
   const [items, setItems] = useState<GearWithOffers[]>([]);
   const [state, setState] = useState<LoadState>("loading");
@@ -70,144 +76,113 @@ export function GearList() {
     setSearchParams(next);
   }
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-lg)" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "var(--space-md)" }}>
-        <div>
-          <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0, letterSpacing: "-0.4px" }}>Gear</h1>
-          <p style={{ fontSize: 14, color: "var(--color-text-secondary)", margin: "var(--space-xs) 0 0" }}>
-            The affiliate catalog. Each item lists retailer prices and sends the shopper out to buy.
-          </p>
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (q.length === 0) return items;
+    return items.filter(
+      (item) => item.title.toLowerCase().includes(q) || (item.brand ?? "").toLowerCase().includes(q),
+    );
+  }, [items, search]);
+
+  const columns: DataTableColumn<GearWithOffers>[] = [
+    {
+      key: "title",
+      header: "Product",
+      render: (item) => (
+        <div className="ak-gear-title-cell">
+          <span className="ak-gear-image-tile">
+            {item.image_url ? <img src={item.image_url} alt="" /> : null}
+          </span>
+          <div>
+            <span className="ak-gear-title-text">{item.title}</span>
+            <span className="ak-gear-brand-text">{item.brand ?? "No brand"}</span>
+          </div>
         </div>
-        <Button onClick={() => navigate("/gear/create")}>
-          <Plus size={16} strokeWidth={1.75} />
-          New gear item
-        </Button>
-      </div>
+      ),
+    },
+    { key: "sport", header: "Sport", render: (item) => item.sport ?? "Any" },
+    { key: "offers", header: "Retailers", numeric: true, render: (item) => item.offers.length },
+    {
+      key: "price",
+      header: "From",
+      numeric: true,
+      render: (item) => {
+        const price = cheapest(item);
+        return price === null ? "None in stock" : formatINR(price);
+      },
+    },
+    {
+      key: "health",
+      header: "Health",
+      render: (item) => <Badge tone={outcomeTone(worstOutcomeOf(item.offers))}>{outcomeLabel(worstOutcomeOf(item.offers))}</Badge>,
+    },
+    { key: "updated", header: "Updated", render: (item) => relativeDays(item.health_checked_at) },
+  ];
 
-      <div style={{ display: "flex", gap: "var(--space-lg)", flexWrap: "wrap", alignItems: "flex-end" }}>
-        <FilterGroup label="Sport">
-          <Chip active={!sportParam} onClick={() => setParam("sport", null)}>
-            All
-          </Chip>
-          {SPORTS.map((sport) => (
-            <Chip key={sport} active={sportParam === sport} onClick={() => setParam("sport", sport)}>
-              {sport}
-            </Chip>
-          ))}
-        </FilterGroup>
-        <FilterGroup label="State">
-          {ACTIVE_TABS.map((tab) => (
-            <Chip
-              key={tab.key}
-              active={activeParam === tab.key}
-              onClick={() => setParam("active", tab.key === "all" ? null : tab.key)}
-            >
-              {tab.label}
-            </Chip>
-          ))}
-        </FilterGroup>
-      </div>
-
-      <Card style={{ padding: 0 }}>
-        {state === "loading" ? (
-          <div style={{ padding: "var(--space-2xl)", color: "var(--color-text-secondary)", fontSize: 14 }}>Loading gear...</div>
-        ) : state === "error" ? (
-          <EmptyState
-            icon={<AlertTriangle size={32} strokeWidth={1.75} />}
-            title="Could not load gear"
-            description="Something went wrong reading the catalog. Try again."
-          />
-        ) : items.length === 0 ? (
-          <EmptyState
-            icon={<Tag size={32} strokeWidth={1.75} />}
-            title="No gear yet"
-            description="Nothing matches these filters. Add the first item to start the catalog."
-          />
-        ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ textAlign: "left", borderBottom: "1px solid var(--color-border)" }}>
-                {["Title", "Brand", "Sport", "Retailers", "From", "Health", "Last checked", "State"].map((heading) => (
-                  <th
-                    key={heading}
-                    style={{
-                      padding: "var(--space-sm) var(--space-lg)",
-                      fontSize: 12,
-                      fontWeight: 600,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.06em",
-                      color: "var(--color-text-tertiary)",
-                    }}
-                  >
-                    {heading}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => {
-                const from = cheapest(item);
-                return (
-                  <tr
-                    key={item.id}
-                    onClick={() => navigate(`/gear/show/${item.id}`)}
-                    style={{ borderBottom: "1px solid var(--color-border)", cursor: "pointer" }}
-                  >
-                    <td style={{ ...cell, fontWeight: 600 }}>{item.title}</td>
-                    <td style={{ ...cell, color: "var(--color-text-secondary)" }}>{item.brand ?? ""}</td>
-                    <td style={{ ...cell, color: "var(--color-text-secondary)" }}>{item.sport ?? "any"}</td>
-                    <td style={cell}>
-                      <Mono>{item.offers.length}</Mono>
-                    </td>
-                    <td style={cell}>{from === null ? <span style={{ color: "var(--color-text-tertiary)" }}>none in stock</span> : <Mono>INR {from.toLocaleString("en-IN")}</Mono>}</td>
-                    <td style={cell}>
-                      <Badge tone={outcomeTone(worstOutcomeOf(item.offers))}>{outcomeLabel(worstOutcomeOf(item.offers))}</Badge>
-                    </td>
-                    <td style={cell}>{relativeDays(item.health_checked_at)}</td>
-                    <td style={cell}>
-                      <Badge tone={item.active ? "success" : "neutral"}>{item.active ? "listed" : "delisted"}</Badge>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </Card>
-    </div>
-  );
-}
-
-function FilterGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-xs)" }}>
-      <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--color-text-tertiary)" }}>
-        {label}
-      </span>
-      <div style={{ display: "flex", gap: "var(--space-xs)", flexWrap: "wrap" }}>{children}</div>
-    </div>
-  );
-}
+    <div>
+      <PageHeader
+        breadcrumbs={[{ label: "Catalog" }, { label: "Gear" }]}
+        title="Gear"
+        description="The affiliate catalog. Each item lists retailer prices and sends the shopper out to buy."
+        primaryAction={
+          <Button variant="primary" onClick={() => navigate("/gear/create")}>
+            <Plus size={16} strokeWidth={1.75} />
+            Add gear
+          </Button>
+        }
+        secondaryActions={
+          <Button variant="secondary" onClick={() => navigate("/gear/health")}>
+            Catalog health
+          </Button>
+        }
+      />
 
-function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        padding: "var(--space-xs) var(--space-md)",
-        borderRadius: "var(--radius-pill)",
-        border: active ? "1px solid var(--color-accent)" : "1px solid var(--color-border)",
-        backgroundColor: active ? "var(--color-accent-tint)" : "transparent",
-        color: active ? "var(--color-accent)" : "var(--color-text-secondary)",
-        fontSize: 13,
-        fontWeight: 600,
-        cursor: "pointer",
-        textTransform: "capitalize",
-      }}
-    >
-      {children}
-    </button>
+      <Tabs
+        items={ACTIVE_TABS.map((tab) => ({ key: tab.key, label: tab.label }))}
+        active={activeParam}
+        onChange={(key) => setParam("active", key === "all" ? null : key)}
+      />
+
+      <FilterBar
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search gear by title or brand"
+        filters={
+          <Select
+            value={sportParam ?? ""}
+            onChange={(value) => setParam("sport", value || null)}
+            placeholder="All sports"
+            options={SPORTS.map((sport) => ({ value: sport, label: sport }))}
+          />
+        }
+        resultCount={filtered.length}
+        resultNoun="products"
+      />
+
+      <DataTable
+        columns={columns}
+        rows={filtered}
+        rowKey={(item) => item.id}
+        rowHref={(item) => `/gear/show/${item.id}`}
+        loading={state === "loading"}
+        emptyTitle={state === "error" ? "Could not load gear" : search || sportParam || activeParam !== "all" ? "No products match this filter" : "No gear yet"}
+        emptyBody={
+          state === "error"
+            ? "Something went wrong reading the catalog. Try again."
+            : search || sportParam || activeParam !== "all"
+              ? "Try a different sport, state or search."
+              : "Add a product to start building the shop catalog."
+        }
+        emptyAction={
+          state === "error" ? undefined : (
+            <Button variant="primary" onClick={() => navigate("/gear/create")}>
+              <Plus size={16} strokeWidth={1.75} />
+              Add gear
+            </Button>
+          )
+        }
+      />
+    </div>
   );
 }
