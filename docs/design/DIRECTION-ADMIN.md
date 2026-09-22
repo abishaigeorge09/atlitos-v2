@@ -49,24 +49,44 @@ aligned, so the state of the business reads at a glance.**
 
 ## Scarcity budget, counted from the kit as shipped
 
-The kit is a shared surface, not a single locked screen the way `DIRECTION-SHOP.md`'s grid and
-compare rows are, so the honest budget here is kit-wide token usage, grepped from
-`apps/admin/src/components/kit/`, `apps/admin/src/layout/` and the kitchen sink page itself,
-not asserted from memory.
+Two different counts, kept apart because the ux-critic caught them conflated on 2026-09-21:
 
-| Thing | Used | Tokens |
+**Available in `apps/admin/src/styles/tokens.css`** (generated from `packages/theme`): 12 `--text-*`
+sizes and 12 `--type-*-size` named variants. The kitchen sink's "1. Tokens" section is a
+reference sheet and renders all of them on purpose; that section is not a screen.
+
+**Spent by the kit and the shell**, from a real grep of `apps/admin/src/components/kit` and
+`apps/admin/src/layout` (rerun it; if the numbers move, this table is wrong):
+
+```
+$ grep -rhoE 'var\(--(text|type)-[a-zA-Z0-9-]+' apps/admin/src/components/kit apps/admin/src/layout | sort | uniq -c | sort -rn
+  14 var(--text-base
+  11 var(--text-sm
+   3 var(--text-xs
+   2 var(--text-md
+   2 var(--text-lg
+   1 var(--type-title-size      (page title, PageHeader)
+   1 var(--type-title-line
+   1 var(--type-title-tracking
+   1 var(--type-h2-size         (dialog title)
+$ grep -rhoE 'var\(--radius-[a-z]+' ... | sort | uniq -c
+  12 var(--radius-sm    6 var(--radius-lg    2 var(--radius-md    2 var(--radius-pill
+$ grep -rhoE 'var\(--color-(bg|surface|surface-muted|card)\b' ... | sort | uniq -c
+  14 var(--color-surface-muted    7 var(--color-card    6 var(--color-surface    2 var(--color-bg
+```
+
+| Thing | Spent | Where |
 |---|---|---|
-| Ground and card surfaces | 4 | `--color-bg`, `--color-surface`, `--color-surface-muted`, `--color-card` |
-| Radii | 5 | `--radius-sm` (buttons, inputs), `--radius-md` (sidebar items, table cells), `--radius-lg` (cards, table wrap), `--radius-xl` (image tiles, none used at present), `--radius-pill` (badges) |
-| Type sizes (base scale) | 5 | `--text-xs`, `--text-sm`, `--text-base`, `--text-md`, `--text-lg` |
-| Type sizes (named variants) | 3 | `--type-title-size` (page titles), `--type-overline-size` (eyebrows), `--type-numericLg-size` (KPI tiles) |
-| Badge tones | 4 | neutral, success, warning, danger, exactly the plan's four, no fifth added |
-| Accent family | 3 vars, 1 hue | `--color-accent`, `--color-accent-pressed`, `--color-accent-tint`, all one orange; used for the primary button fill, the active nav item, the active tab underline, focus rings and the save bar's primary action |
-| Semantic colours | 3 | `--color-success`, `--color-warning`, `--color-danger` (plus `--color-info`, present in tokens.css but not yet consumed by a kit component) |
+| Type sizes, base scale | 5 | xs (captions, badges), sm (table cells, hints), base (body, inputs), md (card titles), lg (KPI numbers) |
+| Type sizes, named | 2 | `title` (page title), `h2` (dialog title) |
+| Radii | 4 | sm (buttons, inputs, chips), md (nav items, cells), lg (cards, table wrap), pill (badges) |
+| Ground and card surfaces | 4 | bg (page), surface (header, sidebar), surface-muted (inputs, image tiles, skeletons), card |
+| Badge tones | 4 | neutral, success, warning, danger, from `src/lib/status.ts` |
+| Accent family | 3 vars, 1 hue | accent, accent-pressed, accent-tint: primary button, active nav, active tab, focus ring, save bar |
+| Semantic colours | 3 | success, warning, danger; `info` exists in tokens.css and is unused |
 
-A2's page rewrites are where the per-screen budget (closer to `DIRECTION-SHOP.md`'s discipline
-of naming exactly which 2 or 3 sizes a single list page uses) gets enforced; this document
-records what the shared kit makes available, not what one screen should spend.
+Per screen this lands at 4 sizes on a list page (title, sm cells, base body, xs meta) and 5 on a
+form (adds md card titles), which is the plan's cap. `--radius-xl` is available and unused.
 
 ## Components rendered in the kitchen sink
 
