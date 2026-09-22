@@ -1,12 +1,17 @@
-import { AlertTriangle, Film, Video } from "lucide-react";
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Video } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
-import { Badge, Card, EmptyState } from "../../components/ui";
-import { Mono } from "../../components/mono";
+import { Badge } from "../../components/kit/Badge";
+import { DataTable, type DataTableColumn } from "../../components/kit/DataTable";
+import { FilterBar } from "../../components/kit/FilterBar";
+import { PageHeader } from "../../components/kit/PageHeader";
+import { Tabs } from "../../components/kit/Tabs";
+import { relativeTime } from "../../lib/relative-time";
 import { supabaseClient } from "../../providers/supabaseClient";
-import { clipStatusLabel, clipStatusTone } from "./status";
 import type { ClipQueueRow } from "./api";
+import { clipStatusLabel, clipStatusTone } from "./status";
+import "./moderation.css";
 
 // AT-102, PRD-04 FR-27, FR-33. The Moderation Queue: every clip whose status is
 // uploading, processing, or ready, showing creator, caption, sport, and upload
@@ -17,18 +22,21 @@ import type { ClipQueueRow } from "./api";
 // select would also return every published clip. This query carries its OWN
 // `.in('status', pending)` filter; RLS is the ceiling, the filter is the scope.
 //
-// No thumbnail image is shown in the list on purpose: the `clips` bucket is
-// private and a thumbnail is only resolvable through the admin-only signed mint
-// (FR-28), which the Detail screen does once per open. Minting one URL per list
-// row would be wasteful, so the list uses a placeholder tile and the real
-// preview lives on the Detail screen.
+// No thumbnail image is shown on purpose: the `clips` bucket is private and a
+// thumbnail is only resolvable through the admin-only signed mint (FR-28),
+// which the Detail screen does once per open. The list shows a placeholder
+// tile instead of minting one URL per row.
 
 const PENDING_STATUSES = ["uploading", "processing", "ready"] as const;
 
+type StatusFilter = "all" | (typeof PENDING_STATUSES)[number];
 type LoadState = "loading" | "error" | "ready";
 
 export function ModerationList() {
-  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = (searchParams.get("status") as StatusFilter | null) ?? "all";
+  const [search, setSearch] = useState("");
+
   const [clips, setClips] = useState<ClipQueueRow[]>([]);
   const [creatorNames, setCreatorNames] = useState<Record<string, string>>({});
   const [state, setState] = useState<LoadState>("loading");
@@ -72,100 +80,85 @@ export function ModerationList() {
     };
   }, []);
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-lg)" }}>
-      <div>
-        <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0, letterSpacing: "-0.4px" }}>Moderation queue</h1>
-        <p style={{ fontSize: 14, color: "var(--color-text-secondary)", margin: "var(--space-xs) 0 0" }}>
-          Clips awaiting review before they reach the feed. Approve to publish or reject with a reason.
-        </p>
-      </div>
+  const tabbed = useMemo(
+    () => clips.filter((c) => activeTab === "all" || c.status === activeTab),
+    [clips, activeTab],
+  );
 
-      <Card style={{ padding: 0 }}>
-        {state === "loading" ? (
-          <div style={{ padding: "var(--space-2xl)", color: "var(--color-text-secondary)", fontSize: 14 }}>
-            Loading queue...
-          </div>
-        ) : state === "error" ? (
-          <EmptyState
-            icon={<AlertTriangle size={32} strokeWidth={1.75} />}
-            title="Could not load the queue"
-            description="Something went wrong reading pending clips. Try again."
-          />
-        ) : clips.length === 0 ? (
-          <EmptyState
-            icon={<Film size={32} strokeWidth={1.75} />}
-            title="Nothing to review"
-            description="No clips are waiting for moderation right now."
-          />
-        ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ textAlign: "left", borderBottom: "1px solid var(--color-border)" }}>
-                {["Clip", "Creator", "Sport", "Uploaded", "Status"].map((heading) => (
-                  <th
-                    key={heading}
-                    style={{
-                      padding: "var(--space-sm) var(--space-lg)",
-                      fontSize: 12,
-                      fontWeight: 600,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.04em",
-                      color: "var(--color-text-tertiary)",
-                    }}
-                  >
-                    {heading}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {clips.map((clip) => (
-                <tr
-                  key={clip.id}
-                  onClick={() => navigate(`/moderation/show/${clip.id}`)}
-                  style={{ borderBottom: "1px solid var(--color-border)", cursor: "pointer" }}
-                >
-                  <td style={{ padding: "var(--space-md) var(--space-lg)" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-md)" }}>
-                      <span
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          width: 44,
-                          height: 44,
-                          flexShrink: 0,
-                          borderRadius: "var(--radius-sm)",
-                          backgroundColor: "var(--color-surface-muted)",
-                          color: "var(--color-text-tertiary)",
-                        }}
-                      >
-                        <Video size={20} strokeWidth={1.75} />
-                      </span>
-                      <span style={{ fontSize: 14, fontWeight: 600 }}>{clip.caption}</span>
-                    </div>
-                  </td>
-                  <td style={{ padding: "var(--space-md) var(--space-lg)", fontSize: 14, color: "var(--color-text-secondary)" }}>
-                    {creatorNames[clip.owner_id] ?? clip.owner_id}
-                  </td>
-                  <td style={{ padding: "var(--space-md) var(--space-lg)", fontSize: 14, color: "var(--color-text-secondary)" }}>
-                    {clip.sport}
-                  </td>
-                  <td style={{ padding: "var(--space-md) var(--space-lg)" }}>
-                    <Mono style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
-                      {new Date(clip.created_at).toLocaleDateString()}
-                    </Mono>
-                  </td>
-                  <td style={{ padding: "var(--space-md) var(--space-lg)" }}>
-                    <Badge tone={clipStatusTone(clip.status)}>{clipStatusLabel(clip.status)}</Badge>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </Card>
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return tabbed;
+    return tabbed.filter((c) => {
+      const creator = (creatorNames[c.owner_id] ?? "").toLowerCase();
+      return c.caption.toLowerCase().includes(q) || creator.includes(q);
+    });
+  }, [tabbed, search, creatorNames]);
+
+  const columns: DataTableColumn<ClipQueueRow>[] = [
+    {
+      key: "thumb",
+      header: "Clip",
+      render: (row) => (
+        <div className="ak-mod-clip-cell">
+          <span className="ak-mod-thumb">
+            <Video size={18} strokeWidth={1.75} />
+          </span>
+          <span className="ak-mod-caption">{row.caption}</span>
+        </div>
+      ),
+    },
+    { key: "creator", header: "Creator", render: (row) => creatorNames[row.owner_id] ?? row.owner_id },
+    { key: "sport", header: "Sport", render: (row) => row.sport },
+    {
+      key: "status",
+      header: "Status",
+      render: (row) => <Badge tone={clipStatusTone(row.status)}>{clipStatusLabel(row.status)}</Badge>,
+    },
+    { key: "submitted", header: "Submitted", render: (row) => relativeTime(row.created_at) },
+  ];
+
+  return (
+    <div>
+      <PageHeader
+        breadcrumbs={[{ label: "Community" }]}
+        title="Moderation queue"
+        description="Clips awaiting review before they reach the feed. Approve to publish or reject with a reason."
+      />
+
+      <Tabs
+        items={[
+          { key: "all", label: "All", count: clips.length },
+          ...PENDING_STATUSES.map((status) => ({
+            key: status,
+            label: clipStatusLabel(status),
+            count: clips.filter((c) => c.status === status).length,
+          })),
+        ]}
+        active={activeTab}
+        onChange={(key) => setSearchParams(key === "all" ? {} : { status: key })}
+      />
+
+      <FilterBar
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search by caption or creator"
+        resultCount={filtered.length}
+        resultNoun={filtered.length === 1 ? "clip" : "clips"}
+      />
+
+      <DataTable
+        columns={columns}
+        rows={filtered}
+        rowKey={(row) => row.id}
+        rowHref={(row) => `/moderation/show/${row.id}`}
+        loading={state === "loading"}
+        emptyTitle={state === "error" ? "Could not load the queue" : "Nothing to review"}
+        emptyBody={
+          state === "error"
+            ? "Something went wrong reading pending clips. Try again."
+            : "No clips are waiting for moderation right now."
+        }
+      />
     </div>
   );
 }

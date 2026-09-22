@@ -1,0 +1,70 @@
+.ak-mod-clip-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.ak-mod-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface-muted);
+  color: var(--color-text-tertiary);
+}
+
+.ak-mod-caption {
+  font-weight: var(--weight-semibold);
+}
+
+.ak-mod-preview-video {
+  width: 100%;
+  max-height: 420px;
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-muted);
+}
+
+.ak-mod-eyebrow {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  margin: 0;
+}
+
+.ak-mod-meta-row {
+  display: flex;
+  gap: var(--space-lg);
+  margin-top: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.ak-mod-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.ak-mod-section-title {
+  margin: 0 0 var(--space-md);
+}
+
+.ak-mod-error-box {
+  padding: var(--space-md);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-danger);
+  background-color: var(--color-danger-tint);
+  margin-bottom: var(--space-md);
+}
+
+.ak-mod-reject-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
