@@ -1,6 +1,6 @@
 # Admin UX rebuild: status and resume point
 
-Status: PHASE A2 AND A3 IN INTEGRATION (2026-09-22)
+Status: PHASE A2 AND A3 INTEGRATED AND VERIFIED, WAITING ON THE CRITIC (2026-09-22)
 Plan: `docs/PLAN-ADMIN-UX.md` (Gate 2, self gated under the autonomy directive).
 Direction: `docs/design/DIRECTION-ADMIN.md` (Gate 1, answered 2026-09-22).
 IA: `docs/design/IA-ADMIN.md`. References: `docs/design/references/admin/stripe-*.png`.
@@ -22,16 +22,39 @@ and dont stop till all screens are done".
 | A1 shell, kit, tokens, kitchen sink | MERGED to main | PR #8, main `4c66289` |
 | A2-T1 gear and venues | built, merged into the integration branch | `pages/gear/{list,show,form,health}.tsx`, `pages/venues/*`, `pages/gear/gear.css` |
 | A2-T2 operations | built, merged into the integration branch | `pages/{dashboard,verification,bookings,orders}/*` plus one `.css` each |
-| A2-T3 community and settings | in flight | `pages/{moderation,reports,drills,users,fee-config,products}/*` |
+| A2-T3 community and settings | done, merged | `pages/{moderation,reports,drills,users,fee-config,products}/*` |
 | A2-T4 e2e sync | done | `apps/e2e/specs/money/admin.spec.ts` now expects `/dashboard` after sign in |
 | A3-T1 ingest client | built | `pages/gear/create.tsx` rewritten as one form, `pages/gear/api.ts`, new `pages/gear/ingest-guidance.ts` |
 | A3-T2 ingest server | built and proven | `supabase/functions/gear-ingest/index.ts`, `supabase/migrations/XXXX_retailer_programme_fetchable.sql` |
 | A3-T3 evidence | written | `docs/qa/evidence/admin-ux/walkthrough-a3.mjs` |
-| Screenshot matrix and axe | harness written, run pending | `docs/qa/evidence/admin-ux/capture-matrix.mjs` |
-| ux-critic on the integrated tree | pending | |
-| DoD, PR, merge | pending | branch `admin-ux/integration-a2` |
+| Screenshot matrix and axe | GREEN | 110 PNGs in `docs/qa/evidence/admin-ux/phase-A2/matrix/`, `axe.json` empty |
+| A3 walkthrough | GREEN, 13 of 13 | `docs/qa/evidence/admin-ux/phase-A2/a3/` |
+| `scripts/dod.sh` | GREEN | invariants, typecheck, lint, build |
+| ux-critic on the integrated tree | running | |
+| PR, merge | pending | branch `admin-ux/integration-a2` |
 
-## Proofs taken so far
+## Proofs taken
+
+- **axe over 27 routes in both themes: 0 critical, 0 serious, 0 moderate, 0 minor.** It was 72
+  critical and 1123 serious nodes before the two fix passes. Root causes, each fixed in shared
+  code rather than page by page: `Field` never associated its label with its control; the
+  skeletons put `aria-label` on a bare div; `textTertiary` failed contrast on every ground it sat
+  on; white on the logo orange is 3.33:1 and the primary button's label is 13px; the status
+  badges put the semantic hue on its own tint.
+- **The logo orange is unchanged.** Four additive ink tokens carry text instead: `accentInk`
+  (near black on an accent fill, 5.84:1), `accentOnTint`, and `successInk`/`warningInk`/
+  `dangerInk`/`infoInk` for text on a semantic tint. The base semantics stay as they are for
+  fills and borders, where the 3:1 non text threshold applies.
+- **A real defect the matrix caught:** `DataTable` made rows clickable with `onClick` and a
+  `tabIndex` on the `tr`. That is not a link: no open in a new tab, nothing for assistive tech,
+  and `admin.spec.ts` AD-04 selects `a[href^="/orders/show/"]`, which could never match. The
+  first cell of a linked row is a real `Link` now.
+- **`walkthrough-a3.mjs`: 13 of 13 on the real screen.** A readable page prefills the one form and
+  writes nothing until save; an `amazon.in` paste answers immediately with no round trip, names
+  Amazon India, and keeps the pasted URL as the offer link; a 503 shows the upstream status; a
+  page with no product still says so.
+
+## Earlier proofs
 
 - `scripts/verify-gear-ingest-honesty.mjs`: 22 of 22 checks pass against the local stack. A
   supported retailer answering 503 or 403 now returns `RETAILER_UNAVAILABLE` with the upstream
@@ -46,12 +69,23 @@ and dont stop till all screens are done".
 
 ## Open, in order
 
-1. A2-T3 lands, merge it into `admin-ux/integration-a2`.
-2. Run `docs/qa/evidence/admin-ux/capture-matrix.mjs phase-A2` (every route, both themes, both
-   viewports, plus axe) and `walkthrough-a3.mjs`. Both need the machine under load 25.
-3. ux-critic on the integrated tree.
-4. `scripts/dod.sh`, PR to main, merge, then number the `XXXX_` migration per `docs/BRANCHING.md`
-   and deploy `gear-ingest` plus the migration to production.
+1. The ux-critic verdict, and any blocking finding fixed.
+2. PR from `admin-ux/integration-a2` to main, diff checked for the expected files, merged.
+3. Number the `XXXX_retailer_programme_fetchable.sql` migration per `docs/BRANCHING.md`, then
+   deploy it and `gear-ingest` to production.
+4. Phase A4, bulk catalogue data entry: `docs/PLAN-CATALOGUE-ENTRY.md` on
+   `docs/architecture/ADR-013-catalogue-data-entry.md`. Its design gate waits on the founder's
+   GMV inventory reference, which needs a sign in this session will not perform.
+
+## The tooling this phase leaves behind
+
+- `docs/qa/evidence/admin-ux/capture-matrix.mjs`: every route, both themes, both viewports, plus
+  axe, one command. Exits non zero on a route that renders an error boundary or a stuck skeleton,
+  or on any critical or serious axe violation. Run it after any admin change.
+- `docs/qa/evidence/admin-ux/walkthrough-a3.mjs`: the ingest flow on the real screen.
+- `scripts/verify-gear-ingest-honesty.mjs`: the server half, including the assertion that an
+  `amazon.in` paste makes no outbound request at all.
+- `supabase/seed/local_seed_admin_ux.sql`: fills the five admin lists the other seeds leave empty.
 
 ## How to resume
 
