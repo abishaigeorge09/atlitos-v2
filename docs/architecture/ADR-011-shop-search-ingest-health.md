@@ -137,6 +137,19 @@ live retailer): `fetch` leaves row counts unchanged; `save` creates exactly one 
 table and `image_url` resolves to the project's Storage domain, never the fixture's host
 (AC-11-3, on a controlled fixture).
 
+**Amendment 2026-09-22 (admin UX A3-T2).** A supported retailer that refuses the server fetch
+(bot wall, rate limit, outage) answers `RETAILER_UNAVAILABLE` with the upstream status, not
+`NO_PRODUCT_FOUND`; `retailer_programmes.fetchable` records the retailers that never serve the
+edge runtime (`amazon_in`, 503 observed 2026-09-18) so the client skips the round trip and keeps
+the pasted URL as the offer link. Confirmation: `scripts/verify-gear-ingest-honesty.mjs`.
+
+**Future option, not built: a browser clipper.** A bookmarklet or extension that reads the
+product page inside the admin's own signed in browser session, where Amazon serves real HTML,
+and posts the extracted draft to `gear-ingest` `save`. It would bypass the bot wall without
+any server side fetching. Deferred because the manual form plus the honest message covers the
+ingest volume today (one admin, a few products a day), and an extension is a second deployable
+with its own review cycle. Revisit when the catalogue grows past what one person types.
+
 ### D4. Health: `gear-recheck`
 
 Trigger, given `pg_net` is off: `pg_cron`+`pg_net` is blocked today, the exact gap
