@@ -215,6 +215,20 @@ export interface IngestFetchResult {
   warnings: string[];
 }
 
+/**
+ * What a refused `ingestFetch` throws. `partialDraft` is whatever the server
+ * could still read (an og:image, a canonical URL, a description) and is what
+ * the manual form prefills from; `upstreamStatus` is the retailer's own HTTP
+ * status when it refused us, and null when no request was made at all
+ * (the programme is marked not fetchable).
+ */
+export interface IngestError extends CommerceError {
+  partialDraft: Partial<IngestDraft> | null;
+  retailerKey: string | null;
+  warnings: string[];
+  upstreamStatus: number | null;
+}
+
 export interface IngestSaveResult {
   productId: string;
   offerId: string;
@@ -226,21 +240,39 @@ export interface IngestSaveResult {
  * "Could not read a product from this page") reaches the caller as a real
  * message instead of "Edge Function returned a non-2xx status code", same
  * shape `advanceOrder` in pages/commerce/api.ts already established.
+ *
+ * A3-T1: the 422 body also carries whatever the server still managed to read
+ * (`draft`), the matched retailer and, for RETAILER_UNAVAILABLE, the upstream
+ * HTTP status. Those are attached to the thrown error so the create screen can
+ * prefill the manual form from a refusal instead of discarding it (FR-47).
  */
-async function readFunctionError(error: unknown): Promise<CommerceError> {
+async function readFunctionError(error: unknown): Promise<IngestError> {
   const context = (error as { context?: Response }).context;
   if (context && typeof context.json === "function") {
     try {
-      const body = (await context.json()) as { error?: { code?: string; message?: string } };
+      const body = (await context.json()) as {
+        error?: { code?: string; message?: string };
+        draft?: Partial<IngestDraft>;
+        retailer_key?: string | null;
+        warnings?: string[];
+        upstream_status?: number | null;
+      };
       if (body?.error) {
-        return { code: body.error.code ?? "INGEST_FAILED", message: body.error.message ?? "Could not read a product from this page." };
+        return {
+          code: body.error.code ?? "INGEST_FAILED",
+          message: body.error.message ?? "Could not read a product from this page.",
+          partialDraft: body.draft ?? null,
+          retailerKey: body.retailer_key ?? null,
+          warnings: body.warnings ?? [],
+          upstreamStatus: body.upstream_status ?? null,
+        };
       }
     } catch {
       // body was not JSON; fall through to the generic message below
     }
   }
   const message = error instanceof Error ? error.message : "Something went wrong. Try again.";
-  return { code: "INTERNAL", message };
+  return { code: "INTERNAL", message, partialDraft: null, retailerKey: null, warnings: [], upstreamStatus: null };
 }
 
 /**
