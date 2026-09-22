@@ -1,16 +1,23 @@
 import { SPORTS, type Sport } from "@atlitos/types";
-import { Plus, Save, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 
-import { Button } from "../../components/ui";
-import { Field, Input, inputStyle } from "../../components/form";
+import { Button } from "../../components/kit/Button";
+import { Card } from "../../components/kit/Card";
+import { Field } from "../../components/kit/Field";
+import { Input } from "../../components/kit/Input";
+import { SaveBar } from "../../components/kit/SaveBar";
+import { Select } from "../../components/kit/Select";
+import { Textarea } from "../../components/kit/Textarea";
 import type { CategoryOption, GearInput, OfferInput } from "./api";
+import "./gear.css";
 
 // The one gear field set, shared by Create and Edit so the two cannot drift.
 // Client validation is a fast first line only: the 0120 RPCs re-check every
 // rule server side (title required, link must be http(s), price >= 0).
 //
-// Prices render through the mono Input (JetBrains Mono, tabular figures).
+// Props and submit contract are frozen: `create.tsx` (Phase A3, not this
+// track's file) depends on this exact shape.
 
 export interface GearFormInitial {
   title: string;
@@ -26,7 +33,7 @@ export interface GearFormInitial {
 const EMPTY: GearFormInitial = {
   title: "",
   brand: null,
-  sport: SPORTS[0],
+  sport: null,
   categoryId: null,
   skillLevel: null,
   ageRange: null,
@@ -60,87 +67,123 @@ export function GearForm({
   const [ageRange, setAgeRange] = useState(initial.ageRange ?? "");
   const [description, setDescription] = useState(initial.description ?? "");
   const [imageUrl, setImageUrl] = useState(initial.imageUrl ?? "");
+  const [titleTouched, setTitleTouched] = useState(false);
 
-  const canSave = !busy && title.trim().length > 0;
+  const dirty =
+    title !== initial.title ||
+    brand !== (initial.brand ?? "") ||
+    sport !== (initial.sport ?? "") ||
+    categoryId !== (initial.categoryId ?? "") ||
+    skillLevel !== (initial.skillLevel ?? "") ||
+    ageRange !== (initial.ageRange ?? "") ||
+    description !== (initial.description ?? "") ||
+    imageUrl !== (initial.imageUrl ?? "");
+
+  const titleError = title.trim().length === 0 ? "Title is required." : undefined;
+  const errorCount = titleTouched && titleError ? 1 : 0;
+
+  function discard() {
+    setTitle(initial.title);
+    setBrand(initial.brand ?? "");
+    setSport(initial.sport ?? "");
+    setCategoryId(initial.categoryId ?? "");
+    setSkillLevel(initial.skillLevel ?? "");
+    setAgeRange(initial.ageRange ?? "");
+    setDescription(initial.description ?? "");
+    setImageUrl(initial.imageUrl ?? "");
+    setTitleTouched(false);
+  }
+
+  function save() {
+    setTitleTouched(true);
+    if (titleError) return;
+    onSubmit({
+      id: null,
+      title: title.trim(),
+      brand: clean(brand),
+      sport: (sport || null) as Sport | null,
+      categoryId: categoryId || null,
+      skillLevel: clean(skillLevel),
+      ageRange: clean(ageRange),
+      description: clean(description),
+      imageUrl: clean(imageUrl),
+    });
+  }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
-      <div style={{ display: "flex", gap: "var(--space-md)" }}>
-        <Field label="Title" style={{ flex: 2 }}>
-          <Input value={title} onChange={setTitle} placeholder="Babolat Pure Drive 2026" />
-        </Field>
-        <Field label="Brand" style={{ flex: 1 }}>
-          <Input value={brand} onChange={setBrand} placeholder="Babolat" />
-        </Field>
-      </div>
+    <div className="ak-gear-form-stack" style={{ display: "flex", flexDirection: "column", gap: "var(--space-lg)" }}>
+      <Card>
+        <h3 className="ak-gear-section-title">Product</h3>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
+          <div className="ak-gear-form-row">
+            <Field label="Title" error={titleTouched ? titleError : undefined}>
+              <div onBlur={() => setTitleTouched(true)}>
+                <Input
+                  value={title}
+                  onChange={setTitle}
+                  placeholder="Babolat Pure Drive 2026"
+                  invalid={titleTouched && Boolean(titleError)}
+                />
+              </div>
+            </Field>
+            <Field label="Brand">
+              <Input value={brand} onChange={setBrand} placeholder="Babolat" />
+            </Field>
+          </div>
+        </div>
+      </Card>
 
-      <div style={{ display: "flex", gap: "var(--space-md)" }}>
-        <Field label="Sport" style={{ flex: 1 }}>
-          <select value={sport} onChange={(event) => setSport(event.target.value)} style={inputStyle}>
-            <option value="">Any sport</option>
-            {SPORTS.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Category" style={{ flex: 1 }}>
-          <select value={categoryId} onChange={(event) => setCategoryId(event.target.value)} style={inputStyle}>
-            <option value="">No category</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </Field>
-      </div>
+      <Card>
+        <h3 className="ak-gear-section-title">Classification</h3>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
+          <div className="ak-gear-form-row">
+            <Field label="Sport">
+              <Select
+                value={sport}
+                onChange={setSport}
+                placeholder="Any sport"
+                options={SPORTS.map((s) => ({ value: s, label: s }))}
+              />
+            </Field>
+            <Field label="Category">
+              <Select
+                value={categoryId}
+                onChange={setCategoryId}
+                placeholder="No category"
+                options={categories.map((c) => ({ value: c.id, label: c.name }))}
+              />
+            </Field>
+          </div>
+          <div className="ak-gear-form-row">
+            <Field label="Skill level" hint="Optional">
+              <Input value={skillLevel} onChange={setSkillLevel} placeholder="Beginner, intermediate, advanced" />
+            </Field>
+            <Field label="Age range" hint="Optional">
+              <Input value={ageRange} onChange={setAgeRange} placeholder="Adult, 10 to 14 years" />
+            </Field>
+          </div>
+        </div>
+      </Card>
 
-      <div style={{ display: "flex", gap: "var(--space-md)" }}>
-        <Field label="Skill level, optional" style={{ flex: 1 }}>
-          <Input value={skillLevel} onChange={setSkillLevel} placeholder="beginner, intermediate, advanced" />
-        </Field>
-        <Field label="Age range, optional" style={{ flex: 1 }}>
-          <Input value={ageRange} onChange={setAgeRange} placeholder="adult, 10 to 14 years" />
-        </Field>
-      </div>
+      <Card>
+        <h3 className="ak-gear-section-title">Description and image</h3>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
+          <Field label="Description" hint="Optional">
+            <Textarea value={description} onChange={setDescription} rows={3} placeholder="What it is and who it suits." />
+          </Field>
+          <Field label="Image URL" hint="Optional">
+            <Input value={imageUrl} onChange={setImageUrl} placeholder="https://..." />
+          </Field>
+        </div>
+      </Card>
 
-      <Field label="Description, optional">
-        <textarea
-          value={description}
-          onChange={(event) => setDescription(event.target.value)}
-          rows={3}
-          placeholder="What it is and who it suits."
-          style={{ ...inputStyle, resize: "vertical" }}
-        />
-      </Field>
-
-      <Field label="Image URL, optional">
-        <Input value={imageUrl} onChange={setImageUrl} placeholder="https://..." />
-      </Field>
-
-      <div>
-        <Button
-          disabled={!canSave}
-          onClick={() =>
-            onSubmit({
-              id: null,
-              title: title.trim(),
-              brand: clean(brand),
-              sport: (sport || null) as Sport | null,
-              categoryId: categoryId || null,
-              skillLevel: clean(skillLevel),
-              ageRange: clean(ageRange),
-              description: clean(description),
-              imageUrl: clean(imageUrl),
-            })
-          }
-        >
-          <Save size={16} strokeWidth={1.75} />
+      <div className="ak-gear-savebar-fallback">
+        <Button variant="primary" disabled={busy || Boolean(titleTouched && titleError)} onClick={save}>
           {submitLabel}
         </Button>
       </div>
+
+      <SaveBar dirty={dirty} saving={busy} errorCount={errorCount} onSave={save} onDiscard={discard} />
     </div>
   );
 }
@@ -188,30 +231,20 @@ export function OfferRow({
 }) {
   return (
     <div style={{ display: "flex", gap: "var(--space-sm)", alignItems: "flex-end" }}>
-      <Field label="Retailer" style={{ flex: 1 }}>
+      <Field label="Retailer">
         <Input value={draft.retailer} onChange={(v) => onChange({ ...draft, retailer: v })} placeholder="Amazon" />
       </Field>
-      <Field label="Price (INR)" style={{ width: 140 }}>
+      <Field label="Price, INR">
         <Input value={draft.price} onChange={(v) => onChange({ ...draft, price: v })} mono placeholder="15999" />
       </Field>
-      <Field label="Affiliate link" style={{ flex: 2 }}>
+      <Field label="Affiliate link">
         <Input
           value={draft.affiliateUrl}
           onChange={(v) => onChange({ ...draft, affiliateUrl: v })}
           placeholder="https://amzn.to/..."
         />
       </Field>
-      <label
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "var(--space-xs)",
-          fontSize: 13,
-          color: "var(--color-text-secondary)",
-          paddingBottom: "var(--space-sm)",
-          whiteSpace: "nowrap",
-        }}
-      >
+      <label className="ak-gear-instock-label">
         <input
           type="checkbox"
           checked={draft.inStock}
@@ -220,7 +253,7 @@ export function OfferRow({
         In stock
       </label>
       {onRemove ? (
-        <Button variant="secondary" onClick={onRemove} aria-label="Remove offer" style={{ marginBottom: 1 }}>
+        <Button variant="secondary" onClick={onRemove} aria-label="Remove offer">
           <Trash2 size={16} strokeWidth={1.75} />
         </Button>
       ) : null}

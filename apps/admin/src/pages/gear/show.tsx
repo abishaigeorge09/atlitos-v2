@@ -1,9 +1,20 @@
-import { AlertTriangle, ArrowLeft, Eye, EyeOff, ExternalLink, RefreshCw, Save, Sparkles, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { formatINR } from "@atlitos/theme";
+import { useNotification } from "@refinedev/core";
+import { ExternalLink, EyeOff, Eye, Package, RefreshCw, Sparkles, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { useParams, useSearchParams } from "react-router-dom";
 
-import { Badge, Button, Card, EmptyState } from "../../components/ui";
+import { Badge } from "../../components/kit/Badge";
+import { Button } from "../../components/kit/Button";
+import { Card } from "../../components/kit/Card";
+import { ConfirmDialog, type ConfirmDialogHandle } from "../../components/kit/ConfirmDialog";
+import { DetailLayout } from "../../components/kit/DetailLayout";
+import { Field } from "../../components/kit/Field";
+import { PageHeader } from "../../components/kit/PageHeader";
+import { DetailSkeleton } from "../../components/kit/Skeleton";
+import { EmptyState } from "../../components/kit/EmptyState";
 import { Mono } from "../../components/mono";
+import { statusLabel, statusTone } from "../../lib/status";
 import {
   fetchCategories,
   fetchGearItem,
@@ -15,9 +26,11 @@ import {
   type FetchLogSuggestion,
   type GearInput,
   type GearWithOffers,
+  type HealthOfferRow,
 } from "./api";
 import { EMPTY_OFFER, GearForm, OfferRow, offerDraftToInput, offerDraftValid, type OfferDraft } from "./form";
 import { outcomeLabel, outcomeTone, relativeDays } from "./format";
+import "./gear.css";
 
 // Edit one gear item, list or delist it, and manage its retailer lines. Every
 // mutation is a 0120 admin RPC with its own audit_log row. Adding a retailer
@@ -31,19 +44,10 @@ function errorMessage(err: unknown): string {
   return e?.message ?? "Something went wrong. Try again.";
 }
 
-const label: React.CSSProperties = {
-  fontSize: 12,
-  fontWeight: 600,
-  letterSpacing: "0.08em",
-  textTransform: "uppercase",
-  color: "var(--color-text-tertiary)",
-  margin: 0,
-};
-
 export function GearShow() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { open } = useNotification();
 
   const [item, setItem] = useState<GearWithOffers | null>(null);
   const [categories, setCategories] = useState<CategoryOption[]>([]);
@@ -51,9 +55,12 @@ export function GearShow() {
   const [busy, setBusy] = useState(false);
   const [recheckingOffer, setRecheckingOffer] = useState(false);
   const [error, setError] = useState<string | null>(searchParams.get("error"));
-  const [notice, setNotice] = useState<string | null>(null);
   const [draft, setDraft] = useState<OfferDraft>({ ...EMPTY_OFFER });
   const [suggestion, setSuggestion] = useState<FetchLogSuggestion | null>(null);
+  const [offerToDelete, setOfferToDelete] = useState<HealthOfferRow | null>(null);
+
+  const deleteOfferRef = useRef<ConfirmDialogHandle>(null);
+  const listStatusRef = useRef<ConfirmDialogHandle>(null);
 
   async function load() {
     if (!id) return;
@@ -93,13 +100,12 @@ export function GearShow() {
     }
   }
 
-  async function run(action: () => Promise<unknown>, successNotice: string) {
+  async function run(action: () => Promise<unknown>, successMessage: string) {
     setBusy(true);
     setError(null);
-    setNotice(null);
     try {
       await action();
-      setNotice(successNotice);
+      open?.({ type: "success", message: successMessage });
       await load();
     } catch (err) {
       setError(errorMessage(err));
@@ -109,20 +115,31 @@ export function GearShow() {
   }
 
   if (state === "loading") {
-    return <div style={{ fontSize: 14, color: "var(--color-text-secondary)" }}>Loading gear item...</div>;
+    return (
+      <div>
+        <PageHeader breadcrumbs={[{ label: "Catalog", to: "/gear" }, { label: "Gear" }]} title="Loading" />
+        <DetailSkeleton />
+      </div>
+    );
   }
   if (state === "not_found") {
     return (
-      <Card>
-        <EmptyState icon={<AlertTriangle size={32} strokeWidth={1.75} />} title="Gear item not found" description="This item does not exist or was removed." />
-      </Card>
+      <div>
+        <PageHeader breadcrumbs={[{ label: "Catalog", to: "/gear" }, { label: "Gear" }]} title="Not found" />
+        <Card>
+          <EmptyState title="Gear item not found" body="This item does not exist or was removed." />
+        </Card>
+      </div>
     );
   }
   if (state === "error" || !item) {
     return (
-      <Card>
-        <EmptyState icon={<AlertTriangle size={32} strokeWidth={1.75} />} title="Could not load this item" description="Something went wrong reading this item. Try again." />
-      </Card>
+      <div>
+        <PageHeader breadcrumbs={[{ label: "Catalog", to: "/gear" }, { label: "Gear" }]} title="Could not load" />
+        <Card>
+          <EmptyState title="Could not load this item" body="Something went wrong reading this item. Try again." />
+        </Card>
+      </div>
     );
   }
 
@@ -140,157 +157,226 @@ export function GearShow() {
     }, "Retailer saved.");
   }
 
+  function confirmDeleteOffer(offer: HealthOfferRow) {
+    setOfferToDelete(offer);
+    deleteOfferRef.current?.open();
+  }
+
+  function runDeleteOffer() {
+    if (!offerToDelete) return;
+    void run(() => gearApi.deleteOffer(offerToDelete.id), `${offerToDelete.retailer} removed.`).then(() => {
+      deleteOfferRef.current?.close();
+      setOfferToDelete(null);
+    });
+  }
+
+  function runToggleActive() {
+    void run(
+      () => gearApi.setProductActive(current.id, !current.active),
+      current.active ? "Item delisted." : "Item listed again.",
+    ).then(() => listStatusRef.current?.close());
+  }
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-lg)", maxWidth: 880 }}>
-      <button
-        type="button"
-        onClick={() => navigate("/gear")}
-        style={{ display: "flex", alignItems: "center", gap: "var(--space-xs)", border: "none", background: "none", color: "var(--color-text-secondary)", fontSize: 14, cursor: "pointer", padding: 0, alignSelf: "flex-start" }}
-      >
-        <ArrowLeft size={16} strokeWidth={1.75} />
-        Back to gear
-      </button>
-
-      {error ? (
-        <Card style={{ borderColor: "var(--color-danger)", padding: "var(--space-md) var(--space-lg)" }}>
-          <p style={{ fontSize: 14, color: "var(--color-danger)", margin: 0 }}>{error}</p>
-        </Card>
-      ) : null}
-      {notice ? (
-        <Card style={{ borderColor: "var(--color-success)", padding: "var(--space-md) var(--space-lg)" }}>
-          <p style={{ fontSize: 14, color: "var(--color-success)", margin: 0 }}>{notice}</p>
-        </Card>
-      ) : null}
-
-      <Card>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "var(--space-md)" }}>
-          <div>
-            <p style={label}>Gear item</p>
-            <h1 style={{ fontSize: 20, fontWeight: 700, margin: "var(--space-xs) 0 0" }}>{current.title}</h1>
-            <p style={{ fontSize: 13, color: "var(--color-text-secondary)", margin: "var(--space-xs) 0 0" }}>
-              {current.brand ?? "No brand"}, {current.sport ?? "any sport"}. <Mono style={{ fontWeight: 600 }}>{current.offers.length}</Mono> retailer{current.offers.length === 1 ? "" : "s"}.
-            </p>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
-            <Badge tone={current.active ? "success" : "neutral"}>{current.active ? "listed" : "delisted"}</Badge>
-            <Button
-              variant="secondary"
-              disabled={busy}
-              onClick={() =>
-                run(
-                  () => gearApi.setProductActive(current.id, !current.active),
-                  current.active ? "Item hidden from shoppers." : "Item visible to shoppers again.",
-                )
-              }
-            >
-              {current.active ? <EyeOff size={16} strokeWidth={1.75} /> : <Eye size={16} strokeWidth={1.75} />}
-              {current.active ? "Delist" : "List"}
-            </Button>
-          </div>
-        </div>
-      </Card>
-
-      <Card>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-md)" }}>
-          <p style={{ ...label, margin: 0 }}>Retailers, cheapest first</p>
+    <div>
+      <PageHeader
+        breadcrumbs={[{ label: "Catalog", to: "/gear" }, { label: "Gear", to: "/gear" }]}
+        title={current.title}
+        description={`${current.brand ?? "No brand"}, ${current.sport ?? "any sport"}`}
+        secondaryActions={
           <Button variant="secondary" disabled={recheckingOffer} onClick={runRecheck}>
             <RefreshCw size={16} strokeWidth={1.75} />
             {recheckingOffer ? "Checking" : "Re-check now"}
           </Button>
-        </div>
-        {current.offers.length === 0 ? (
-          <p style={{ fontSize: 14, color: "var(--color-text-secondary)", margin: "0 0 var(--space-md)" }}>
-            No retailer yet. Shoppers cannot buy this item until one is added.
-          </p>
-        ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "var(--space-md)" }}>
-            <tbody>
-              {current.offers.map((offer) => (
-                <tr key={offer.id} style={{ borderBottom: "1px solid var(--color-border)" }}>
-                  <td style={{ padding: "var(--space-sm) 0", fontSize: 14, fontWeight: 600 }}>{offer.retailer}</td>
-                  <td style={{ padding: "var(--space-sm) var(--space-md)", fontSize: 14 }}>
-                    <Mono>INR {Number(offer.price).toLocaleString("en-IN")}</Mono>
-                  </td>
-                  <td style={{ padding: "var(--space-sm) var(--space-md)" }}>
-                    <Badge tone={offer.in_stock ? "success" : "warning"}>{offer.in_stock ? "in stock" : "out of stock"}</Badge>
-                  </td>
-                  <td style={{ padding: "var(--space-sm) var(--space-md)" }}>
-                    <Badge tone={outcomeTone(offer.last_check_outcome)}>{outcomeLabel(offer.last_check_outcome)}</Badge>
-                  </td>
-                  <td style={{ padding: "var(--space-sm) var(--space-md)", fontSize: 13, color: "var(--color-text-secondary)" }}>
-                    {relativeDays(offer.last_checked_at)}
-                  </td>
-                  <td style={{ padding: "var(--space-sm) var(--space-md)", fontSize: 13 }}>
-                    <a href={offer.affiliate_url} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-xs)", color: "var(--color-accent)" }}>
-                      <ExternalLink size={14} strokeWidth={1.75} />
-                      Open link
-                    </a>
-                  </td>
-                  <td style={{ padding: "var(--space-sm) 0", textAlign: "right" }}>
-                    <Button
-                      variant="secondary"
-                      disabled={busy}
-                      aria-label={`Remove ${offer.retailer}`}
-                      onClick={() => run(() => gearApi.deleteOffer(offer.id), `${offer.retailer} removed.`)}
-                    >
-                      <Trash2 size={16} strokeWidth={1.75} />
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        }
+      />
 
-        <p style={{ ...label, marginBottom: "var(--space-sm)" }}>Add or update a retailer</p>
-        <OfferRow draft={draft} onChange={setDraft} />
-        <div style={{ marginTop: "var(--space-md)" }}>
-          <Button disabled={busy || !offerDraftValid(draft)} onClick={addOffer}>
-            <Save size={16} strokeWidth={1.75} />
-            Save retailer
-          </Button>
-        </div>
-      </Card>
-
-      {suggestion ? (
+      {error ? (
         <Card>
-          <p style={{ ...label, marginBottom: "var(--space-md)", display: "flex", alignItems: "center", gap: "var(--space-xs)" }}>
-            <Sparkles size={14} strokeWidth={1.75} />
-            AI suggestion
-          </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-xs)", marginBottom: "var(--space-md)" }}>
-            {Object.entries(suggestion.suggestion).map(([key, value]) => (
-              <p key={key} style={{ fontSize: 14, margin: 0 }}>
-                <span style={{ fontWeight: 600, textTransform: "capitalize" }}>{key.replace(/([A-Z])/g, " $1").trim()}</span>: {String(value)}
-              </p>
-            ))}
-          </div>
-          <p style={{ fontSize: 13, color: "var(--color-text-secondary)", margin: 0 }}>
-            Fetched {relativeDays(suggestion.fetchedAt)}. Suggestion only, nothing was changed.
-          </p>
+          <p style={{ color: "var(--color-danger)", fontSize: "var(--text-sm)", margin: 0 }}>{error}</p>
         </Card>
       ) : null}
 
-      <Card>
-        <p style={{ ...label, marginBottom: "var(--space-md)" }}>Product</p>
-        <GearForm
-          key={current.updated_at}
-          categories={categories}
-          initial={{
-            title: current.title,
-            brand: current.brand,
-            sport: current.sport,
-            categoryId: current.category_id,
-            skillLevel: current.skill_level,
-            ageRange: current.age_range,
-            description: current.description,
-            imageUrl: current.image_url,
-          }}
-          submitLabel="Save gear item"
-          busy={busy}
-          onSubmit={saveProduct}
-        />
-      </Card>
+      <DetailLayout
+        main={
+          <>
+            <Card>
+              <div className="ak-gear-detail-image">
+                {current.image_url ? <img src={current.image_url} alt="" /> : <Package size={32} strokeWidth={1.5} />}
+              </div>
+              {current.description ? <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)" }}>{current.description}</p> : null}
+            </Card>
+
+            <Card>
+              <h3 className="ak-gear-section-title">Offers</h3>
+              {current.offers.length === 0 ? (
+                <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)" }}>
+                  No retailer yet. Shoppers cannot buy this item until one is added.
+                </p>
+              ) : (
+                <table className="ak-gear-offers-table">
+                  <thead>
+                    <tr>
+                      <th>Retailer</th>
+                      <th className="ak-gear-numeric">Price</th>
+                      <th>Stock</th>
+                      <th>Health</th>
+                      <th>Checked</th>
+                      <th>Link</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {current.offers.map((offer) => (
+                      <tr key={offer.id}>
+                        <td>{offer.retailer}</td>
+                        <td className="ak-gear-numeric">
+                          <Mono>{formatINR(Number(offer.price))}</Mono>
+                        </td>
+                        <td>
+                          <Badge tone={offer.in_stock ? "success" : "warning"}>{offer.in_stock ? "In stock" : "Out of stock"}</Badge>
+                        </td>
+                        <td>
+                          <Badge tone={outcomeTone(offer.last_check_outcome)}>{outcomeLabel(offer.last_check_outcome)}</Badge>
+                        </td>
+                        <td>{relativeDays(offer.last_checked_at)}</td>
+                        <td>
+                          <a href={offer.affiliate_url} target="_blank" rel="noreferrer" className="ak-gear-offer-link">
+                            <ExternalLink size={14} strokeWidth={1.75} />
+                            Open link
+                          </a>
+                        </td>
+                        <td style={{ textAlign: "right" }}>
+                          <Button variant="secondary" disabled={busy} aria-label={`Delete ${offer.retailer}`} onClick={() => confirmDeleteOffer(offer)}>
+                            <Trash2 size={16} strokeWidth={1.75} />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
+              <h3 className="ak-gear-section-title" style={{ marginTop: "var(--space-lg)" }}>
+                Add or update a retailer
+              </h3>
+              <OfferRow draft={draft} onChange={setDraft} />
+              <div style={{ marginTop: "var(--space-md)" }}>
+                <Button disabled={busy || !offerDraftValid(draft)} onClick={addOffer}>
+                  Save retailer
+                </Button>
+              </div>
+            </Card>
+
+            {suggestion ? (
+              <Card>
+                <h3 className="ak-gear-section-title" style={{ display: "flex", alignItems: "center", gap: "var(--space-xs)" }}>
+                  <Sparkles size={14} strokeWidth={1.75} />
+                  AI suggestion
+                </h3>
+                <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-xs)", marginBottom: "var(--space-md)" }}>
+                  {Object.entries(suggestion.suggestion).map(([key, value]) => (
+                    <p key={key} style={{ fontSize: "var(--text-sm)", margin: 0 }}>
+                      <span style={{ fontWeight: 600, textTransform: "capitalize" }}>{key.replace(/([A-Z])/g, " $1").trim()}</span>: {String(value)}
+                    </p>
+                  ))}
+                </div>
+                <p style={{ fontSize: "var(--text-xs)", color: "var(--color-text-secondary)", margin: 0 }}>
+                  Fetched {relativeDays(suggestion.fetchedAt)}. Suggestion only, nothing was changed.
+                </p>
+              </Card>
+            ) : null}
+
+            <Card>
+              <h3 className="ak-gear-section-title">Edit product</h3>
+              <GearForm
+                key={current.updated_at}
+                categories={categories}
+                initial={{
+                  title: current.title,
+                  brand: current.brand,
+                  sport: current.sport,
+                  categoryId: current.category_id,
+                  skillLevel: current.skill_level,
+                  ageRange: current.age_range,
+                  description: current.description,
+                  imageUrl: current.image_url,
+                }}
+                submitLabel="Save gear item"
+                busy={busy}
+                onSubmit={saveProduct}
+              />
+            </Card>
+          </>
+        }
+        side={
+          <Card>
+            <Field label="Status">
+              <Badge tone={current.active ? "success" : "neutral"}>{current.active ? "Listed" : "Delisted"}</Badge>
+            </Field>
+            <div className="ak-gear-metadata-row">
+              <span className="ak-gear-metadata-label">Sport</span>
+              <span className="ak-gear-metadata-value">{current.sport ?? "Any"}</span>
+            </div>
+            <div className="ak-gear-metadata-row">
+              <span className="ak-gear-metadata-label">Brand</span>
+              <span className="ak-gear-metadata-value">{current.brand ?? "No brand"}</span>
+            </div>
+            <div className="ak-gear-metadata-row">
+              <span className="ak-gear-metadata-label">Retailers</span>
+              <span className="ak-gear-metadata-value">
+                <Mono>{current.offers.length}</Mono>
+              </span>
+            </div>
+            <div className="ak-gear-metadata-row">
+              <span className="ak-gear-metadata-label">Health</span>
+              <Badge tone={statusTone(current.health_status)}>{statusLabel(current.health_status)}</Badge>
+            </div>
+            <div className="ak-gear-metadata-row">
+              <span className="ak-gear-metadata-label">Created</span>
+              <span className="ak-gear-metadata-value">{relativeDays(current.created_at)}</span>
+            </div>
+            <div className="ak-gear-metadata-row">
+              <span className="ak-gear-metadata-label">Updated</span>
+              <span className="ak-gear-metadata-value">{relativeDays(current.updated_at)}</span>
+            </div>
+            <Button
+              variant="secondary"
+              disabled={busy}
+              onClick={() => listStatusRef.current?.open()}
+              style={{ marginTop: "var(--space-lg)", width: "100%" }}
+            >
+              {current.active ? <EyeOff size={16} strokeWidth={1.75} /> : <Eye size={16} strokeWidth={1.75} />}
+              {current.active ? "Delist" : "Relist"}
+            </Button>
+          </Card>
+        }
+      />
+
+      <ConfirmDialog
+        ref={deleteOfferRef}
+        title="Delete this offer"
+        body="This removes the offer from the product page. This cannot be undone for"
+        recordName={offerToDelete ? `${offerToDelete.retailer}, ${formatINR(Number(offerToDelete.price))}` : undefined}
+        confirmLabel="Delete offer"
+        onConfirm={runDeleteOffer}
+        loading={busy}
+      />
+
+      <ConfirmDialog
+        ref={listStatusRef}
+        title={current.active ? "Delist this product" : "Relist this product"}
+        body={
+          current.active
+            ? "Shoppers will no longer see this product in the shop for"
+            : "This product becomes visible to shoppers again for"
+        }
+        recordName={current.title}
+        confirmLabel={current.active ? "Delist" : "Relist"}
+        danger={current.active}
+        onConfirm={runToggleActive}
+        loading={busy}
+      />
     </div>
   );
 }
