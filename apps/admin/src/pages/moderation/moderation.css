@@ -63,6 +63,13 @@
   margin-bottom: var(--space-md);
 }
 
+/* The danger hue is a fill and a border colour; on its own tint it is 4.01:1,
+   short of what this body copy needs. */
+.ak-mod-error-box > span,
+.ak-mod-error-box > p {
+  color: var(--color-danger-ink);
+}
+
 .ak-mod-reject-stack {
   display: flex;
   flex-direction: column;

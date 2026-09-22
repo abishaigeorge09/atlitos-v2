@@ -49,7 +49,8 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-sm);
-  color: var(--color-accent);
+  /* accent on a white card is 3.32:1; this link is body size. */
+  color: var(--color-accent-on-tint);
   font-size: var(--text-base);
   text-decoration: none;
 }

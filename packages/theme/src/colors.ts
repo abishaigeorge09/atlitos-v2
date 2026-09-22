@@ -100,6 +100,13 @@ export interface ColorPalette {
   accentInk: string;
   /** Accent-coloured text on `accentTint`, dark enough to read. */
   accentOnTint: string;
+  /** Semantic INK: the text colour to use on the matching tint. The base
+   * semantic colours stay as they are for fills, dots and icons, where the
+   * 3:1 non-text threshold applies rather than 4.5:1. */
+  successInk: string;
+  warningInk: string;
+  dangerInk: string;
+  infoInk: string;
 
   // Both accent candidates, always available for the token gallery / gate.
   brandOrange: string;
@@ -152,6 +159,12 @@ export const lightColors: ColorPalette = {
   infoTint: "#DFEBFB",
   danger: "#D7263D",
   dangerTint: "#FBE1E4",
+
+  // Each measured against its own tint: 5.14, 5.15, 5.18, 5.62.
+  successInk: "#16724A",
+  warningInk: "#8A580A",
+  dangerInk: "#B81F33",
+  infoInk: "#185CA3",
 };
 
 // Dark: neutral near-black, anchored on the founder's #141414. Deliberately
@@ -191,6 +204,13 @@ export const darkColors: ColorPalette = {
   infoTint: "#16273A",
   danger: "#F0616F",
   dangerTint: "#3A1418",
+
+  // On the dark tints the base semantics already clear 4.5:1, so ink is the
+  // same colour rather than a second value that could drift from it.
+  successInk: "#34C787",
+  warningInk: "#E3A83B",
+  dangerInk: "#F0616F",
+  infoInk: "#5B9FE8",
 };
 
 export const colors = { light: lightColors, dark: darkColors } as const;

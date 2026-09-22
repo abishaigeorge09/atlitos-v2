@@ -32,7 +32,7 @@
 }
 
 .ak-tab-active {
-  color: var(--color-accent);
+  color: var(--color-accent-on-tint);
   border-bottom-color: var(--color-accent);
 }
 
@@ -44,5 +44,5 @@
 }
 
 .ak-tab-active .ak-tab-count {
-  color: var(--color-accent);
+  color: var(--color-accent-on-tint);
 }

@@ -33,6 +33,10 @@
   --color-info-tint: hsl(214 78% 93%);
   --color-danger: hsl(352 70% 50%);
   --color-danger-tint: hsl(353 76% 93%);
+  --color-success-ink: hsl(154 68% 27%);
+  --color-warning-ink: hsl(37 86% 29%);
+  --color-danger-ink: hsl(352 71% 42%);
+  --color-info-ink: hsl(211 74% 37%);
 
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -165,6 +169,10 @@
   --color-info-tint: hsl(212 45% 16%);
   --color-danger: hsl(354 83% 66%);
   --color-danger-tint: hsl(354 49% 15%);
+  --color-success-ink: hsl(154 59% 49%);
+  --color-warning-ink: hsl(39 75% 56%);
+  --color-danger-ink: hsl(354 83% 66%);
+  --color-info-ink: hsl(211 75% 63%);
 }
 
 body {

@@ -222,7 +222,13 @@ export function ProductShow() {
           >
             Adjust stock
           </Button>
-          <Button variant="danger" size="sm" disabled={busy} onClick={() => requestDeleteVariant(v)}>
+          <Button
+            variant="danger"
+            size="sm"
+            disabled={busy}
+            aria-label={`Delete variant ${v.sku}`}
+            onClick={() => requestDeleteVariant(v)}
+          >
             <Trash2 size={14} strokeWidth={1.75} />
           </Button>
         </div>

@@ -211,10 +211,10 @@ export function ModerationShow() {
                 </div>
               ) : previewError ? (
                 <div className="ak-mod-error-box">
-                  <Mono style={{ fontSize: "var(--text-xs)", fontWeight: "var(--weight-semibold)", color: "var(--color-danger)" }}>
+                  <Mono style={{ fontSize: "var(--text-xs)", fontWeight: "var(--weight-semibold)", color: "var(--color-danger-ink)" }}>
                     {previewError.code}
                   </Mono>
-                  <p style={{ fontSize: "var(--text-sm)", color: "var(--color-danger)", margin: "var(--space-xs) 0 0" }}>
+                  <p style={{ fontSize: "var(--text-sm)", color: "var(--color-danger-ink)", margin: "var(--space-xs) 0 0" }}>
                     {clip.status === "removed" || clip.status === "rejected"
                       ? "This clip is terminal, so the preview link is refused by design."
                       : previewError.message}
