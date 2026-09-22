@@ -38,7 +38,9 @@ const GUIDANCE: Record<IngestErrorCode, IngestGuidance> = {
     fillByHand: true,
   },
   RETAILER_UNAVAILABLE: {
-    guidance: "Fill the form below. The link you pasted is kept as the offer, so nothing is lost.",
+    // The message already says what to do, so this line says why, which is the
+    // part that stops someone retrying the same link three times.
+    guidance: "This is the retailer refusing an automated read, not a problem with the link you pasted.",
     fillByHand: true,
   },
   NO_PRODUCT_FOUND: {

@@ -71,7 +71,7 @@ export function GearCreate() {
   const [url, setUrl] = useState("");
   const [fetching, setFetching] = useState(false);
   const [refusal, setRefusal] = useState<Refusal | null>(null);
-  const [fetched, setFetched] = useState<{ retailerKey: string | null; warnings: string[] } | null>(null);
+  const [fetched, setFetched] = useState<{ retailerName: string | null; warnings: string[] } | null>(null);
   const [prefill, setPrefill] = useState<PrefillState>({ initial: BLANK, nonce: 0 });
 
   useEffect(() => {
@@ -98,7 +98,7 @@ export function GearCreate() {
     price?: number | null;
     inStock?: boolean | null;
     canonicalUrl?: string | null;
-  }, retailerKey: string | null) {
+  }, retailerName: string | null) {
     setPrefill((prev) => ({
       nonce: prev.nonce + 1,
       initial: {
@@ -115,7 +115,7 @@ export function GearCreate() {
       const rest = prev.slice(1).filter((o) => o.retailer.trim() || o.price.trim() || o.affiliateUrl.trim());
       return [
         {
-          retailer: retailerKey ? retailerKey.replace(/_/g, " ") : retailerFromUrl,
+          retailer: retailerName ?? retailerFromUrl,
           price: draft.price === null || draft.price === undefined ? "" : String(draft.price),
           affiliateUrl: offerUrl,
           inStock: draft.inStock ?? true,
@@ -132,8 +132,8 @@ export function GearCreate() {
     setError(null);
     try {
       const result = await ingestFetch(url.trim());
-      applyPrefill(result.draft, result.retailerKey);
-      setFetched({ retailerKey: result.retailerKey, warnings: result.warnings });
+      applyPrefill(result.draft, result.retailerDisplay);
+      setFetched({ retailerName: result.retailerDisplay, warnings: result.warnings });
     } catch (err) {
       const e = err as IngestError;
       const code = e?.code ?? "INTERNAL";
@@ -142,7 +142,7 @@ export function GearCreate() {
       // FR-47: whatever was readable still fills the form, and for the codes
       // where the link is a valid offer, the URL lands in the offer row.
       if (e?.partialDraft || keepsUrlAsOffer(code)) {
-        applyPrefill(e?.partialDraft ?? {}, e?.retailerKey ?? null);
+        applyPrefill(e?.partialDraft ?? {}, e?.retailerDisplay ?? null);
       }
     } finally {
       setFetching(false);
@@ -204,7 +204,7 @@ export function GearCreate() {
         {fetched ? (
           <div className="ak-gear-ingest-result">
             <Badge tone="success">Filled in below</Badge>
-            {fetched.retailerKey ? <Badge tone="neutral">{fetched.retailerKey.replace(/_/g, " ")}</Badge> : null}
+            {fetched.retailerName ? <Badge tone="neutral">{fetched.retailerName}</Badge> : null}
             {fetched.warnings.map((w) => (
               <Badge key={w} tone="warning">
                 {w}

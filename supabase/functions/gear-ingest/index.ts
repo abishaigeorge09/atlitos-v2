@@ -206,6 +206,7 @@ async function handleFetch(svc: AnySupabaseClient, url: string) {
         },
         draft: { canonicalUrl: url },
         retailer_key: programme.key,
+        retailer_display: programme.display_name,
         warnings,
         upstream_status: null,
       },
@@ -237,6 +238,7 @@ async function handleFetch(svc: AnySupabaseClient, url: string) {
         },
         draft: partial,
         retailer_key: programme.key,
+        retailer_display: programme.display_name,
         warnings,
         upstream_status: page.status,
       },
@@ -257,12 +259,12 @@ async function handleFetch(svc: AnySupabaseClient, url: string) {
     const partial = partialFromHtml(page.html, page.finalUrl);
     const err = new AppError("NO_PRODUCT_FOUND", "Could not read a product from this page.", 422);
     return jsonResponse(
-      { error: { code: err.code, message: err.message }, draft: partial, retailer_key: programme?.key ?? null, warnings },
+      { error: { code: err.code, message: err.message }, draft: partial, retailer_key: programme?.key ?? null, retailer_display: programme?.display_name ?? null, warnings },
       422,
     );
   }
 
-  return jsonResponse({ draft, retailer_key: programme?.key ?? null, warnings });
+  return jsonResponse({ draft, retailer_key: programme?.key ?? null, retailer_display: programme?.display_name ?? null, warnings });
 }
 
 // ---------------------------------------------------------------------------

@@ -212,6 +212,7 @@ export interface IngestDraft {
 export interface IngestFetchResult {
   draft: IngestDraft;
   retailerKey: string | null;
+  retailerDisplay: string | null;
   warnings: string[];
 }
 
@@ -225,6 +226,8 @@ export interface IngestFetchResult {
 export interface IngestError extends CommerceError {
   partialDraft: Partial<IngestDraft> | null;
   retailerKey: string | null;
+  /** The programme's display name, for the offer row and the badge. */
+  retailerDisplay: string | null;
   warnings: string[];
   upstreamStatus: number | null;
 }
@@ -254,6 +257,7 @@ async function readFunctionError(error: unknown): Promise<IngestError> {
         error?: { code?: string; message?: string };
         draft?: Partial<IngestDraft>;
         retailer_key?: string | null;
+        retailer_display?: string | null;
         warnings?: string[];
         upstream_status?: number | null;
       };
@@ -263,6 +267,7 @@ async function readFunctionError(error: unknown): Promise<IngestError> {
           message: body.error.message ?? "Could not read a product from this page.",
           partialDraft: body.draft ?? null,
           retailerKey: body.retailer_key ?? null,
+          retailerDisplay: body.retailer_display ?? null,
           warnings: body.warnings ?? [],
           upstreamStatus: body.upstream_status ?? null,
         };
@@ -272,7 +277,7 @@ async function readFunctionError(error: unknown): Promise<IngestError> {
     }
   }
   const message = error instanceof Error ? error.message : "Something went wrong. Try again.";
-  return { code: "INTERNAL", message, partialDraft: null, retailerKey: null, warnings: [], upstreamStatus: null };
+  return { code: "INTERNAL", message, partialDraft: null, retailerKey: null, retailerDisplay: null, warnings: [], upstreamStatus: null };
 }
 
 /**
@@ -284,8 +289,8 @@ export async function ingestFetch(url: string): Promise<IngestFetchResult> {
     body: { action: "fetch", url },
   });
   if (error) throw await readFunctionError(error);
-  const body = data as { draft: IngestDraft; retailer_key: string | null; warnings?: string[] };
-  return { draft: body.draft, retailerKey: body.retailer_key, warnings: body.warnings ?? [] };
+  const body = data as { draft: IngestDraft; retailer_key: string | null; retailer_display?: string | null; warnings?: string[] };
+  return { draft: body.draft, retailerKey: body.retailer_key, retailerDisplay: body.retailer_display ?? null, warnings: body.warnings ?? [] };
 }
 
 /**

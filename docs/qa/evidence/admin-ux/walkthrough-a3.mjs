@@ -110,7 +110,7 @@ try {
   createdId = page.url().split("/gear/show/")[1].split("?")[0];
   const { data: saved } = await svc.from("affiliate_products").select("id,title").eq("id", createdId).single();
   check("one product row saved", Boolean(saved?.id), saved?.title);
-  const { count: offerCount } = await svc.from("product_offers").select("id", { count: "exact", head: true }).eq("product_id", createdId);
+  const { count: offerCount } = await svc.from("product_offers").select("id", { count: "exact", head: true }).eq("affiliate_product_id", createdId);
   check("exactly one offer saved", offerCount === 1, String(offerCount));
   await shot("a3-2-saved-product");
 
@@ -153,7 +153,7 @@ try {
   await browser.close();
   await new Promise((r) => server.close(r));
   if (createdId) {
-    await svc.from("product_offers").delete().eq("product_id", createdId);
+    await svc.from("product_offers").delete().eq("affiliate_product_id", createdId);
     await svc.from("affiliate_products").delete().eq("id", createdId);
   }
   await svc.from("retailer_programmes").delete().eq("key", KEY);
