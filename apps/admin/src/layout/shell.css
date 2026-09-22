@@ -103,7 +103,7 @@
 }
 
 .ak-sidebar-item-active {
-  color: var(--color-accent);
+  color: var(--color-accent-on-tint);
   background-color: var(--color-accent-tint);
 }
 

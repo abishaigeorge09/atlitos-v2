@@ -1,3 +1,4 @@
+import { useFieldControl } from "./Field";
 import "./Field.css";
 
 export function Textarea({
@@ -13,14 +14,17 @@ export function Textarea({
   id?: string;
   rows?: number;
 }) {
+  const field = useFieldControl(id);
   return (
     <textarea
-      id={id}
+      id={field.id}
       value={value}
       placeholder={placeholder}
       rows={rows}
       onChange={(event) => onChange(event.target.value)}
       className="ak-textarea"
+      aria-invalid={field.invalid || undefined}
+      aria-describedby={field.describedBy}
     />
   );
 }

@@ -13,7 +13,7 @@
   --color-overlay: rgba(0,0,0,0.45);
   --color-text: hsl(0 0% 5%);
   --color-text-secondary: hsl(0 0% 36%);
-  --color-text-tertiary: hsl(0 0% 56%);
+  --color-text-tertiary: hsl(0 0% 42%);
   --color-text-inverse: hsl(0 0% 100%);
   --color-border: hsl(0 0% 90%);
   --color-border-strong: hsl(0 0% 82%);
@@ -21,6 +21,8 @@
   --color-accent-pressed: hsl(18 100% 43%);
   --color-accent-tint: hsl(18 100% 95%);
   --color-ink-on-accent: hsl(0 0% 100%);
+  --color-accent-ink: hsl(0 0% 5%);
+  --color-accent-on-tint: hsl(17 100% 35%);
   --color-brand-orange: hsl(18 100% 50%);
   --color-brand-ember: hsl(15 76% 55%);
   --color-success: hsl(154 67% 32%);
@@ -143,7 +145,7 @@
   --color-overlay: rgba(0,0,0,0.6);
   --color-text: hsl(0 0% 100%);
   --color-text-secondary: hsl(0 0% 66%);
-  --color-text-tertiary: hsl(0 0% 48%);
+  --color-text-tertiary: hsl(0 0% 58%);
   --color-text-inverse: hsl(0 0% 8%);
   --color-border: hsl(0 0% 18%);
   --color-border-strong: hsl(0 0% 24%);
@@ -151,6 +153,8 @@
   --color-accent-pressed: hsl(18 100% 43%);
   --color-accent-tint: hsl(17 84% 12%);
   --color-ink-on-accent: hsl(0 0% 100%);
+  --color-accent-ink: hsl(0 0% 5%);
+  --color-accent-on-tint: hsl(18 100% 50%);
   --color-brand-orange: hsl(18 100% 50%);
   --color-brand-ember: hsl(15 76% 55%);
   --color-success: hsl(154 59% 49%);

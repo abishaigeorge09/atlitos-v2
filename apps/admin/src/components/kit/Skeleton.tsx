@@ -18,7 +18,7 @@ export function Skeleton({ width, height = 16, radius = "sm" }: { width?: string
 /** Shaped like a data table, never "Loading..." (Part B plan B0.9). */
 export function TableSkeleton({ columns = 5, rows = 6 }: { columns?: number; rows?: number }) {
   return (
-    <div className="ak-table-wrap" aria-busy="true" aria-label="Loading table">
+    <div className="ak-table-wrap" role="status" aria-busy="true" aria-label="Loading table">
       <table className="ak-table">
         <thead>
           <tr>
@@ -48,7 +48,7 @@ export function TableSkeleton({ columns = 5, rows = 6 }: { columns?: number; row
 /** Shaped like DetailLayout's 2fr/1fr grid. */
 export function DetailSkeleton() {
   return (
-    <div className="ak-detail-skeleton" aria-busy="true" aria-label="Loading detail">
+    <div className="ak-detail-skeleton" role="status" aria-busy="true" aria-label="Loading detail">
       <div className="ak-detail-skeleton-main">
         <div className="ak-card ak-detail-skeleton-card">
           <Skeleton width={140} height={14} />
