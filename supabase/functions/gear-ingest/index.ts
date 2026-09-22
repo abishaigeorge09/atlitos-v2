@@ -7,10 +7,16 @@
 // Two actions, same function:
 //   POST { action: "fetch", url }
 //     -> 200 { draft: ProductDraft, retailer_key: string | null, warnings: string[] }
-//     -> 422 { error: { code, message } } with UNSUPPORTED_RETAILER,
-//        ROBOTS_DISALLOWED or NO_PRODUCT_FOUND, whatever partial fields
-//        could still be read attached under `draft` (FR-47: the manual form
-//        stays usable with whatever was extracted).
+//     -> 422 { error: { code, message }, draft?, retailer_key, warnings,
+//        upstream_status? } with UNSUPPORTED_RETAILER, ROBOTS_DISALLOWED,
+//        BLOCKED_TARGET, RETAILER_UNAVAILABLE or NO_PRODUCT_FOUND, whatever
+//        partial fields could still be read attached under `draft` (FR-47:
+//        the manual form stays usable with whatever was extracted).
+//        RETAILER_UNAVAILABLE (A3-T2, 2026-09-22) is the honest answer when
+//        a supported retailer refuses the fetch itself: the programme is
+//        marked `fetchable = false` (no round trip is made), or the page
+//        answered 403, 429 or 5xx. Before this, an Amazon 503 fell through
+//        to NO_PRODUCT_FOUND and read as "your link is wrong".
 //     WRITES NOTHING (FR-44). Not even the image copy.
 //   POST { action: "save", url, draft, productId? }
 //     -> 200 { product: AffiliateProductRow, offer: ProductOfferRow }
@@ -56,6 +62,7 @@ interface RetailerProgrammeRow {
   url_patterns: string[];
   affiliate_tag_template: string | null;
   extractor: RetailerExtractorMap | null;
+  fetchable: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -150,7 +157,7 @@ async function matchRetailer(svc: AnySupabaseClient, url: string): Promise<Retai
   }
   const { data, error } = await svc
     .from("retailer_programmes")
-    .select("key, display_name, url_patterns, affiliate_tag_template, extractor")
+    .select("key, display_name, url_patterns, affiliate_tag_template, extractor, fetchable")
     .eq("active", true);
   if (error) {
     throw new AppError("INTERNAL", `Failed to load retailer programmes: ${error.message}`, 500);
@@ -187,6 +194,25 @@ async function handleFetch(svc: AnySupabaseClient, url: string) {
     );
   }
 
+  // The programme says, as data, that this retailer's pages cannot be read
+  // from here (amazon_in answers a 503 bot wall). No round trip: the admin
+  // fills the form by hand and the pasted URL stays the offer link.
+  if (programme.fetchable === false) {
+    return jsonResponse(
+      {
+        error: {
+          code: "RETAILER_UNAVAILABLE",
+          message: `${programme.display_name} pages cannot be fetched automatically. Fill in the details and the link is kept as the offer.`,
+        },
+        draft: { canonicalUrl: url },
+        retailer_key: programme.key,
+        warnings,
+        upstream_status: null,
+      },
+      422,
+    );
+  }
+
   const page = await fetchPage(url, programme.url_patterns ?? []);
   if (page.blocked) {
     // robots.txt is the only "blocked" the retailer chose; every other reason
@@ -195,6 +221,25 @@ async function handleFetch(svc: AnySupabaseClient, url: string) {
     throw new AppError(
       robots ? "ROBOTS_DISALLOWED" : "BLOCKED_TARGET",
       page.reason ?? "Could not read a product from this page.",
+      422,
+    );
+  }
+  // A supported retailer that refused us (bot wall, rate limit, outage) is not
+  // "no product on this page". Say what happened, with the upstream status,
+  // and hand back whatever the error page still carried.
+  if (page.status === 403 || page.status === 429 || page.status >= 500) {
+    const partial = partialFromHtml(page.html, page.finalUrl);
+    return jsonResponse(
+      {
+        error: {
+          code: "RETAILER_UNAVAILABLE",
+          message: `${programme.display_name} answered HTTP ${page.status} and did not serve the product page. Fill in the details and the link is kept as the offer.`,
+        },
+        draft: partial,
+        retailer_key: programme.key,
+        warnings,
+        upstream_status: page.status,
+      },
       422,
     );
   }
