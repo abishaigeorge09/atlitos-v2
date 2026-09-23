@@ -1,4 +1,4 @@
-import { spacing } from '@atlitos/theme';
+import { inkOnMedia, mediaBackdrop, spacing } from '@atlitos/theme';
 import type { Clip } from '@atlitos/types';
 import * as Haptics from 'expo-haptics';
 import { Bookmark, BookmarkCheck, EllipsisVertical, Film, Heart, MessageCircle, Share2, WifiOff } from 'lucide-react-native';
@@ -164,8 +164,8 @@ export function ClutchPostCard({
         )}
         {showSkeleton ? null : (
           <View className="absolute bottom-xs left-xs flex-row items-center gap-xs">
-            <Heart size={16} strokeWidth={2} color={colors.textInverse} fill={colors.textInverse} />
-            <Text className="font-mono text-xs text-text-inverse">{clip.likes}</Text>
+            <Heart size={16} strokeWidth={2} color={inkOnMedia} fill={inkOnMedia} />
+            <Text className="font-mono text-xs" style={{ color: inkOnMedia }}>{clip.likes}</Text>
           </View>
         )}
       </Pressable>
@@ -173,7 +173,7 @@ export function ClutchPostCard({
   }
 
   return (
-    <View className="h-full w-full overflow-hidden bg-text">
+    <View className="h-full w-full overflow-hidden" style={{ backgroundColor: mediaBackdrop }}>
       {/* 1. Playback surface (poster + video), non-interactive. The poster is
           the signed thumb URL from the feed, falling back to any absolute
           clip.thumbUrl. F1: only the near-visible window mounts a real
@@ -200,8 +200,8 @@ export function ClutchPostCard({
           className="items-center justify-center gap-sm px-lg"
           pointerEvents="box-none"
         >
-          <WifiOff size={28} strokeWidth={1.75} color={colors.textInverse} />
-          <Text className="text-center text-sm text-text-inverse opacity-90">
+          <WifiOff size={28} strokeWidth={1.75} color={inkOnMedia} />
+          <Text className="text-center text-sm opacity-90" style={{ color: inkOnMedia }}>
             This clip could not load right now.
           </Text>
           {onRetryPlayback ? (
@@ -213,7 +213,7 @@ export function ClutchPostCard({
               className="min-h-11 items-center justify-center rounded-pill px-lg"
               style={{ backgroundColor: colors.overlay }}
             >
-              <Text className="font-sans-semibold text-sm text-text-inverse">Retry</Text>
+              <Text className="font-sans-semibold text-sm" style={{ color: inkOnMedia }}>Retry</Text>
             </Pressable>
           ) : null}
         </View>
@@ -237,22 +237,22 @@ export function ClutchPostCard({
           (3); the inner "View all comments" Pressable still captures taps. */}
       <View className="absolute inset-x-0 gap-xs p-md" style={{ pointerEvents: 'box-none', right: spacing['6xl'], bottom: bottomInset }}>
         <View className="flex-row items-center gap-sm">
-          <Text className="font-sans-semibold text-text-inverse">{clip.channel}</Text>
-          <Text className="font-mono text-xs text-text-inverse opacity-80">{timeAgo(clip.createdAt)}</Text>
+          <Text className="font-sans-semibold" style={{ color: inkOnMedia }}>{clip.channel}</Text>
+          <Text className="font-mono text-xs opacity-80" style={{ color: inkOnMedia }}>{timeAgo(clip.createdAt)}</Text>
         </View>
         {clip.caption ? (
-          <Text className="text-sm text-text-inverse opacity-95" numberOfLines={2}>
+          <Text className="text-sm opacity-95" style={{ color: inkOnMedia }} numberOfLines={2}>
             {clip.caption}
           </Text>
         ) : null}
         {clip.topComment ? (
-          <Text className="text-xs text-text-inverse opacity-90" numberOfLines={1}>
+          <Text className="text-xs opacity-90" style={{ color: inkOnMedia }} numberOfLines={1}>
             {clip.topComment.username}: {clip.topComment.text}
           </Text>
         ) : null}
         {clip.commentCount > 0 ? (
           <Pressable onPress={onComment} accessibilityRole="button" hitSlop={8} className="self-start py-xs">
-            <Text className="text-xs text-text-inverse opacity-75">View all {clip.commentCount} comments</Text>
+            <Text className="text-xs opacity-75" style={{ color: inkOnMedia }}>View all {clip.commentCount} comments</Text>
           </Pressable>
         ) : null}
       </View>
@@ -275,10 +275,10 @@ export function ClutchPostCard({
           <Heart
             size={24}
             strokeWidth={1.75}
-            color={clip.likedByMe ? colors.danger : colors.textInverse}
+            color={clip.likedByMe ? colors.danger : inkOnMedia}
             fill={clip.likedByMe ? colors.danger : 'transparent'}
           />
-          {compactActions ? null : <Text className="font-mono text-xs text-text-inverse">{clip.likes}</Text>}
+          {compactActions ? null : <Text className="font-mono text-xs" style={{ color: inkOnMedia }}>{clip.likes}</Text>}
         </Pressable>
         <Pressable
           onPress={onComment}
@@ -286,8 +286,8 @@ export function ClutchPostCard({
           accessibilityLabel="Comments"
           className={cn('min-h-11 min-w-11 items-center justify-center', compactActions ? '' : 'gap-xs')}
         >
-          <MessageCircle size={24} strokeWidth={1.75} color={colors.textInverse} />
-          {compactActions ? null : <Text className="font-mono text-xs text-text-inverse">{clip.commentCount}</Text>}
+          <MessageCircle size={24} strokeWidth={1.75} color={inkOnMedia} />
+          {compactActions ? null : <Text className="font-mono text-xs" style={{ color: inkOnMedia }}>{clip.commentCount}</Text>}
         </Pressable>
         <Pressable
           onPress={handleSave}
@@ -298,9 +298,9 @@ export function ClutchPostCard({
           {clip.savedByMe ? (
             <BookmarkCheck size={24} strokeWidth={1.75} color={colors.accent} fill={colors.accent} />
           ) : (
-            <Bookmark size={24} strokeWidth={1.75} color={colors.textInverse} />
+            <Bookmark size={24} strokeWidth={1.75} color={inkOnMedia} />
           )}
-          {compactActions ? null : <Text className="text-xs text-text-inverse">Save</Text>}
+          {compactActions ? null : <Text className="text-xs" style={{ color: inkOnMedia }}>Save</Text>}
         </Pressable>
         {onReportOrBlock ? (
           <Pressable
@@ -309,7 +309,7 @@ export function ClutchPostCard({
             accessibilityLabel="Report or block"
             className="min-h-11 min-w-11 items-center justify-center gap-xs"
           >
-            <EllipsisVertical size={24} strokeWidth={1.75} color={colors.textInverse} />
+            <EllipsisVertical size={24} strokeWidth={1.75} color={inkOnMedia} />
           </Pressable>
         ) : null}
         <Pressable
@@ -318,8 +318,8 @@ export function ClutchPostCard({
           accessibilityLabel="Share"
           className={cn('min-h-11 min-w-11 items-center justify-center', compactActions ? '' : 'gap-xs')}
         >
-          <Share2 size={24} strokeWidth={1.75} color={colors.textInverse} />
-          {compactActions ? null : <Text className="text-xs text-text-inverse">Share</Text>}
+          <Share2 size={24} strokeWidth={1.75} color={inkOnMedia} />
+          {compactActions ? null : <Text className="text-xs" style={{ color: inkOnMedia }}>Share</Text>}
         </Pressable>
       </View>
     </View>

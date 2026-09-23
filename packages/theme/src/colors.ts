@@ -80,6 +80,14 @@ export const accentInk = "#0D0D0D";
  */
 export const inkOnMedia = "#FFFFFF";
 
+/**
+ * The letterbox behind video and clip thumbnails (Clutch feed, post view,
+ * clip cards, coach review video). Near black in BOTH themes: video is shown
+ * on black, and every overlay on it uses `inkOnMedia`. `colors.text` was
+ * used here before and turned cream in dark mode.
+ */
+export const mediaBackdrop = "#0D0D0D";
+
 export interface ColorPalette {
   // Surfaces
   bg: string;

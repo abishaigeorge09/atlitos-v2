@@ -39,6 +39,8 @@ Orange at this saturation is darker than it looks. Measured against both candida
 
 `inkOnMedia` (`#FFFFFF`, `packages/theme/src/colors.ts`) is the text colour for copy laid over a photo or video behind the dark `overlay` scrim (promo banners, media cards). The scrim is dark in both themes, so this ink is theme independent. Never use `textInverse` over media: it flips to near black in dark mode, which rendered the Home promo banner as dark text on a grey slab (fixed 2026-09-23).
 
+`mediaBackdrop` (`#0D0D0D`) is the letterbox behind video and clip thumbnails (Clutch feed, post view, clip cards, coach review video), dark in both themes. Never use `colors.text` / `bg-text` as a video backdrop: it turns cream in dark mode. Media surfaces therefore look the same in light and dark mode: `mediaBackdrop` underneath, `overlay` scrims, `inkOnMedia` on top.
+
 ### Light theme: "Paper"
 
 | Token | Hex | Use |
