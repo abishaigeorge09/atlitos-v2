@@ -1665,7 +1665,9 @@ already discloses.
   unchanged and that every entry group still balances, raising
   `FINANCIAL_INVARIANT` or `LEDGER_UNBALANCED` rather than committing.
   EXECUTE `authenticated` only.
-- `account_deletion_mark_auth_released(p_user_id uuid)` (`0098`). Stamps
+- `account_deletion_mark_auth_released(p_user_id uuid)` (`0098`, body replaced
+  in `0131`). Deletes the user's non email, non phone `auth.identities` rows
+  (Apple, Google) so the same provider account can register again, then stamps
   `auth_released_at`. EXECUTE `service_role` only.
 - `is_actor_active()` (`0098`, replacing `0096`'s). Now
   `status = 'active' and deleted_at is null`. This is what makes a deleted
