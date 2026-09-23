@@ -3741,7 +3741,6 @@ export type Database = {
           name: string
           partner_user_id: string
           pincode: string
-          booking_url: string | null
           rejection_reason: string | null
           status: Database["public"]["Enums"]["venue_status"]
           updated_at: string
@@ -3759,7 +3758,6 @@ export type Database = {
           name: string
           partner_user_id: string
           pincode: string
-          booking_url?: string | null
           rejection_reason?: string | null
           status?: Database["public"]["Enums"]["venue_status"]
           updated_at?: string
@@ -3777,7 +3775,6 @@ export type Database = {
           name?: string
           partner_user_id?: string
           pincode?: string
-          booking_url?: string | null
           rejection_reason?: string | null
           status?: Database["public"]["Enums"]["venue_status"]
           updated_at?: string
