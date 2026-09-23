@@ -35,6 +35,10 @@ Orange at this saturation is darker than it looks. Measured against both candida
 - `ink.onAccent` = `#2A0E02` ("Ember Ink"), deep warm brown-black, used for text and icons sitting on top of any accent fill (primary CTA label, active tab indicator, selected chip text, badge glyphs).
 - This single ink value works unchanged across both accent candidates and both light/dark app themes, because it is contrast-paired to the accent fill itself, not to the surrounding surface.
 
+### Ink on media
+
+`inkOnMedia` (`#FFFFFF`, `packages/theme/src/colors.ts`) is the text colour for copy laid over a photo or video behind the dark `overlay` scrim (promo banners, media cards). The scrim is dark in both themes, so this ink is theme independent. Never use `textInverse` over media: it flips to near black in dark mode, which rendered the Home promo banner as dark text on a grey slab (fixed 2026-09-23).
+
 ### Light theme: "Paper"
 
 | Token | Hex | Use |

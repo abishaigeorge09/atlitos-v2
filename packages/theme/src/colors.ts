@@ -72,6 +72,14 @@ export const inkOnAccent = "#FFFFFF";
  */
 export const accentInk = "#0D0D0D";
 
+/**
+ * Text laid over photography or video behind a dark scrim (promo banners,
+ * media cards). Theme independent on purpose: the scrim is dark in BOTH
+ * modes, so the ink on it must stay light in both. `textInverse` flips to
+ * near black in dark mode and must never be used over media.
+ */
+export const inkOnMedia = "#FFFFFF";
+
 export interface ColorPalette {
   // Surfaces
   bg: string;
