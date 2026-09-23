@@ -183,7 +183,8 @@
           "locationAlwaysPermission": false,
           "locationAlwaysAndWhenInUsePermission": false,
           "isIosBackgroundLocationEnabled": false,
-          "isAndroidBackgroundLocationEnabled": false
+          "isAndroidBackgroundLocationEnabled": false,
+          "motionUsagePermission": "Atlitos does not use motion or fitness data. The location feature that finds courts near you includes this permission, and the app never asks for it."
         }
       ],
       [
