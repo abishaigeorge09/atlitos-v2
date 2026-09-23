@@ -3730,10 +3730,12 @@ export type Database = {
       venues: {
         Row: {
           address: string
+          booking_url: string | null
           city: string
           created_at: string
           description: string | null
           id: string
+          image_url: string | null
           lat: number | null
           lng: number | null
           name: string
@@ -3746,10 +3748,12 @@ export type Database = {
         }
         Insert: {
           address: string
+          booking_url?: string | null
           city: string
           created_at?: string
           description?: string | null
           id?: string
+          image_url?: string | null
           lat?: number | null
           lng?: number | null
           name: string
@@ -3762,10 +3766,12 @@ export type Database = {
         }
         Update: {
           address?: string
+          booking_url?: string | null
           city?: string
           created_at?: string
           description?: string | null
           id?: string
+          image_url?: string | null
           lat?: number | null
           lng?: number | null
           name?: string
