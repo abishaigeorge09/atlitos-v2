@@ -4,7 +4,7 @@ import type { RefreshControlProps } from 'react-native';
 import { Button } from '@/components/organisms/_shared';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
-import { formatINR, radii, spacing } from '@atlitos/theme';
+import { formatINR, inkOnMedia, radii, spacing } from '@atlitos/theme';
 import * as Haptics from 'expo-haptics';
 import { Heart } from 'lucide-react-native';
 import { FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -142,7 +142,7 @@ export function WishlistGrid({ variant, items, numColumns = 2, header, emptyComp
                   backgroundColor: colors.overlay,
                 }}
               >
-                <Heart size={16} color={colors.textInverse} fill={colors.danger} strokeWidth={1.75} />
+                <Heart size={16} color={inkOnMedia} fill={colors.danger} strokeWidth={1.75} />
               </Pressable>
             ) : null}
           </View>

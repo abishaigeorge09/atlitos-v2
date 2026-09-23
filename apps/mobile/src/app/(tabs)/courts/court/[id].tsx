@@ -2,9 +2,9 @@ import { useCourts } from '@atlitos/api';
 import type { ApiError, Court, TimeSlot } from '@atlitos/types';
 import { radii, spacing } from '@atlitos/theme';
 import { router, useLocalSearchParams } from 'expo-router';
-import { LandPlot, TriangleAlert } from 'lucide-react-native';
+import { ExternalLink, LandPlot, TriangleAlert } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { Linking, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AdBannerCarousel } from '@/components/molecules/AdBannerCarousel';
@@ -19,6 +19,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { StarRating } from '@/components/ui/star-rating';
 import { Text } from '@/components/ui/text';
 import { usePendingAuthAction } from '@/hooks/use-pending-auth-action';
+import { COURT_IN_APP_BOOKING_ENABLED } from '@/lib/feature-flags';
 import { SPORT_ICON, SPORT_LABEL } from '@/lib/sport-display';
 import { supabase } from '@/lib/supabase';
 import { useLocationStore } from '@/store/location-store';
@@ -43,6 +44,13 @@ function todayISO(): string {
  * (not found); the slot section carries its own loading/empty/populated/
  * error quartet, since it refetches independently of the court itself on
  * every date change.
+ *
+ * Release task 5: a venue with `bookingUrl` is booked on its own site. The
+ * pickers and the Book footer give way to one click out card, modelled on
+ * the shop affiliate screen. While `COURT_IN_APP_BOOKING_ENABLED` is off
+ * every court is treated this way; a court with no URL never lists (see
+ * courts/index.tsx), so this screen only meets one through a stale link,
+ * and then it simply shows the venue without a booking action.
  */
 export default function CourtDetailScreen() {
   const colors = useThemeColors();
@@ -107,9 +115,12 @@ export default function CourtDetailScreen() {
     void loadCourt();
   }, [loadCourt]);
 
+  const clickOut = !COURT_IN_APP_BOOKING_ENABLED || Boolean(court?.bookingUrl);
+
   useEffect(() => {
+    if (clickOut) return;
     void loadSlots(date);
-  }, [date, loadSlots]);
+  }, [date, loadSlots, clickOut]);
 
   function handleBook() {
     if (!court || !selectedSlot) return;
@@ -204,59 +215,69 @@ export default function CourtDetailScreen() {
             <PriceText amount={court.basePricePerHour} size="lg" />
             <Text className="font-sans text-sm text-text-secondary">per hour</Text>
           </View>
-          <Text className="font-sans text-xs text-text-tertiary">
-            Prices can be higher during peak hours, the exact price for your chosen slot shows below.
-          </Text>
-        </View>
-
-        <View style={{ paddingHorizontal: spacing.lg, gap: spacing.md }}>
-          <Text style={[textStyle('h3'), { color: colors.text }]}>Pick a date</Text>
-          <CalendarPicker value={date} onChange={setDate} />
-        </View>
-
-        <View style={{ paddingHorizontal: spacing.lg, gap: spacing.md }}>
-          <Text style={[textStyle('h3'), { color: colors.text }]}>Pick a time</Text>
-
-          {slotsState === 'loading' ? (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-              {[0, 1, 2, 3].map((key) => (
-                <Skeleton key={key} shape="tile" width={92} height={44} />
-              ))}
-            </View>
-          ) : slotsState === 'error' ? (
-            <Text style={[textStyle('callout'), { color: colors.danger }]}>
-              Couldn't load slots for this date. Try another date or check back.
+          {clickOut ? null : (
+            <Text className="font-sans text-xs text-text-tertiary">
+              Prices can be higher during peak hours, the exact price for your chosen slot shows below.
             </Text>
-          ) : slotsState === 'empty' ? (
-            <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
-              No open slots on this date. Try another date.
-            </Text>
-          ) : (
-            <>
-              <SlotPicker
-                slots={slots.map((slot) => ({ from: slot.from, to: slot.to }))}
-                value={selectedSlot}
-                onChange={setSelectedSlot}
-              />
-              {selectedSlot ? (
-                <View className="flex-row items-center gap-xs">
-                  <Text className="font-sans text-sm text-text-secondary">Price for this slot</Text>
-                  <PriceText
-                    amount={slots.find((s) => s.from === selectedSlot.from && s.to === selectedSlot.to)?.price ?? court.basePricePerHour}
-                    size="sm"
-                  />
-                </View>
-              ) : null}
-            </>
           )}
         </View>
+
+        {clickOut ? (
+          <ClickOutCard bookingUrl={court.bookingUrl} />
+        ) : (
+          <>
+            <View style={{ paddingHorizontal: spacing.lg, gap: spacing.md }}>
+              <Text style={[textStyle('h3'), { color: colors.text }]}>Pick a date</Text>
+              <CalendarPicker value={date} onChange={setDate} />
+            </View>
+
+            <View style={{ paddingHorizontal: spacing.lg, gap: spacing.md }}>
+              <Text style={[textStyle('h3'), { color: colors.text }]}>Pick a time</Text>
+
+              {slotsState === 'loading' ? (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+                  {[0, 1, 2, 3].map((key) => (
+                    <Skeleton key={key} shape="tile" width={92} height={44} />
+                  ))}
+                </View>
+              ) : slotsState === 'error' ? (
+                <Text style={[textStyle('callout'), { color: colors.danger }]}>
+                  Couldn't load slots for this date. Try another date or check back.
+                </Text>
+              ) : slotsState === 'empty' ? (
+                <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
+                  No open slots on this date. Try another date.
+                </Text>
+              ) : (
+                <>
+                  <SlotPicker
+                    slots={slots.map((slot) => ({ from: slot.from, to: slot.to }))}
+                    value={selectedSlot}
+                    onChange={setSelectedSlot}
+                  />
+                  {selectedSlot ? (
+                    <View className="flex-row items-center gap-xs">
+                      <Text className="font-sans text-sm text-text-secondary">Price for this slot</Text>
+                      <PriceText
+                        amount={slots.find((s) => s.from === selectedSlot.from && s.to === selectedSlot.to)?.price ?? court.basePricePerHour}
+                        size="sm"
+                      />
+                    </View>
+                  ) : null}
+                </>
+              )}
+            </View>
+          </>
+        )}
       </ScrollView>
 
-      <View style={{ padding: spacing.lg, paddingBottom: navInset + spacing.lg, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.bg }}>
-        <Button disabled={!selectedSlot} onPress={handleBook}>
-          <Text style={{ color: colors.inkOnAccent }}>{selectedSlot ? 'Book this slot' : 'Select a time to book'}</Text>
-        </Button>
-      </View>
+      {clickOut ? null : (
+        <View style={{ padding: spacing.lg, paddingBottom: navInset + spacing.lg, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.bg }}>
+          <Button disabled={!selectedSlot} onPress={handleBook}>
+            <Text style={{ color: colors.inkOnAccent }}>{selectedSlot ? 'Book this slot' : 'Select a time to book'}</Text>
+          </Button>
+        </View>
+      )}
 
       <LoginGateModal
         visible={gateVisible}
@@ -265,4 +286,56 @@ export default function CourtDetailScreen() {
       />
     </SafeAreaView>
   );
+}
+
+/** Release task 5's booking action: one button that opens the venue's own
+ * booking page. A venue reached with no URL (only possible through a stale
+ * link while in-app booking is off) gets an honest line instead of a dead
+ * button. */
+function ClickOutCard({ bookingUrl }: { bookingUrl?: string }) {
+  const colors = useThemeColors();
+  const host = bookingUrl ? hostLabel(bookingUrl) : null;
+
+  return (
+    <View style={{ paddingHorizontal: spacing.lg }}>
+      <View
+        style={{
+          gap: spacing.md,
+          padding: spacing.lg,
+          borderRadius: radii.lg,
+          borderWidth: 1,
+          borderColor: colors.border,
+          backgroundColor: colors.card,
+        }}
+      >
+        <Text style={[textStyle('overline'), { color: colors.textTertiary }]}>Book this court</Text>
+        {bookingUrl && host ? (
+          <>
+            <Text style={[textStyle('body'), { color: colors.textSecondary }]}>
+              Slots, prices and payment are on {host}. You complete the booking there.
+            </Text>
+            <Button onPress={() => void Linking.openURL(bookingUrl)}>
+              <ExternalLink size={18} strokeWidth={1.75} color={colors.inkOnAccent} />
+              <Text style={{ color: colors.inkOnAccent }}>Book on {host}</Text>
+            </Button>
+          </>
+        ) : (
+          <Text style={[textStyle('body'), { color: colors.textSecondary }]}>
+            Online booking for this venue is not available yet.
+          </Text>
+        )}
+      </View>
+    </View>
+  );
+}
+
+/** "https://www.playo.co/venue/123" -> "playo.co". Falls back to the raw
+ * string for anything the URL parser rejects, so the button always has a
+ * label. */
+function hostLabel(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
 }

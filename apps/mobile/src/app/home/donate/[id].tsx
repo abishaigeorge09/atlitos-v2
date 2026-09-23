@@ -1,7 +1,7 @@
 import { useEmpower, toApiError, type UpaProfile, type UpaWishlistItem } from '@atlitos/api';
 import type { ApiError } from '@atlitos/types';
 import { formatINR, radii, spacing } from '@atlitos/theme';
-import { router, useLocalSearchParams } from 'expo-router';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { CheckCircle2, HeartHandshake, RefreshCw, TriangleAlert } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, View } from 'react-native';
@@ -20,6 +20,7 @@ import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
+import { DONATIONS_ENABLED } from '@/lib/feature-flags';
 
 type LoadState = 'loading' | 'ready' | 'error';
 type Phase = 'select' | 'processing' | 'success' | 'failed';
@@ -42,7 +43,14 @@ const RAZORPAY_KEY_ID = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID ?? '';
  * (someone else filled the item first) blocks submission and offers the general
  * fund instead (FR-5).
  */
-export default function DonateScreen() {
+// Donations are off on this platform (DONATIONS_ENABLED); a deep link, a
+// stale push or a search hit lands on Home instead.
+export default function DonateRoute() {
+  if (!DONATIONS_ENABLED) return <Redirect href="/" />;
+  return <DonateScreen />;
+}
+
+function DonateScreen() {
   const colors = useThemeColors();
   const empower = useEmpower(supabase);
   const params = useLocalSearchParams<{ id: string; itemId?: string }>();

@@ -1,6 +1,6 @@
 import { sizedImageUrl, toApiError, useClutch, type CreatorProfile } from '@atlitos/api';
 import { COVER_IMAGE_SIZE } from '@/lib/image-sizes';
-import { spacing } from '@atlitos/theme';
+import { inkOnMedia, spacing } from '@atlitos/theme';
 import type { ApiError, Clip, ClipStatus } from '@atlitos/types';
 import { router } from 'expo-router';
 import { Bookmark, Heart, LayoutGrid, LogIn, RotateCcw, Settings, TriangleAlert } from 'lucide-react-native';
@@ -450,9 +450,9 @@ export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {
                   className="absolute inset-0 items-center justify-center gap-xs p-xs"
                   style={{ backgroundColor: colors.overlay }}
                 >
-                  <TriangleAlert size={18} color={colors.textInverse} strokeWidth={1.75} />
+                  <TriangleAlert size={18} color={inkOnMedia} strokeWidth={1.75} />
                   <Text
-                    style={[textStyle('caption'), { color: colors.textInverse, textAlign: 'center' }]}
+                    style={[textStyle('caption'), { color: inkOnMedia, textAlign: 'center' }]}
                     numberOfLines={2}
                   >
                     {retryError ?? item.failureReason ?? 'Upload failed'}

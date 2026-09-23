@@ -1,5 +1,5 @@
 import { useClutch } from '@atlitos/api';
-import { spacing } from '@atlitos/theme';
+import { mediaBackdrop, spacing } from '@atlitos/theme';
 import type { Clip } from '@atlitos/types';
 import { router } from 'expo-router';
 import { ChevronRight } from 'lucide-react-native';
@@ -99,8 +99,8 @@ export function ClutchPreviewCard({ reloadKey }: { reloadKey: number }) {
   return (
     <View style={{ gap: spacing.sm }}>
       <View
-        className="overflow-hidden rounded-xl bg-text"
-        style={{ aspectRatio: 4 / 5, width: '100%' }}
+        className="overflow-hidden rounded-xl"
+        style={{ aspectRatio: 4 / 5, width: '100%', backgroundColor: mediaBackdrop }}
       >
         <ClutchPostCard
           clip={clip}

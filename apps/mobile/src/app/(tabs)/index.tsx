@@ -23,6 +23,7 @@ import { usePendingAuthAction } from '@/hooks/use-pending-auth-action';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
 import { useThemeColors } from '@/theme/use-theme-colors';
+import { DONATIONS_ENABLED } from '@/lib/feature-flags';
 
 /**
  * Home tab, rebuilt to PRD-01 3.2's approved mockup layout. Order:
@@ -196,7 +197,7 @@ export default function HomeScreen() {
 
         <ClutchPreviewCard reloadKey={reloadKey} />
 
-        <EmpowerRail reloadKey={reloadKey} />
+        {DONATIONS_ENABLED ? <EmpowerRail reloadKey={reloadKey} /> : null}
 
         <BrandFooter />
 

@@ -1,7 +1,7 @@
 import { useCourts, type BookCourtResult } from '@atlitos/api';
 import type { ApiError } from '@atlitos/types';
 import { formatINR, radii, spacing } from '@atlitos/theme';
-import { router, useLocalSearchParams } from 'expo-router';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { CheckCircle2, TriangleAlert } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { ScrollView, View } from 'react-native';
@@ -18,6 +18,7 @@ import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
+import { COURT_IN_APP_BOOKING_ENABLED } from '@/lib/feature-flags';
 
 type ScreenState = 'reserving' | 'ready' | 'paying' | 'confirmed' | 'error';
 
@@ -51,7 +52,17 @@ const RAZORPAY_KEY_ID = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID ?? '';
  * both service-role edge functions, this screen only calls them and
  * displays their response.
  */
-export default function BookCourtPayScreen() {
+export default function BookCourtPayScreenRoute() {
+  // Release task 5: in-app booking is off, so this route only exists for a
+  // stale deep link or push. Send it back to the courts tab. Gated here,
+  // outside the screen, so the screen's own hooks never run conditionally.
+  if (!COURT_IN_APP_BOOKING_ENABLED) {
+    return <Redirect href="/(tabs)/courts" />;
+  }
+  return <BookCourtPayScreen />;
+}
+
+function BookCourtPayScreen() {
   const colors = useThemeColors();
   const navInset = useNavBarInset();
   const courts = useCourts(supabase);

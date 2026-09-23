@@ -1,6 +1,6 @@
 import { sizedImageUrl, toApiError, useProfile } from '@atlitos/api';
 import { COVER_IMAGE_SIZE } from '@/lib/image-sizes';
-import { spacing, radii } from '@atlitos/theme';
+import { inkOnMedia, radii, spacing } from '@atlitos/theme';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Camera, ImageIcon, LogIn } from 'lucide-react-native';
@@ -249,8 +249,8 @@ export default function EditProfileScreen() {
                   paddingVertical: spacing.xs,
                 }}
               >
-                <ImageIcon size={14} strokeWidth={1.75} color={colors.textInverse} />
-                <Text style={[textStyle('caption'), { color: colors.textInverse }]}>Change</Text>
+                <ImageIcon size={14} strokeWidth={1.75} color={inkOnMedia} />
+                <Text style={[textStyle('caption'), { color: inkOnMedia }]}>Change</Text>
               </View>
             )}
           </Pressable>

@@ -4,6 +4,35 @@ Owner: whoever is holding the deploy. Written 2026-09-12 after the migration
 reconciliation pass. Read this before running anything that touches
 `supabase/migrations/` against production (`syzzfgaudpifwvbpycyi`).
 
+## Applied 2026-09-23 (supersedes the pending lists below)
+
+Production's ledger was read and every missing file probed for its objects
+before applying. Applied one file per SQL editor run, each with its own
+`supabase_migrations.schema_migrations` row (versions `20260923160001` to
+`20260923160019`), in this order: `0098`, `0099`, `0100`, `0101`, `0102`,
+`0103`, `0104`, `0105`, `0106`, `0110`, `0112`, `0113`, `0114`, `0115`,
+`0118`, `0127`, `0130`, `0131`. Verified afterwards: 19 of 19 ledger rows,
+every marker object present, the `membership-sweep` cron job scheduled.
+
+* `0114` must run as its own single statement: the SQL editor wraps a
+  multi statement query in a transaction and `create index concurrently`
+  refuses that. The index ran alone; its `comment on index` and ledger row
+  ran after.
+* `0119` was RECORDED ONLY, not run. It grants `select on
+  public.affiliate_products` to `anon` and `authenticated`, which the
+  already applied `0121` and `0123` revoke on purpose. Production already
+  held the rest of its grants (the file was generated from production).
+* A pre-apply overlap check found no missing file that `create or replace`s
+  an object an already applied later migration also defines, so none of
+  them rolled anything back.
+* Edge function `delete-account` deployed the same day
+  (`supabase functions deploy delete-account --use-api`, no Docker needed).
+  `notify-push-sweep` is still NOT deployed and `pg_net` is NOT enabled
+  (release task 9).
+* The 12 published production clips were all synthetic ffmpeg test videos;
+  taken down with `scripts/sql/2026-09-23-remove-test-pattern-clips.sql`.
+  The Clutch feed is empty until real clips are posted.
+
 ## The one thing to know
 
 **`supabase db push` is not safe on this project. Do not run it.**

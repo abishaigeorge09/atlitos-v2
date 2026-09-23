@@ -277,12 +277,15 @@ Integrator TODO: apply `0082_coach_trainee_videos.sql`, deploy both functions, r
 | `description` | `text` | nullable |
 | `status` | `venue_status` | not null default `pending` |
 | `rejection_reason` | `text` | nullable |
-| `booking_url` | `text` | nullable. External booking link (affiliate model for courts, `0120`); when set the app sends the athlete there instead of the in-app slot picker |
+| `booking_url` | `text` | nullable, check `^https?://` (`0120` adds the column, `0130` adds the check). Release task 5: the venue's own booking page. When set, the app opens it instead of its slot picker; while `COURT_IN_APP_BOOKING_ENABLED` is off only venues with one are listed |
+| `image_url` | `text` | nullable, check `^https?://` (`0130`). External cover photo for an imported venue, read ahead of `venue_photos` |
 | `created_at`, `updated_at` | `timestamptz` | |
 
 Admin-entered venues (`admin_create_venue`, `0120`) are owned by the entering admin (`partner_user_id = auth.uid()`) and inserted as `verified` with their courts in one transaction.
 
 Indexes: `idx_venues_partner_user_id` on `partner_user_id`, `idx_venues_status_city` on `(status, city)`.
+
+Imported (affiliate) venues are written by `scripts/import-courts.mjs` under the service role with `status = 'verified'`, so they ride the existing public read policy; no client role can set `booking_url`.
 
 ### `venue_photos`
 
@@ -1662,7 +1665,9 @@ already discloses.
   unchanged and that every entry group still balances, raising
   `FINANCIAL_INVARIANT` or `LEDGER_UNBALANCED` rather than committing.
   EXECUTE `authenticated` only.
-- `account_deletion_mark_auth_released(p_user_id uuid)` (`0098`). Stamps
+- `account_deletion_mark_auth_released(p_user_id uuid)` (`0098`, body replaced
+  in `0131`). Deletes the user's non email, non phone `auth.identities` rows
+  (Apple, Google) so the same provider account can register again, then stamps
   `auth_released_at`. EXECUTE `service_role` only.
 - `is_actor_active()` (`0098`, replacing `0096`'s). Now
   `status = 'active' and deleted_at is null`. This is what makes a deleted
