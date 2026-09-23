@@ -22,6 +22,7 @@ import { supabase } from '@/lib/supabase';
 import { useLocationStore } from '@/store/location-store';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
+import { DONATIONS_ENABLED } from '@/lib/feature-flags';
 
 type LoadState = 'idle' | 'loading' | 'empty' | 'populated' | 'error';
 
@@ -33,7 +34,12 @@ const MAX_RECENT_SEARCHES = 8;
 
 // Suggestion chips shown above results when the query is empty, one per
 // segment plus a price cut and a donate prompt.
-const SUGGESTIONS = ['Courts near me', 'Badminton gear', 'Coaches under 500', 'Athletes to support'];
+const SUGGESTIONS = [
+  'Courts near me',
+  'Badminton gear',
+  'Coaches under 500',
+  ...(DONATIONS_ENABLED ? ['Athletes to support'] : []),
+];
 
 // The search entity types map onto the organism's three segments. Keeping the
 // mapping here, not in the organism, lets the transport stay in v1's
@@ -140,9 +146,11 @@ export default function SearchScreen() {
           lng: coords?.lng,
         });
         if (seq !== requestSeq.current) return; // a newer query already ran
-        setHits(res.results);
+        // Athlete hits open the Empower profile, which is off where donations are.
+        const results = DONATIONS_ENABLED ? res.results : res.results.filter((h) => h.entityType !== 'athlete');
+        setHits(results);
         setBroaden(res.broaden ?? null);
-        setState(res.results.length === 0 ? 'empty' : 'populated');
+        setState(results.length === 0 ? 'empty' : 'populated');
         rememberSearch(q);
       } catch (err) {
         if (seq !== requestSeq.current) return;

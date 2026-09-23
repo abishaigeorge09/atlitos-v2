@@ -3,6 +3,7 @@
  * bundler can fold away, so a gated surface costs nothing at runtime and the
  * decision lives in exactly one reviewable place.
  */
+import { Platform } from 'react-native';
 
 /**
  * Coach trainee video review.
@@ -70,3 +71,16 @@ export const COACH_TRAINEE_VIDEO_REVIEW_ENABLED = false;
  * and in-app booking is back exactly as it was.
  */
 export const COURT_IN_APP_BOOKING_ENABLED = false;
+
+/**
+ * Empower donations (Home rail, hub, athlete profile, donate flow, checkout
+ * roundup).
+ *
+ * OFF on iOS. Donations are collected in app through Razorpay into an
+ * Atlitos held fund, not a registered nonprofit, which App Store guideline
+ * 3.2.2(iv) does not allow outside In-App Purchase. Android and web keep
+ * them. Founder decision row 24 (RELEASE-TODO-PRASANTH.md) picks the long
+ * term route: an approved nonprofit, or IAP. Either one flips this to true.
+ * Existing donors still see their history in My Impact.
+ */
+export const DONATIONS_ENABLED = Platform.OS !== 'ios';

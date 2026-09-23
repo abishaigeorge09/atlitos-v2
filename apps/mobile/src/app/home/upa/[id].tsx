@@ -1,7 +1,7 @@
 import { useEmpower, toApiError, type UpaProfile } from '@atlitos/api';
 import type { ApiError } from '@atlitos/types';
 import { formatINR, radii, spacing } from '@atlitos/theme';
-import { router, useLocalSearchParams } from 'expo-router';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { BadgeCheck, Heart, HeartHandshake, Quote, RefreshCw, SearchX, TriangleAlert, Users } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { Image, View } from 'react-native';
@@ -17,6 +17,7 @@ import { SPORT_LABEL } from '@/lib/sport-display';
 import { supabase } from '@/lib/supabase';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
+import { DONATIONS_ENABLED } from '@/lib/feature-flags';
 
 type LoadState = 'loading' | 'ready' | 'notfound' | 'error';
 
@@ -30,7 +31,14 @@ type LoadState = 'loading' | 'ready' | 'notfound' | 'error';
  * item disables Fund This and shows a Funded marker (FR-5); the general Donate
  * CTA stays active even when every item is funded (goes to the general fund).
  */
-export default function UpaProfileScreen() {
+// Donations are off on this platform (DONATIONS_ENABLED); a deep link, a
+// stale push or a search hit lands on Home instead.
+export default function UpaProfileRoute() {
+  if (!DONATIONS_ENABLED) return <Redirect href="/" />;
+  return <UpaProfileScreen />;
+}
+
+function UpaProfileScreen() {
   const colors = useThemeColors();
   const empower = useEmpower(supabase);
   const { id } = useLocalSearchParams<{ id: string }>();

@@ -29,6 +29,7 @@ import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
+import { DONATIONS_ENABLED } from '@/lib/feature-flags';
 
 type LoadState = 'loading' | 'ready' | 'error';
 
@@ -334,7 +335,7 @@ export default function CheckoutScreen() {
           <BillSummary
             rows={commerceBillRows(bill)}
             donationRow={
-              showRoundupRow
+              DONATIONS_ENABLED && showRoundupRow
                 ? {
                     label: COMMERCE_BILL_LABELS.donation,
                     amount: bill.donationRoundup,
