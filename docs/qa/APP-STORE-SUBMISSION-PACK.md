@@ -28,11 +28,14 @@ what the app **can** produce, not what you hope it produces.
 
 ## Sign in with Apple
 
-**Not required.** The app offers only its own account system, email or phone
-with a password or a one time code (`signInWithPassword`, `signInWithOtp`). No
-Google, Facebook or other third-party sign in exists, so the equivalent-option
-rule does not apply. If a social login is ever added, Sign in with Apple becomes
-mandatory in the same release.
+**Offered, and required.** The app has its own accounts (email or phone, with a
+password or a one time code) AND Sign in with Google (browser OAuth), so
+guideline 4.8 applies: Sign in with Apple ships alongside it, native sheet via
+`expo-apple-authentication` (`apps/mobile/src/lib/oauth.ts`). Both providers
+are enabled on production (docs/qa/evidence/oauth/README.md).
+
+Before submitting: the Google consent screen must be **In production**, not
+Testing, or a reviewer's Google account is refused. Updated 2026-09-23.
 
 ## Privacy nutrition label
 
@@ -44,6 +47,9 @@ Transparency prompt. Declare all of these as **Linked to the user**, used for
 Name, Email Address, Phone Number, Physical Address, Coarse Location,
 Photos or Videos, Other User Content, Purchase History, User ID, Other Data.
 
+Plus, for Sentry, **Not linked to the user**, not used for tracking, App
+Functionality: Crash Data, Performance Data, Other Diagnostic Data.
+
 This matches `ios.privacyManifests` in `app.json` exactly. If you change one,
 change the other, because Apple compares them.
 
@@ -52,8 +58,8 @@ change the other, because Apple compares them.
 COPY:
 
 ```
-Atlitos is a sports app for athletes in India: book courts, book coaching,
-post match clips, shop, and support other athletes.
+Atlitos is a sports app for athletes in India: find courts, book coaching,
+post match clips, and compare prices on sports gear.
 
 To test:
 1. Open the app. You can browse courts, coaches and the Clutch feed as a
@@ -87,12 +93,16 @@ Permissions we request, and why:
   works fully if you deny it.
 We request no camera, microphone or background location access.
 
-Payments use Razorpay in test mode for this review. No real charge is made.
-Card details never reach our servers.
+Payments: coaching sessions are real world services, delivered in person or
+live one to one, and court bookings are real world venue time, so both are
+paid through Razorpay under guideline 3.1.3(d)/(e). Gear opens the partner
+retailer's own site. Card details never reach our servers.
+[Confirm the live Razorpay key is in the production build before submitting.]
 
 Third parties that receive data: Supabase (our backend), Razorpay
-(payments), Anthropic (search text only). No analytics, no advertising, no
-tracking.
+(payments), Anthropic and Voyage AI (search text only), Sentry (crash
+reports, not linked to the account), Apple and Google (only for their own
+sign in). No analytics, no advertising, no tracking.
 
 Privacy policy: https://www.atlitos.com/privacy
 Terms: https://www.atlitos.com/terms
