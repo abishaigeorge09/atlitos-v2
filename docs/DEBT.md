@@ -347,3 +347,47 @@ from growing further.
 ## 2026-09-22
 
 - **`packages/theme`'s `textTertiary` changed, and mobile inherits it without a device proof.** The admin UX A2 gate darkened light `textTertiary` from `#8F8F8F` to `#6A6A6A` and lightened dark from `#7A7A7A` to `#949494`, because at the old values every caption, hint and placeholder failed WCAG AA on every ground it sat on (2.74:1 at worst). `apps/mobile`, `apps/portal-court` and `apps/portal-life` regenerate from the same source, so their tertiary text moved too, and that change shipped without the Release-build screenshot and Maestro run CLAUDE.md requires for a mobile visual change. The four new ink tokens beside it (`accentInk`, `accentOnTint`, `successInk`/`warningInk`/`dangerInk`/`infoInk`) are additive and unreferenced outside `apps/admin`, so they change nothing on those surfaces. Owed: one Release-build screenshot pass over the mobile screens with the most tertiary text (captions, empty states, form hints) to confirm the darker grey reads correctly against the dark surfaces, before the 8 Oct submission. The same contrast failure exists on mobile today, so the change is a fix there too, not a regression; what is missing is the proof, not the reasoning. Owner: Abishai.
+
+## 2026-09-24
+
+- **The Razorpay test-mode payment cycle has never been run against production, and production is
+  running `RAZORPAY_MODE=test`, so real customers cannot pay.** Backlogged at the founder's
+  request. Both key pairs and one webhook secret are in the project's function secrets, both
+  webhooks are registered in the Razorpay dashboard, and the key pair verifies against
+  `GET /v1/payments`. What is unproven is the cycle itself: order created, payment captured,
+  `payment.captured` delivered and signature-verified, `ledger_entries` written once and only
+  once, then `refund.processed` reversing it. Nothing about the mode switch removes the need for
+  that run, because the switch only chooses which credentials are used, not whether the ledger is
+  correct. Two things are owed, in order: run the cycle in test mode with a Rs 1 amount and read
+  the ledger rows back with SQL, then flip `RAZORPAY_MODE` to `live` and repeat once with Rs 1 of
+  real money, refunding it. Until the second run, treat payments as not launched regardless of
+  what the dashboard says. Owner: Abishai.
+- **Razorpay Route is not enabled on the new account, so coach and venue payouts cannot settle.**
+  Proven rather than assumed: `GET /v1/transfers` and a `transfer` search return 0 results in both
+  test and live mode, which is what an account without the Route product returns. A support ticket
+  is raised asking for Route enablement and for the pricing in writing. When it is enabled, add
+  `transfer.processed` and `transfer.failed` to BOTH webhooks (they are configured on neither
+  today) and re-run the payment cycle above with a linked account in the path, because a captured
+  payment that cannot be transferred is money the platform is holding with no way to pass it on.
+  Owner: Abishai, then whoever wires the two events.
+- **Single item gear ingest is deployed everywhere but has never been exercised end to end in
+  production by a real admin.** Closed this session: migration 0127 (`retailer_programmes.fetchable`)
+  is applied in production, the deployed `gear-ingest` body carries `RETAILER_UNAVAILABLE`,
+  `retailer_display` and `fetchable` (checked in the deployed source, not inferred from the repo),
+  the function's auth gate holds (anon and no-header both 401), and the admin is live at
+  `atlitos-admin.vercel.app`. Still unproven: one real paste through the live admin, because
+  `action: "fetch"` requires an admin JWT and this session's sandbox refuses to read `.env*` by
+  design, so no admin session could be minted locally. The production catalogue is still only the
+  8 seed rows created 2026-07-28, which means no product has ever been entered through the admin
+  in production. Proof owed: sign in to the live admin, paste one decathlon.in URL (expect a
+  prefilled draft) and one amazon.in URL (expect the `RETAILER_UNAVAILABLE` guidance, no round
+  trip), and save the decathlon one. Owner: Abishai or the next session with browser sign-in.
+- **There is no approval step between data entry and live, and the schema has nowhere to put one.**
+  The founder's requirement for bulk entry was explicit: an entry goes to approval, then to a
+  tester account, then live. `affiliate_products` has only `active boolean`, and the admin knows
+  only `active`, `listed` and `delisted`, so anything a data entry person saves is live the moment
+  it is saved. This is a correctness gap in the single item flow that exists today, not only in
+  the unbuilt bulk flow: the people who will be entering the catalogue have no reviewer between
+  them and the shopper. `docs/PLAN-CATALOGUE-ENTRY.md` phase A4 carries the design
+  (`draft -> in_review -> approved -> live`); it needs the founder's design gate before any code.
+  Owner: Abishai to open the gate.
