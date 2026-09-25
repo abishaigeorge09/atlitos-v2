@@ -20,4 +20,7 @@
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
+  <url><loc>https://www.atlitos.com/refund-policy</loc></url>
+  <url><loc>https://www.atlitos.com/shipping</loc></url>
+  <url><loc>https://www.atlitos.com/contact</loc></url>
 </urlset>
