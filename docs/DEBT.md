@@ -391,3 +391,38 @@ from growing further.
   them and the shopper. `docs/PLAN-CATALOGUE-ENTRY.md` phase A4 carries the design
   (`draft -> in_review -> approved -> live`); it needs the founder's design gate before any code.
   Owner: Abishai to open the gate.
+- **Atlitos has never been submitted to Apple review, and the App Store Connect listing is empty
+  except for the title.** Established with `eas metadata:pull` against the real ASC record (app
+  `6793626237`, team `4U493SXP52`, EAS account `synthorgtech`), not from a doc. What came back is
+  `version 1.0`, `release.automaticRelease true`, `info.en-US.title "Atlitos"` and the age rating
+  answers, and nothing else: no description, no keywords, no support URL, no marketing or privacy
+  URL, no categories, no copyright, no screenshots and no review contact or demo account. A
+  submission is impossible in that state, so nothing is waiting on Apple. The build history agrees:
+  three iOS builds have ever run, numbers 1 (errored), 2 and 3, the newest finished 25 July 2026,
+  and none since. `app.json` carries `ios.buildNumber 9`, which corresponds to no EAS build at all,
+  so someone bumped it by hand six times without building; do not read it as evidence of six
+  submissions. The gate before submission, `LAUNCH-PHASE-5-STATUS.md` native both-platform QA, is
+  still "PLANNED, not started". Owner: Abishai.
+- **The App Store age rating answers say the app has no user generated content and no messaging,
+  and both are false.** Pulled from ASC: `userGeneratedContent: false`, `messagingAndChat: false`,
+  `advertising: false`, `healthOrWellnessTopics: false`. Atlitos carries user generated content and
+  Prasanth's own `eca5992` says so in its commit message, quoting the guideline: "App Store
+  guideline 1.2 requires a report mechanism and a block mechanism on any surface carrying user
+  generated content". He built report, block and account deletion precisely because the app has
+  UGC. Declaring no UGC while shipping UGC is the Guideline 1.2 shape that rejected BelieversDiary
+  twice, and the second of those rejections came from a detail nobody had checked rather than a
+  missing feature. Correct the answers in the same pass that fills the listing, and re-read
+  `docs/store/APPLE-APP-PRIVACY.md` and `SUBMISSION-CHECKLIST.md` against what the app now does.
+  Owner: Abishai.
+- **There is exactly one Android build ever and it cannot be submitted to Play.** Profile `preview`,
+  distribution `internal`, an APK with `versionCode 1`. Play production needs an AAB from the
+  `production` profile, and `app.json` has no `android.versionCode` at all, so the production
+  profile has nothing to increment from. `docs/store/PLAY-READINESS.md` says there is "no record in
+  this repo of a successful `eas build --platform android`", which is true of the repo and wrong
+  about EAS; the conclusion it draws still holds, because a preview APK exercises none of the
+  native risks a store build does. Owner: Abishai.
+- **`apps/mobile/node_modules` was missing entirely in the main checkout.** Every EAS command failed
+  with "Failed to resolve plugin for module expo-router" until `pnpm install --filter
+  @atlitos/mobile...` ran, which took 6 seconds against an up to date lockfile. It reads exactly
+  like a broken EAS setup or a bad credential, which is the trap: check the workspace is installed
+  before believing any mobile tooling failure. Owner: whoever next hits it.
