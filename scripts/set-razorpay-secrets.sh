@@ -21,9 +21,16 @@
 #
 # The file is KEY=VALUE lines, no quotes, no export:
 #
-#   RAZORPAY_KEY_ID=rzp_test_xxxxxxxx
-#   RAZORPAY_KEY_SECRET=xxxxxxxx
-#   RAZORPAY_WEBHOOK_SECRET=xxxxxxxx
+#   RAZORPAY_MODE=test                  # or live, chooses which pair is used
+#   RAZORPAY_TEST_KEY_ID=rzp_test_xxxxxxxx
+#   RAZORPAY_TEST_KEY_SECRET=xxxxxxxx
+#   RAZORPAY_LIVE_KEY_ID=rzp_live_xxxxxxxx
+#   RAZORPAY_LIVE_KEY_SECRET=xxxxxxxx
+#   RAZORPAY_WEBHOOK_SECRET=xxxxxxxx     # one secret, both webhooks
+#
+# Both pairs can live here at once. RAZORPAY_MODE decides which one the edge
+# functions use, and _shared/razorpay.ts refuses to run if the mode and the key
+# id disagree, so a live key can never be used during a test run.
 #
 # Usage:
 #   bash scripts/set-razorpay-secrets.sh                 # push and verify
@@ -53,21 +60,34 @@ if [ "$MODE" != "--verify-only" ]; then
   set -a; # shellcheck disable=SC1090
   . "$ENV_FILE"; set +a
 
-  MISSING=""
-  for k in RAZORPAY_KEY_ID RAZORPAY_KEY_SECRET RAZORPAY_WEBHOOK_SECRET; do
-    [ -n "${!k:-}" ] || MISSING="$MISSING $k"
-  done
-  [ -z "$MISSING" ] || { echo "missing from the file:$MISSING"; exit 2; }
+  RZP_MODE="${RAZORPAY_MODE:-}"
+  case "$RZP_MODE" in
+    test) ACTIVE_ID="${RAZORPAY_TEST_KEY_ID:-${RAZORPAY_KEY_ID:-}}"; ACTIVE_SECRET="${RAZORPAY_TEST_KEY_SECRET:-${RAZORPAY_KEY_SECRET:-}}" ;;
+    live) ACTIVE_ID="${RAZORPAY_LIVE_KEY_ID:-${RAZORPAY_KEY_ID:-}}"; ACTIVE_SECRET="${RAZORPAY_LIVE_KEY_SECRET:-${RAZORPAY_KEY_SECRET:-}}" ;;
+    "")   ACTIVE_ID="${RAZORPAY_KEY_ID:-}"; ACTIVE_SECRET="${RAZORPAY_KEY_SECRET:-}"
+          echo "NOTE: RAZORPAY_MODE is not set, falling back to the un-prefixed names." ;;
+    *)    echo "RAZORPAY_MODE must be test or live, not \"$RZP_MODE\""; exit 2 ;;
+  esac
+
+  [ -n "$ACTIVE_ID" ] && [ -n "$ACTIVE_SECRET" ] || { echo "no key pair for mode \"${RZP_MODE:-unset}\" in $ENV_FILE"; exit 2; }
+  [ -n "${RAZORPAY_WEBHOOK_SECRET:-}" ] || { echo "missing from the file: RAZORPAY_WEBHOOK_SECRET"; exit 2; }
 
   echo "read from $ENV_FILE:"
-  for k in RAZORPAY_KEY_ID RAZORPAY_KEY_SECRET RAZORPAY_WEBHOOK_SECRET; do
-    printf '  %-26s %s\n' "$k" "$(redact "${!k}")"
+  for k in RAZORPAY_MODE RAZORPAY_TEST_KEY_ID RAZORPAY_TEST_KEY_SECRET RAZORPAY_LIVE_KEY_ID RAZORPAY_LIVE_KEY_SECRET RAZORPAY_KEY_ID RAZORPAY_KEY_SECRET RAZORPAY_WEBHOOK_SECRET; do
+    [ -n "${!k:-}" ] && printf '  %-26s %s\n' "$k" "$(redact "${!k}")"
   done
 
-  case "$RAZORPAY_KEY_ID" in
-    rzp_test_*) echo "mode:    TEST keys" ;;
-    rzp_live_*) echo "mode:    LIVE keys. Real money will move." ;;
-    *) echo "mode:    unrecognised key id prefix, continuing anyway" ;;
+  # The guard the edge functions also enforce, checked here so a bad file is
+  # caught before it is pushed rather than at the first payment.
+  case "$RZP_MODE:$ACTIVE_ID" in
+    test:rzp_live_*) echo "REFUSING: RAZORPAY_MODE=test but the active key is a LIVE key."; exit 2 ;;
+    live:rzp_test_*) echo "REFUSING: RAZORPAY_MODE=live but the active key is a TEST key."; exit 2 ;;
+  esac
+
+  case "$ACTIVE_ID" in
+    rzp_test_*) echo "active:  TEST keys" ;;
+    rzp_live_*) echo "active:  LIVE keys. Real money will move." ;;
+    *) echo "active:  unrecognised key id prefix, continuing anyway" ;;
   esac
 
   echo "pushing to Supabase project $PROJECT_REF ..."
@@ -88,7 +108,7 @@ echo "verifying against Razorpay ..."
 if [ "$MODE" = "--verify-only" ]; then
   echo "  (verify-only: this checks the names are present in Supabase, not their values)"
   supabase secrets list --project-ref "$PROJECT_REF" 2>/dev/null \
-    | grep -E "RAZORPAY_(KEY_ID|KEY_SECRET|WEBHOOK_SECRET)" \
+    | grep -E "RAZORPAY_" \
     | awk '{printf "  %-26s present\n", $1}'
   exit 0
 fi
@@ -96,7 +116,7 @@ fi
 # A real call: fetch the account's own payments list, limit 1. It needs both the
 # id and the secret to be correct, so a 200 proves the pair, not just the id.
 CODE=$(curl -s -o /tmp/rzp-verify.json -w "%{http_code}" --max-time 30 \
-  -u "$RAZORPAY_KEY_ID:$RAZORPAY_KEY_SECRET" \
+  -u "$ACTIVE_ID:$ACTIVE_SECRET" \
   "https://api.razorpay.com/v1/payments?count=1")
 
 case "$CODE" in
