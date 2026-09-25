@@ -26,9 +26,82 @@ function requiredEnv(name: string): string {
   return value;
 }
 
+/**
+ * Which Razorpay account this deployment talks to.
+ *
+ * WHY A MODE AND NOT JUST OVERWRITING THE KEYS. Test and live credentials both
+ * have to live somewhere during launch, and swapping the same two secret names
+ * back and forth is the shape of mistake that costs real money: paste the live
+ * pair while testing and a test booking charges a customer; forget to paste the
+ * live pair before going live and every capture fails signature-free, silently,
+ * because Razorpay retries a non-2xx a few times and then gives up. Naming both
+ * pairs and choosing between them with one flag makes the switch a single,
+ * visible, reversible edit.
+ *
+ * FAIL CLOSED. There is deliberately no default. An unset or unrecognised
+ * RAZORPAY_MODE throws rather than guessing, because both possible guesses are
+ * wrong in an expensive direction.
+ *
+ * BACKWARD COMPATIBLE. If the mode-specific names are absent, the original
+ * RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET are used, so a deployment mid-migration
+ * keeps working.
+ */
+export type RazorpayMode = "test" | "live";
+
+export function razorpayMode(): RazorpayMode {
+  const raw = (Deno.env.get("RAZORPAY_MODE") ?? "").trim().toLowerCase();
+  if (raw === "test" || raw === "live") return raw;
+  if (raw === "") {
+    // Only legal when the un-prefixed names are the ones in use.
+    if (Deno.env.get("RAZORPAY_KEY_ID")) return keyIdMode(Deno.env.get("RAZORPAY_KEY_ID") as string);
+    throw new AppError(
+      "INTERNAL",
+      "Server misconfiguration: RAZORPAY_MODE is not set and no RAZORPAY_KEY_ID is present.",
+      500,
+    );
+  }
+  throw new AppError(
+    "INTERNAL",
+    `Server misconfiguration: RAZORPAY_MODE must be "test" or "live", not "${raw}".`,
+    500,
+  );
+}
+
+/** Razorpay key ids carry their own mode, which is what makes the guard below possible. */
+function keyIdMode(keyId: string): RazorpayMode {
+  if (keyId.startsWith("rzp_live_")) return "live";
+  if (keyId.startsWith("rzp_test_")) return "test";
+  throw new AppError(
+    "INTERNAL",
+    "Server misconfiguration: RAZORPAY_KEY_ID is neither an rzp_test_ nor an rzp_live_ key.",
+    500,
+  );
+}
+
+/** The key pair for the active mode, with the mode-specific names preferred. */
+function credentials(): { keyId: string; keySecret: string; mode: RazorpayMode } {
+  const mode = razorpayMode();
+  const prefix = mode === "live" ? "RAZORPAY_LIVE" : "RAZORPAY_TEST";
+  const keyId = Deno.env.get(`${prefix}_KEY_ID`) ?? requiredEnv("RAZORPAY_KEY_ID");
+  const keySecret = Deno.env.get(`${prefix}_KEY_SECRET`) ?? requiredEnv("RAZORPAY_KEY_SECRET");
+
+  // THE GUARD THAT EARNS THIS CHANGE. A key id states its own mode, so a
+  // mismatch between the flag and the key is detectable, and it is exactly the
+  // mistake worth refusing: RAZORPAY_MODE=test with a live key charges real
+  // cards during a test run.
+  const actual = keyIdMode(keyId);
+  if (actual !== mode) {
+    throw new AppError(
+      "INTERNAL",
+      `Server misconfiguration: RAZORPAY_MODE is "${mode}" but the key id is an ${actual} key. Refusing to call Razorpay.`,
+      500,
+    );
+  }
+  return { keyId, keySecret, mode };
+}
+
 function basicAuthHeader(): string {
-  const keyId = requiredEnv("RAZORPAY_KEY_ID");
-  const keySecret = requiredEnv("RAZORPAY_KEY_SECRET");
+  const { keyId, keySecret } = credentials();
   // btoa is available globally in the Deno edge runtime.
   return `Basic ${btoa(`${keyId}:${keySecret}`)}`;
 }
@@ -169,7 +242,7 @@ export async function verifyPaymentSignature(
 
 /** The public key id, safe to return to the client for opening the checkout sheet. */
 export function razorpayKeyId(): string {
-  return requiredEnv("RAZORPAY_KEY_ID");
+  return credentials().keyId;
 }
 
 /**
