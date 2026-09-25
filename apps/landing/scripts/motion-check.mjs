@@ -153,7 +153,7 @@ async function checkC1() {
       "Meet",
       "Playing is easy",
       "Here is how it works",
-      "Plans built for athletes",
+      "Free for athletes",
       "Empower",
     ];
     /* textContent, not innerText: the guard is "present in plain markup",
@@ -327,7 +327,14 @@ async function checkC10C11() {
     if (!skip("C11")) {
       const r = await page.evaluate(() => {
         const text = document.body.textContent.replace(/\s+/g, " ");
-        const tiers = ["Starter", "₹0", "Pro", "₹199", "Elite", "₹499"].every((s) => text.includes(s));
+        /* Frozen pricing copy, corrected 24 September 2026. The list used to
+           read Starter/Pro/Elite at ₹0/₹199/₹499, which no version of this
+           page has shipped for a long time: pricing is free to join, you pay
+           the venue or the coach, and a subscription is coming. The check was
+           therefore red on every run and proving nothing, which is how a
+           check teaches people to ignore the whole script. These are the
+           strings the page actually ships. */
+        const tiers = ["Free to use", "Pay for what you book", "Subscription, coming soon"].every((s) => text.includes(s));
         const tags = Array.from(document.querySelectorAll(".v-tag, .emp-stat .v-tag"));
         const sampleVisible = tags.length > 0 && tags.every((el) => {
           const cs = getComputedStyle(el);

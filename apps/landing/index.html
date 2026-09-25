@@ -1,8 +1,8 @@
 <!doctype html>
 <!-- ATLITOS landing page.
      Architecture: static HTML plus styles.css plus main.js, no framework, no build step.
-     Page story: cinematic scoreboard film hero (video scrubbed by scroll)
-     -> Meet Atlitos emerges from inside the LED board -> problem band with word rotator
+     Page story: COLD OPEN kinetic type hero (no video, GSAP load choreography)
+     -> Meet Atlitos title card -> problem band with word rotator
      -> how it works interlude -> three step FILES (sticky tab plus panel, one viewport each)
      -> always on features band -> old way vs Atlitos way toggle court
      -> three differentiator intent rows -> scrolling subscription strip
@@ -19,15 +19,18 @@
   <title>ATLITOS, the sports superapp for Indian athletes</title>
   <meta name="description" content="Book verified courts, train with coaches, share your best plays, and give back to athletes across India. One app for your whole game." />
   <meta name="theme-color" content="#FBF7F1" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;0,9..144,900;1,9..144,700;1,9..144,900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet" />
-  <link rel="icon" type="image/png" href="img/favicon.png" />
+  <!-- fonts are self hosted (fonts/, latin subsets, variable files). No font
+       preloads on purpose: they starved the LCP image on throttled mobile,
+       and the metric-matched fallbacks make the later swap shift-free. -->
   <link rel="stylesheet" href="styles.css" />
+  <link rel="preload" as="image" href="img/hero-panel.webp" imagesrcset="img/hero-panel-640.webp 640w, img/hero-panel.webp 1200w" imagesizes="(max-width: 900px) 74vw, 42vw" fetchpriority="high" />
+  <link rel="modulepreload" href="motion/index.js" />
 </head>
 <body>
 
 <a class="skip-link" href="#main">Skip to content</a>
+
+<div class="grain" aria-hidden="true"></div>
 
 <header class="site-header" id="siteHeader">
   <div class="nav-card">
@@ -44,23 +47,36 @@
 
 <main id="main">
 
-  <!-- HERO. The cinematic scoreboard video IS the hero. Phase 1 autoplays the
-       intro to the resting frame; phase 2 maps scroll to the final camera push
-       so the visitor scrolls INTO the LED board. Zero JS: the video autoplays
-       once and the page reads normally below. -->
-  <section class="vhero" id="top" aria-label="Atlitos opening film">
-    <div class="vhero-sticky">
-      <video id="heroVideo" class="vhero-video" src="img/hero-scoreboard.mp4" poster="img/hero-poster.jpg" autoplay muted playsinline preload="auto"></video>
-      <div class="vhero-veil" id="heroVeil" aria-hidden="true"></div>
-      <h1 class="sr-only">The way you play sports is about to change forever. Meet Atlitos.</h1>
-      <p class="vhero-hint mono" id="heroHint" aria-hidden="true">SCROLL DOWN<span class="hint-arrow">&darr;</span></p>
+  <!-- HERO: COLD OPEN. No video, no waiting. The headline is real markup and
+       the LCP element is the duotone athlete panel. motion/sections/hero.js
+       runs the load choreography; html.hero-ready (1800ms hard fallback in
+       main.js, or set by the timeline finishing) forces final states so the
+       fold can never depend on animation completing. -->
+  <section class="hero" id="top" aria-label="Atlitos opening">
+    <div class="hero-lines" aria-hidden="true">
+      <i class="hl hl-1"></i><i class="hl hl-2"></i><i class="hl hl-3"></i><i class="hl hl-4"></i><i class="hl hl-5"></i>
     </div>
+    <div class="hero-panel" aria-hidden="true">
+      <img src="img/hero-panel.webp" srcset="img/hero-panel-640.webp 640w, img/hero-panel.webp 1200w" sizes="(max-width: 900px) 74vw, 42vw" alt="" width="1200" height="800" fetchpriority="high" decoding="async" />
+    </div>
+    <h1 class="hero-headline">
+      <span class="hh-line"><span class="hh-inner">The way you play</span></span>
+      <span class="hh-line"><span class="hh-inner">sports is about to</span></span>
+      <span class="hh-line"><span class="hh-inner"><em class="hh-accent">change forever.</em></span></span>
+    </h1>
+    <div class="hero-tiles" aria-hidden="true">
+      <span class="kit-tile mono">PLAY MORE</span>
+      <span class="kit-tile mono">COACH MORE</span>
+      <span class="kit-tile mono">EARN MORE</span>
+      <span class="kit-tile mono">GIVE MORE</span>
+    </div>
+    <p class="hero-rail mono" aria-hidden="true">SCROLL<span class="rail-line"></span></p>
   </section>
 
   <!-- INSIDE THE BOARD. Section 2 emerges from the LED close up darkness. -->
   <section class="led-entry" aria-labelledby="led-entry-title">
     <div class="shell led-entry-inner">
-      <p class="sec-eyebrow eyebrow-onDark eyebrow-center mono" data-reveal="up">YOU ARE INSIDE THE BOARD</p>
+      <p class="sec-eyebrow eyebrow-onDark eyebrow-center mono" data-reveal="up">GAME ON</p>
       <h2 id="led-entry-title" class="serif-line led-entry-title" data-reveal="up" data-reveal-delay="1">Meet <em class="meet-accent">Atlitos</em>.</h2>
       <p class="led-entry-sub" data-reveal="up" data-reveal-delay="2">Courts. Coaches. Clips. Gear. Drills. One app for your whole game.</p>
       <div class="cta-row cta-center">
@@ -160,9 +176,14 @@
             <p class="stack-list">Badminton.<br />Basketball.<br />Tennis.<br />Turf.<br />Near you.</p>
             <p class="stack-list">All verified.<br />All live.<br />All bookable.</p>
           </div>
-          <div class="demo-frame frame-marigold step-video">
-            <video src="img/step1-courts.mp4" poster="img/hero-pitch.jpg" autoplay muted loop playsinline></video>
-            <span class="slot-chip mono">VIDEO SLOT, img/step1-courts.mp4</span>
+          <div class="demo-frame frame-marigold step-demo" data-reveal="up">
+            <div class="demo-card">
+              <div class="d-row d-search"><span>Courts near you</span></div>
+              <div class="d-row" data-reveal="pop" data-reveal-delay="1"><span>Badminton Hall, Sector 12</span><span class="mono">&#8377;300</span></div>
+              <div class="d-row" data-reveal="pop" data-reveal-delay="2"><span>Turf Ground, HSR Layout</span><span class="mono">&#8377;500</span></div>
+              <div class="d-row" data-reveal="pop" data-reveal-delay="3"><span>Basketball Court, Indiranagar</span><span class="mono">&#8377;250</span></div>
+              <div class="d-row d-cta" data-reveal="pop" data-reveal-delay="4"><span>Booked, 7 to 8 pm</span><span class="mono">&#8377;300</span></div>
+            </div>
           </div>
         </div>
       </div>
@@ -177,9 +198,13 @@
             <p class="stack-list">Real coaches.<br />One on one sessions.<br />Group training.</p>
             <p class="stack-list">Drills.<br />XP.<br />Milestones.</p>
           </div>
-          <div class="demo-frame frame-ember step-video">
-            <video src="img/step2-coach.mp4" poster="img/step-train.jpg" autoplay muted loop playsinline></video>
-            <span class="slot-chip mono">VIDEO SLOT, img/step2-coach.mp4</span>
+          <div class="demo-frame frame-ember step-demo" data-reveal="up">
+            <div class="demo-card">
+              <div class="d-row d-search"><span>How do I fix my smash?</span></div>
+              <div class="d-row" data-reveal="pop" data-reveal-delay="1"><span>Coach Priya, footwork ladder drill</span></div>
+              <div class="d-row" data-reveal="pop" data-reveal-delay="2"><span>Drill complete</span><svg class="check d-check" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></div>
+              <div class="d-xp" data-reveal="pop" data-reveal-delay="3"><span class="mono">XP</span><span class="xp-bar"><i style="width:65%"></i></span><span class="mono">65%</span></div>
+            </div>
           </div>
         </div>
       </div>
@@ -194,9 +219,12 @@
             <p class="stack-list">Post your best plays.<br />Shop the gear you need.</p>
             <p class="stack-list">Round up the change.<br />Fund another athlete.</p>
           </div>
-          <div class="demo-frame frame-green step-video">
-            <video src="img/step3-roundup.mp4" poster="img/step-give.jpg" autoplay muted loop playsinline></video>
-            <span class="slot-chip mono">VIDEO SLOT, img/step3-roundup.mp4</span>
+          <div class="demo-frame frame-green step-demo" data-reveal="up">
+            <div class="demo-card">
+              <div class="d-row d-search"><span>Grip tape and shuttles</span><span class="mono">&#8377;293</span></div>
+              <div class="d-row" data-reveal="pop" data-reveal-delay="1"><span>Round up</span><span class="mono">+&#8377;7</span></div>
+              <div class="d-row d-cta" data-reveal="pop" data-reveal-delay="2"><span>Routed to a young athlete</span><span class="mono">&#8377;7</span></div>
+            </div>
           </div>
         </div>
       </div>
@@ -303,7 +331,7 @@
             </div>
           </div>
           <div class="diff-media">
-            <img src="img/hero-pitch.jpg" alt="A verified turf pitch" loading="lazy" />
+            <img src="img/hero-pitch.jpg" alt="A verified turf pitch" loading="lazy" decoding="async" width="1600" height="1067" />
           </div>
         </div>
         <div class="diff-row diff-ember diff-flip" data-reveal="up">
@@ -348,74 +376,76 @@
   <!-- STRIP. The subscription itself scrolls past on the way into pricing. -->
   <div class="strip" aria-hidden="true">
     <div class="strip-track">
-      <span class="strip-word">Starter <span class="mono">&#8377;0</span></span><span class="strip-star">&#10033;</span>
-      <span class="strip-word">Pro <span class="mono">&#8377;199</span> per month</span><span class="strip-star">&#10033;</span>
-      <span class="strip-word">Elite <span class="mono">&#8377;499</span> per month</span><span class="strip-star">&#10033;</span>
-      <span class="strip-word">Every plan is the full Atlitos</span><span class="strip-star">&#10033;</span>
-      <span class="strip-word">Starter <span class="mono">&#8377;0</span></span><span class="strip-star">&#10033;</span>
-      <span class="strip-word">Pro <span class="mono">&#8377;199</span> per month</span><span class="strip-star">&#10033;</span>
-      <span class="strip-word">Elite <span class="mono">&#8377;499</span> per month</span><span class="strip-star">&#10033;</span>
-      <span class="strip-word">Every plan is the full Atlitos</span><span class="strip-star">&#10033;</span>
+      <span class="strip-word">Free to join</span><span class="strip-star">&#10033;</span>
+      <span class="strip-word">No monthly fee</span><span class="strip-star">&#10033;</span>
+      <span class="strip-word">Pay for what you book</span><span class="strip-star">&#10033;</span>
+      <span class="strip-word">Full breakdown before you confirm</span><span class="strip-star">&#10033;</span>
+      <span class="strip-word">Free to join</span><span class="strip-star">&#10033;</span>
+      <span class="strip-word">No monthly fee</span><span class="strip-star">&#10033;</span>
+      <span class="strip-word">Pay for what you book</span><span class="strip-star">&#10033;</span>
+      <span class="strip-word">Full breakdown before you confirm</span><span class="strip-star">&#10033;</span>
     </div>
   </div>
 
   <!-- PRICING. Deep green band, included card left, tier cards right. -->
   <section class="pricing" id="pricing" aria-labelledby="pricing-title">
     <div class="shell">
-      <p class="sec-eyebrow eyebrow-onDark mono" data-reveal="up">MEMBERSHIP</p>
+      <p class="sec-eyebrow eyebrow-onDark mono" data-reveal="up">PRICING</p>
       <div class="pricing-head">
         <h2 id="pricing-title" class="sticker-stack">
-          <span class="sticker" data-reveal="tilt">Plans built for</span>
+          <span class="sticker" data-reveal="tilt">Free for</span>
           <span class="sticker" data-reveal="tilt" data-reveal-delay="1"><em class="accent">athletes.</em></span>
         </h2>
-        <p class="pricing-note" data-reveal="up" data-reveal-delay="2">Every plan includes the full Atlitos experience. Pick the tier that matches your game.</p>
+        <p class="pricing-note" data-reveal="up" data-reveal-delay="2">The app is free. You pay only when you book something, at the price the venue or coach sets.</p>
       </div>
       <div class="pricing-grid">
         <div class="incl-card" data-reveal="up">
-          <h3>What's included in every plan</h3>
+          <h3>What you get, at no charge</h3>
           <ul role="list">
             <li data-reveal="side"><svg class="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Verified court booking</li>
             <li data-reveal="side" data-reveal-delay="1"><svg class="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Coach discovery and session booking</li>
             <li data-reveal="side" data-reveal-delay="2"><svg class="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Clutch, watch and share plays</li>
-            <li data-reveal="side" data-reveal-delay="3"><svg class="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Gear shop with delivery</li>
+            <li data-reveal="side" data-reveal-delay="3"><svg class="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Gear compared across retailers</li>
             <li data-reveal="side" data-reveal-delay="4"><svg class="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Drills, XP, and milestones</li>
             <li data-reveal="side" data-reveal-delay="5"><svg class="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Empower roundups and donations</li>
-            <li data-reveal="side" data-reveal-delay="6"><svg class="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Payments that settle right, receipts included</li>
+            <li data-reveal="side" data-reveal-delay="6"><svg class="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>AI search, ask in plain words</li>
+            <li data-reveal="side" data-reveal-delay="7"><svg class="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Payments that settle right, receipts included</li>
           </ul>
           <p class="incl-foot mono" aria-hidden="true">NO ADS. NO SPAM. JUST GAME.</p>
         </div>
+        <!-- The Pro (199/mo) and Elite (499/mo) tiers were removed 2026-08-13.
+             They could not be bought: no subscription, plan or tier table exists
+             in the database, and the app has no purchase path for them. They also
+             listed features that do not exist in the product (AI drill plans, AI
+             coach chat, automatic highlight cuts, AI match analysis, video form
+             checks, monthly progress reports), and carried a "MOST PICKED" badge
+             on a plan nobody has ever picked. House rule: if the evidence does
+             not exist, the claim does not go on the page. Restore only when a
+             real, purchasable plan ships. -->
         <div class="plan-col">
           <div class="plan plan-starter" data-reveal="up">
-            <h3>Starter</h3>
-            <p class="price"><span class="mono">&#8377;0</span><span class="per">forever</span></p>
-            <p class="plan-line">Everything an athlete needs to play.</p>
-            <a class="plan-cta cta-ink" href="https://atlitos-app.vercel.app">Start free</a>
+            <h3>Free to use</h3>
+            <p class="price"><span class="mono">&#8377;0</span><span class="per">to join</span></p>
+            <p class="plan-line">Browse courts, coaches, drills and Clutch without an account. Make one when you want to book.</p>
+            <a class="plan-cta cta-ink" href="https://atlitos-app.vercel.app">Open Atlitos</a>
           </div>
           <div class="plan plan-pro" data-reveal="up" data-reveal-delay="1">
-            <p class="plan-flag mono" aria-hidden="true">MOST PICKED</p>
-            <h3>Pro</h3>
-            <p class="price"><span class="mono">&#8377;199</span><span class="per">per month</span></p>
-            <p class="plan-line">For athletes who train every week.</p>
+            <h3>Pay for what you book</h3>
+            <p class="plan-line">No membership, no monthly fee. You pay the venue, the coach or the seller at the price they set, and you see the full breakdown before you confirm.</p>
             <ul class="plan-feats" role="list">
-              <li>AI drill plans that adapt to your XP</li>
-              <li>AI coach chat, ask anything about your game</li>
-              <li>Automatic highlight cuts from your clips</li>
-              <li>Priority alerts when your court opens up</li>
+              <li>Court bookings at the venue's own rate</li>
+              <li>Coaching sessions priced by the coach</li>
+              <li>Training groups billed per month by the coach who runs them</li>
+              <li>Gear you buy at the retailer, compared here first</li>
             </ul>
-            <a class="plan-cta cta-marigold" href="https://atlitos-app.vercel.app">Go Pro</a>
+            <a class="plan-cta cta-marigold" href="https://atlitos-app.vercel.app">Find a court</a>
           </div>
-          <div class="plan plan-elite" data-reveal="up" data-reveal-delay="2">
-            <h3>Elite</h3>
-            <p class="price"><span class="mono">&#8377;499</span><span class="per">per month</span></p>
-            <p class="plan-line">For athletes chasing the next level.</p>
-            <ul class="plan-feats" role="list">
-              <li>Everything in Pro</li>
-              <li>AI match analysis on your Clutch clips</li>
-              <li>Video form checks with fix suggestions</li>
-              <li>Monthly progress report on your whole game</li>
-            </ul>
-            <a class="plan-cta cta-ember" href="https://atlitos-app.vercel.app">Go Elite</a>
+          <div class="plan-col" data-reveal="up" data-reveal-delay="2">
+            <h3>Subscription, coming soon</h3>
+            <p class="plan-price">Soon</p>
+            <p class="plan-line">We are building a paid tier on top of the AI features, starting with search. Everything listed above stays free when it arrives.</p>
           </div>
+
           <div class="plan-enterprise" data-reveal="up" data-reveal-delay="3">
             <p class="ent-title">An academy or a club?</p>
             <p class="ent-line">We will set your whole team up, courts, coaches, and rosters.</p>
@@ -436,24 +466,24 @@
     </div>
     <div class="vwall" aria-hidden="true">
       <div class="marquee-track vrow">
-        <div class="vcard"><p class="v-quote">Quote from a Bengaluru badminton regular goes here.</p><p class="v-name mono">ATHLETE NAME, BENGALURU</p><span class="v-tag mono">SAMPLE</span></div>
-        <div class="vcard"><p class="v-quote">A coach on filling weekday sessions goes here.</p><p class="v-name mono">COACH NAME, PUNE</p><span class="v-tag mono">SAMPLE</span></div>
-        <div class="vcard"><p class="v-quote">A court partner on payouts landing on time goes here.</p><p class="v-name mono">PARTNER NAME, HYDERABAD</p><span class="v-tag mono">SAMPLE</span></div>
-        <div class="vcard"><p class="v-quote">A player on booking a turf in under a minute goes here.</p><p class="v-name mono">ATHLETE NAME, MUMBAI</p><span class="v-tag mono">SAMPLE</span></div>
-        <div class="vcard"><p class="v-quote">Quote from a Bengaluru badminton regular goes here.</p><p class="v-name mono">ATHLETE NAME, BENGALURU</p><span class="v-tag mono">SAMPLE</span></div>
-        <div class="vcard"><p class="v-quote">A coach on filling weekday sessions goes here.</p><p class="v-name mono">COACH NAME, PUNE</p><span class="v-tag mono">SAMPLE</span></div>
-        <div class="vcard"><p class="v-quote">A court partner on payouts landing on time goes here.</p><p class="v-name mono">PARTNER NAME, HYDERABAD</p><span class="v-tag mono">SAMPLE</span></div>
-        <div class="vcard"><p class="v-quote">A player on booking a turf in under a minute goes here.</p><p class="v-name mono">ATHLETE NAME, MUMBAI</p><span class="v-tag mono">SAMPLE</span></div>
+        <div class="vcard" data-skew data-skew-max="5"><p class="v-quote">Quote from a Bengaluru badminton regular goes here.</p><p class="v-name mono">ATHLETE NAME, BENGALURU</p><span class="v-tag mono">SAMPLE</span></div>
+        <div class="vcard" data-skew data-skew-max="5"><p class="v-quote">A coach on filling weekday sessions goes here.</p><p class="v-name mono">COACH NAME, PUNE</p><span class="v-tag mono">SAMPLE</span></div>
+        <div class="vcard" data-skew data-skew-max="5"><p class="v-quote">A court partner on payouts landing on time goes here.</p><p class="v-name mono">PARTNER NAME, HYDERABAD</p><span class="v-tag mono">SAMPLE</span></div>
+        <div class="vcard" data-skew data-skew-max="5"><p class="v-quote">A player on booking a turf in under a minute goes here.</p><p class="v-name mono">ATHLETE NAME, MUMBAI</p><span class="v-tag mono">SAMPLE</span></div>
+        <div class="vcard" data-skew data-skew-max="5"><p class="v-quote">Quote from a Bengaluru badminton regular goes here.</p><p class="v-name mono">ATHLETE NAME, BENGALURU</p><span class="v-tag mono">SAMPLE</span></div>
+        <div class="vcard" data-skew data-skew-max="5"><p class="v-quote">A coach on filling weekday sessions goes here.</p><p class="v-name mono">COACH NAME, PUNE</p><span class="v-tag mono">SAMPLE</span></div>
+        <div class="vcard" data-skew data-skew-max="5"><p class="v-quote">A court partner on payouts landing on time goes here.</p><p class="v-name mono">PARTNER NAME, HYDERABAD</p><span class="v-tag mono">SAMPLE</span></div>
+        <div class="vcard" data-skew data-skew-max="5"><p class="v-quote">A player on booking a turf in under a minute goes here.</p><p class="v-name mono">ATHLETE NAME, MUMBAI</p><span class="v-tag mono">SAMPLE</span></div>
       </div>
       <div class="marquee-track marquee-reverse vrow">
-        <div class="vcard"><p class="v-quote">A parent on their kid earning XP for real drills goes here.</p><p class="v-name mono">PARENT NAME, CHENNAI</p><span class="v-tag mono">SAMPLE</span></div>
-        <div class="vcard"><p class="v-quote">A supporter on funding an athlete through Empower goes here.</p><p class="v-name mono">SUPPORTER NAME, DELHI</p><span class="v-tag mono">SAMPLE</span></div>
-        <div class="vcard"><p class="v-quote">A weekend team on finding their fifth player goes here.</p><p class="v-name mono">TEAM NAME, KOCHI</p><span class="v-tag mono">SAMPLE</span></div>
-        <div class="vcard"><p class="v-quote">A young athlete on their first funded coaching block goes here.</p><p class="v-name mono">ATHLETE NAME, JAIPUR</p><span class="v-tag mono">SAMPLE</span></div>
-        <div class="vcard"><p class="v-quote">A parent on their kid earning XP for real drills goes here.</p><p class="v-name mono">PARENT NAME, CHENNAI</p><span class="v-tag mono">SAMPLE</span></div>
-        <div class="vcard"><p class="v-quote">A supporter on funding an athlete through Empower goes here.</p><p class="v-name mono">SUPPORTER NAME, DELHI</p><span class="v-tag mono">SAMPLE</span></div>
-        <div class="vcard"><p class="v-quote">A weekend team on finding their fifth player goes here.</p><p class="v-name mono">TEAM NAME, KOCHI</p><span class="v-tag mono">SAMPLE</span></div>
-        <div class="vcard"><p class="v-quote">A young athlete on their first funded coaching block goes here.</p><p class="v-name mono">ATHLETE NAME, JAIPUR</p><span class="v-tag mono">SAMPLE</span></div>
+        <div class="vcard" data-skew data-skew-max="5"><p class="v-quote">A parent on their kid earning XP for real drills goes here.</p><p class="v-name mono">PARENT NAME, CHENNAI</p><span class="v-tag mono">SAMPLE</span></div>
+        <div class="vcard" data-skew data-skew-max="5"><p class="v-quote">A supporter on funding an athlete through Empower goes here.</p><p class="v-name mono">SUPPORTER NAME, DELHI</p><span class="v-tag mono">SAMPLE</span></div>
+        <div class="vcard" data-skew data-skew-max="5"><p class="v-quote">A weekend team on finding their fifth player goes here.</p><p class="v-name mono">TEAM NAME, KOCHI</p><span class="v-tag mono">SAMPLE</span></div>
+        <div class="vcard" data-skew data-skew-max="5"><p class="v-quote">A young athlete on their first funded coaching block goes here.</p><p class="v-name mono">ATHLETE NAME, JAIPUR</p><span class="v-tag mono">SAMPLE</span></div>
+        <div class="vcard" data-skew data-skew-max="5"><p class="v-quote">A parent on their kid earning XP for real drills goes here.</p><p class="v-name mono">PARENT NAME, CHENNAI</p><span class="v-tag mono">SAMPLE</span></div>
+        <div class="vcard" data-skew data-skew-max="5"><p class="v-quote">A supporter on funding an athlete through Empower goes here.</p><p class="v-name mono">SUPPORTER NAME, DELHI</p><span class="v-tag mono">SAMPLE</span></div>
+        <div class="vcard" data-skew data-skew-max="5"><p class="v-quote">A weekend team on finding their fifth player goes here.</p><p class="v-name mono">TEAM NAME, KOCHI</p><span class="v-tag mono">SAMPLE</span></div>
+        <div class="vcard" data-skew data-skew-max="5"><p class="v-quote">A young athlete on their first funded coaching block goes here.</p><p class="v-name mono">ATHLETE NAME, JAIPUR</p><span class="v-tag mono">SAMPLE</span></div>
       </div>
     </div>
   </section>
@@ -494,8 +524,14 @@
   </section>
 
   <!-- EMPOWER. The heart of Atlitos: the flow, the impact, the 3D ball, the CTA. -->
+  <!-- EMPOWER: the page's ONE pin (D3) and ONE WebGL scene, per the ORBIT
+       concept in docs/MOTION-ARCHITECTURE.md 3.13. .emp-pin-wrap owns its own
+       stacking context; .emp-stage is the pinned element; .emp-outro rises
+       after the pin releases. Mobile and reduced motion: no pin, the same
+       beats fire as plain reveals in DOM order. -->
   <section class="empower" id="empower" aria-labelledby="empower-title">
-    <div class="shell empower-inner">
+    <div class="emp-pin-wrap">
+    <div class="emp-stage shell empower-inner">
       <p class="sec-eyebrow eyebrow-onDark eyebrow-center mono" data-reveal="up">THE HEART OF ATLITOS</p>
       <div class="empower-head">
         <h2 id="empower-title" class="sticker-stack">
@@ -527,10 +563,7 @@
           <p class="emp-num mono">03</p>
           <p class="emp-title">An athlete plays</p>
           <p class="emp-line">Court time, coaching, and gear, funded.</p>
-          <div class="photo-slot">
-            <span class="mono">PHOTO SLOT</span>
-            <span class="mono slot-file">img/empower-story.jpg</span>
-          </div>
+          <div class="photo-slot" role="img" aria-label="A young athlete on a neighborhood court, holding a badminton racquet"></div>
         </div>
       </div>
       <div class="emp-stats">
@@ -550,10 +583,10 @@
           <span class="v-tag mono">SAMPLE</span>
         </div>
       </div>
-      <div class="emp-3d" id="emp3d" aria-hidden="true">
-        <div class="emp-3d-fallback"></div>
-      </div>
       <p class="roundup-line mono" data-reveal="up"><span class="ru" data-count="293" data-prefix="&#8377;">&#8377;293</span> order. <span class="ru" data-count="7" data-prefix="&#8377;">&#8377;7</span> rounded up. <span class="ru" data-count="7" data-prefix="&#8377;">&#8377;7</span> to an athlete.</p>
+    </div><!-- /.emp-stage -->
+    </div><!-- /.emp-pin-wrap -->
+    <div class="emp-outro shell">
       <div class="cta-row cta-center">
         <a class="btn-pill btn-lg btn-onDark" data-reveal="up" href="https://atlitos-app.vercel.app">Try the web app</a>
         <a class="btn-ghost ghost-onDark" data-reveal="up" data-reveal-delay="1" href="mailto:support@elsheph.com?subject=Atlitos%20TestFlight%20access">Get early iOS access</a>
@@ -590,16 +623,6 @@
           <a href="https://atlitos-portal-court.vercel.app">Court portal</a>
           <a href="https://atlitos-portal-life.vercel.app">Empower portal</a>
         </nav>
-        <!-- App Store guideline 5.1.1 requires a reachable privacy policy, and
-             1.2 requires a published content policy plus a monitored contact,
-             for any app carrying user generated content. -->
-        <nav aria-label="Legal" data-reveal="up" data-reveal-delay="3">
-          <p class="f-head mono">LEGAL</p>
-          <a href="/privacy">Privacy policy</a>
-          <a href="/terms">Terms of service</a>
-          <a href="/content-policy">Content policy</a>
-          <a href="mailto:support@elsheph.com?subject=Atlitos%20support">Contact support</a>
-        </nav>
       </div>
     </div>
     <p class="copyright"><span class="mono">&copy; 2026</span> Atlitos. All rights reserved.</p>
@@ -608,6 +631,13 @@
 </footer>
 
 <script src="main.js" defer></script>
+<!-- Motion stack. main.js is the floor, motion/ is the ceiling; if the module
+     graph fails the page degrades to main.js behaviour, never to nothing. -->
+<script src="vendor/gsap-3.13.min.js" defer></script>
+<script src="vendor/ScrollTrigger-3.13.min.js" defer></script>
+<script src="vendor/SplitText-3.13.min.js" defer></script>
+<script src="vendor/lenis-1.3.min.js" defer></script>
+<script type="module" src="motion/index.js"></script>
 
 </body>
 </html>
