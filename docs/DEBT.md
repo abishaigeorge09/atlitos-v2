@@ -427,7 +427,7 @@ from growing further.
   like a broken EAS setup or a bad credential, which is the trap: check the workspace is installed
   before believing any mobile tooling failure. Owner: whoever next hits it.
 
-## 2026-09-26: manual payouts (0130) and what they leave open
+## 2026-09-26: manual payouts (0132) and what they leave open
 
 - **Merchant of record changed, and GST and TDS are undecided.** Route is closed to ELSHEPH until
   about Rs 40L of taxable turnover on GST-3B, so Atlitos now receives the full booking amount and
@@ -456,7 +456,7 @@ from growing further.
   allowlisted and no X webhook. Supabase Edge Functions have no fixed outbound IP, so an automatic
   run needs a static egress path (a small proxy with a fixed IP, or a runner that has one) before
   the allowlist is meaningful. Owner: Abishai to fund X; engineering to pick the egress path.
-- **Affiliate clicks are recorded but no subid reaches a retailer yet.** `0131` records every Buy
+- **Affiliate clicks are recorded but no subid reaches a retailer yet.** `0133` records every Buy
   tap and appends the click id when `retailer_programmes.subid_param` is set. It is null for every
   programme, because none is approved (`affiliate_tag_template` is null for all three) and each
   programme names its subid parameter differently. When a programme is approved, set both the tag
@@ -465,7 +465,7 @@ from growing further.
 - **The Buy tap has not been seen on a device.** `buyUrlForOffer` is proven at the database layer
   (`scripts/verify-affiliate-clicks.mjs`) and typechecks, but the tap on the compare view is owed
   a Release build pass with the App Store submission. Owner: the App Store submission pass.
-- **Court search and the past-slot fixes are not in production until deployed.** `0132` and `0133`
+- **Court search and the past-slot fixes are not in production until deployed.** `0134` and `0135`
   must be applied and `ai-search` plus `book-session` deployed; until then production still returns
   nothing for "badminton court tonight" and still offers past slots. Owner: whoever deploys this
   branch.
@@ -477,3 +477,16 @@ from growing further.
   still uses a fixed Hyderabad point to sort venues, but the courts screen no longer shows
   kilometres measured from it (they were not the athlete's distance). Sorting a guest by a city
   centre is a product choice worth revisiting if venues spread beyond Hyderabad. Owner: Abishai.
+
+## 2026-09-26: a release branch deployed to production without reaching main
+
+- **`release/ios-2026-09-23` is live in production and is not on `main`.** On 2026-09-23 it applied
+  19 migrations to production, including `0130_venue_booking_url` and
+  `0131_account_deletion_release_identities`, which exist only on that branch. That breaks
+  BRANCHING.md rule 1 (every deploy comes from `main`). Found when PR #20 was about to apply its own
+  `0130` and `0131`. Resolved the numbers per rule 4: those two already own `0130` and `0131` in the
+  production ledger, so PR #20's migrations were renumbered to `0132` to `0136` before being applied.
+  Checked before deploying: the branch changes no edge function that PR #20 deploys, and its
+  migrations touch none of PR #20's objects. Still owed: merge `release/ios-2026-09-23` into `main`
+  keeping its `0130` and `0131` file numbers, so the repo describes what production runs. It is 17
+  commits ahead and 16 behind. Owner: Prasanth, with Abishai.

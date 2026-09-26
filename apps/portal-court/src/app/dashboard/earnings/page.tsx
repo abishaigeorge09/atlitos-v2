@@ -36,7 +36,7 @@ interface EarningsData {
     created_at: string;
   }[];
   payoutLinked: boolean;
-  /** Masked payout method from get_my_payout_method (0130). `forbidden`
+  /** Masked payout method from get_my_payout_method (0132). `forbidden`
    * when the viewer is venue staff: only the partner may see or change
    * where the venue is paid. */
   payout:

@@ -15,7 +15,7 @@ import type { StatusTone } from "../../lib/status";
 import { supabaseClient } from "../../providers/supabaseClient";
 import "./payouts.css";
 
-// Manual payouts (docs/PLAN-PAYOUTS-CLICKS-SEARCH.md Track 1, migration 0130).
+// Manual payouts (docs/PLAN-PAYOUTS-CLICKS-SEARCH.md Track 1, migration 0132).
 //
 // Razorpay Route is closed to ELSHEPH, so an admin pays coaches and venues by
 // NEFT or UPI and records the bank reference here. Every action is an RPC

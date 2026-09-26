@@ -9,7 +9,7 @@ import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
 
 /**
- * One court search result (migration 0132). Leads with WHEN, because a court
+ * One court search result (migration 0134). Leads with WHEN, because a court
  * search is a question about time: "Free today at 7:00 PM", then the venue,
  * then the slot's real price. Every row is bookable at that time and price,
  * since it comes from the same availability the booking screen uses.

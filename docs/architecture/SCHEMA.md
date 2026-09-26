@@ -400,12 +400,12 @@ Rating is embedded on the booking row itself (matches the v1 `CourtBooking.ratin
 
 ---
 
-### Court availability functions (`0132`, `0133`)
+### Court availability functions (`0134`, `0135`)
 
 `get_court_available_slots(court, date)` is the single definition of "free": availability windows,
 minus blackouts, minus bookings not cancelled, priced by the newest active pricing rule. Since
-`0133` it also returns nothing for a past date and, today, only slots that have not ended (IST).
-`search_court_slots` (`0132`) calls it per candidate court and day to answer court search, so search
+`0135` it also returns nothing for a past date and, today, only slots that have not ended (IST).
+`search_court_slots` (`0134`) calls it per candidate court and day to answer court search, so search
 can never offer a slot or price the booking screen would not. See API-MAPPING.md, court search.
 
 ## Domain: commerce
@@ -773,17 +773,17 @@ Both dropped and recreated under the same name with two new trailing, defaulted 
 
 Two actions: `{ action: "fetch", url }` matches a `retailer_programmes` row by hostname, fetches the page (`_shared/fetch-page.ts`: named UA, 10s timeout, 5MB cap, robots.txt checked first) and extracts a draft (`_shared/extract-product.ts`: JSON-LD Product, then Open Graph, then the programme's `extractor` map), WRITING NOTHING (FR-44); a blocked/unsupported/unparseable page returns 422 with whatever partial fields could still be scraped. `{ action: "save", url, draft, productId? }` fetches only the draft's image (never the page a second time), SHA-256 hashes it, copies it into `product-images` under the service role (skip if the hash already exists), then calls the two extended RPCs above using the caller's own admin JWT. Admin JWT required for both actions; anon and non-admin are refused 401/403.
 
-### `affiliate_products.search_tsv` (`0134`)
+### `affiliate_products.search_tsv` (`0136`)
 
 Stored generated `tsvector`: title and brand at weight A, description at weight C, English
 configuration, GIN indexed (`idx_affiliate_products_search_tsv`). Not granted to clients; read only
 by `search_affiliate_product_ids`. Sport is deliberately not in it: it is filtered exactly as an
 enum, and an enum to text cast is not immutable, which a generated column requires.
 
-### `affiliate_clicks` (`0131`)
+### `affiliate_clicks` (`0133`)
 
 One row per outbound Buy tap on an affiliate offer. The row id is the subid appended to the
-retailer URL when the programme has `retailer_programmes.subid_param` set (new in `0131`, null for
+retailer URL when the programme has `retailer_programmes.subid_param` set (new in `0133`, null for
 every programme until one is approved), so a line in a retailer's commission report maps to one
 row.
 
@@ -1360,7 +1360,7 @@ Debits (1000.00) equal credits (900.00 + 100.00). A coach's balance is `sum(cred
 
 Constraints: `UNIQUE(owner_type, owner_id)`.
 
-### `payout_methods` (`0130`)
+### `payout_methods` (`0132`)
 
 Where a coach or venue is paid. One row per `payout_accounts` row.
 
@@ -1395,7 +1395,7 @@ security definer function (API-MAPPING.md, payouts). Not column-encrypted (DEBT.
 
 Indexes: `idx_transfers_payout_account_id` on `payout_account_id`.
 
-`0130` adds `method` (`route`, `razorpayx`, `manual`, default `route`), `external_reference`
+`0132` adds `method` (`route`, `razorpayx`, `manual`, default `route`), `external_reference`
 (the bank UTR for a manual payout) and `created_by`, with a partial unique index on
 `(method, external_reference)` so one bank reference can only ever be one payout.
 

@@ -7,7 +7,7 @@ import type { PayoutMethodType, SavePayoutMethodInput } from "@atlitos/types";
 export { validatePayoutMethod } from "@atlitos/types";
 export type { PayoutMethodType, SavePayoutMethodInput } from "@atlitos/types";
 
-// Payout details for a coach or a venue (migration 0130,
+// Payout details for a coach or a venue (migration 0132,
 // docs/PLAN-PAYOUTS-CLICKS-SEARCH.md Track 1).
 //
 // Razorpay Route is closed to ELSHEPH, so Atlitos pays coaches and venues by

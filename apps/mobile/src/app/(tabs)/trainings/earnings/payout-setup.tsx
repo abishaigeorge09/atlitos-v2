@@ -22,7 +22,7 @@ type ScreenState = 'loading' | 'populated' | 'error';
 type FieldErrors = Partial<Record<keyof SavePayoutMethodInput | 'confirmAccountNumber', string>>;
 
 /**
- * Payout details for a coach (migration 0130, docs/PLAN-PAYOUTS-CLICKS-SEARCH.md
+ * Payout details for a coach (migration 0132, docs/PLAN-PAYOUTS-CLICKS-SEARCH.md
  * Track 1). Replaces the Razorpay Route hand off, which is closed to ELSHEPH.
  *
  * The coach no longer requests transfers. Atlitos pays verified details by

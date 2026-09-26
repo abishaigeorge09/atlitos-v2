@@ -194,7 +194,7 @@ Deno.serve(async (req) => {
 
 `handlePaymentFailed` updates `payment_intents.status = 'failed'` and, for `commerce`/`donation` where no domain row exists yet, does nothing further, there is nothing to unwind. For `session`/`court`, the already-created row is left in place but the client-facing polling never observes a `captured` intent, so the booking never renders as confirmed; a scheduled cleanup (not built in v1, flagged for P8 hardening) can later auto-cancel stale unpaid bookings.
 
-## Manual payouts: how coaches and venues are actually paid (`0130`, 2026-09-25)
+## Manual payouts: how coaches and venues are actually paid (`0132`, 2026-09-25)
 
 **Read this before the Route section below, which describes a path that is closed.** Razorpay Route
 can only be enabled for a merchant with more than Rs 40L of domestic taxable turnover shown on

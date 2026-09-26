@@ -80,7 +80,7 @@ export default function CourtsIndexScreen() {
   const [error, setError] = useState<ApiError | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Court search (migration 0132). Answered from real availability: "badminton
+  // Court search (migration 0134). Answered from real availability: "badminton
   // tonight after 7 under 500" returns courts that are actually free then, at
   // that price. Submit only, not per keystroke: each search generates slots
   // across courts and days, and a half typed "tonig" has nothing to answer.

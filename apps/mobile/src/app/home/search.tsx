@@ -193,7 +193,7 @@ export default function SearchScreen() {
         router.push({ pathname: '/(tabs)/coaching/coach/[id]', params: { id: hit.entityId } });
         break;
       case 'court':
-        // A court hit carries its first free slot (migration 0132); open the
+        // A court hit carries its first free slot (migration 0134); open the
         // court on that date with the slot chosen.
         router.push({
           pathname: '/(tabs)/courts/court/[id]',

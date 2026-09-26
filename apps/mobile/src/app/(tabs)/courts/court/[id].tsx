@@ -48,7 +48,7 @@ export default function CourtDetailScreen() {
   const colors = useThemeColors();
   const navInset = useNavBarInset();
   const courts = useCourts(supabase);
-  // `date` and `slot` arrive from court search (migration 0132): the shopper
+  // `date` and `slot` arrive from court search (migration 0134): the shopper
   // asked for "tonight after 7" and tapped a result, so the screen opens on
   // that date with that slot already chosen instead of making them find it
   // again. Both are hints: the slot is only preselected if it is still free.

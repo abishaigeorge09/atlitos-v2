@@ -222,7 +222,7 @@ export interface Candidate {
   price?: number;
   rating?: number;
   distanceKm?: number;
-  /** Courts only: the first free slot inside the searched window (0132). */
+  /** Courts only: the first free slot inside the searched window (0134). */
   slot?: CourtSlotHit;
   text: string; // lowercased searchable blob
 }
