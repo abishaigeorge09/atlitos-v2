@@ -400,6 +400,14 @@ Rating is embedded on the booking row itself (matches the v1 `CourtBooking.ratin
 
 ---
 
+### Court availability functions (`0132`, `0133`)
+
+`get_court_available_slots(court, date)` is the single definition of "free": availability windows,
+minus blackouts, minus bookings not cancelled, priced by the newest active pricing rule. Since
+`0133` it also returns nothing for a past date and, today, only slots that have not ended (IST).
+`search_court_slots` (`0132`) calls it per candidate court and day to answer court search, so search
+can never offer a slot or price the booking screen would not. See API-MAPPING.md, court search.
+
 ## Domain: commerce
 
 ### `categories`

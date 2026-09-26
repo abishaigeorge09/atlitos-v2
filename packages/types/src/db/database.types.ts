@@ -6703,6 +6703,37 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      search_court_slots: {
+        Args: {
+          p_city?: string
+          p_date_from: string
+          p_date_to: string
+          p_lat?: number
+          p_limit?: number
+          p_lng?: number
+          p_price_max?: number
+          p_radius_km?: number
+          p_sport?: Database["public"]["Enums"]["sport"]
+          p_time_from?: string
+          p_time_to?: string
+        }
+        Returns: {
+          address: string
+          city: string
+          court_id: string
+          court_name: string
+          distance_km: number
+          first_date: string
+          first_end: string
+          first_price: number
+          first_start: string
+          matching_slots: number
+          min_price: number
+          sport: Database["public"]["Enums"]["sport"]
+          venue_id: string
+          venue_name: string
+        }[]
+      }
       session_abandon_unpaid: {
         Args: { p_session_id: string }
         Returns: {

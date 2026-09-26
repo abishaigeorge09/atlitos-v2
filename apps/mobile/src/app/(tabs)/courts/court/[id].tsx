@@ -3,7 +3,7 @@ import type { ApiError, Court, TimeSlot } from '@atlitos/types';
 import { radii, spacing } from '@atlitos/theme';
 import { router, useLocalSearchParams } from 'expo-router';
 import { LandPlot, TriangleAlert } from 'lucide-react-native';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -48,7 +48,14 @@ export default function CourtDetailScreen() {
   const colors = useThemeColors();
   const navInset = useNavBarInset();
   const courts = useCourts(supabase);
-  const { id } = useLocalSearchParams<{ id: string }>();
+  // `date` and `slot` arrive from court search (migration 0132): the shopper
+  // asked for "tonight after 7" and tapped a result, so the screen opens on
+  // that date with that slot already chosen instead of making them find it
+  // again. Both are hints: the slot is only preselected if it is still free.
+  const { id, date: dateParam, slot: slotParam } = useLocalSearchParams<{ id: string; date?: string; slot?: string }>();
+  const preselect = useRef<{ date: string; slot: string } | null>(
+    dateParam && slotParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? { date: dateParam, slot: slotParam } : null,
+  );
   const requiresAuthGate = useSessionStore((state) => state.status !== 'signed_in');
   const coords = useLocationStore((state) => state.coords);
 
@@ -56,7 +63,7 @@ export default function CourtDetailScreen() {
   const [court, setCourt] = useState<Court | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
 
-  const [date, setDate] = useState(todayISO());
+  const [date, setDate] = useState(() => (preselect.current && preselect.current.date >= todayISO() ? preselect.current.date : todayISO()));
   const [slotsState, setSlotsState] = useState<SlotsState>('loading');
   const [slots, setSlots] = useState<{ from: string; to: string; price: number }[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | undefined>(undefined);
@@ -96,6 +103,13 @@ export default function CourtDetailScreen() {
         const result = await courts.getAvailableSlots(id, forDate);
         setSlots(result);
         setSlotsState(result.length === 0 ? 'empty' : 'populated');
+        const wanted = preselect.current;
+        if (wanted && wanted.date === forDate) {
+          const match = result.find((s) => s.from === wanted.slot);
+          if (match) setSelectedSlot({ from: match.from, to: match.to });
+          // One shot: changing the date afterwards is the shopper's choice.
+          preselect.current = null;
+        }
       } catch {
         setSlotsState('error');
       }

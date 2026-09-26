@@ -84,6 +84,37 @@ Over budget or on ANY Voyage failure (bad key, timeout, non-2xx): the vector ste
 | `record_affiliate_click` | mobile compare view Buy button, via `useShop().buyUrlForOffer` | `p_offer_id`, optional `p_surface` (`compare` default, `search`, `home`). Granted to `anon` and `authenticated`. Returns `{ click_id, url, recorded }`; the client opens `url`. No session: `recorded: false`, the stored URL, nothing written. `NOT_FOUND` for an offer on a delisted product, `VALIDATION` for an unknown surface. The client falls back to the offer's stored URL on ANY failure, so recording never blocks a shopper |
 | `admin_affiliate_click_stats` | admin Gear list, "Buy taps, 30 days" | `p_days` (1 to 365). Per product and retailer: `clicks`, distinct `shoppers`, `with_subid`, `last_click_at`. `FORBIDDEN` for non-admins |
 
+### Court search from real availability (`0132`, `0133`, 2026-09-26)
+
+**The defect this fixes, verified in production 2026-09-26.** Any court query with a time word
+("badminton court tonight", "cricket turf tomorrow evening", "at 7pm", "this weekend") returned ZERO
+courts and told the shopper to remove the time. Time words stayed in the keyword list, and the
+honesty gate requires a court's text (name, sport, venue, address) to contain a keyword.
+
+**Now.** `ai-search/when.ts` parses the date and time window in IST (today, tonight, tomorrow, day
+after tomorrow, weekday names, this weekend, mornings to nights, "at 7pm", "after 8", "before 9am",
+"7 to 9pm", "19:00") and removes time and booking words from the keywords, for court queries only.
+Courts are then fetched from `search_court_slots`, never by text:
+
+| RPC | Contract |
+| --- | --- |
+| `search_court_slots` | `p_date_from`, `p_date_to` required; optional `p_time_from`, `p_time_to` (slot START bounds, `null` end means end of day), `p_sport`, `p_price_max`, `p_city`, `p_lat`, `p_lng`, `p_radius_km`, `p_limit` (max 50). Per court: its first free slot in the window and price, `min_price`, `matching_slots`, venue, distance. Verified venues only, slot price after peak rules, slots not yet started (IST), at most 14 days and 60 candidate courts. Built on `get_court_available_slots`, so search and booking agree. Granted to `anon` and `authenticated` |
+
+`ai-search` response changes, additive: court hits carry `slot { date, start, end, price, label,
+freeSlots, otherCourtsFree }`, one hit per VENUE (the soonest court there; the rest are counted),
+`rankReason` is always `Free <label>` for a court even after the Claude rerank, and
+`parsedIntent.when` carries the window. A courts only search with no result gets a broaden line that
+relaxes ONE constraint and names a real alternative ("The cheapest tomorrow in the evening is ...").
+With no time in the query, courts are searched over the coming week and show their next free slot.
+
+`get_court_available_slots` (`0133`) no longer offers past dates or slots that have ENDED today
+(IST); a slot in progress stays offered for walk ins. `book-court` accepts only slots this function
+lists, so booking a past slot is now refused as `SLOT_TAKEN`. `book-session` refuses a start time
+that has passed with `VALIDATION`.
+
+Proof: `scripts/verify-court-search.ts` (parser, fixed clock), `scripts/verify-court-slots.mjs`
+(SQL, adversarial fixtures), `scripts/verify-court-search-e2e.mjs` (through the function).
+
 ### `gear-embed`, as built (Phase S1 Track B, PRD-07 FR-43, ADR-011 D2)
 
 `POST { productId: string }` (one row) or `POST { sweep: true, limit?: number }` (every row where `embedding is null`, capped at `limit`, default 200). Auth: a service-role bearer token, OR an authenticated caller holding the `admin` role (checked through their OWN JWT, the same `requireAdmin` pattern `admin-order-advance` uses); anon and any non-admin authenticated caller are refused with 401/403. Never called by `ai-search` (component boundary) and never on a read path.

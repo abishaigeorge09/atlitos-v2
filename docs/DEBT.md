@@ -465,3 +465,15 @@ from growing further.
 - **The Buy tap has not been seen on a device.** `buyUrlForOffer` is proven at the database layer
   (`scripts/verify-affiliate-clicks.mjs`) and typechecks, but the tap on the compare view is owed
   a Release build pass with the App Store submission. Owner: the App Store submission pass.
+- **Court search and the past-slot fixes are not in production until deployed.** `0132` and `0133`
+  must be applied and `ai-search` plus `book-session` deployed; until then production still returns
+  nothing for "badminton court tonight" and still offers past slots. Owner: whoever deploys this
+  branch.
+- **The Courts tab search box has not been seen on a device.** Walked end to end in the Expo web
+  build against the local stack (search, results, tap through to a preselected slot), which is a
+  real render but not the Release build CLAUDE.md requires. Owed with the App Store pass. Owner:
+  the App Store submission pass.
+- **Guest location fallback now only sorts.** With location off and no profile city, the store
+  still uses a fixed Hyderabad point to sort venues, but the courts screen no longer shows
+  kilometres measured from it (they were not the athlete's distance). Sorting a guest by a city
+  centre is a product choice worth revisiting if venues spread beyond Hyderabad. Owner: Abishai.
