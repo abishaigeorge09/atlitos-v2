@@ -222,6 +222,7 @@ export type Database = {
           id: string
           image_path: string | null
           image_url: string | null
+          search_tsv: unknown
           skill_level: string | null
           source_image_url: string | null
           sport: Database["public"]["Enums"]["sport"] | null
@@ -242,6 +243,7 @@ export type Database = {
           id?: string
           image_path?: string | null
           image_url?: string | null
+          search_tsv?: unknown
           skill_level?: string | null
           source_image_url?: string | null
           sport?: Database["public"]["Enums"]["sport"] | null
@@ -262,6 +264,7 @@ export type Database = {
           id?: string
           image_path?: string | null
           image_url?: string | null
+          search_tsv?: unknown
           skill_level?: string | null
           source_image_url?: string | null
           sport?: Database["public"]["Enums"]["sport"] | null
@@ -5337,6 +5340,7 @@ export type Database = {
           id: string
           image_path: string | null
           image_url: string | null
+          search_tsv: unknown
           skill_level: string | null
           source_image_url: string | null
           sport: Database["public"]["Enums"]["sport"] | null
@@ -5556,6 +5560,7 @@ export type Database = {
           id: string
           image_path: string | null
           image_url: string | null
+          search_tsv: unknown
           skill_level: string | null
           source_image_url: string | null
           sport: Database["public"]["Enums"]["sport"] | null
@@ -6703,6 +6708,17 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      search_affiliate_product_ids: {
+        Args: {
+          p_limit?: number
+          p_sport?: Database["public"]["Enums"]["sport"]
+          p_terms: string[]
+        }
+        Returns: {
+          id: string
+          rank: number
+        }[]
+      }
       search_court_slots: {
         Args: {
           p_city?: string
@@ -6982,6 +6998,7 @@ export type Database = {
           id: string
           image_path: string | null
           image_url: string | null
+          search_tsv: unknown
           skill_level: string | null
           source_image_url: string | null
           sport: Database["public"]["Enums"]["sport"] | null

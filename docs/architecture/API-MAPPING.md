@@ -115,6 +115,25 @@ that has passed with `VALIDATION`.
 Proof: `scripts/verify-court-search.ts` (parser, fixed clock), `scripts/verify-court-slots.mjs`
 (SQL, adversarial fixtures), `scripts/verify-court-search-e2e.mjs` (through the function).
 
+### Gear recall by full text, and the owned catalogue kept out (`0134`, 2026-09-26)
+
+- **Recall.** The keyword path used to read the first 50 active affiliate products in no order and
+  score those, so on a catalogue of hundreds an exact match was often never considered (proved: a
+  product inserted after 500 others was answered "No matches ... Try removing paddle"). The query's
+  terms (keywords, brand, noun) now go to `search_affiliate_product_ids(p_terms, p_sport,
+  p_limit)`, which ranks by a weighted full text vector (title and brand A, description C,
+  English stemming, prefix matched, terms OR'ed) and returns ids and ranks only. Scoring, the
+  honesty gate and the Voyage vector recall are unchanged. A query with no terms lists newest
+  first by sport. The function is security definer and restates the public rule (`active`)
+  itself, because clients are granted `affiliate_products` column by column and cannot read
+  `search_tsv`.
+- **Owned catalogue.** While `app_config` `shop.owned_enabled` is false, `ai-search` returns no
+  owned products to ANY caller. Before, only the shop screen filtered them client side and the
+  home search offered products the shop hides.
+
+Proof: `scripts/verify-gear-recall.mjs` (500 fixture products, deleted afterwards), born red on
+all three counts before the change.
+
 ### `gear-embed`, as built (Phase S1 Track B, PRD-07 FR-43, ADR-011 D2)
 
 `POST { productId: string }` (one row) or `POST { sweep: true, limit?: number }` (every row where `embedding is null`, capped at `limit`, default 200). Auth: a service-role bearer token, OR an authenticated caller holding the `admin` role (checked through their OWN JWT, the same `requireAdmin` pattern `admin-order-advance` uses); anon and any non-admin authenticated caller are refused with 401/403. Never called by `ai-search` (component boundary) and never on a read path.

@@ -773,6 +773,13 @@ Both dropped and recreated under the same name with two new trailing, defaulted 
 
 Two actions: `{ action: "fetch", url }` matches a `retailer_programmes` row by hostname, fetches the page (`_shared/fetch-page.ts`: named UA, 10s timeout, 5MB cap, robots.txt checked first) and extracts a draft (`_shared/extract-product.ts`: JSON-LD Product, then Open Graph, then the programme's `extractor` map), WRITING NOTHING (FR-44); a blocked/unsupported/unparseable page returns 422 with whatever partial fields could still be scraped. `{ action: "save", url, draft, productId? }` fetches only the draft's image (never the page a second time), SHA-256 hashes it, copies it into `product-images` under the service role (skip if the hash already exists), then calls the two extended RPCs above using the caller's own admin JWT. Admin JWT required for both actions; anon and non-admin are refused 401/403.
 
+### `affiliate_products.search_tsv` (`0134`)
+
+Stored generated `tsvector`: title and brand at weight A, description at weight C, English
+configuration, GIN indexed (`idx_affiliate_products_search_tsv`). Not granted to clients; read only
+by `search_affiliate_product_ids`. Sport is deliberately not in it: it is filtered exactly as an
+enum, and an enum to text cast is not immutable, which a generated column requires.
+
 ### `affiliate_clicks` (`0131`)
 
 One row per outbound Buy tap on an affiliate offer. The row id is the subid appended to the

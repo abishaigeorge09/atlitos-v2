@@ -339,6 +339,18 @@ async function courtBroaden(supabase: any, intent: ParsedIntent, lat?: number, l
 
 // deno-lint-ignore no-explicit-any
 async function fetchProducts(supabase: any, intent: ParsedIntent): Promise<Candidate[]> {
+  // The OWNED catalogue is hidden while shop.owned_enabled is false (the
+  // launch setting). The shop screen filtered these out client side, but home
+  // search did not, so owned products the shop hides were offered there.
+  // Checked here, once, for every caller.
+  const { data: flag } = await supabase
+    .from("app_config")
+    .select("value")
+    .eq("key", "shop.owned_enabled")
+    .eq("public", true)
+    .maybeSingle();
+  if (flag?.value !== true) return [];
+
   let q = supabase
     .from("products")
     .select("id, title, description, sport, base_price")
@@ -383,20 +395,35 @@ async function fetchProducts(supabase: any, intent: ParsedIntent): Promise<Candi
 // missed.
 // deno-lint-ignore no-explicit-any
 async function fetchAffiliateProducts(supabase: any, intent: ParsedIntent, ids?: string[]): Promise<Candidate[]> {
-  let q = supabase
-    .from("affiliate_products")
-    .select("id, title, brand, sport, skill_level, age_range, description, image_url, product_offers ( price, in_stock )")
-    .eq("active", true)
-    .limit(50);
+  const SELECT = "id, title, brand, sport, skill_level, age_range, description, image_url, product_offers ( price, in_stock )";
+
+  // Keyword recall (0134). The old path read the first 50 active rows in no
+  // order and scored those, so on a catalogue of hundreds a product that
+  // exactly matched the query was often never looked at. Now the query's
+  // meaningful terms go through the full text index and the best ranked
+  // products are recalled; scoring and the honesty gate still decide what is
+  // shown. A query with no terms ("tennis") lists newest first, by sport.
+  if (!ids) {
+    const terms = [...new Set([...intent.keywords, intent.brand, intent.nounHint].filter((t): t is string => !!t && t.length >= 2))];
+    if (terms.length > 0) {
+      const { data: ranked, error: rankError } = await supabase.rpc("search_affiliate_product_ids", {
+        p_terms: terms,
+        p_sport: intent.sport === "general" ? null : intent.sport,
+        p_limit: 50,
+      });
+      if (rankError) throw new AppError("INTERNAL", `Failed to search affiliate products: ${rankError.message}`, 500);
+      ids = ((ranked ?? []) as Array<{ id: string }>).map((r) => r.id);
+      if (ids.length === 0) return [];
+    }
+  }
+
+  let q = supabase.from("affiliate_products").select(SELECT).eq("active", true);
   if (ids) {
     if (ids.length === 0) return [];
-    q = supabase
-      .from("affiliate_products")
-      .select("id, title, brand, sport, skill_level, age_range, description, image_url, product_offers ( price, in_stock )")
-      .eq("active", true)
-      .in("id", ids);
-  } else if (intent.sport !== "general") {
-    q = q.eq("sport", intent.sport);
+    q = q.in("id", ids);
+  } else {
+    if (intent.sport !== "general") q = q.eq("sport", intent.sport);
+    q = q.order("created_at", { ascending: false }).limit(50);
   }
 
   const { data, error } = await q;
