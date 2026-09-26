@@ -166,34 +166,39 @@ const PRODUCTS = [
 // product_offers. Each offer is one retailer selling one product at one price.
 // Retailers span Amazon, Tennis Hub, Decathlon and Cricket Store; every product
 // is on at least two so the compare view has a spread. `affiliate_url` is the
-// commission-bearing outbound link the click-out opens.
+// outbound link the click-out opens. It is a PLAIN retailer URL: no programme
+// is approved, so any tag or aff parameter here would be fabricated (2026-09-26,
+// ADR-014 GEAR-22; security-invariants.sh no-fake-affiliate-tag). A real tag is
+// applied from retailer_programmes.affiliate_tag_template at ingest, never here.
+// The Amazon ASINs below are also placeholders; production still carries the
+// old tagged rows until the founder delists them (docs/DEBT.md).
 const OFFERS = [
   // Babolat Pure Drive Team — THE proof: under 2000 on Tennis Hub, higher on Amazon.
-  offer('001', 'a0000000-0000-0000-0000-000000000001', 'Tennis Hub', 1799.0, 'https://www.tennishub.in/babolat-pure-drive-team?aff=atlitos'),
-  offer('002', 'a0000000-0000-0000-0000-000000000001', 'Amazon', 2149.0, 'https://www.amazon.in/dp/B08PDT4?tag=atlitos-21'),
-  offer('003', 'a0000000-0000-0000-0000-000000000001', 'Decathlon', 1999.0, 'https://www.decathlon.in/p/babolat-pure-drive-team?aff=atlitos'),
+  offer('001', 'a0000000-0000-0000-0000-000000000001', 'Tennis Hub', 1799.0, 'https://www.tennishub.in/babolat-pure-drive-team'),
+  offer('002', 'a0000000-0000-0000-0000-000000000001', 'Amazon', 2149.0, 'https://www.amazon.in/dp/B08PDT4'),
+  offer('003', 'a0000000-0000-0000-0000-000000000001', 'Decathlon', 1999.0, 'https://www.decathlon.in/p/babolat-pure-drive-team'),
   // Babolat Boost Drive — both under 2000.
-  offer('004', 'a0000000-0000-0000-0000-000000000002', 'Amazon', 1499.0, 'https://www.amazon.in/dp/B07BOOST?tag=atlitos-21'),
-  offer('005', 'a0000000-0000-0000-0000-000000000002', 'Tennis Hub', 1650.0, 'https://www.tennishub.in/babolat-boost-drive?aff=atlitos'),
+  offer('004', 'a0000000-0000-0000-0000-000000000002', 'Amazon', 1499.0, 'https://www.amazon.in/dp/B07BOOST'),
+  offer('005', 'a0000000-0000-0000-0000-000000000002', 'Tennis Hub', 1650.0, 'https://www.tennishub.in/babolat-boost-drive'),
   // Yonex Astrox 99 Pro.
-  offer('006', 'a0000000-0000-0000-0000-000000000003', 'Amazon', 18990.0, 'https://www.amazon.in/dp/B08ASTROX?tag=atlitos-21'),
-  offer('007', 'a0000000-0000-0000-0000-000000000003', 'Decathlon', 18490.0, 'https://www.decathlon.in/p/yonex-astrox-99-pro?aff=atlitos'),
+  offer('006', 'a0000000-0000-0000-0000-000000000003', 'Amazon', 18990.0, 'https://www.amazon.in/dp/B08ASTROX'),
+  offer('007', 'a0000000-0000-0000-0000-000000000003', 'Decathlon', 18490.0, 'https://www.decathlon.in/p/yonex-astrox-99-pro'),
   // Wilson Pro Staff — all over 2000 (keeps the honest-broaden proof true).
-  offer('008', 'a0000000-0000-0000-0000-000000000004', 'Amazon', 16999.0, 'https://www.amazon.in/dp/B08PROSTAFF?tag=atlitos-21'),
-  offer('009', 'a0000000-0000-0000-0000-000000000004', 'Tennis Hub', 15499.0, 'https://www.tennishub.in/wilson-pro-staff-97?aff=atlitos'),
+  offer('008', 'a0000000-0000-0000-0000-000000000004', 'Amazon', 16999.0, 'https://www.amazon.in/dp/B08PROSTAFF'),
+  offer('009', 'a0000000-0000-0000-0000-000000000004', 'Tennis Hub', 15499.0, 'https://www.tennishub.in/wilson-pro-staff-97'),
   // Nike Court Lite shoes.
-  offer('010', 'a0000000-0000-0000-0000-000000000005', 'Amazon', 4295.0, 'https://www.amazon.in/dp/B08NIKECL?tag=atlitos-21'),
-  offer('011', 'a0000000-0000-0000-0000-000000000005', 'Decathlon', 3999.0, 'https://www.decathlon.in/p/nike-court-lite?aff=atlitos'),
+  offer('010', 'a0000000-0000-0000-0000-000000000005', 'Amazon', 4295.0, 'https://www.amazon.in/dp/B08NIKECL'),
+  offer('011', 'a0000000-0000-0000-0000-000000000005', 'Decathlon', 3999.0, 'https://www.decathlon.in/p/nike-court-lite'),
   // Asics Gel Rocket shoes.
-  offer('012', 'a0000000-0000-0000-0000-000000000006', 'Amazon', 4499.0, 'https://www.amazon.in/dp/B08ASICSGR?tag=atlitos-21'),
-  offer('013', 'a0000000-0000-0000-0000-000000000006', 'Decathlon', 4199.0, 'https://www.decathlon.in/p/asics-gel-rocket?aff=atlitos'),
+  offer('012', 'a0000000-0000-0000-0000-000000000006', 'Amazon', 4499.0, 'https://www.amazon.in/dp/B08ASICSGR'),
+  offer('013', 'a0000000-0000-0000-0000-000000000006', 'Decathlon', 4199.0, 'https://www.decathlon.in/p/asics-gel-rocket'),
   // SG Player Edition bat.
-  offer('014', 'a0000000-0000-0000-0000-000000000007', 'Amazon', 4999.0, 'https://www.amazon.in/dp/B08SGPLAYER?tag=atlitos-21'),
-  offer('015', 'a0000000-0000-0000-0000-000000000007', 'Cricket Store', 4599.0, 'https://www.cricketstoreonline.in/sg-player-edition?aff=atlitos'),
+  offer('014', 'a0000000-0000-0000-0000-000000000007', 'Amazon', 4999.0, 'https://www.amazon.in/dp/B08SGPLAYER'),
+  offer('015', 'a0000000-0000-0000-0000-000000000007', 'Cricket Store', 4599.0, 'https://www.cricketstoreonline.in/sg-player-edition'),
   // Kookaburra kids bat (one currently out of stock at the cheaper retailer, so
   // the compare view exercises the "sold out here" state too).
-  offer('016', 'a0000000-0000-0000-0000-000000000008', 'Cricket Store', 1299.0, 'https://www.cricketstoreonline.in/kookaburra-kids-size-4?aff=atlitos', false),
-  offer('017', 'a0000000-0000-0000-0000-000000000008', 'Amazon', 1449.0, 'https://www.amazon.in/dp/B08KOOKKIDS?tag=atlitos-21'),
+  offer('016', 'a0000000-0000-0000-0000-000000000008', 'Cricket Store', 1299.0, 'https://www.cricketstoreonline.in/kookaburra-kids-size-4', false),
+  offer('017', 'a0000000-0000-0000-0000-000000000008', 'Amazon', 1449.0, 'https://www.amazon.in/dp/B08KOOKKIDS'),
 ];
 
 function offer(seq, productId, retailer, price, url, inStock = true) {

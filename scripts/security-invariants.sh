@@ -419,6 +419,41 @@ on the line above. See CLAUDE.md > Scope every query by owner."
 fi
 
 # --------------------------------------------------------------------------
+# CHECK no-fake-affiliate-tag
+#
+# ADR-014 Confirmation 10, docs/PLAN-SEARCH-LOCATION-AFFILIATE.md GEAR-22 and
+# L0-T3. No affiliate programme is approved (retailer_programmes.
+# affiliate_tag_template is null for every retailer), so ANY tag parameter
+# written into a URL is fabricated: the seed catalogue shipped `tag=atlitos-21`
+# on eight Amazon links that earn nothing and claim an account nobody holds.
+# A programme's tag is applied at ingest from its template, never typed into a
+# seed, a fixture or an evaluation file.
+#
+# Scope is where URLs are hand written: scripts/, supabase/seed/ and
+# docs/search-eval/. This file is excluded because it has to spell the pattern.
+# Matches a `tag` or `aff` query parameter, any parameter whose value is
+# `atlitos`, and the literal account id. A bare word like "tagline" or
+# "affiliate_tag_template" does not match.
+#
+# WIDENED while being born red (2026-09-26): the first pattern (tag= only)
+# went green after the eight Amazon tags were removed while the same file
+# still carried nine `?aff=atlitos` parameters on Tennis Hub, Decathlon and
+# Cricket Store links. Same fabrication, different parameter name.
+# --------------------------------------------------------------------------
+TAG_DIRS="scripts supabase/seed docs/search-eval"
+offenders=$(command grep -rnE '[?&](tag|aff)=|=atlitos|atlitos-21' $TAG_DIRS 2>/dev/null \
+            | command grep -v '^scripts/security-invariants.sh:' \
+            | command grep -v 'invariant-allow: no-fake-affiliate-tag' || true)
+if [ -n "$offenders" ]; then
+  fail no-fake-affiliate-tag "a hand written affiliate tag in a seed, script or eval file" "$offenders
+No programme is approved, so this tag is fabricated. Store the plain retailer
+URL; a real tag is applied from retailer_programmes.affiliate_tag_template at
+ingest once a programme is approved. See ADR-014 GEAR-22."
+else
+  pass no-fake-affiliate-tag "no tag parameter or atlitos-21 in scripts, seeds or the eval set"
+fi
+
+# --------------------------------------------------------------------------
 # CHECK db-dual-policy-drift  (SQL)
 #
 # Re-derives the dual-policy table set from pg_policy on the live project and
@@ -659,6 +694,104 @@ elif [ "$OFFLINE" = 1 ]; then
   echo
 else
   fail auto-delist-actor-null "the auto-delist actor check could not run" "No ATLITOS_DB_URL or SUPABASE_DB_URL is set, or psql is not on PATH.
+A check that should apply but cannot run is a failure, not a skip.
+Set the connection string, or pass --offline and accept the recorded gap."
+fi
+
+# --------------------------------------------------------------------------
+# CHECK search-log-no-user  (SQL)
+#
+# ADR-014 D4 and Confirmation 10: search_query_log keeps raw query text for 30
+# days and must never be joinable to a person. "No user column" is a property
+# of the SCHEMA, so it is checked in the catalog, not by reading the migration:
+# a later ALTER that adds one would pass every review of the original file.
+# Any column whose name carries "user" counts, not only user_id.
+#
+# The table is created in Phase L1. Until then the query runs and finds no
+# such table, which holds the invariant trivially; the result line says so
+# rather than reporting it as a skip or as proof.
+# --------------------------------------------------------------------------
+SEARCH_LOG_SQL="select coalesce((select string_agg(table_schema || '.' || table_name || '.' || column_name, ', ' order by column_name)
+  from information_schema.columns
+  where table_name = 'search_query_log' and column_name ilike '%user%'), '')
+  || '|' || (select count(*) from information_schema.tables where table_name = 'search_query_log');"
+
+if [ -n "$DB_URL" ] && command -v psql >/dev/null 2>&1; then
+  if out=$(psql "$DB_URL" -At -c "$SEARCH_LOG_SQL" 2>"$TMP/searchlog.err"); then
+    cols=${out%|*}
+    exists=${out##*|}
+    if [ -n "$cols" ]; then
+      fail search-log-no-user "search_query_log carries a user column" "$cols
+
+The query log is stored with no user id by design (ADR-014 D4): the eval set
+needs queries, not people. Drop the column; aggregate through
+admin_search_query_stats, never through a join to a person."
+    elif [ "$exists" = 0 ]; then
+      pass search-log-no-user "search_query_log does not exist yet (Phase L1), so it has no user column"
+    else
+      pass search-log-no-user "search_query_log has no column naming a user"
+    fi
+  else
+    fail search-log-no-user "could not query the live catalog" "$(cat "$TMP/searchlog.err")"
+  fi
+elif [ "$OFFLINE" = 1 ]; then
+  echo "NOT RUN  search-log-no-user"
+  echo "         No ATLITOS_DB_URL/SUPABASE_DB_URL or no psql, and --offline was passed."
+  echo "         A column added by a later ALTER leaves no trace a grep of one"
+  echo "         migration would see. Recorded in docs/DEBT.md."
+  echo
+else
+  fail search-log-no-user "the search log user column check could not run" "No ATLITOS_DB_URL or SUPABASE_DB_URL is set, or psql is not on PATH.
+A check that should apply but cannot run is a failure, not a skip.
+Set the connection string, or pass --offline and accept the recorded gap."
+fi
+
+# --------------------------------------------------------------------------
+# CHECK clicks-zero-policy  (SQL)
+#
+# ADR-014 D5 and Confirmation 10; 0133. affiliate_clicks (and, from Phase L2,
+# venue_booking_clicks) hold who tapped what. They are written only by a
+# SECURITY DEFINER function and read only through admin aggregates, so the
+# tables carry RLS ON with ZERO policies. A single policy, even an admin one,
+# opens raw rows to a role the aggregate was built to keep them from; RLS
+# turned off with zero policies opens them to every grant. Both are failures.
+# A table that does not exist yet is named in the result line, not hidden.
+# --------------------------------------------------------------------------
+CLICKS_SQL="select string_agg(line, E'\n' order by line) from (
+  select c.relname || ': policy ' || pol.polname as line
+  from pg_policy pol join pg_class c on c.oid = pol.polrelid join pg_namespace n on n.oid = c.relnamespace
+  where n.nspname = 'public' and c.relname in ('affiliate_clicks', 'venue_booking_clicks')
+  union all
+  select c.relname || ': row level security is OFF'
+  from pg_class c join pg_namespace n on n.oid = c.relnamespace
+  where n.nspname = 'public' and c.relname in ('affiliate_clicks', 'venue_booking_clicks') and not c.relrowsecurity
+) x;"
+CLICKS_PRESENT_SQL="select coalesce(string_agg(c.relname, ', ' order by c.relname), '') from pg_class c join pg_namespace n on n.oid = c.relnamespace
+  where n.nspname = 'public' and c.relkind = 'r' and c.relname in ('affiliate_clicks', 'venue_booking_clicks');"
+
+if [ -n "$DB_URL" ] && command -v psql >/dev/null 2>&1; then
+  if bad=$(psql "$DB_URL" -At -c "$CLICKS_SQL" 2>"$TMP/clicks.err") && present=$(psql "$DB_URL" -At -c "$CLICKS_PRESENT_SQL" 2>>"$TMP/clicks.err"); then
+    if [ -n "$bad" ]; then
+      fail clicks-zero-policy "a click table has a policy or has RLS off" "$bad
+
+Click rows are written by record_affiliate_click / record_venue_booking_click
+(SECURITY DEFINER) and read only through admin_*_click_stats. Drop the policy
+and keep RLS on. See 0133 and ADR-014 D5."
+    elif [ -z "$present" ]; then
+      fail clicks-zero-policy "neither click table exists" "affiliate_clicks (0133) should exist. A check that finds nothing to inspect is not a green."
+    else
+      pass clicks-zero-policy "RLS on and zero policies on: $present"
+    fi
+  else
+    fail clicks-zero-policy "could not query the live catalog" "$(cat "$TMP/clicks.err")"
+  fi
+elif [ "$OFFLINE" = 1 ]; then
+  echo "NOT RUN  clicks-zero-policy"
+  echo "         No ATLITOS_DB_URL/SUPABASE_DB_URL or no psql, and --offline was passed."
+  echo "         A policy is catalog state with no static equivalent. Recorded in docs/DEBT.md."
+  echo
+else
+  fail clicks-zero-policy "the click table policy check could not run" "No ATLITOS_DB_URL or SUPABASE_DB_URL is set, or psql is not on PATH.
 A check that should apply but cannot run is a failure, not a skip.
 Set the connection string, or pass --offline and accept the recorded gap."
 fi
