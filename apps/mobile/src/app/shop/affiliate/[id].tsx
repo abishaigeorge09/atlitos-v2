@@ -157,7 +157,7 @@ export default function AffiliateProductScreen() {
                 inStock={offer.inStock}
                 cheapest={offer.id === cheapestId}
                 checkedHoursAgo={hoursSince(offer.lastCheckedAt)}
-                onBuy={() => void Linking.openURL(offer.affiliateUrl)}
+                onBuy={() => void shop.buyUrlForOffer(offer, 'compare').then((url) => Linking.openURL(url))}
               />
             ))
           )}

@@ -765,6 +765,29 @@ Both dropped and recreated under the same name with two new trailing, defaulted 
 
 Two actions: `{ action: "fetch", url }` matches a `retailer_programmes` row by hostname, fetches the page (`_shared/fetch-page.ts`: named UA, 10s timeout, 5MB cap, robots.txt checked first) and extracts a draft (`_shared/extract-product.ts`: JSON-LD Product, then Open Graph, then the programme's `extractor` map), WRITING NOTHING (FR-44); a blocked/unsupported/unparseable page returns 422 with whatever partial fields could still be scraped. `{ action: "save", url, draft, productId? }` fetches only the draft's image (never the page a second time), SHA-256 hashes it, copies it into `product-images` under the service role (skip if the hash already exists), then calls the two extended RPCs above using the caller's own admin JWT. Admin JWT required for both actions; anon and non-admin are refused 401/403.
 
+### `affiliate_clicks` (`0131`)
+
+One row per outbound Buy tap on an affiliate offer. The row id is the subid appended to the
+retailer URL when the programme has `retailer_programmes.subid_param` set (new in `0131`, null for
+every programme until one is approved), so a line in a retailer's commission report maps to one
+row.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | `uuid` | pk, and the subid |
+| `offer_id` | `uuid` | references `product_offers`, on delete cascade |
+| `affiliate_product_id` | `uuid` | references `affiliate_products`, on delete cascade |
+| `retailer_key` | `text` | copied from the offer |
+| `user_id` | `uuid` | references `auth.users`, on delete set null; anonymous sessions count |
+| `surface` | `text` | `compare`, `search` or `home` |
+| `target_url` | `text` | the URL actually opened |
+| `subid_applied` | `boolean` | whether the subid was in `target_url` |
+| `created_at` | `timestamptz` | |
+
+RLS on, zero policies, no client grant. Written only by `record_affiliate_click`, read only through
+`admin_affiliate_click_stats`. A call with no session records nothing; a repeat tap by the same user
+on the same offer within 10 seconds returns the same row.
+
 ## The commerce bill is a third pricing shape (PHASE-4-STATUS.md D1)
 
 Recorded here because it is why `orders` has the money columns it has.

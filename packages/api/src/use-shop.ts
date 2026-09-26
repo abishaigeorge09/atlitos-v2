@@ -761,6 +761,25 @@ export function useShop(client: AtlitosClient) {
       return mapAffiliateProductRow(data);
     },
 
+    /** The URL to open for a Buy tap, after recording the click (0131).
+     * The server returns the retailer URL with this click's id appended as
+     * a subid when the programme has one configured, so a line in the
+     * retailer's commission report maps to exactly one click here.
+     *
+     * Never blocks the shopper: any failure falls back to the offer's own
+     * stored URL, because a lost click record costs a data point and a
+     * shopper who taps Buy and goes nowhere costs the sale. */
+    async buyUrlForOffer(offer: Pick<ProductOffer, "id" | "affiliateUrl">, surface: "compare" | "search" | "home" = "compare"): Promise<string> {
+      try {
+        const { data, error } = await client.rpc("record_affiliate_click", { p_offer_id: offer.id, p_surface: surface });
+        if (error || !data) return offer.affiliateUrl;
+        const url = (data as { url?: unknown }).url;
+        return typeof url === "string" && /^https?:\/\//.test(url) ? url : offer.affiliateUrl;
+      } catch {
+        return offer.affiliateUrl;
+      }
+    },
+
     // -----------------------------------------------------------------------
     // cart
     // -----------------------------------------------------------------------

@@ -156,6 +156,57 @@ export type Database = {
         }
         Relationships: []
       }
+      affiliate_clicks: {
+        Row: {
+          affiliate_product_id: string
+          created_at: string
+          id: string
+          offer_id: string
+          retailer_key: string | null
+          subid_applied: boolean
+          surface: string
+          target_url: string
+          user_id: string | null
+        }
+        Insert: {
+          affiliate_product_id: string
+          created_at?: string
+          id?: string
+          offer_id: string
+          retailer_key?: string | null
+          subid_applied?: boolean
+          surface: string
+          target_url: string
+          user_id?: string | null
+        }
+        Update: {
+          affiliate_product_id?: string
+          created_at?: string
+          id?: string
+          offer_id?: string
+          retailer_key?: string | null
+          subid_applied?: boolean
+          surface?: string
+          target_url?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "affiliate_clicks_affiliate_product_id_fkey"
+            columns: ["affiliate_product_id"]
+            isOneToOne: false
+            referencedRelation: "affiliate_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "affiliate_clicks_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "product_offers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       affiliate_products: {
         Row: {
           active: boolean
@@ -3368,6 +3419,7 @@ export type Database = {
           fetch_policy: Json
           fetchable: boolean
           key: string
+          subid_param: string | null
           url_patterns: string[]
         }
         Insert: {
@@ -3378,6 +3430,7 @@ export type Database = {
           fetch_policy?: Json
           fetchable?: boolean
           key: string
+          subid_param?: string | null
           url_patterns?: string[]
         }
         Update: {
@@ -3388,6 +3441,7 @@ export type Database = {
           fetch_policy?: Json
           fetchable?: boolean
           key?: string
+          subid_param?: string | null
           url_patterns?: string[]
         }
         Relationships: []
@@ -4897,6 +4951,10 @@ export type Database = {
         Args: { p_owner_type: string; p_venue_id: string }
         Returns: string
       }
+      _url_with_param: {
+        Args: { p_param: string; p_url: string; p_value: string }
+        Returns: string
+      }
       accept_venue_staff_invite: {
         Args: { p_venue_staff_id: string }
         Returns: {
@@ -4972,6 +5030,18 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      admin_affiliate_click_stats: {
+        Args: { p_days?: number }
+        Returns: {
+          affiliate_product_id: string
+          clicks: number
+          last_click_at: string
+          retailer_key: string
+          shoppers: number
+          title: string
+          with_subid: number
+        }[]
       }
       admin_approve_verification_request: {
         Args: { p_request_id: string }
@@ -6428,6 +6498,10 @@ export type Database = {
         }
       }
       reconcile_stranded_clips: { Args: never; Returns: Json }
+      record_affiliate_click: {
+        Args: { p_offer_id: string; p_surface?: string }
+        Returns: Json
+      }
       record_ai_spend: {
         Args: {
           p_est_usd: number

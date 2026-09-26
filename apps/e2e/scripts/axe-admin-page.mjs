@@ -7,7 +7,8 @@
 // themes; this is how a new route is held to the same bar.
 //
 // Optional `--click "<button text>"` clicks a button first, so a panel that
-// only exists after an interaction is audited too.
+// only exists after an interaction is audited too. Optional `--shot <dir>`
+// saves a full-page screenshot per theme and route into that directory.
 //
 // LOCAL ONLY: signs in with the committed demo credentials.
 //
@@ -34,8 +35,10 @@ if (!/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(SUPABASE_URL)) {
 const args = process.argv.slice(2);
 const routes = [];
 const clicks = [];
+let shotDir = null;
 for (let i = 0; i < args.length; i += 1) {
   if (args[i] === '--click') clicks.push(args[++i]);
+  else if (args[i] === '--shot') shotDir = args[++i];
   else routes.push(args[i]);
 }
 if (routes.length === 0) routes.push('/payouts');
@@ -67,6 +70,11 @@ for (const theme of ['light', 'dark']) {
       await page.waitForTimeout(400);
     }
     const onLogin = page.url().includes('/login');
+    if (shotDir) {
+      const file = `${shotDir}/${theme}${route.replace(/[^a-z0-9]+/gi, '-')}.png`;
+      await page.screenshot({ path: file, fullPage: true });
+      console.log(`saved ${file}`);
+    }
     const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
     total += results.violations.length;
     console.log(`${theme.padEnd(5)} ${route}${clicks.length ? ` after ${clicks.join(' > ')}` : ''}: ${results.violations.length} violation(s)${onLogin ? ' (WARNING: landed on /login)' : ''}`);

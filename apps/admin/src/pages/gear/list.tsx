@@ -11,7 +11,7 @@ import { FilterBar } from "../../components/kit/FilterBar";
 import { PageHeader } from "../../components/kit/PageHeader";
 import { Select } from "../../components/kit/Select";
 import { Tabs } from "../../components/kit/Tabs";
-import { fetchGear, worstOutcomeOf, type GearListFilters, type GearWithOffers } from "./api";
+import { fetchClickCounts, fetchGear, worstOutcomeOf, type GearListFilters, type GearWithOffers } from "./api";
 import { outcomeLabel, outcomeTone, relativeDays } from "./format";
 import "./gear.css";
 
@@ -43,6 +43,19 @@ export function GearList() {
 
   const [items, setItems] = useState<GearWithOffers[]>([]);
   const [state, setState] = useState<LoadState>("loading");
+  // Buy taps per product over the last 30 days (0131). Loaded separately so a
+  // failure here leaves the catalogue usable and shows a dash, not an error.
+  const [clicksByProduct, setClicksByProduct] = useState<Map<string, number> | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchClickCounts(30).then((m) => {
+      if (!cancelled) setClicksByProduct(m);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const filters = useMemo<GearListFilters>(() => {
     const next: GearListFilters = {};
@@ -102,6 +115,12 @@ export function GearList() {
     },
     { key: "sport", header: "Sport", render: (item) => item.sport ?? "any" },
     { key: "offers", header: "Retailers", numeric: true, render: (item) => item.offers.length },
+    {
+      key: "clicks",
+      header: "Buy taps, 30 days",
+      numeric: true,
+      render: (item) => (clicksByProduct ? (clicksByProduct.get(item.id) ?? 0) : "Not loaded"),
+    },
     {
       key: "price",
       header: "From",

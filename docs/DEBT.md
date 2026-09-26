@@ -456,3 +456,12 @@ from growing further.
   allowlisted and no X webhook. Supabase Edge Functions have no fixed outbound IP, so an automatic
   run needs a static egress path (a small proxy with a fixed IP, or a runner that has one) before
   the allowlist is meaningful. Owner: Abishai to fund X; engineering to pick the egress path.
+- **Affiliate clicks are recorded but no subid reaches a retailer yet.** `0131` records every Buy
+  tap and appends the click id when `retailer_programmes.subid_param` is set. It is null for every
+  programme, because none is approved (`affiliate_tag_template` is null for all three) and each
+  programme names its subid parameter differently. When a programme is approved, set both the tag
+  template and `subid_param` from that programme's own documentation, then reconcile its first
+  commission report against `affiliate_clicks`. Owner: Abishai, per programme approval.
+- **The Buy tap has not been seen on a device.** `buyUrlForOffer` is proven at the database layer
+  (`scripts/verify-affiliate-clicks.mjs`) and typechecks, but the tap on the compare view is owed
+  a Release build pass with the App Store submission. Owner: the App Store submission pass.

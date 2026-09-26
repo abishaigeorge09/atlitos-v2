@@ -77,6 +77,13 @@ After the deterministic candidates load and before scoring, when the CT-2/CT-3 g
 
 Over budget or on ANY Voyage failure (bad key, timeout, non-2xx): the vector step is skipped, `vector: false`, never an error (same fail-safe posture as the existing LLM gate). Scoped to `entityType: "gear"` only, over `affiliate_products` only (ADR-011's own non-goal excludes the owned catalogue from vector search).
 
+### Affiliate click tracking (`0131`, 2026-09-26)
+
+| RPC | Caller | Contract |
+| --- | --- | --- |
+| `record_affiliate_click` | mobile compare view Buy button, via `useShop().buyUrlForOffer` | `p_offer_id`, optional `p_surface` (`compare` default, `search`, `home`). Granted to `anon` and `authenticated`. Returns `{ click_id, url, recorded }`; the client opens `url`. No session: `recorded: false`, the stored URL, nothing written. `NOT_FOUND` for an offer on a delisted product, `VALIDATION` for an unknown surface. The client falls back to the offer's stored URL on ANY failure, so recording never blocks a shopper |
+| `admin_affiliate_click_stats` | admin Gear list, "Buy taps, 30 days" | `p_days` (1 to 365). Per product and retailer: `clicks`, distinct `shoppers`, `with_subid`, `last_click_at`. `FORBIDDEN` for non-admins |
+
 ### `gear-embed`, as built (Phase S1 Track B, PRD-07 FR-43, ADR-011 D2)
 
 `POST { productId: string }` (one row) or `POST { sweep: true, limit?: number }` (every row where `embedding is null`, capped at `limit`, default 200). Auth: a service-role bearer token, OR an authenticated caller holding the `admin` role (checked through their OWN JWT, the same `requireAdmin` pattern `admin-order-advance` uses); anon and any non-admin authenticated caller are refused with 401/403. Never called by `ai-search` (component boundary) and never on a read path.

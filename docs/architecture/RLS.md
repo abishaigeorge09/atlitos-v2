@@ -112,6 +112,13 @@ admins through the `admin_` payout functions (`has_role('admin')`, every full re
 `scripts/verify-manual-payouts.mjs` checks 1a to 1d prove the refusals, and were watched fail
 with a permissive policy planted.
 
+### `affiliate_clicks`: no policies at all (`0131`)
+
+Same posture as `payout_methods`: RLS on, zero policies, no grant to `anon` or `authenticated`, so
+even an admin JWT gets `42501` reading raw clicks. `record_affiliate_click` writes, admins see
+aggregates only. `scripts/verify-affiliate-clicks.mjs` 5a to 5d, watched fail with a planted
+permissive policy.
+
 ## Guest/anon read surface
 
 The guest experience (PRD-01 section 3, FR-1 through FR-5) needs `anon` to read real content with zero writes. The following is the complete set of tables with an `anon`-inclusive `SELECT` policy; anything not listed here is invisible to a guest, no exceptions:
