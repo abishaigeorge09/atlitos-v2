@@ -6,7 +6,7 @@ import { forwardRef, useState } from 'react';
 import type { ComponentProps } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 
-export type InputType = 'text' | 'password' | 'phone' | 'pincode' | 'multiline';
+export type InputType = 'text' | 'password' | 'phone' | 'pincode' | 'number' | 'multiline';
 
 export interface InputProps
   extends Omit<ComponentProps<typeof TextInput>, 'secureTextEntry' | 'multiline' | 'keyboardType'> {
@@ -19,7 +19,7 @@ export interface InputProps
 
 /**
  * Input. Locked API per SPEC Section 5.1 #2: `type`
- * text|password|phone|pincode|multiline, `label`, `error`, `required`.
+ * text|password|phone|pincode|number|multiline, `label`, `error`, `required`.
  * Labels end with "*" when required, per the v1 designs. surfaceMuted fill,
  * radius.sm, border outline, 2px accent outline on focus, danger outline on
  * error, per DESIGN-LANGUAGE's "Inputs" component tone.
@@ -33,7 +33,7 @@ const Input = forwardRef<TextInput, InputProps>(function Input(
   const [secure, setSecure] = useState(type === 'password');
 
   const isMultiline = type === 'multiline';
-  const keyboardType = type === 'phone' || type === 'pincode' ? 'number-pad' : 'default';
+  const keyboardType = type === 'phone' || type === 'pincode' || type === 'number' ? 'number-pad' : 'default';
   const borderColorClass = error ? 'border-danger' : focused ? 'border-accent' : 'border-border';
   const borderWidthClass = focused || error ? 'border-2' : 'border';
 

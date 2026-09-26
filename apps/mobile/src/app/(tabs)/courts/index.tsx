@@ -1,19 +1,21 @@
-import { useCourts } from '@atlitos/api';
-import type { ApiError, Court, Sport } from '@atlitos/types';
+import { useCourts, useSearch } from '@atlitos/api';
+import type { ApiError, Court, SearchHit, Sport } from '@atlitos/types';
 import { radii, spacing } from '@atlitos/theme';
 import { router } from 'expo-router';
-import { CalendarClock, LandPlot, RefreshCw, TriangleAlert } from 'lucide-react-native';
+import { CalendarClock, LandPlot, RefreshCw, SearchX, TriangleAlert, X } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
+import { CourtSlotResult } from '@/components/molecules/CourtSlotResult';
 import { LocationStatusRow } from '@/components/molecules/LocationStatusRow';
 import { LoginGateModal } from '@/components/organisms/LoginGateModal';
 import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { CourtCard } from '@/components/ui/court-card';
+import { SearchBar } from '@/components/ui/search-bar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
 import { usePendingAuthAction } from '@/hooks/use-pending-auth-action';
@@ -58,6 +60,7 @@ export default function CourtsIndexScreen() {
   const colors = useThemeColors();
   const navInset = useNavBarInset();
   const courts = useCourts(supabase);
+  const search = useSearch(supabase);
   const requiresAuthGate = useSessionStore((state) => state.status !== 'signed_in');
   const profileCity = useSessionStore((state) => state.me?.city ?? null);
   const [gateVisible, setGateVisible] = useState(false);
@@ -68,6 +71,7 @@ export default function CourtsIndexScreen() {
   const locationRequested = useLocationStore((state) => state.requested);
   const city = useLocationStore((state) => state.city);
   const coords = useLocationStore((state) => state.coords);
+  const locationStatus = useLocationStore((state) => state.status);
   const requestLocation = useLocationStore((state) => state.requestLocation);
 
   const [sport, setSport] = useState<Sport | null>(null);
@@ -76,6 +80,52 @@ export default function CourtsIndexScreen() {
   const [error, setError] = useState<ApiError | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Court search (migration 0132). Answered from real availability: "badminton
+  // tonight after 7 under 500" returns courts that are actually free then, at
+  // that price. Submit only, not per keystroke: each search generates slots
+  // across courts and days, and a half typed "tonig" has nothing to answer.
+  const [query, setQuery] = useState('');
+  const [searchState, setSearchState] = useState<'idle' | 'loading' | 'results' | 'error'>('idle');
+  const [hits, setHits] = useState<SearchHit[]>([]);
+  const [broaden, setBroaden] = useState<string | null>(null);
+  const [timed, setTimed] = useState(false);
+
+  const runSearch = useCallback(
+    async (text: string, forSport: Sport | null) => {
+      const q = text.trim();
+      if (!q) {
+        setSearchState('idle');
+        return;
+      }
+      setSearchState('loading');
+      try {
+        const res = await search.search({
+          query: q,
+          entityTypes: ['court'],
+          sport: forSport ?? undefined,
+          lat: coords?.lat,
+          lng: coords?.lng,
+          city: coords ? undefined : city ?? undefined,
+          limit: 20,
+        });
+        setHits(res.results);
+        setBroaden(res.broaden ?? null);
+        setTimed(!!res.parsedIntent.when?.hasTime);
+        setSearchState('results');
+      } catch {
+        setSearchState('error');
+      }
+    },
+    [search, coords, city],
+  );
+
+  function clearSearch() {
+    setQuery('');
+    setHits([]);
+    setBroaden(null);
+    setSearchState('idle');
+  }
+
   // F4: coords resolved but implausibly far from every result. Treat as "no
   // meaningful nearby match" rather than claim proximity or show the number.
   const nearestDistanceKm = items.reduce<number | null>((min, item) => {
@@ -83,6 +133,12 @@ export default function CourtsIndexScreen() {
     return min === null ? item.distanceKm : Math.min(min, item.distanceKm);
   }, null);
   const locationIsMeaningful = coords === null || nearestDistanceKm === null || nearestDistanceKm <= IMPLAUSIBLE_DISTANCE_KM;
+  // A distance is only shown when it is measured from the athlete. With
+  // location off and no profile city, the store falls back to a fixed
+  // Hyderabad point (fine for SORTING nearby venues first), and kilometres
+  // measured from that point are not the athlete's distance to anything. The
+  // status row already says "distances are hidden"; now they are.
+  const showDistances = locationStatus === 'granted' && locationIsMeaningful;
 
   const load = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -151,6 +207,30 @@ export default function CourtsIndexScreen() {
           the F4 rule (a resolved city with no court within a plausible
           distance is not a claim to make) still belongs here, because only
           this screen knows how far its results are. */}
+      <View className="flex-row items-center gap-sm">
+        <View style={{ flex: 1 }}>
+          <SearchBar
+            variant="ai"
+            placeholder="Badminton tonight after 7, under 500"
+            value={query}
+            onChangeText={setQuery}
+            returnKeyType="search"
+            onSubmitEditing={() => void runSearch(query, sport)}
+            accessibilityLabel="Search courts by sport, time and budget"
+          />
+        </View>
+        {searchState !== 'idle' ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Clear search"
+            className="min-h-11 min-w-11 items-center justify-center rounded-pill active:bg-surface-muted"
+            onPress={clearSearch}
+          >
+            <X size={20} strokeWidth={1.75} color={colors.textSecondary} />
+          </Pressable>
+        ) : null}
+      </View>
+
       <LocationStatusRow
         resolvedLabel={locationIsMeaningful ? `Showing courts near ${city}` : 'Showing all verified courts'}
         profileCity={profileCity}
@@ -171,7 +251,15 @@ export default function CourtsIndexScreen() {
           style={{ flexGrow: 0 }}
           contentContainerStyle={{ gap: spacing.sm, paddingVertical: spacing.xs, paddingRight: spacing.xl }}
           ListHeaderComponent={
-            <Chip label="All sports" variant="filter" selected={sport === null} onPress={() => setSport(null)} />
+            <Chip
+              label="All sports"
+              variant="filter"
+              selected={sport === null}
+              onPress={() => {
+                setSport(null);
+                if (searchState !== 'idle') void runSearch(query, null);
+              }}
+            />
           }
           ItemSeparatorComponent={() => <View style={{ width: spacing.sm }} />}
           renderItem={({ item }) => (
@@ -179,7 +267,10 @@ export default function CourtsIndexScreen() {
               label={SPORT_LABEL[item]}
               variant="filter"
               selected={sport === item}
-              onPress={() => setSport(item)}
+              onPress={() => {
+                setSport(item);
+                if (searchState !== 'idle') void runSearch(query, item);
+              }}
             />
           )}
         />
@@ -203,7 +294,58 @@ export default function CourtsIndexScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-      {state === 'loading' ? (
+      {searchState === 'loading' ? (
+        <View>
+          {header}
+          <View style={{ padding: spacing.lg, gap: spacing.lg }}>
+            <Skeleton shape="card" height={120} />
+            <Skeleton shape="card" height={120} />
+          </View>
+        </View>
+      ) : searchState === 'error' ? (
+        <View>
+          {header}
+          <View style={{ padding: spacing.lg, alignItems: 'center', gap: spacing.md }}>
+            <TriangleAlert size={40} color={colors.danger} strokeWidth={1.75} />
+            <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
+              Search did not go through. Check your connection and try again.
+            </Text>
+            <Button variant="secondary" onPress={() => void runSearch(query, sport)}>
+              <RefreshCw size={16} strokeWidth={1.75} color={colors.text} />
+              <Text style={{ color: colors.text }}>Try again</Text>
+            </Button>
+          </View>
+        </View>
+      ) : searchState === 'results' ? (
+        <FlatList
+          data={hits}
+          keyExtractor={(item) => item.entityId}
+          ListHeaderComponent={header}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ gap: spacing.md, paddingBottom: navInset + spacing.xl }}
+          ListEmptyComponent={
+            <View style={{ padding: spacing.lg, alignItems: 'center', gap: spacing.md }}>
+              <SearchX size={40} color={colors.textTertiary} strokeWidth={1.75} />
+              <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
+                {broaden ?? 'No courts match that. Try another time or sport.'}
+              </Text>
+            </View>
+          }
+          renderItem={({ item }) => (
+            <CourtSlotResult
+              hit={item}
+              showDistance={showDistances}
+              showSlotCount={timed}
+              onPress={() =>
+                router.push({
+                  pathname: '/(tabs)/courts/court/[id]',
+                  params: item.slot ? { id: item.entityId, date: item.slot.date, slot: item.slot.start } : { id: item.entityId },
+                })
+              }
+            />
+          )}
+        />
+      ) : state === 'loading' ? (
         <View>
           {header}
           <View style={{ padding: spacing.lg, gap: spacing.lg }}>
@@ -266,7 +408,7 @@ export default function CourtsIndexScreen() {
               name={item.name}
               location={item.location}
               pricePerHour={item.basePricePerHour}
-              distanceKm={locationIsMeaningful ? item.distanceKm : undefined}
+              distanceKm={showDistances ? item.distanceKm : undefined}
               onPress={() => router.push({ pathname: '/(tabs)/courts/court/[id]', params: { id: item.id } })}
               onBookPress={() => router.push({ pathname: '/(tabs)/courts/court/[id]', params: { id: item.id } })}
             />

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Wallet } from "lucide-react";
+import { Landmark, Wallet } from "lucide-react";
 import { BillSummary } from "@atlitos/ui-web";
 import { formatINR } from "@atlitos/theme";
 
@@ -17,6 +17,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { EarningsChart } from "@/components/earnings-chart";
+import { Button } from "@/components/ui/button";
+import { PayoutDetailsDialog } from "./payout-details-dialog";
 
 interface EarningsData {
   grossThisMonth: number;
@@ -25,8 +27,33 @@ interface EarningsData {
   pendingBalance: number;
   lastPayout: { amount: number; date: string } | null;
   chartPoints: { date: string; amount: number }[];
-  transfers: { id: string; amount: number; status: "processing" | "paid" | "failed"; razorpay_transfer_id: string | null; created_at: string }[];
+  transfers: {
+    id: string;
+    amount: number;
+    status: "processing" | "paid" | "failed";
+    razorpay_transfer_id: string | null;
+    external_reference: string | null;
+    created_at: string;
+  }[];
   payoutLinked: boolean;
+  /** Masked payout method from get_my_payout_method (0130). `forbidden`
+   * when the viewer is venue staff: only the partner may see or change
+   * where the venue is paid. */
+  payout:
+    | { kind: "forbidden" }
+    | {
+        kind: "ok";
+        eligibleBalance: number;
+        method: {
+          method_type: "bank_account" | "upi";
+          account_holder_name: string;
+          account_number_last4: string | null;
+          ifsc: string | null;
+          vpa: string | null;
+          verification_status: "unverified" | "verified" | "rejected";
+          verification_note: string | null;
+        } | null;
+      };
 }
 
 const CHART_DAYS = 14;
@@ -36,6 +63,7 @@ export default function EarningsPage() {
   const [data, setData] = useState<EarningsData | null>(null);
   const [status, setStatus] = useState<"loading" | "error" | "ready">("loading");
   const [error, setError] = useState<string | null>(null);
+  const [payoutDialogOpen, setPayoutDialogOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!scope.selectedVenueId) return;
@@ -70,6 +98,8 @@ export default function EarningsPage() {
         .eq("account_ref", venueId),
       supabase.from("payout_accounts").select("id").eq("owner_type", "court_partner").eq("owner_id", venueId).maybeSingle(),
     ]);
+
+    const payoutMethodResult = await supabase.rpc("get_my_payout_method", { p_owner_type: "court_partner", p_venue_id: venueId });
 
     if (bookingsResult.error || ledgerResult.error) {
       setError(bookingsResult.error?.message ?? ledgerResult.error?.message ?? "Failed to load earnings.");
@@ -120,7 +150,7 @@ export default function EarningsPage() {
     if (payoutAccountId) {
       const { data: transferRows } = await supabase
         .from("transfers")
-        .select("id, amount, status, razorpay_transfer_id, created_at")
+        .select("id, amount, status, razorpay_transfer_id, external_reference, created_at")
         .eq("payout_account_id", payoutAccountId)
         .order("created_at", { ascending: false });
       transfers = transferRows ?? [];
@@ -139,6 +169,13 @@ export default function EarningsPage() {
       chartPoints,
       transfers,
       payoutLinked: !!payoutAccountId,
+      payout: payoutMethodResult.error?.message.startsWith("FORBIDDEN")
+        ? { kind: "forbidden" }
+        : {
+            kind: "ok",
+            eligibleBalance: Number((payoutMethodResult.data as { eligible_balance?: number } | null)?.eligible_balance ?? 0),
+            method: ((payoutMethodResult.data as { method?: unknown } | null)?.method ?? null) as Extract<EarningsData["payout"], { kind: "ok" }>["method"],
+          },
     });
     setStatus("ready");
   }, [scope.selectedVenueId]);
@@ -219,10 +256,50 @@ export default function EarningsPage() {
         </Card>
         <Card>
           <CardHeader className="pb-1">
-            <CardTitle className="text-xs font-medium text-muted-foreground">Payout account</CardTitle>
+            <CardTitle className="text-xs font-medium text-muted-foreground">Payout details</CardTitle>
           </CardHeader>
-          <CardContent>
-            <span className="text-sm text-foreground">{data.payoutLinked ? "Linked" : "Not linked yet"}</span>
+          <CardContent className="flex flex-col gap-2">
+            {data.payout.kind === "forbidden" ? (
+              <span className="text-sm text-muted-foreground">Only the venue owner can see where this venue is paid.</span>
+            ) : data.payout.method ? (
+              <>
+                <span className="flex items-center gap-2 text-sm text-foreground">
+                  <Landmark className="size-4 text-muted-foreground" aria-hidden />
+                  {data.payout.method.method_type === "bank_account"
+                    ? `Bank ending ${data.payout.method.account_number_last4 ?? ""}`
+                    : `UPI ${data.payout.method.vpa ?? ""}`}
+                </span>
+                <StatusPill
+                  label={
+                    data.payout.method.verification_status === "verified"
+                      ? "Verified"
+                      : data.payout.method.verification_status === "rejected"
+                        ? "Needs fixing"
+                        : "In review"
+                  }
+                  tone={
+                    data.payout.method.verification_status === "verified"
+                      ? "success"
+                      : data.payout.method.verification_status === "rejected"
+                        ? "danger"
+                        : "warning"
+                  }
+                />
+                {data.payout.method.verification_status === "rejected" && data.payout.method.verification_note ? (
+                  <span className="text-xs text-muted-foreground">{data.payout.method.verification_note}</span>
+                ) : null}
+                <Button variant="outline" size="sm" className="self-start" onClick={() => setPayoutDialogOpen(true)}>
+                  Change details
+                </Button>
+              </>
+            ) : (
+              <>
+                <span className="text-sm text-muted-foreground">Add where Atlitos should send your earnings.</span>
+                <Button size="sm" className="self-start" onClick={() => setPayoutDialogOpen(true)}>
+                  Add payout details
+                </Button>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -254,12 +331,12 @@ export default function EarningsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Transfer history</CardTitle>
+          <CardTitle className="text-base">Payout history</CardTitle>
         </CardHeader>
         <CardContent>
           {data.transfers.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              {data.payoutLinked ? "No transfers yet." : "Link a payout account to start receiving transfers."}
+              {data.payout.kind === "ok" && data.payout.method ? "No payouts yet." : "Add payout details to start receiving payouts."}
             </p>
           ) : (
             <Table>
@@ -282,7 +359,7 @@ export default function EarningsPage() {
                         <StatusPill label={pill.label} tone={pill.tone} />
                       </TableCell>
                       <TableCell className="font-mono text-xs tabular-nums text-muted-foreground">
-                        {t.razorpay_transfer_id ?? "Not available"}
+                        {t.external_reference ?? t.razorpay_transfer_id ?? "Not available"}
                       </TableCell>
                     </TableRow>
                   );
@@ -292,6 +369,18 @@ export default function EarningsPage() {
           )}
         </CardContent>
       </Card>
+
+      {scope.selectedVenueId && data.payout.kind === "ok" ? (
+        <PayoutDetailsDialog
+          open={payoutDialogOpen}
+          onOpenChange={setPayoutDialogOpen}
+          venueId={scope.selectedVenueId}
+          hasExisting={!!data.payout.method}
+          initialHolder={data.payout.method?.account_holder_name ?? ""}
+          initialMethod={data.payout.method?.method_type ?? "bank_account"}
+          onSaved={load}
+        />
+      ) : null}
     </div>
   );
 }

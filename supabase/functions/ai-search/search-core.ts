@@ -21,6 +21,8 @@ export type SkillLevel = "beginner" | "intermediate" | "advanced";
 // Intent
 // --------------------------------------------------------------------------
 
+import { isTimeToken, parseWhen, TEMPORAL_TOKENS, type WhenWindow } from "./when.ts";
+
 export interface ParsedIntent {
   entityTypes: EntityType[];
   sport: Sport | "general";
@@ -29,6 +31,9 @@ export interface ParsedIntent {
   skillLevel?: SkillLevel;
   ageHint?: number;
   timeWindow?: "morning" | "evening";
+  /** When the query asks about a time, in IST (when.ts). Only acted on for
+   * courts, where it is answered from real availability, never from text. */
+  when?: WhenWindow;
   // The concrete thing the user named (e.g. "racket"), used to phrase an
   // honest broaden suggestion ("No Babolat rackets under 2000."). Internal
   // signal, not part of the SearchResponse contract's parsedIntent.
@@ -104,7 +109,7 @@ export interface IntentOverride {
   priceMax?: number;
 }
 
-export function parseIntent(query: string, override?: IntentOverride): ParsedIntent {
+export function parseIntent(query: string, override?: IntentOverride, now: Date = new Date()): ParsedIntent {
   const tokens = tokenize(query);
   const lower = query.toLowerCase();
 
@@ -171,6 +176,16 @@ export function parseIntent(query: string, override?: IntentOverride): ParsedInt
   if (tokens.includes("morning")) timeWindow = "morning";
   else if (tokens.includes("evening") || tokens.includes("night")) timeWindow = "evening";
 
+  let entityTypes: EntityType[];
+  if (override?.entityTypes && override.entityTypes.length > 0) entityTypes = override.entityTypes;
+  else if (routed.size > 0) entityTypes = [...routed];
+  else entityTypes = [...ENTITY_TYPES];
+
+  // WHEN is only meaningful for courts. Parsed only when courts are in play,
+  // so a gear query like "8 to 10 year old racket" is never read as a time.
+  const wantsCourts = entityTypes.includes("court");
+  const when = wantsCourts ? parseWhen(query, now) : undefined;
+
   const sportTokens = new Set(Object.keys(SPORT_SYNONYMS));
   const routerTokens = new Set(Object.values(ROUTER_TOKENS).flat());
   const brandTokens = new Set(BRANDS.flatMap((b) => b.split(" ")));
@@ -183,15 +198,14 @@ export function parseIntent(query: string, override?: IntentOverride): ParsedInt
       !routerTokens.has(tok) &&
       !brandTokens.has(tok) &&
       !skillTokens.has(tok) &&
-      !/^\d+$/.test(tok),
+      !/^\d+$/.test(tok) &&
+      // A time word is not a thing a court's text contains. Left in, it failed
+      // the honesty gate's text match for every court (verified in production
+      // 2026-09-26: "badminton court tonight" returned nothing).
+      !(wantsCourts && (TEMPORAL_TOKENS.has(tok) || isTimeToken(tok))),
   );
 
-  let entityTypes: EntityType[];
-  if (override?.entityTypes && override.entityTypes.length > 0) entityTypes = override.entityTypes;
-  else if (routed.size > 0) entityTypes = [...routed];
-  else entityTypes = [...ENTITY_TYPES];
-
-  return { entityTypes, sport, priceMax, brand, skillLevel, ageHint, timeWindow, nounHint, keywords };
+  return { entityTypes, sport, priceMax, brand, skillLevel, ageHint, timeWindow, when, nounHint, keywords };
 }
 
 // --------------------------------------------------------------------------
@@ -208,7 +222,22 @@ export interface Candidate {
   price?: number;
   rating?: number;
   distanceKm?: number;
+  /** Courts only: the first free slot inside the searched window (0132). */
+  slot?: CourtSlotHit;
   text: string; // lowercased searchable blob
+}
+
+export interface CourtSlotHit {
+  date: string;
+  start: string;
+  end: string;
+  price: number;
+  /** "today at 7:00 PM", "Saturday at 8:30 AM". */
+  label: string;
+  /** How many slots in the window are free at this court. */
+  freeSlots: number;
+  /** Other courts at the same venue that also have a free slot in the window. */
+  otherCourtsFree: number;
 }
 
 export interface ScoredHit {
@@ -220,6 +249,7 @@ export interface ScoredHit {
   sport?: Sport;
   price?: number;
   distanceKm?: number;
+  slot?: CourtSlotHit;
   rankScore: number; // 0..1
   rankReason: string;
 }
@@ -326,8 +356,11 @@ export function scoreCandidates(candidates: Candidate[], intent: ParsedIntent): 
       sport: c.sport,
       price: c.price,
       distanceKm: c.distanceKm,
+      slot: c.slot,
       rankScore: Math.round(rankScore * 1000) / 1000,
-      rankReason,
+      // A court with a real free slot says when, which is the thing the
+      // shopper asked; the generic reason would hide it.
+      rankReason: c.slot ? `Free ${c.slot.label}` : rankReason,
     });
   }
 

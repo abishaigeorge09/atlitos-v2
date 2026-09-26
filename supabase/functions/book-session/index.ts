@@ -234,6 +234,18 @@ Deno.serve((req) =>
       throw new AppError("VALIDATION", "A coach cannot book their own session.", 400);
     }
 
+    // A session must start in the future, in IST (2026-09-26). Nothing
+    // checked this, and a session's payment is captured at request time, so
+    // an athlete could be charged for a slot that had already passed. The
+    // coach's availability windows repeat weekly, so a past date still
+    // "fits" a window; only an explicit clock check catches it.
+    const istNow = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+    const istToday = istNow.toISOString().slice(0, 10);
+    const istMinutes = istNow.getUTCHours() * 60 + istNow.getUTCMinutes();
+    if (body.date < istToday || (body.date === istToday && timeToMinutes(slotStart) <= istMinutes)) {
+      throw new AppError("VALIDATION", "That time has already passed. Pick a later slot.", 400);
+    }
+
     const slotEnd = minutesToTime(
       timeToMinutes(slotStart) + sessionType.duration_minutes,
     );

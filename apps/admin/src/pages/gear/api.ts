@@ -467,3 +467,17 @@ export async function fetchLatestSuggestions(productId: string): Promise<FetchLo
   if (!row) return null;
   return { offerId: row.offer_id, fetchedAt: row.fetched_at, suggestion: row.ai_suggestion };
 }
+
+
+/** Buy taps per affiliate product over the last `days` days, from
+ * `admin_affiliate_click_stats` (0131, admin only). Sums across retailers.
+ * Resolves to null on any failure so the caller can degrade quietly. */
+export async function fetchClickCounts(days: number): Promise<Map<string, number> | null> {
+  const { data, error } = await supabaseClient.rpc("admin_affiliate_click_stats", { p_days: days });
+  if (error || !Array.isArray(data)) return null;
+  const counts = new Map<string, number>();
+  for (const row of data as Array<{ affiliate_product_id: string; clicks: number }>) {
+    counts.set(row.affiliate_product_id, (counts.get(row.affiliate_product_id) ?? 0) + Number(row.clicks));
+  }
+  return counts;
+}

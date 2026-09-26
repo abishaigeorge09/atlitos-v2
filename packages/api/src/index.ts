@@ -19,3 +19,4 @@ export * from "./use-shop";
 export * from "./use-app-config";
 export * from "./use-home";
 export * from "./use-account-deletion";
+export * from "./use-payout-method";

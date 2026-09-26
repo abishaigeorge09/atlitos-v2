@@ -193,7 +193,12 @@ export default function SearchScreen() {
         router.push({ pathname: '/(tabs)/coaching/coach/[id]', params: { id: hit.entityId } });
         break;
       case 'court':
-        router.push({ pathname: '/(tabs)/courts/court/[id]', params: { id: hit.entityId } });
+        // A court hit carries its first free slot (migration 0132); open the
+        // court on that date with the slot chosen.
+        router.push({
+          pathname: '/(tabs)/courts/court/[id]',
+          params: hit.slot ? { id: hit.entityId, date: hit.slot.date, slot: hit.slot.start } : { id: hit.entityId },
+        });
         break;
       case 'athlete':
         router.push({ pathname: '/home/upa/[id]', params: { id: hit.entityId } });

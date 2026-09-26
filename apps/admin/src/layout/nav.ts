@@ -1,4 +1,5 @@
 import {
+  Banknote,
   Building2,
   CalendarClock,
   Film,
@@ -40,6 +41,7 @@ const operationsGroup: NavGroup = {
     { to: "/venues", label: "Venues", icon: Building2 },
     { to: "/bookings", label: "Bookings", icon: CalendarClock },
     { to: "/orders", label: "Orders", icon: ShoppingBag },
+    { to: "/payouts", label: "Payouts", icon: Banknote },
   ],
 };
 

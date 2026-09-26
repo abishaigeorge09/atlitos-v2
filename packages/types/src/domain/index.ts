@@ -558,6 +558,16 @@ export interface ParsedIntent {
   /** The searcher's age in years, when stated (e.g. "10 year old"). */
   ageHint?: number;
   timeWindow?: 'morning' | 'evening';
+  /** Court searches only (ai-search/when.ts): the date and time window the
+   * query asked about, in IST. `hasTime` is false for a date with no time. */
+  when?: {
+    dateFrom: string;
+    dateTo: string;
+    timeFrom: string;
+    timeTo: string;
+    label: string;
+    hasTime: boolean;
+  };
   keywords: string[];
 }
 
@@ -604,6 +614,18 @@ export interface SearchHit {
   sport?: Sport;
   price?: number;
   distanceKm?: number;
+  /** Courts only (migration 0132): the first free slot in the searched window,
+   * from the same availability the booking screen uses. `start`/`end` are
+   * IST "HH:MM"; `label` is ready to show ("today at 7:00 PM"). */
+  slot?: {
+    date: string;
+    start: string;
+    end: string;
+    price: number;
+    label: string;
+    freeSlots: number;
+    otherCourtsFree: number;
+  };
   rankScore: number; // 0-1
   rankReason: string; // "Closest, 1.2km" | "Best price match" | "Top rated"
 }

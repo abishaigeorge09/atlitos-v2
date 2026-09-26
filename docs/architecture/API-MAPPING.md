@@ -77,6 +77,63 @@ After the deterministic candidates load and before scoring, when the CT-2/CT-3 g
 
 Over budget or on ANY Voyage failure (bad key, timeout, non-2xx): the vector step is skipped, `vector: false`, never an error (same fail-safe posture as the existing LLM gate). Scoped to `entityType: "gear"` only, over `affiliate_products` only (ADR-011's own non-goal excludes the owned catalogue from vector search).
 
+### Affiliate click tracking (`0131`, 2026-09-26)
+
+| RPC | Caller | Contract |
+| --- | --- | --- |
+| `record_affiliate_click` | mobile compare view Buy button, via `useShop().buyUrlForOffer` | `p_offer_id`, optional `p_surface` (`compare` default, `search`, `home`). Granted to `anon` and `authenticated`. Returns `{ click_id, url, recorded }`; the client opens `url`. No session: `recorded: false`, the stored URL, nothing written. `NOT_FOUND` for an offer on a delisted product, `VALIDATION` for an unknown surface. The client falls back to the offer's stored URL on ANY failure, so recording never blocks a shopper |
+| `admin_affiliate_click_stats` | admin Gear list, "Buy taps, 30 days" | `p_days` (1 to 365). Per product and retailer: `clicks`, distinct `shoppers`, `with_subid`, `last_click_at`. `FORBIDDEN` for non-admins |
+
+### Court search from real availability (`0132`, `0133`, 2026-09-26)
+
+**The defect this fixes, verified in production 2026-09-26.** Any court query with a time word
+("badminton court tonight", "cricket turf tomorrow evening", "at 7pm", "this weekend") returned ZERO
+courts and told the shopper to remove the time. Time words stayed in the keyword list, and the
+honesty gate requires a court's text (name, sport, venue, address) to contain a keyword.
+
+**Now.** `ai-search/when.ts` parses the date and time window in IST (today, tonight, tomorrow, day
+after tomorrow, weekday names, this weekend, mornings to nights, "at 7pm", "after 8", "before 9am",
+"7 to 9pm", "19:00") and removes time and booking words from the keywords, for court queries only.
+Courts are then fetched from `search_court_slots`, never by text:
+
+| RPC | Contract |
+| --- | --- |
+| `search_court_slots` | `p_date_from`, `p_date_to` required; optional `p_time_from`, `p_time_to` (slot START bounds, `null` end means end of day), `p_sport`, `p_price_max`, `p_city`, `p_lat`, `p_lng`, `p_radius_km`, `p_limit` (max 50). Per court: its first free slot in the window and price, `min_price`, `matching_slots`, venue, distance. Verified venues only, slot price after peak rules, slots not yet started (IST), at most 14 days and 60 candidate courts. Built on `get_court_available_slots`, so search and booking agree. Granted to `anon` and `authenticated` |
+
+`ai-search` response changes, additive: court hits carry `slot { date, start, end, price, label,
+freeSlots, otherCourtsFree }`, one hit per VENUE (the soonest court there; the rest are counted),
+`rankReason` is always `Free <label>` for a court even after the Claude rerank, and
+`parsedIntent.when` carries the window. A courts only search with no result gets a broaden line that
+relaxes ONE constraint and names a real alternative ("The cheapest tomorrow in the evening is ...").
+With no time in the query, courts are searched over the coming week and show their next free slot.
+
+`get_court_available_slots` (`0133`) no longer offers past dates or slots that have ENDED today
+(IST); a slot in progress stays offered for walk ins. `book-court` accepts only slots this function
+lists, so booking a past slot is now refused as `SLOT_TAKEN`. `book-session` refuses a start time
+that has passed with `VALIDATION`.
+
+Proof: `scripts/verify-court-search.ts` (parser, fixed clock), `scripts/verify-court-slots.mjs`
+(SQL, adversarial fixtures), `scripts/verify-court-search-e2e.mjs` (through the function).
+
+### Gear recall by full text, and the owned catalogue kept out (`0134`, 2026-09-26)
+
+- **Recall.** The keyword path used to read the first 50 active affiliate products in no order and
+  score those, so on a catalogue of hundreds an exact match was often never considered (proved: a
+  product inserted after 500 others was answered "No matches ... Try removing paddle"). The query's
+  terms (keywords, brand, noun) now go to `search_affiliate_product_ids(p_terms, p_sport,
+  p_limit)`, which ranks by a weighted full text vector (title and brand A, description C,
+  English stemming, prefix matched, terms OR'ed) and returns ids and ranks only. Scoring, the
+  honesty gate and the Voyage vector recall are unchanged. A query with no terms lists newest
+  first by sport. The function is security definer and restates the public rule (`active`)
+  itself, because clients are granted `affiliate_products` column by column and cannot read
+  `search_tsv`.
+- **Owned catalogue.** While `app_config` `shop.owned_enabled` is false, `ai-search` returns no
+  owned products to ANY caller. Before, only the shop screen filtered them client side and the
+  home search offered products the shop hides.
+
+Proof: `scripts/verify-gear-recall.mjs` (500 fixture products, deleted afterwards), born red on
+all three counts before the change.
+
 ### `gear-embed`, as built (Phase S1 Track B, PRD-07 FR-43, ADR-011 D2)
 
 `POST { productId: string }` (one row) or `POST { sweep: true, limit?: number }` (every row where `embedding is null`, capped at `limit`, default 200). Auth: a service-role bearer token, OR an authenticated caller holding the `admin` role (checked through their OWN JWT, the same `requireAdmin` pattern `admin-order-advance` uses); anon and any non-admin authenticated caller are refused with 401/403. Never called by `ai-search` (component boundary) and never on a read path.
@@ -484,6 +541,22 @@ PLAN.md's edge function roster includes several functions v1 never had a mock fo
 | `decline-session-refund` | coach session detail, when the session is `requested` | CO-04 (`0085`). Declines an unanswered, already-paid request and refunds it in full, automatically. Coach-side mirror of `cancel-session-refund`, reusing the same `refunds` + `settle_refund` machinery. Contract and error codes in the sessions section above |
 | `razorpay-route-onboard` | coach Payout Account Setup, `portal-court` Payout Account | starts Route linked-account KYC hand-off. Built AT-42. `POST { owner_type: 'coach' \| 'court_partner', venue_id? }` with the caller's own JWT (`verify_jwt` true), `venue_id` required for `court_partner`. Returns `{ payout_account_id, owner_type, owner_id, razorpay_account_id, status, onboarding_url, created }`. Errors `VALIDATION` 400, `UNAUTHENTICATED` 401, `FORBIDDEN` 403, `NOT_FOUND` 404, `RAZORPAY_ERROR` 502, `ROUTE_UNAVAILABLE` 503, `INTERNAL` 500. Idempotent on `(owner_type, owner_id)`: an existing `razorpay_account_id` makes the call a status poll (`created: false`), never a second sub-merchant. Sole writer of `payout_accounts`, service role only. Route is not yet enabled on the test merchant account, see `PAYMENTS.md` |
 | `razorpay-route-transfer` | coach Transfer screen, admin never | creates a Route transfer, writes `transfers` + a balancing `ledger_entries` group. Built AT-43. `POST { amount }` (rupees, at most 2dp) with the caller's own JWT (`verify_jwt` true). The coach is resolved from `auth.uid()`, never from the body, and the amount is a request the server re-derives against, never an authority (PRD-02 FR-28). Returns `{ transfer_id, razorpay_transfer_id, amount, status, ledger_entry_group_id, balance_before, balance_after }` with `status: 'processing'`; `transfer.processed` moves it to `paid`. Errors `VALIDATION` 400, `UNAUTHENTICATED` 401, `NOT_COACH` 403, `PAYOUT_ACCOUNT_NOT_ACTIVE` 409, `INSUFFICIENT_BALANCE` 409, `RAZORPAY_ERROR` 502, `ROUTE_UNAVAILABLE` 503, `INTERNAL` 500. Every failure writes no `transfers` row and no `ledger_entries` row (FR-29). Route is not yet enabled on the test merchant account, so today every balance-passing call returns `ROUTE_UNAVAILABLE` 503, see `PAYMENTS.md` |
+
+### Payouts, manual (`0130`, 2026-09-25)
+
+Route is closed to ELSHEPH (PAYMENTS.md, "Manual payouts"), so the two Route rows above describe
+deployed but unused paths. Coaches and venues are paid by admin. All of these are Postgres RPCs;
+each raises `CODE: message` and `mapPostgrestError` surfaces the code.
+
+| RPC | Caller | Contract |
+| --- | --- | --- |
+| `upsert_my_payout_method` | coach (mobile), venue partner (portal-court) | named args `p_owner_type`, `p_method_type`, `p_account_holder_name`, optional `p_venue_id` (required for `court_partner`), `p_account_number`, `p_ifsc`, `p_vpa`, `p_pan`. Ownership from `auth.uid()`; staff refused. Returns `{ payout_account_id, payout_status, method (masked), changed }`. Identical resubmission is `changed: false` and keeps verification; any change returns the account to `pending`. `VALIDATION`, `FORBIDDEN`, `UNAUTHENTICATED` |
+| `get_my_payout_method` | same | `p_owner_type`, optional `p_venue_id`. Returns `{ payout_account_id, payout_status, method (masked, last four only), balance, eligible_balance }` |
+| `admin_payouts_due` | admin Payouts page | `p_min_amount`. Everyone the ledger says is owed, INCLUDING payees with no details (`verification_status: 'missing'`), with balance, eligible balance and in-flight amount. `FORBIDDEN` for non-admins |
+| `admin_reveal_payout_method` | admin | `p_payout_account_id`, `p_reason` (required). Full details; writes `audit_log` `payout_method.reveal`. `NOTE_REQUIRED` |
+| `admin_verify_payout_method` | admin | `p_payout_account_id`, `p_decision` (`verify` or `reject`), `p_note` (required to reject). Verify makes the account `active`; reject makes it `needs_attention` |
+| `admin_record_manual_payout` | admin | `p_payout_account_id`, `p_amount`, `p_reference` (UTR, 6 to 40 alphanumerics), `p_note`. Returns the `transfers` row, `processing`. `PAYOUT_ACCOUNT_NOT_ACTIVE`, `PAYOUT_METHOD_NOT_VERIFIED`, `INSUFFICIENT_BALANCE` (eligible balance), `DUPLICATE_REFERENCE` |
+| `admin_resolve_manual_payout` | admin | `p_transfer_id`, `p_outcome` (`paid` or `failed`), `p_note` (required for `failed`). Failed writes the reversing ledger group |
 | `stream-upload-url` | Clutch Upload screen, and scriptable for verification | v1 storage adapter (Cloudflare deferred, `VIDEO.md` line 153). `POST { caption, sport, clip_id? }` athlete JWT, returns `{ clipId, uploadUrl, token, path, bucket, status }`, clip row set to `uploading`. `sport` in football|cricket|badminton|tennis. Client PUTs the MP4 to `uploadUrl` (or supabase-js `uploadToSignedUrl(path, token, file)`) |
 | `stream-webhook` | v1: the uploader's own client, synchronously after the signed PUT (Cloudflare Stream deferred) | `POST { clip_id, thumb_path? }` flips a clip forward `processing` to `ready` via `clip_transition_internal` under service role, returns `{ clipId, status, outcome: 'finalized' \| 'already_finalized' }`, idempotent like `razorpay-webhook` (redelivery is a no-op); see `VIDEO.md` v1 storage-adapter contracts |
 | `get-clip-playback-url` | Clutch feed and post detail; public-callable (guests pass anon key) | Legacy body `POST { clip_id }` returns `{ clipId, url, thumbUrl, expiresIn: 300, status }`, unchanged. **New (LAUNCH Phase 3, CT-1):** `POST { clip_ids: string[] (max 24), kind?: "video" \| "thumb" }` returns `{ urls: [{ clip_id, url, expires_at }], failed: [{ clip_id, reason }] }`, 200 even on partial failure (a forbidden/missing id lands in `failed`, never aborts the batch). Same live-row authz as the legacy body for every id: `published` open to anyone, owner in any status, admin/moderator for non-terminal, `removed`/`rejected` refused for everyone but the owner. TTL: `video` 300s (unchanged), `thumb` 3600s. **Rate limit (CT-2):** a per-IP token bucket (`clip-playback-ip`, 60 req/60s, Postgres-backed `take_rate_limit_token`) sits in front of BOTH bodies; over it returns `429 { "error": "RATE_LIMITED", "retry_after_seconds" }`. Fails OPEN on a rate-limit RPC error (never 500s this read path). Never stores a resolved URL. Implementation shared from `supabase/functions/get-clip-playback-url/handler.ts` |

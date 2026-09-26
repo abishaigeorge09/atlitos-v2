@@ -74,6 +74,7 @@ import {
   VECTOR_SIMILARITY_FLOOR,
 } from "./search-core.ts";
 import { llmEnabled, llmRerank } from "./llm.ts";
+import { istToday, slotLabel, type WhenWindow } from "./when.ts";
 import { evaluateAiSearchGate, recordAiSpend, recordVoyageSpend } from "./spend-guard.ts";
 import { embeddingsMode, embedTexts } from "../_shared/embeddings.ts";
 
@@ -209,45 +210,147 @@ async function fetchCoaches(supabase: any, intent: ParsedIntent, city?: string):
   });
 }
 
+// Courts come from REAL availability (0132 search_court_slots), not from
+// matching text. Before this, "badminton court tonight" returned nothing in
+// production because "tonight" had to appear in a court's name or address.
+// Now the window is answered by the same slot function the booking screen
+// uses, so a result is always bookable at the time and price shown.
+//
+// No time in the query means "the coming week": each court shows its next
+// free slot, and a court with nothing free this week is not offered, since it
+// cannot be booked. The candidate set is capped in SQL (60 courts, 14 days).
+function defaultWindow(): WhenWindow {
+  const today = istToday();
+  const end = new Date(`${today}T00:00:00Z`);
+  end.setUTCDate(end.getUTCDate() + 6);
+  return { dateFrom: today, dateTo: end.toISOString().slice(0, 10), timeFrom: "00:00", timeTo: "24:00", label: "this week", hasTime: false };
+}
+
+interface CourtSlotRow {
+  court_id: string;
+  court_name: string;
+  sport: Sport;
+  venue_id: string;
+  venue_name: string;
+  city: string;
+  address: string;
+  distance_km: number | null;
+  first_date: string;
+  first_start: string;
+  first_end: string;
+  first_price: number;
+  matching_slots: number;
+}
+
 // deno-lint-ignore no-explicit-any
-async function fetchCourts(supabase: any, intent: ParsedIntent, lat?: number, lng?: number): Promise<Candidate[]> {
-  let q = supabase
-    .from("courts")
-    .select("id, name, sport, base_price_per_hour, venues!inner(id, name, city, address, lat, lng, status)")
-    .eq("active", true)
-    .eq("venues.status", "verified")
-    .limit(50);
-  if (intent.sport !== "general") q = q.eq("sport", intent.sport);
-
-  const { data, error } = await q;
-  if (error) throw new AppError("INTERNAL", `Failed to load courts: ${error.message}`, 500);
-  const rows = (data ?? []) as Array<Record<string, unknown>>;
-
-  return rows.map((r): Candidate => {
-    const venue = (r.venues ?? {}) as Record<string, unknown>;
-    const vLat = numberOrUndefined(venue.lat);
-    const vLng = numberOrUndefined(venue.lng);
-    let distanceKm: number | undefined;
-    if (lat !== undefined && lng !== undefined && vLat !== undefined && vLng !== undefined) {
-      distanceKm = Math.round(haversineKm(lat, lng, vLat, vLng) * 10) / 10;
-    }
-    const cityStr = (venue.city as string) ?? "";
-    return {
-      entityType: "court",
-      entityId: r.id as string,
-      title: (r.name as string) ?? (venue.name as string) ?? "Court",
-      subtitle: [venue.name, cityStr].filter(Boolean).join(" . "),
-      sport: r.sport as Sport,
-      price: numberOrUndefined(r.base_price_per_hour),
-      rating: undefined,
-      distanceKm,
-      text: [r.name, r.sport, venue.name, cityStr, venue.address].filter(Boolean).join(" ").toLowerCase(),
-    };
+async function searchCourtSlots(supabase: any, args: {
+  window: WhenWindow;
+  sport: Sport | "general";
+  priceMax?: number;
+  city?: string;
+  lat?: number;
+  lng?: number;
+  limit: number;
+}): Promise<CourtSlotRow[]> {
+  const { data, error } = await supabase.rpc("search_court_slots", {
+    p_date_from: args.window.dateFrom,
+    p_date_to: args.window.dateTo,
+    p_time_from: args.window.timeFrom,
+    p_time_to: args.window.timeTo === "24:00" ? null : args.window.timeTo,
+    p_sport: args.sport === "general" ? null : args.sport,
+    p_price_max: args.priceMax ?? null,
+    p_city: args.lat === undefined ? args.city ?? null : null,
+    p_lat: args.lat ?? null,
+    p_lng: args.lng ?? null,
+    p_limit: args.limit,
   });
+  if (error) throw new AppError("INTERNAL", `Failed to search courts: ${error.message}`, 500);
+  return (data ?? []) as CourtSlotRow[];
+}
+
+// deno-lint-ignore no-explicit-any
+async function fetchCourts(supabase: any, intent: ParsedIntent, lat?: number, lng?: number, city?: string): Promise<Candidate[]> {
+  const window = intent.when ?? defaultWindow();
+  const rows = await searchCourtSlots(supabase, { window, sport: intent.sport, priceMax: intent.priceMax, city, lat, lng, limit: 50 });
+
+  // One row per VENUE. Three identical courts at one venue at the same time
+  // are one choice to a shopper; listing them separately pushed every other
+  // venue off the first screen. SQL returns courts soonest first, so the
+  // first court seen per venue is that venue's soonest free slot; the rest
+  // are counted and shown as "more courts free here".
+  const byVenue = new Map<string, { row: CourtSlotRow; others: number }>();
+  for (const r of rows) {
+    const seen = byVenue.get(r.venue_id);
+    if (seen) seen.others += 1;
+    else byVenue.set(r.venue_id, { row: r, others: 0 });
+  }
+
+  return [...byVenue.values()].map(({ row: r, others }): Candidate => ({
+    entityType: "court",
+    entityId: r.court_id,
+    title: r.venue_name,
+    subtitle: [r.court_name, r.city].filter(Boolean).join(" . "),
+    sport: r.sport,
+    price: Number(r.first_price),
+    rating: undefined,
+    distanceKm: r.distance_km ?? undefined,
+    slot: {
+      date: r.first_date,
+      start: r.first_start.slice(0, 5),
+      end: r.first_end.slice(0, 5),
+      price: Number(r.first_price),
+      label: slotLabel(r.first_date, r.first_start),
+      freeSlots: r.matching_slots,
+      otherCourtsFree: others,
+    },
+    text: [r.court_name, r.sport, r.venue_name, r.city, r.address].filter(Boolean).join(" ").toLowerCase(),
+  }));
+}
+
+/** The honest empty answer for a court search: name ONE real alternative
+ * that relaxes ONE constraint, rather than telling the shopper to delete their
+ * words. With both a time and a budget, keep the budget and move the time
+ * first ("the soonest under Rs 300 is ..."), then keep the time and move the
+ * budget ("the cheapest tonight is ..."). Copy obeys house style. */
+// deno-lint-ignore no-explicit-any
+async function courtBroaden(supabase: any, intent: ParsedIntent, lat?: number, lng?: number, city?: string): Promise<string> {
+  const sportWord = intent.sport === "general" ? "" : `${intent.sport} `;
+  const budget = intent.priceMax !== undefined ? ` under Rs ${intent.priceMax}` : "";
+  const what = intent.when
+    ? `No ${sportWord}courts free ${intent.when.label}${budget}`
+    : `No ${sportWord}courts${budget} have a free slot this week`;
+  const base = { sport: intent.sport, city, lat, lng, limit: 1 };
+  const describe = (s: CourtSlotRow) =>
+    `${s.venue_name}, ${slotLabel(s.first_date, s.first_start)}, Rs ${Number(s.first_price)}`;
+
+  if (intent.priceMax !== undefined) {
+    const inBudget = await searchCourtSlots(supabase, { ...base, window: defaultWindow(), priceMax: intent.priceMax }).catch(() => []);
+    if (inBudget.length > 0) return `${what}. The soonest${budget} is ${describe(inBudget[0])}.`;
+    if (intent.when) {
+      const sameTime = await searchCourtSlots(supabase, { ...base, window: intent.when, limit: 50 }).catch(() => []);
+      const cheapest = sameTime.sort((a, b) => Number(a.first_price) - Number(b.first_price))[0];
+      if (cheapest) return `${what}. The cheapest ${intent.when.label} is ${describe(cheapest)}.`;
+    }
+  }
+  const soonest = await searchCourtSlots(supabase, { ...base, window: defaultWindow() }).catch(() => []);
+  if (soonest.length === 0) return `${what}. Try another sport or area.`;
+  return `${what}. The soonest is ${describe(soonest[0])}.`;
 }
 
 // deno-lint-ignore no-explicit-any
 async function fetchProducts(supabase: any, intent: ParsedIntent): Promise<Candidate[]> {
+  // The OWNED catalogue is hidden while shop.owned_enabled is false (the
+  // launch setting). The shop screen filtered these out client side, but home
+  // search did not, so owned products the shop hides were offered there.
+  // Checked here, once, for every caller.
+  const { data: flag } = await supabase
+    .from("app_config")
+    .select("value")
+    .eq("key", "shop.owned_enabled")
+    .eq("public", true)
+    .maybeSingle();
+  if (flag?.value !== true) return [];
+
   let q = supabase
     .from("products")
     .select("id, title, description, sport, base_price")
@@ -292,20 +395,35 @@ async function fetchProducts(supabase: any, intent: ParsedIntent): Promise<Candi
 // missed.
 // deno-lint-ignore no-explicit-any
 async function fetchAffiliateProducts(supabase: any, intent: ParsedIntent, ids?: string[]): Promise<Candidate[]> {
-  let q = supabase
-    .from("affiliate_products")
-    .select("id, title, brand, sport, skill_level, age_range, description, image_url, product_offers ( price, in_stock )")
-    .eq("active", true)
-    .limit(50);
+  const SELECT = "id, title, brand, sport, skill_level, age_range, description, image_url, product_offers ( price, in_stock )";
+
+  // Keyword recall (0134). The old path read the first 50 active rows in no
+  // order and scored those, so on a catalogue of hundreds a product that
+  // exactly matched the query was often never looked at. Now the query's
+  // meaningful terms go through the full text index and the best ranked
+  // products are recalled; scoring and the honesty gate still decide what is
+  // shown. A query with no terms ("tennis") lists newest first, by sport.
+  if (!ids) {
+    const terms = [...new Set([...intent.keywords, intent.brand, intent.nounHint].filter((t): t is string => !!t && t.length >= 2))];
+    if (terms.length > 0) {
+      const { data: ranked, error: rankError } = await supabase.rpc("search_affiliate_product_ids", {
+        p_terms: terms,
+        p_sport: intent.sport === "general" ? null : intent.sport,
+        p_limit: 50,
+      });
+      if (rankError) throw new AppError("INTERNAL", `Failed to search affiliate products: ${rankError.message}`, 500);
+      ids = ((ranked ?? []) as Array<{ id: string }>).map((r) => r.id);
+      if (ids.length === 0) return [];
+    }
+  }
+
+  let q = supabase.from("affiliate_products").select(SELECT).eq("active", true);
   if (ids) {
     if (ids.length === 0) return [];
-    q = supabase
-      .from("affiliate_products")
-      .select("id, title, brand, sport, skill_level, age_range, description, image_url, product_offers ( price, in_stock )")
-      .eq("active", true)
-      .in("id", ids);
-  } else if (intent.sport !== "general") {
-    q = q.eq("sport", intent.sport);
+    q = q.in("id", ids);
+  } else {
+    if (intent.sport !== "general") q = q.eq("sport", intent.sport);
+    q = q.order("created_at", { ascending: false }).limit(50);
   }
 
   const { data, error } = await q;
@@ -602,7 +720,7 @@ Deno.serve((req) =>
     const [gate, coaches, courts, products, affiliateProducts, athletes, clips, cachePre] = await Promise.all([
       shortQuery ? Promise.resolve({ mode: "keyword" as const }) : evaluateAiSearchGate(svc, userId),
       want.has("coach") ? fetchCoaches(supabase, intent, body.city) : Promise.resolve([]),
-      want.has("court") ? fetchCourts(supabase, intent, body.lat, body.lng) : Promise.resolve([]),
+      want.has("court") ? fetchCourts(supabase, intent, body.lat, body.lng, body.city) : Promise.resolve([]),
       want.has("gear") ? fetchProducts(supabase, intent) : Promise.resolve([]),
       want.has("gear") ? fetchAffiliateProducts(supabase, intent) : Promise.resolve([]),
       want.has("athlete") ? fetchAthletes(supabase, intent) : Promise.resolve([]),
@@ -651,8 +769,14 @@ Deno.serve((req) =>
     // VECTOR_SIMILARITY_FLOOR (D1); brand/price constraints are unaffected.
     const honesty = evaluateHonesty(candidates, scored, intent, similarityByKey);
     if (honesty.broaden) {
+      // A courts-only search gets a specific answer from real availability
+      // ("the soonest is ... tomorrow at 6:00 AM") instead of the generic
+      // text-based line, which would suggest deleting the time.
+      const broaden = want.size === 1 && want.has("court")
+        ? await courtBroaden(supabase, intent, body.lat, body.lng, body.city)
+        : honesty.broaden;
       return jsonResponse(
-        { query: body.query, parsedIntent: intent, results: [], broaden: honesty.broaden, mode: reportedMode, vector },
+        { query: body.query, parsedIntent: intent, results: [], broaden, mode: reportedMode, vector },
         200,
       );
     }
@@ -689,6 +813,13 @@ Deno.serve((req) =>
       );
       results = reranked;
       if (usage) background(recordAiSpend(svc, usage.inputTokens, usage.outputTokens));
+    }
+
+    // The rerank may rewrite rankReason in prose. For a court, "when is it
+    // free" is a fact from the database, and the thing the shopper asked, so
+    // it always wins over the model's wording.
+    for (const hit of results) {
+      if (hit.slot) hit.rankReason = `Free ${hit.slot.label}`;
     }
 
     return jsonResponse(

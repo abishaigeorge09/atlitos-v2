@@ -20,6 +20,7 @@ export function VenueSwitcher() {
     <Select
       value={selectedVenueId ?? ""}
       onChange={(e) => setSelectedVenueId(e.target.value)}
+      aria-label="Venue"
       className="w-56"
     >
       {venues.map((v) => (

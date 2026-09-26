@@ -347,3 +347,133 @@ from growing further.
 ## 2026-09-22
 
 - **`packages/theme`'s `textTertiary` changed, and mobile inherits it without a device proof.** The admin UX A2 gate darkened light `textTertiary` from `#8F8F8F` to `#6A6A6A` and lightened dark from `#7A7A7A` to `#949494`, because at the old values every caption, hint and placeholder failed WCAG AA on every ground it sat on (2.74:1 at worst). `apps/mobile`, `apps/portal-court` and `apps/portal-life` regenerate from the same source, so their tertiary text moved too, and that change shipped without the Release-build screenshot and Maestro run CLAUDE.md requires for a mobile visual change. The four new ink tokens beside it (`accentInk`, `accentOnTint`, `successInk`/`warningInk`/`dangerInk`/`infoInk`) are additive and unreferenced outside `apps/admin`, so they change nothing on those surfaces. Owed: one Release-build screenshot pass over the mobile screens with the most tertiary text (captions, empty states, form hints) to confirm the darker grey reads correctly against the dark surfaces, before the 8 Oct submission. The same contrast failure exists on mobile today, so the change is a fix there too, not a regression; what is missing is the proof, not the reasoning. Owner: Abishai.
+
+## 2026-09-24
+
+- **The Razorpay test-mode payment cycle has never been run against production, and production is
+  running `RAZORPAY_MODE=test`, so real customers cannot pay.** Backlogged at the founder's
+  request. Both key pairs and one webhook secret are in the project's function secrets, both
+  webhooks are registered in the Razorpay dashboard, and the key pair verifies against
+  `GET /v1/payments`. What is unproven is the cycle itself: order created, payment captured,
+  `payment.captured` delivered and signature-verified, `ledger_entries` written once and only
+  once, then `refund.processed` reversing it. Nothing about the mode switch removes the need for
+  that run, because the switch only chooses which credentials are used, not whether the ledger is
+  correct. Two things are owed, in order: run the cycle in test mode with a Rs 1 amount and read
+  the ledger rows back with SQL, then flip `RAZORPAY_MODE` to `live` and repeat once with Rs 1 of
+  real money, refunding it. Until the second run, treat payments as not launched regardless of
+  what the dashboard says. Owner: Abishai.
+- **Razorpay Route is not enabled on the new account, so coach and venue payouts cannot settle.**
+  Proven rather than assumed: `GET /v1/transfers` and a `transfer` search return 0 results in both
+  test and live mode, which is what an account without the Route product returns. A support ticket
+  is raised asking for Route enablement and for the pricing in writing. When it is enabled, add
+  `transfer.processed` and `transfer.failed` to BOTH webhooks (they are configured on neither
+  today) and re-run the payment cycle above with a linked account in the path, because a captured
+  payment that cannot be transferred is money the platform is holding with no way to pass it on.
+  Owner: Abishai, then whoever wires the two events.
+- **Single item gear ingest is deployed everywhere but has never been exercised end to end in
+  production by a real admin.** Closed this session: migration 0127 (`retailer_programmes.fetchable`)
+  is applied in production, the deployed `gear-ingest` body carries `RETAILER_UNAVAILABLE`,
+  `retailer_display` and `fetchable` (checked in the deployed source, not inferred from the repo),
+  the function's auth gate holds (anon and no-header both 401), and the admin is live at
+  `atlitos-admin.vercel.app`. Still unproven: one real paste through the live admin, because
+  `action: "fetch"` requires an admin JWT and this session's sandbox refuses to read `.env*` by
+  design, so no admin session could be minted locally. The production catalogue is still only the
+  8 seed rows created 2026-07-28, which means no product has ever been entered through the admin
+  in production. Proof owed: sign in to the live admin, paste one decathlon.in URL (expect a
+  prefilled draft) and one amazon.in URL (expect the `RETAILER_UNAVAILABLE` guidance, no round
+  trip), and save the decathlon one. Owner: Abishai or the next session with browser sign-in.
+- **There is no approval step between data entry and live, and the schema has nowhere to put one.**
+  The founder's requirement for bulk entry was explicit: an entry goes to approval, then to a
+  tester account, then live. `affiliate_products` has only `active boolean`, and the admin knows
+  only `active`, `listed` and `delisted`, so anything a data entry person saves is live the moment
+  it is saved. This is a correctness gap in the single item flow that exists today, not only in
+  the unbuilt bulk flow: the people who will be entering the catalogue have no reviewer between
+  them and the shopper. `docs/PLAN-CATALOGUE-ENTRY.md` phase A4 carries the design
+  (`draft -> in_review -> approved -> live`); it needs the founder's design gate before any code.
+  Owner: Abishai to open the gate.
+- **Atlitos has never been submitted to Apple review, and the App Store Connect listing is empty
+  except for the title.** Established with `eas metadata:pull` against the real ASC record (app
+  `6793626237`, team `4U493SXP52`, EAS account `synthorgtech`), not from a doc. What came back is
+  `version 1.0`, `release.automaticRelease true`, `info.en-US.title "Atlitos"` and the age rating
+  answers, and nothing else: no description, no keywords, no support URL, no marketing or privacy
+  URL, no categories, no copyright, no screenshots and no review contact or demo account. A
+  submission is impossible in that state, so nothing is waiting on Apple. The build history agrees:
+  three iOS builds have ever run, numbers 1 (errored), 2 and 3, the newest finished 25 July 2026,
+  and none since. `app.json` carries `ios.buildNumber 9`, which corresponds to no EAS build at all,
+  so someone bumped it by hand six times without building; do not read it as evidence of six
+  submissions. The gate before submission, `LAUNCH-PHASE-5-STATUS.md` native both-platform QA, is
+  still "PLANNED, not started". Owner: Abishai.
+- **The App Store age rating answers say the app has no user generated content and no messaging,
+  and both are false.** Pulled from ASC: `userGeneratedContent: false`, `messagingAndChat: false`,
+  `advertising: false`, `healthOrWellnessTopics: false`. Atlitos carries user generated content and
+  Prasanth's own `eca5992` says so in its commit message, quoting the guideline: "App Store
+  guideline 1.2 requires a report mechanism and a block mechanism on any surface carrying user
+  generated content". He built report, block and account deletion precisely because the app has
+  UGC. Declaring no UGC while shipping UGC is the Guideline 1.2 shape that rejected BelieversDiary
+  twice, and the second of those rejections came from a detail nobody had checked rather than a
+  missing feature. Correct the answers in the same pass that fills the listing, and re-read
+  `docs/store/APPLE-APP-PRIVACY.md` and `SUBMISSION-CHECKLIST.md` against what the app now does.
+  Owner: Abishai.
+- **There is exactly one Android build ever and it cannot be submitted to Play.** Profile `preview`,
+  distribution `internal`, an APK with `versionCode 1`. Play production needs an AAB from the
+  `production` profile, and `app.json` has no `android.versionCode` at all, so the production
+  profile has nothing to increment from. `docs/store/PLAY-READINESS.md` says there is "no record in
+  this repo of a successful `eas build --platform android`", which is true of the repo and wrong
+  about EAS; the conclusion it draws still holds, because a preview APK exercises none of the
+  native risks a store build does. Owner: Abishai.
+- **`apps/mobile/node_modules` was missing entirely in the main checkout.** Every EAS command failed
+  with "Failed to resolve plugin for module expo-router" until `pnpm install --filter
+  @atlitos/mobile...` ran, which took 6 seconds against an up to date lockfile. It reads exactly
+  like a broken EAS setup or a bad credential, which is the trap: check the workspace is installed
+  before believing any mobile tooling failure. Owner: whoever next hits it.
+
+## 2026-09-26: manual payouts (0130) and what they leave open
+
+- **Merchant of record changed, and GST and TDS are undecided.** Route is closed to ELSHEPH until
+  about Rs 40L of taxable turnover on GST-3B, so Atlitos now receives the full booking amount and
+  pays coaches and venues as contractors. That plausibly means GST on the full amount rather than
+  the platform fee, and TDS on payee payments with a PAN from each payee. `payout_methods.pan` is
+  optional until this is decided; if the CA says TDS applies, make it required in
+  `upsert_my_payout_method` and deduct in the payout run. Owner: Abishai, with the CA.
+- **Bank details are not column-encrypted.** `payout_methods` relies on Supabase encryption at
+  rest plus zero client access and audited admin reveals. Column-level encryption (Vault or an
+  app key) is the next step if the threat model includes database dumps. Owner: whoever next
+  touches payouts.
+- **The coach payout screen has not been seen on a device.** `payout-setup.tsx` and the changed
+  `EarningsHeader` typecheck and lint clean, but CLAUDE.md requires a Release build screenshot and
+  Maestro run. Batched with the App Store Release build, which has to happen anyway. Owner: the
+  App Store submission pass.
+- **Mobile primary buttons fail contrast the same way the portals did.** White ink on ember
+  (`inkOnAccent` on `accent`) is 3.32:1 at button sizes, below AA's 4.5:1. Admin (A2 gate) and
+  both portals (this change) now use `accentInk`, dark on ember. Mobile still uses white on every
+  primary CTA. Not changed here because it restyles every button in the consumer app and needs the
+  founder's eye plus device proof. Owner: Abishai to decide, then the next mobile visual pass.
+- **Route code is deployed and unused.** `razorpay-route-onboard`, `razorpay-route-transfer`, the
+  Route webhook branches and `useCoachEarnings().setupPayoutAccount` / `initiateTransfer` stay, so
+  Route can be switched back on when eligible. Nothing in the apps calls them. Owner: none until
+  eligible.
+- **RazorpayX automatic payouts need a static egress IP.** X is active but unfunded, with no IP
+  allowlisted and no X webhook. Supabase Edge Functions have no fixed outbound IP, so an automatic
+  run needs a static egress path (a small proxy with a fixed IP, or a runner that has one) before
+  the allowlist is meaningful. Owner: Abishai to fund X; engineering to pick the egress path.
+- **Affiliate clicks are recorded but no subid reaches a retailer yet.** `0131` records every Buy
+  tap and appends the click id when `retailer_programmes.subid_param` is set. It is null for every
+  programme, because none is approved (`affiliate_tag_template` is null for all three) and each
+  programme names its subid parameter differently. When a programme is approved, set both the tag
+  template and `subid_param` from that programme's own documentation, then reconcile its first
+  commission report against `affiliate_clicks`. Owner: Abishai, per programme approval.
+- **The Buy tap has not been seen on a device.** `buyUrlForOffer` is proven at the database layer
+  (`scripts/verify-affiliate-clicks.mjs`) and typechecks, but the tap on the compare view is owed
+  a Release build pass with the App Store submission. Owner: the App Store submission pass.
+- **Court search and the past-slot fixes are not in production until deployed.** `0132` and `0133`
+  must be applied and `ai-search` plus `book-session` deployed; until then production still returns
+  nothing for "badminton court tonight" and still offers past slots. Owner: whoever deploys this
+  branch.
+- **The Courts tab search box has not been seen on a device.** Walked end to end in the Expo web
+  build against the local stack (search, results, tap through to a preselected slot), which is a
+  real render but not the Release build CLAUDE.md requires. Owed with the App Store pass. Owner:
+  the App Store submission pass.
+- **Guest location fallback now only sorts.** With location off and no profile city, the store
+  still uses a fixed Hyderabad point to sort venues, but the courts screen no longer shows
+  kilometres measured from it (they were not the athlete's distance). Sorting a guest by a city
+  centre is a product choice worth revisiting if venues spread beyond Hyderabad. Owner: Abishai.

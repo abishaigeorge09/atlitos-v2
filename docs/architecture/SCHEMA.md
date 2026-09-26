@@ -400,6 +400,14 @@ Rating is embedded on the booking row itself (matches the v1 `CourtBooking.ratin
 
 ---
 
+### Court availability functions (`0132`, `0133`)
+
+`get_court_available_slots(court, date)` is the single definition of "free": availability windows,
+minus blackouts, minus bookings not cancelled, priced by the newest active pricing rule. Since
+`0133` it also returns nothing for a past date and, today, only slots that have not ended (IST).
+`search_court_slots` (`0132`) calls it per candidate court and day to answer court search, so search
+can never offer a slot or price the booking screen would not. See API-MAPPING.md, court search.
+
 ## Domain: commerce
 
 ### `categories`
@@ -764,6 +772,36 @@ Both dropped and recreated under the same name with two new trailing, defaulted 
 #### `gear-ingest` edge function (ADR-011 D3, AC-11-3)
 
 Two actions: `{ action: "fetch", url }` matches a `retailer_programmes` row by hostname, fetches the page (`_shared/fetch-page.ts`: named UA, 10s timeout, 5MB cap, robots.txt checked first) and extracts a draft (`_shared/extract-product.ts`: JSON-LD Product, then Open Graph, then the programme's `extractor` map), WRITING NOTHING (FR-44); a blocked/unsupported/unparseable page returns 422 with whatever partial fields could still be scraped. `{ action: "save", url, draft, productId? }` fetches only the draft's image (never the page a second time), SHA-256 hashes it, copies it into `product-images` under the service role (skip if the hash already exists), then calls the two extended RPCs above using the caller's own admin JWT. Admin JWT required for both actions; anon and non-admin are refused 401/403.
+
+### `affiliate_products.search_tsv` (`0134`)
+
+Stored generated `tsvector`: title and brand at weight A, description at weight C, English
+configuration, GIN indexed (`idx_affiliate_products_search_tsv`). Not granted to clients; read only
+by `search_affiliate_product_ids`. Sport is deliberately not in it: it is filtered exactly as an
+enum, and an enum to text cast is not immutable, which a generated column requires.
+
+### `affiliate_clicks` (`0131`)
+
+One row per outbound Buy tap on an affiliate offer. The row id is the subid appended to the
+retailer URL when the programme has `retailer_programmes.subid_param` set (new in `0131`, null for
+every programme until one is approved), so a line in a retailer's commission report maps to one
+row.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | `uuid` | pk, and the subid |
+| `offer_id` | `uuid` | references `product_offers`, on delete cascade |
+| `affiliate_product_id` | `uuid` | references `affiliate_products`, on delete cascade |
+| `retailer_key` | `text` | copied from the offer |
+| `user_id` | `uuid` | references `auth.users`, on delete set null; anonymous sessions count |
+| `surface` | `text` | `compare`, `search` or `home` |
+| `target_url` | `text` | the URL actually opened |
+| `subid_applied` | `boolean` | whether the subid was in `target_url` |
+| `created_at` | `timestamptz` | |
+
+RLS on, zero policies, no client grant. Written only by `record_affiliate_click`, read only through
+`admin_affiliate_click_stats`. A call with no session records nothing; a repeat tap by the same user
+on the same offer within 10 seconds returns the same row.
 
 ## The commerce bill is a third pricing shape (PHASE-4-STATUS.md D1)
 
@@ -1322,6 +1360,27 @@ Debits (1000.00) equal credits (900.00 + 100.00). A coach's balance is `sum(cred
 
 Constraints: `UNIQUE(owner_type, owner_id)`.
 
+### `payout_methods` (`0130`)
+
+Where a coach or venue is paid. One row per `payout_accounts` row.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | `uuid` | pk |
+| `payout_account_id` | `uuid` | not null, unique, references `payout_accounts(id)` on delete cascade |
+| `method_type` | `text` | `bank_account` or `upi` |
+| `account_holder_name` | `text` | 2 to 100 characters |
+| `account_number` | `text` | 9 to 18 digits, required for `bank_account`, null for `upi` |
+| `ifsc` | `text` | `^[A-Z]{4}0[A-Z0-9]{6}$`, required for `bank_account` |
+| `vpa` | `text` | required for `upi` |
+| `pan` | `text` | optional until the CA settles TDS |
+| `verification_status` | `text` | `unverified`, `verified`, `rejected` |
+| `verification_note`, `verified_by`, `verified_at` | | set by `admin_verify_payout_method` |
+| `created_at`, `updated_at` | `timestamptz` | |
+
+RLS enabled with ZERO policies and no grant to `anon` or `authenticated`: every access is a
+security definer function (API-MAPPING.md, payouts). Not column-encrypted (DEBT.md).
+
 ### `transfers`
 
 | Column | Type | Constraints |
@@ -1335,6 +1394,10 @@ Constraints: `UNIQUE(owner_type, owner_id)`.
 | `created_at` | `timestamptz` | |
 
 Indexes: `idx_transfers_payout_account_id` on `payout_account_id`.
+
+`0130` adds `method` (`route`, `razorpayx`, `manual`, default `route`), `external_reference`
+(the bank UTR for a manual payout) and `created_by`, with a partial unique index on
+`(method, external_reference)` so one bank reference can only ever be one payout.
 
 ### `refunds`
 One refund attempt against one captured charge. Added 2026-07-19 in `0026_session_request_cancel_refund.sql` for PRD-02 FR-35. Deliberately shaped like `transfers`: an outbound money movement with a provider id, a status that starts optimistic and is confirmed by webhook, and a pointer to the ledger group written when it settles.
