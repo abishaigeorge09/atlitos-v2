@@ -30,6 +30,8 @@ type LoadState = 'idle' | 'loading' | 'empty' | 'populated' | 'error';
 // wishlist) rather than a server round trip.
 const RECENT_SEARCHES_KEY = 'atlitos.search.recent';
 const MAX_RECENT_SEARCHES = 8;
+/** The entityId prefix ai-search puts on affiliate catalogue hits. */
+const AFFILIATE_PREFIX = 'affiliate:';
 
 // Suggestion chips shown above results when the query is empty, one per
 // segment plus a price cut and a donate prompt.
@@ -187,7 +189,14 @@ export default function SearchScreen() {
   function openHit(hit: SearchHit) {
     switch (hit.entityType) {
       case 'gear':
-        router.push({ pathname: '/shop/product/[id]', params: { id: hit.entityId } });
+        // ai-search prefixes affiliate catalogue ids with "affiliate:" (fetch-gear.ts).
+        // Those open the price comparison screen with the bare id; only an owned
+        // product id opens the owned product page (PLAN-SEARCH-LOCATION-AFFILIATE GLB-01).
+        if (hit.entityId.startsWith(AFFILIATE_PREFIX)) {
+          router.push({ pathname: '/shop/affiliate/[id]', params: { id: hit.entityId.slice(AFFILIATE_PREFIX.length) } });
+        } else {
+          router.push({ pathname: '/shop/product/[id]', params: { id: hit.entityId } });
+        }
         break;
       case 'coach':
         router.push({ pathname: '/(tabs)/coaching/coach/[id]', params: { id: hit.entityId } });
