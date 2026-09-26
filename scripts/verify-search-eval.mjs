@@ -241,7 +241,14 @@ async function prepareEmbeddings() {
   if (blob.model !== expected) {
     throw new Error(`committed embeddings are tagged ${blob.model}, VOYAGE_MODEL is ${expected}. Regenerate: node scripts/search-eval-embed.mjs (docs/search-eval/README.md).`);
   }
-  const decode = (b64) => `[${Array.from(new Float32Array(Buffer.from(b64, 'base64').buffer.slice(0))).join(',')}]`;
+  // Copy out of the Buffer first: a small Buffer is a view into a shared pool
+  // with a non zero byteOffset, and reading its .buffer whole reads the pool.
+  const decode = (b64) => {
+    const buf = Buffer.from(b64, 'base64');
+    const vec = new Float32Array(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
+    if (vec.length !== 1024) throw new Error(`committed vector has ${vec.length} dims, expected 1024`);
+    return `[${Array.from(vec).join(',')}]`;
+  };
   let p = 0;
   for (const [id, b64] of Object.entries(blob.products ?? {})) {
     const { error } = await svc.from('affiliate_products').update({ embedding: decode(b64) }).eq('id', id);
