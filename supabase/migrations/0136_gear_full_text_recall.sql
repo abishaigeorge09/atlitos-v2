@@ -77,7 +77,7 @@ begin
   select p.id, ts_rank_cd(p.search_tsv, v_query)
   from public.affiliate_products p
   where p.active
-    and p.search_tsv  v_query
+    and p.search_tsv @@ v_query
     and (p_sport is null or p.sport = p_sport)
   order by ts_rank_cd(p.search_tsv, v_query) desc, p.created_at desc
   limit greatest(1, least(coalesce(p_limit, 50), 100));
