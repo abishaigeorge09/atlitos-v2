@@ -67,6 +67,8 @@ An automated regression suite (Jest/Playwright/Detox in CI) is NOT in this plan;
 
 **Agent model per phase:** planner (cuts Jira stories) → parallel builders per app/domain (opus-tier: schema/payments/RLS; sonnet-tier: screens/CRUD; haiku: mechanical) → integrator (build+deploy) → biased approver → phase-close. ScheduleWakeup loop keeps it autonomous between phases; founder pinged only at gates needing him (P0 accounts, P2 demo, disagreements).
 
+**Search, location and link based courts (2026-09-26):** phased separately in `docs/PLAN-SEARCH-LOCATION-AFFILIATE.md` (architecture ADR-014), L0 to L5; the accuracy bar is `scripts/verify-search-eval.mjs` over `docs/search-eval/`, and L0 status is in `docs/phases/PHASE-L0-STATUS.md`.
+
 ## Risks
 Razorpay Route test-mode limits (ledger = source of truth so KYC later is config) · slot concurrency (DB-enforced only) · react-native-reusables/Expo 57 compat (P1 week-1 spike; fallback plain StyleSheet on theme tokens) · Stream webhook reliability (idempotent + poll fallback) · RLS leaks on multi-role money data (advisor at every gate) · scope gravity across 7 stakeholders (PRD ceiling + approver) · no Apple account → Android device + iOS sim until P8.
 

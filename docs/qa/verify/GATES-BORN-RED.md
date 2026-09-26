@@ -156,3 +156,175 @@ The plant was then deleted (`git status --porcelain` clean afterwards) and the r
 re-run: `PASS copy-dashes` with 0 offenders, confirming the wider pattern does not fire on the
 `// ATLITOS v2 - <path>` file header convention (162 files, excluded as a comment line) or on any
 other existing const/template literal in the tree.
+
+## Search Phase L0: the bar, the refactor, three invariants (2026-09-26)
+
+Branch `l0/search-bar` off `integration/search-l0`. Every run below is local
+(`http://127.0.0.1:54321`), functions served with empty `ANTHROPIC_API_KEY` and `VOYAGE_API_KEY`.
+Exit codes are the scripts' own.
+
+### `scripts/verify-search-eval.mjs`, born red against the CURRENT ai-search (before any search change)
+
+Run at 21:02 IST, fixture only on the stack (`sharing 0 active non fixture affiliate products, 0
+verified non fixture venues`). The plan predicted typo and Hinglish under threshold and no `answer`;
+both happened, plus more:
+
+    judgments 8070 rows: 7273 derived, 797 agent, 0 human, 0 llm.
+              NO row is human graded. This measures the bar on derived and agent grades only.
+    vector   vector path not exercised: no committed embeddings (docs/search-eval/fixtures/embeddings.b64.json is absent).
+    class              n   CP     NDCG@10 P@5    Hit@1  R@5    honest court  ground flags
+    gear_brand          10 1.000 0.848   0.900   n/a   n/a 0.900    n/a   n/a   n/a
+    gear_typo           10 1.000 0.100     n/a   n/a 0.100 0.100    n/a   n/a   n/a
+    gear_type           10 0.908 0.764   0.820   n/a   n/a 1.000    n/a   n/a   n/a
+    gear_price          10 0.872 0.923   0.955   n/a   n/a 1.000    n/a 0.000   n/a
+    gear_brand_price    10 0.952 0.886   0.850   n/a   n/a 0.900    n/a 0.000   n/a
+    gear_age_skill      10 1.000 0.480     n/a   n/a   n/a 0.900    n/a   n/a   n/a
+    gear_vague          10 1.000 0.631     n/a   n/a   n/a 0.800    n/a   n/a   n/a
+    gear_hinglish       10   n/a 0.000     n/a   n/a 0.000 0.000    n/a   n/a   n/a
+    gear_comparison     10 0.474 0.090     n/a   n/a   n/a 1.000    n/a 0.000   n/a
+    gear_specific       10 1.000 0.795     n/a 0.700   n/a 1.000    n/a   n/a   n/a
+    gear_empty          10 1.000 1.000     n/a   n/a   n/a 0.400    n/a   n/a   n/a
+    gear_sport          10 1.000 1.000   1.000   n/a   n/a 1.000    n/a   n/a   n/a
+    gear_keystroke       6   n/a   n/a     n/a   n/a   n/a   n/a    n/a   n/a 1.000
+    crt_timed            8 1.000 0.990     n/a   n/a   n/a 1.000  1.000 0.000   n/a
+    crt_place            6 1.000 0.831     n/a   n/a   n/a 0.833  0.667   n/a   n/a
+    crt_venue            8 1.000 0.659     n/a 0.833   n/a 0.750  1.000   n/a   n/a
+    crt_empty            6 1.000 1.000     n/a   n/a   n/a 0.833  1.000   n/a   n/a
+    home                 6 0.979 0.644     n/a   n/a   n/a 1.000  1.000 0.000   n/a
+    OVERALL            154 0.952 0.637                        0.779  0.917 0.000
+    FAILED 21 gate(s):
+      NDCG@10 [gear_typo] (needs 0.75) = 0.100
+      Recall@5 [gear_typo] (needs 0.8) = 0.100
+      NDCG@10 [gear_hinglish] (needs 0.75) = 0.000
+      Recall@5 [gear_hinglish] (needs 0.8) = 0.000
+      answer grounding (needs 1) = 0.000
+      ... 16 more: constraint precision in 5 classes and overall (0.952), NDCG in 5 more
+      classes and overall (0.637), Hit@1 gear_specific 0.700 and crt_venue 0.833, honest
+      empty 0.779, court window 0.917
+    exit 1
+
+The bar is not wrong: it fails where the plan said it would, for the reasons the per query
+findings name (every typo and Hinglish query returns empty; there is no `answer` field; the
+comparison anchor is returned as its own "cheaper" answer; sold out products pass price ceilings).
+
+`--degraded` (throttle saturated for the harness user, which is the gate outcome the plan's "spend
+guard forced over budget" produces, without touching the shared daily budget):
+
+    Response flags: vector=true on 0 of 160 queries, mode=llm on 0
+      degraded NDCG@10 overall (needs 0.7) = 0.637
+      degraded constraint precision (needs 1) = 0.952
+    exit 1
+
+`vector=true on 0 of 160` is the proof the run was actually degraded; the harness fails if any
+degraded response reports `vector: true`. The same count in a normal `--class gear_brand` run is
+`vector=true on 9 of 10`, so the assertion can tell the two apart.
+
+### `--baseline-diff`, born red, then the L0-T2 refactor proven against it
+
+    baseline recorded 2026-09-26 21:03 IST at df837d6        (--write-baseline)
+    control, no code change:           baseline diff: 0 of 160 compared queries changed     exit 0
+    PLANT index.ts results.slice(0, body.limit).reverse():
+                                       baseline diff: 95 of 160 compared queries changed    exit 1
+    plant reverted (git checkout):     baseline diff: 0 of 160                              exit 0
+    after the split into fetch-gear.ts, fetch-courts.ts, fetch-people.ts (21:06 IST):
+                                       baseline diff: 0 of 160 compared queries changed     exit 0
+    PLANT fetch-courts.ts [...byVenue.values()].slice(1):
+                                       CHANGED CRT-01.1 "badminton court tonight" ...       exit 1
+    plant reverted:                    baseline diff: 0 of 160                              exit 0
+
+The second plant sits inside a NEW module, which proves the served function was running the split
+code and not a stale worker. Court broaden lines are compared with the slot phrase ("today at
+9:30 PM") masked, since the clock moves it without any code change; ids are compared exactly and
+in order. A later run on a stack carrying rows other proofs leave behind (two verified badminton
+coaches from `verify-manual-payouts.mjs`) changed 1 of 160 (`GLB-01.1`, coaches added), with
+`supabase/functions` unchanged since the refactor commit (`git diff --stat a556ecd HEAD` empty):
+the diff is only meaningful on the catalogue state the baseline was taken on, and the harness
+prints that state under `sharing` on every run.
+
+### `scripts/lib/search-eval-metrics.test.ts` (tsx), NDCG against a hand computed example
+
+Planted `Math.log2(i + 2)` -> `Math.log2(i + 1.5)` in the discount:
+
+    FAIL  DCG of [3,2,0,1] is 9.3234658 (hand computed) (14.696836852176643)
+    FAIL  IDCG of [3,3,2,1,0] is 13.3471848 (hand computed) (19.3826043086361)
+    FAIL  NDCG@10 is 0.6985343, and the pool order does not matter (0.7582488203418738)
+    FAIL  NDCG@2 cuts the ranking at 2: [0,3] over pool [3] is 7/log2(3)/7 = 0.6309298 (0.44250704934975993)
+    FAILED 4 check(s)                                                                        exit 1
+
+Reverted (`git status --porcelain` empty): `ALL CHECKS PASSED`, 19 of 19, exit 0.
+
+### `scripts/seed-search-eval.mjs` refuses every non local target with zero writes
+
+A fake `psql` first on PATH appends to a log whenever it is invoked:
+
+    SUPABASE_URL=https://syzzfgaudpifwvbpycyi.supabase.co      REFUSED ... would write to PRODUCTION     exit 1
+    same, plus ATLITOS_ALLOW_PRODUCTION_WRITE=yes-i-mean-production                                      exit 1
+    ATLITOS_LOCAL_DB_URL=postgresql://postgres:pw@db.example.com:5432/postgres
+                                                  REFUSED ... only writes to the local stack             exit 1
+    psql log after all three:                     none (file never created)
+    positive control, loopback target:            psql invoked: postgresql://postgres:postgres@127.0.0.1:54322/postgres -v ON_ERROR_STOP=1 -q -f .../local_seed_search_eval.sql
+                                                                                                         exit 0
+
+The control shows the fake psql does log when called, so the empty log after the three refusals is
+evidence rather than an unexercised check.
+
+### `scripts/security-invariants.sh`: `no-fake-affiliate-tag`
+
+Against the unmodified `scripts/seed-affiliate-catalog.mjs`:
+
+    FAIL  no-fake-affiliate-tag    a hand written affiliate tag in a seed, script or eval file
+            scripts/seed-affiliate-catalog.mjs:173:  offer('002', ..., 'https://www.amazon.in/dp/B08PDT4?tag=atlitos-21'),
+            ... 8 lines
+    security-invariants: 1 of 8 checks FAILED.                                          exit 1
+
+The eight `?tag=atlitos-21` parameters were removed. The first pattern (`[?&]tag=|atlitos-21`)
+then matched 0 lines while the same file still carried 9 `?aff=atlitos` parameters on Tennis Hub,
+Decathlon and Cricket Store links (counted directly: `tag=` 0, `atlitos-21` 0, `aff=atlitos` 9).
+Same fabrication under another name, so the pattern was widened to
+`[?&](tag|aff)=|=atlitos|atlitos-21` and went red again:
+
+    FAIL  no-fake-affiliate-tag    a hand written affiliate tag in a seed, script or eval file
+            scripts/seed-affiliate-catalog.mjs:172:  offer('001', ..., 'https://www.tennishub.in/babolat-pure-drive-team?aff=atlitos'),
+            ... 9 lines                                                                 exit 1
+
+After removing them: `PASS  no-fake-affiliate-tag`, `security-invariants: 8 checks passed.` (offline).
+
+### `search-log-no-user` and `clicks-zero-policy` (SQL, local catalog)
+
+    clean:   PASS  search-log-no-user   search_query_log does not exist yet (Phase L1), so it has no user column
+             PASS  clicks-zero-policy   RLS on and zero policies on: affiliate_clicks
+             security-invariants: 14 checks passed.                                     exit 0
+    PLANT create table public.search_query_log (..., user_id uuid, ...);
+          create policy invariant_plant_admin_read on public.affiliate_clicks for select to authenticated using (true);
+             FAIL  search-log-no-user   search_query_log carries a user column
+                     public.search_query_log.user_id
+             FAIL  clicks-zero-policy   a click table has a policy or has RLS off
+                     affiliate_clicks: policy invariant_plant_admin_read
+             security-invariants: 2 of 14 checks FAILED.                                exit 1
+    PLANT 2: search_query_log WITHOUT a user column; alter table affiliate_clicks disable row level security;
+             PASS  search-log-no-user   search_query_log has no column naming a user
+             FAIL  clicks-zero-policy   a click table has a policy or has RLS off
+                     affiliate_clicks: row level security is OFF
+             security-invariants: 1 of 14 checks FAILED.                                exit 1
+    plants dropped, RLS re-enabled (verified: 0 policies, 0 search_query_log tables, relrowsecurity true):
+             security-invariants: 14 checks passed.                                     exit 0
+
+Plant 2 matters as much as plant 1: it proves the check reports a table that exists without a user
+column as clean (the branch L1 will actually hit), and that RLS off with zero policies, a wide open
+table, is caught rather than read as "zero policies, fine".
+
+### `scripts/search-eval-embed.mjs` and `scripts/probe-search-latency.mjs`
+
+    embed, no key file, no env var:          no Voyage key ... Nothing was written.                     exit 1
+    embed, SUPABASE_URL=production:          REFUSED: ... reads the fixture from the local stack only   exit 1
+    harness with a SYNTHETIC blob (deleted afterwards): loaded 60 product and 160 query embeddings;
+                                             first component round trips (-0.01785678 written, -0.0178568 read back);
+                                             60 fixture rows embedded, 156 unique queries cached
+    same blob, VOYAGE_MODEL=voyage-3-large:  ERROR committed embeddings are tagged voyage-3, VOYAGE_MODEL is voyage-3-large   exit 1
+    blob removed:                            Cleared 60 fixture embedding(s) that did not come from the committed file.
+    probe, production without --confirm-production:   REFUSED                                          exit 1
+    probe, service role key:                           REFUSED: that is a service role key             exit 1
+    probe, local stack, 1 run, unpaced:                40 of 40 HTTP 200; typing p50 24 ms p95 32 ms   exit 0
+
+Neither was run for real: no Voyage key was available to this track, and the probe was not pointed
+at production (`docs/phases/PHASE-L0-STATUS.md` says why).

@@ -341,6 +341,7 @@ from growing further.
 - ~~**Privacy policy names Synth Sports as the operator with a synthsports.co contact.**~~ Carried from Prasanth's landing rewrite because the operator's legal identity is a founder decision, not a merge decision. Decide the operating entity and contact for Atlitos (the account move out of Synth is in progress) and update `apps/landing/privacy.html`, `terms.html` and the App Store privacy URL together. Owner: Abishai.
 - **A partial `pnpm turbo typecheck lint` run reads as green for packages it never reached.** During the 2026-09-19 reconciliation the turbo run stopped at the first failing task (`admin#lint`), and a bare `tsc` in `apps/mobile` then found three errors turbo had not yet reported. Read `Tasks: N successful, M total` and treat N < M as red, never the absence of a package in the failure list. `scripts/dod.sh` uses the same turbo invocation; consider `--continue` so every task runs and every failure is listed in one pass. Owner: Prasanth.
 - **The production affiliate catalogue is seed data with a fabricated affiliate tag.** All 8 `affiliate_products` and 17 `product_offers` are the `b0000000` seed rows: made up Amazon ASINs and `?tag=atlitos-21`, a tag no programme has approved. The first sweep marked 5 Amazon offers gone and 3 blocked. Delist them through the admin (audited, never delete) or replace with real pastes before the store build; a shopper who taps Buy today lands on a 404. Owner: Abishai.
+  **2026-09-26 (search Phase L0-T3):** the SEED SCRIPT no longer carries it. `scripts/seed-affiliate-catalog.mjs` writes plain retailer URLs: the 8 `?tag=atlitos-21` Amazon parameters and, found by sweeping the class, 9 `?aff=atlitos` parameters on Tennis Hub, Decathlon and Cricket Store links are gone, and `scripts/security-invariants.sh` `no-fake-affiliate-tag` now fails any `tag`, `aff` or `=atlitos` parameter in `scripts/`, `supabase/seed/` or `docs/search-eval/` (born red, `docs/qa/verify/GATES-BORN-RED.md`). PRODUCTION IS UNCHANGED: its rows still carry the tag and the placeholder ASINs, and delisting them through the admin is still owed to the founder.
 - **A parsed page with no price reads as `ok` in the health sweep.** decathlon.in serves 200 with OG tags for an unknown slug; `extractProduct` returns a title with `price: null`, and `gear-recheck` records `ok` for a priced offer. Should be `unparsed` (log) and `gone` (offer) when the offer has a price and the page has none. Add the case to `verify-gear-health` first. Owner: Prasanth.
 - **Voyage rate tier.** The key is on the entry tier (a handful of requests per minute). `gear-embed` batches 64 per call so the sweep fits; `ai-search` makes one call per uncached query, which at launch traffic will hit the limit and degrade to keyword (by design, `vector: false`). Add a payment method to the Voyage account before the 8 Oct release. Owner: Abishai.
 
@@ -490,3 +491,39 @@ from growing further.
   migrations touch none of PR #20's objects. Still owed: merge `release/ios-2026-09-23` into `main`
   keeping its `0130` and `0131` file numbers, so the repo describes what production runs. It is 17
   commits ahead and 16 behind. Owner: Prasanth, with Abishai.
+
+## 2026-09-26: search Phase L0 (the bar), what it leaves open
+
+- **The vector path of the search bar has never run on real geometry.** `scripts/search-eval-embed.mjs`
+  is built and its loader is proven with a synthetic blob, but no Voyage key was available to the L0
+  track, so `docs/search-eval/fixtures/embeddings.b64.json` does not exist and every harness run
+  prints `vector path not exercised: no committed embeddings`. Put `VOYAGE_API_KEY=...` in
+  `~/.config/atlitos/voyage.env`, run `node scripts/seed-search-eval.mjs` then
+  `node scripts/search-eval-embed.mjs`, and commit the blob before L1 claims any vector class.
+  Owner: Abishai.
+- **No judgment is human graded.** 7,273 rows are `derived` and 797 are `agent`; ADR-014 D1 says only
+  `human` rows count for the gate. The harness measures on every non `llm` row and says so on every
+  run. A human pass over at least the 797 `agent` rows (grades 1 and 2, each with its rule in `note`)
+  is owed before the L5 gate. Owner: Abishai.
+- **`scripts/verify-search-hybrid.mjs` (b) fails whenever any catalogue with a Babolat under 2000 is
+  loaded**, which includes the search eval fixture and `scripts/seed-affiliate-catalog.mjs`. It passed
+  on a clean catalogue after the L0 refactor, so this is a fixture collision, not a regression; the
+  proof should assert against its own fixture ids rather than the whole catalogue. Owner: L1-T2.
+- **`scripts/verify-manual-payouts.mjs` leaves verified fixture rows behind** on the shared local
+  stack: two verified badminton coaches in Hyderabad (`verify.payout.coacha.<run>`,
+  `verify.payout.coachb.<run>`) and a verified venue (`Verify Arena <run>`). They appear in other
+  scripts' search results; after one run the search eval's home "badminton" query gained both
+  coaches. Same shape as the generator that polluted production, one level down. Owner: the next
+  track to touch 0132 or its proof.
+- **Court search tells a false "no courts" for a keyword it cannot match.** "indoor badminton court"
+  returns empty with "No badminton courts have a free slot this week. The soonest is Smash Arena,
+  today at 10:00 PM", which contradicts itself: the courts are free, the word "indoor" failed the text
+  match. Measured by the eval set (CRT-05.1). ADR-014 CRT-05 owns the fix. Owner: L2-T2.
+- **The GLB-01 routing fix in `apps/mobile/src/app/home/search.tsx` is typechecked and linted, not
+  seen on a device.** CLAUDE.md requires a Release build screenshot and a Maestro run; L4-T3 owns
+  `search-domains.yaml` (GLB-01 tap through). Owner: L4-T3.
+- **`scripts/probe-search-latency.mjs` has not been run against production.** It needs the production
+  anon key, which the L0 track could not read without opening `.env` files, and ai-search does its own
+  server side bookkeeping for every probe request (a rate limit row, a cache row, and on the submit
+  path a Claude spend record), so it is not strictly read only. Run it at the L1 gate from a stated
+  location. Owner: L1 integrator.
