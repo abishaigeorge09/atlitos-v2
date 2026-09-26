@@ -626,6 +626,10 @@ export interface SearchHit {
     freeSlots: number;
     otherCourtsFree: number;
   };
+  /** Courts only (ADR-014 D5, filled from Phase L2): the venue's own booking
+   * page. `host` is the URL's host without `www.`, derived server side. A hit
+   * with `booking` and no `slot` is a link venue; one with both books either way. */
+  booking?: { url: string; host: string };
   rankScore: number; // 0-1
   rankReason: string; // "Closest, 1.2km" | "Best price match" | "Top rated"
 }
@@ -642,4 +646,17 @@ export interface SearchResponse {
    * empty state renders this verbatim.
    */
   broaden?: string;
+  /**
+   * ADR-014 D4, filled from Phase L1: one grounded sentence built from a
+   * template over cited rows, only when the parse carried a constraint (brand,
+   * price ceiling, comparison anchor, court time window). Every number in
+   * `text` equals a field on a cited row; every citation is in `results`.
+   */
+  answer?: {
+    text: string;
+    citations: Array<{ entityType: SearchEntityType; entityId: string; offerId?: string }>;
+  };
+  /** ADR-014 D5, filled from Phase L2: how many court hits are slot venues and
+   * how many are link venues, so the client can head the second group honestly. */
+  courts?: { slotVenues: number; linkVenues: number };
 }

@@ -39,6 +39,22 @@ export interface ParsedIntent {
   // signal, not part of the SearchResponse contract's parsedIntent.
   nounHint?: string;
   keywords: string[];
+  // ADR-014 D2 (Phase L1 fills these; declared in L0 so the modules share one
+  // shape). Not set by parseIntent yet.
+  /** "kids" from a kids or Hinglish age word; "adult" when stated. */
+  ageGroup?: "kids" | "adult";
+  /** A cheapness word ("sasta", "cheap"): sort by price, never a filter. */
+  cheap?: boolean;
+  /** Comparison anchor for "like X" and "alternative to X" (affiliate product id). */
+  anchorProductId?: string;
+  /** A locality named in a court query, resolved to a point and radius (L3). */
+  place?: { label: string; lat: number; lng: number; radiusKm: number };
+}
+
+/** ADR-014 D5 (Phase L2): a venue's own booking page on a court hit. */
+export interface BookingLink {
+  url: string;
+  host: string;
 }
 
 // Router tokens map a word to an entity type. A query with none of these
@@ -224,6 +240,8 @@ export interface Candidate {
   distanceKm?: number;
   /** Courts only: the first free slot inside the searched window (0134). */
   slot?: CourtSlotHit;
+  /** Courts only, from Phase L2 (ADR-014 D5): the venue's booking link. */
+  booking?: BookingLink;
   text: string; // lowercased searchable blob
 }
 
@@ -250,6 +268,7 @@ export interface ScoredHit {
   price?: number;
   distanceKm?: number;
   slot?: CourtSlotHit;
+  booking?: BookingLink;
   rankScore: number; // 0..1
   rankReason: string;
 }
