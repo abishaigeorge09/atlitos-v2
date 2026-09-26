@@ -584,6 +584,12 @@ function baselineDiff(runs) {
   if (!existsSync(file)) throw new Error('docs/search-eval/baseline.json does not exist; record one with --write-baseline');
   const base = JSON.parse(readFileSync(file, 'utf8'));
   console.log(`\nbaseline recorded ${base.recordedAtIst} IST at ${String(base.gitHead).slice(0, 7)}`);
+  // A court broaden names a real slot ("Shuttle House, today at 9:30 PM"), and
+  // that slot moves with the clock without any code change. The slot phrase is
+  // masked before comparison; the venue named and every other word still count.
+  const SLOT = /\b(today|tomorrow|Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|\d{1,2} [A-Z][a-z]{2}) at \d{1,2}:\d{2} (AM|PM)\b/g;
+  const norm = (s) => (s === null || s === undefined ? null : String(s).replace(SLOT, '<slot>'));
+  console.log('  (court broaden lines are compared with their slot day and time masked, since the clock moves them)');
   let changed = 0;
   let compared = 0;
   const notCompared = [];
@@ -594,7 +600,7 @@ function baselineDiff(runs) {
     if (r.error || b.error) { changed += 1; console.log(`  CHANGED ${r.q.id}: error now=${r.error ?? 'none'} before=${b.error ?? 'none'}`); continue; }
     compared += 1;
     const now = r.data.results.map(hitKey);
-    if (JSON.stringify(now) !== JSON.stringify(b.ids) || (r.data.broaden ?? null) !== b.broaden) {
+    if (JSON.stringify(now) !== JSON.stringify(b.ids) || norm(r.data.broaden) !== norm(b.broaden)) {
       changed += 1;
       console.log(`  CHANGED ${r.q.id} "${r.q.query}"`);
       const gone = b.ids.filter((x) => !now.includes(x));
@@ -602,7 +608,7 @@ function baselineDiff(runs) {
       if (gone.length) console.log(`      removed ${gone.join(', ')}`);
       if (added.length) console.log(`      added   ${added.join(', ')}`);
       if (!gone.length && !added.length && JSON.stringify(now) !== JSON.stringify(b.ids)) console.log('      same ids, different order');
-      if ((r.data.broaden ?? null) !== b.broaden) console.log(`      broaden ${JSON.stringify(b.broaden)} -> ${JSON.stringify(r.data.broaden ?? null)}`);
+      if (norm(r.data.broaden) !== norm(b.broaden)) console.log(`      broaden ${JSON.stringify(b.broaden)} -> ${JSON.stringify(r.data.broaden ?? null)}`);
     }
   }
   if (notCompared.length) console.log(`  not compared: ${notCompared.join(', ')}`);

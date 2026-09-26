@@ -1,0 +1,2581 @@
+{
+ "recordedAt": "2026-09-26T15:33:44.830Z",
+ "recordedAtIst": "2026-09-26 21:03",
+ "gitHead": "df837d6f386c129a5f70b4c17c8ed6a6e842a62e",
+ "note": "Recorded against the ai-search function BEFORE the L0-T2 module split. --baseline-diff compares result ids per query, in order.",
+ "vector": "vector path not exercised: no committed embeddings",
+ "sharing": {
+  "foreignProducts": 0,
+  "foreignVenues": 0
+ },
+ "queries": {
+  "GEAR-01.1": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000056",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000047",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000006",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000005",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000048",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000058",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000004",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000003",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000002",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000001",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000012"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-01.2": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000016",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000059",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000015",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000013",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000014"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-01.3": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000057",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000051",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000019",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000018",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000017"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-01.4": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000028",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000053",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000027",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000026"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-01.5": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000023",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000052",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000060",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000031",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000054",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000024",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000025",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000022"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": false
+  },
+  "GEAR-01.6": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000032",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000033",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000034"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-01.7": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000040",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000039",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000041"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-01.8": {
+   "ids": [],
+   "broaden": "No Li ning products. Try removing the brand.",
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-25.1": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000050",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000021",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000020"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-25.2": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000057",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000051",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000019",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000018",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000017"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-02.1": {
+   "ids": [],
+   "broaden": "No matches for \"yonx\". Try removing yonx.",
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-02.2": {
+   "ids": [],
+   "broaden": "No matches for \"babolt\". Try removing babolt.",
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-02.3": {
+   "ids": [],
+   "broaden": "No matches for \"kokaburra\". Try removing kokaburra.",
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-02.4": {
+   "ids": [],
+   "broaden": "No Lining rackets. Try removing the brand.",
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-02.5": {
+   "ids": [],
+   "broaden": "No matches for \"wilsn\". Try removing wilsn.",
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-02.6": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000040",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000039",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000041"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-02.7": {
+   "ids": [],
+   "broaden": "No matches for \"niva\". Try removing niva.",
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-02.8": {
+   "ids": [],
+   "broaden": "No matches for \"adiddas\". Try removing adiddas.",
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-02.9": {
+   "ids": [],
+   "broaden": "No matches for \"badmintn\". Try removing badmintn.",
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-02.10": {
+   "ids": [],
+   "broaden": "No matches for \"criket\". Try removing criket.",
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-03.1": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000058",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000040",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000042",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000039",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000044",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000043",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000041"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-03.2": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000023",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000028",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000052",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000060",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000031",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000054",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000055",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000024",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000053",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000030",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000027",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000025",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000022",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000029",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000026"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-03.3": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000006",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000005",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000007",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000058",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000011",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000004",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000008",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000003",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000002",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000010",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000009",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000001",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000012"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-03.4": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000057",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000016",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000021",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000019",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000059",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000015",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000018",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000020",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000017",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000013",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000014"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-03.5": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000038",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000032",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000037",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000033",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000034",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000035",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000045",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000046",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000036"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-03.6": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000049",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000047",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000048"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-03.7": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000050",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000051"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-03.8": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000060",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000054",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000055"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-26.1": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000057",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000006",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000005",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000016",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000021",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000007",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000058",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000011",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000019",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000004",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000059",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000008",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000015",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000003",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000002",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000010",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000018",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000009",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000020",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000001"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-03.9": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000052",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000054",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000055",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000053"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-04.1": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000056",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000050",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000038",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000032",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000057",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000051",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000037",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000033",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000049",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000047",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000023",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000034"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-04.2": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000056",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000050",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000038",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000032",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000057"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-04.3": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000056",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000050",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000038",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000032",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000057",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000051",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000037",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000033",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000049"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-27.1": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000056",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000050",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000038",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000057",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000032",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000051",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000037",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000033",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000049",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000047",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000023",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000034",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000028",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000035",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000016",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000060",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000052",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000031",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000021",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000054"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-27.2": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000056",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000050",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000038",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000032",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000057",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000051",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000037",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000033",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000049",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000047",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000023",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000034"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-27.3": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000056",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000050",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000038",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000057",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000032",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000051",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000037",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000033",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000049",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000047",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000023",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000034",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000028",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000035",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000016",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000060",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000052",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000031",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000021",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000054"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-04.4": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000023",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000028",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000060",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000052",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000031",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000054"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-04.5": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000056",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000049",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000047",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000006"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-19.1": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000057",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000016"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-04.6": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000058",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000040",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000042",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000039"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-05.1": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000056",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000047",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000006",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000005"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-05.2": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000016"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-05.3": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000057",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000051",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000019"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-05.4": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000032"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-05.5": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000023",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000052",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000060",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000031",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000054",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000024"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-05.6": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000028"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-05.7": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000040",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000039"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-05.8": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000035"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-05.9": {
+   "ids": [],
+   "broaden": "No Li ning products under 3000. Try removing the brand.",
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-05.10": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000042",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000044"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-06.1": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000057",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000006",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000005",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000016",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000021",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000007",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000058",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000011",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000019",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000004",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000059",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000008",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000015",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000003",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000002",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000010",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000018",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000009",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000020",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000001"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-06.2": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000021"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-06.3": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000028"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-06.4": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000006",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000005",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000007",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000058",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000011",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000004",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000008",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000003",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000002",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000010",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000009",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000001",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000012"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-06.5": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000006",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000005",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000007",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000058",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000011",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000004",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000008",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000003",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000002",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000010",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000009",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000001",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000012"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-06.6": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000023",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000028",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000052",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000060",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000031",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000054",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000055",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000024",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000053",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000030",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000027",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000025",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000022",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000029",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000026"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-06.7": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000057",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000016",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000021",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000019",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000059",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000015",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000018",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000020",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000017",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000013",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000014"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-06.8": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000038"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-06.9": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000023",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000028",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000052",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000060",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000031",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000054",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000055",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000024",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000053",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000030",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000027",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000025",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000022",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000029",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000026"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-06.10": {
+   "ids": [],
+   "broaden": "No matches for \"kids\". Try removing beginner.",
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-07.1": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000040",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000039",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000041"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-07.2": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000040",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000039",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000041"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-07.3": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000056",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000057",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000039"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-07.4": {
+   "ids": [],
+   "broaden": "No Head products. Try removing the brand.",
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-07.5": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000052",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000054",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000055",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000053"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-07.6": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000060",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000058",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000059"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-07.7": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000048",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000009"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-07.8": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000045",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000046"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-07.9": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000006",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000005",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000007",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000054",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000053",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000027",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000046",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000043"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-07.10": {
+   "ids": [],
+   "broaden": "No matches for \"practice\". Try removing practice.",
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-08.1": {
+   "ids": [],
+   "broaden": "No matches for \"sasta bachon liye\". Try removing liye.",
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-08.2": {
+   "ids": [],
+   "broaden": "No matches for \"bachon liye\". Try removing liye.",
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-08.3": {
+   "ids": [],
+   "broaden": "No matches for \"liye joota\". Try removing joota.",
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-08.4": {
+   "ids": [],
+   "broaden": "No matches for \"gend\". Try removing gend.",
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-08.5": {
+   "ids": [],
+   "broaden": "No matches for \"sasta\". Try removing sasta.",
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-08.6": {
+   "ids": [],
+   "broaden": "No matches for \"chahiye\". Try removing chahiye.",
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-08.7": {
+   "ids": [],
+   "broaden": "No matches for \"wala\". Try removing beginner.",
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-08.8": {
+   "ids": [],
+   "broaden": "No matches for \"bacche liye\". Try removing liye.",
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-08.9": {
+   "ids": [],
+   "broaden": "No matches for \"joote\". Try removing joote.",
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-08.10": {
+   "ids": [],
+   "broaden": "No matches for \"sasta\". Try removing sasta.",
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-09.1": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000002",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000001"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-09.2": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000059",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000014",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000013"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-09.3": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000053",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000026"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-09.4": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000041"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-09.5": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000018"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-10.1": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000059",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000016",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000015",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000013",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000014"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-10.2": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000002",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000001"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-10.3": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000039"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-10.4": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000027"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-10.5": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000033"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-15.1": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000002",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000001"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-15.2": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000002",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000001"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-15.3": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000003",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000012"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-15.4": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000014",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000054",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000048",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000059",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000009",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000013"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-15.5": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000059",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000013",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000016",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000015",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000014"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-15.6": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000017"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-15.7": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000039"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-15.8": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000053",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000026"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-15.9": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000036"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-15.10": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000047"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-11.1": {
+   "ids": [],
+   "broaden": "No matches for \"golf clubs\". Try removing clubs.",
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-11.2": {
+   "ids": [],
+   "broaden": "No matches for \"swimming goggles\". Try removing goggles.",
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-11.3": {
+   "ids": [],
+   "broaden": "No matches for \"hockey stick\". Try removing stick.",
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-05.11": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000056"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-25.3": {
+   "ids": [],
+   "broaden": "No Yonex rackets. Try removing the brand.",
+   "mode": "keyword",
+   "vector": true
+  },
+  "EMPTY-01.1": {
+   "ids": [],
+   "broaden": "No Babolat products under 1000. Try raising to 2000, or removing the brand.",
+   "mode": "keyword",
+   "vector": true
+  },
+  "EMPTY-03.1": {
+   "ids": [],
+   "broaden": "No matches for \"carbon pickleball paddle\". Try removing paddle.",
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-20.1": {
+   "ids": [],
+   "broaden": "No Badminton bats found. Try searching all sports.",
+   "mode": "keyword",
+   "vector": true
+  },
+  "EMPTY-02.1": {
+   "ids": [],
+   "broaden": "No Nike products under 1000. Try raising to 5000, or removing the brand.",
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-11.4": {
+   "ids": [],
+   "broaden": "No matches for \"table\". Try removing table.",
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-16.1": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000056",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000049",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000047",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000006",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000005",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000007",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000058",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000048",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000011",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000040",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000004",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000039",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000008",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000003",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000002",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000041",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000010",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000009",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000001",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000012"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-16.2": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000050",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000057",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000051",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000016",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000021",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000019",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000042",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000059",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000044",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000015",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000043",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000018",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000020",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000017",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000013",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000014"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-16.3": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000023",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000028",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000060",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000052",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000031",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000054",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000055",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000053",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000024",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000030",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000027",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000025",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000022",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000029",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000026"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-16.4": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000038",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000032",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000037",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000033",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000034",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000035",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000045",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000046",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000036"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-16.5": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000056",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000049",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000047",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000006",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000005",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000007",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000058",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000048",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000011",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000040",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000004",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000039",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000008",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000003",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000002",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000041",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000010",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000009",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000001",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000012"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-16.6": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000050",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000057",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000051",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000016",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000021",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000019",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000042",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000059",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000044",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000015",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000043",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000018",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000020",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000017",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000013",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000014"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-16.7": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000023",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000028",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000060",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000052",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000031",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000054",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000055",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000053",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000024",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000030",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000027",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000025",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000022",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000029",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000026"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-16.8": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000056",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000049",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000047",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000006",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000005",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000007",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000058",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000048",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000011",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000040",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000004",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000039",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000008",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000003",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000002",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000041",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000010",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000009",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000001",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000012"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-16.9": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000050",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000057",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000051",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000016",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000021",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000019",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000042",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000059",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000044",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000015",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000043",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000018",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000020",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000017",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000013",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000014"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-16.10": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000023",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000028",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000060",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000052",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000031",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000054",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000055",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000053",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000024",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000030",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000027",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000025",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000022",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000029",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000026"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GEAR-17.1": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000056",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000050",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000038",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000057",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000032",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000051",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000037",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000033",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000049",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000047",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000023",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000034",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000028",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000035",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000016",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000060",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000052",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000031",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000021",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000054"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": false
+  },
+  "GEAR-17.2": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000056",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000050",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000038",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000057",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000032",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000051",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000037",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000033",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000049",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000047",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000023",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000034",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000028",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000035",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000016",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000060",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000052",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000031",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000021",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000054"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": false
+  },
+  "GEAR-17.3": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000056",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000050",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000038",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000057",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000032",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000051",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000037",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000033",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000049",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000047",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000023",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000034",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000028",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000035",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000016",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000060",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000052",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000031",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000021",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000054"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": false
+  },
+  "GEAR-17.4": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000056",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000050",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000038",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000057",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000032",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000051",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000037",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000033",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000049",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000047",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000023",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000034",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000028",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000035",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000016",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000060",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000052",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000031",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000021",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000054"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": false
+  },
+  "GEAR-17.5": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000056",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000050",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000038",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000057",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000032",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000051",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000037",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000033",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000049",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000047",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000023",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000034",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000028",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000035",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000016",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000060",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000052",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000031",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000021",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000054"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": false
+  },
+  "GEAR-17.6": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000056",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000050",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000038",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000057",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000032",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000051",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000037",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000033",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000049",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000047",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000023",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000034",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000028",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000035",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000016",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000060",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000052",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000031",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000021",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000054"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": false
+  },
+  "CRT-01.1": {
+   "ids": [
+    "court:e0000000-0000-0000-0004-000000000010",
+    "court:e0000000-0000-0000-0004-000000000002",
+    "court:e0000000-0000-0000-0004-000000000001",
+    "court:e0000000-0000-0000-0004-000000000006"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": false
+  },
+  "CRT-01.2": {
+   "ids": [
+    "court:e0000000-0000-0000-0004-000000000010",
+    "court:e0000000-0000-0000-0004-000000000002",
+    "court:e0000000-0000-0000-0004-000000000006",
+    "court:e0000000-0000-0000-0004-000000000001"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": false
+  },
+  "CRT-04.1": {
+   "ids": [
+    "court:e0000000-0000-0000-0004-000000000010",
+    "court:e0000000-0000-0000-0004-000000000002",
+    "court:e0000000-0000-0000-0004-000000000006"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": false
+  },
+  "CRT-17.1": {
+   "ids": [
+    "court:e0000000-0000-0000-0004-000000000004"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": false
+  },
+  "CRT-17.2": {
+   "ids": [
+    "court:e0000000-0000-0000-0004-000000000009",
+    "court:e0000000-0000-0000-0004-000000000005"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": false
+  },
+  "CRT-01.3": {
+   "ids": [
+    "court:e0000000-0000-0000-0004-000000000010",
+    "court:e0000000-0000-0000-0004-000000000002",
+    "court:e0000000-0000-0000-0004-000000000001",
+    "court:e0000000-0000-0000-0004-000000000006"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": false
+  },
+  "CRT-01.4": {
+   "ids": [
+    "court:e0000000-0000-0000-0004-000000000008"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": false
+  },
+  "CRT-04.2": {
+   "ids": [
+    "court:e0000000-0000-0000-0004-000000000009"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": false
+  },
+  "CRT-02.1": {
+   "ids": [
+    "court:e0000000-0000-0000-0004-000000000002",
+    "court:e0000000-0000-0000-0004-000000000010",
+    "court:e0000000-0000-0000-0004-000000000001",
+    "court:e0000000-0000-0000-0004-000000000006",
+    "court:e0000000-0000-0000-0004-000000000012",
+    "court:e0000000-0000-0000-0004-000000000015"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": false
+  },
+  "CRT-03.1": {
+   "ids": [
+    "court:e0000000-0000-0000-0004-000000000002",
+    "court:e0000000-0000-0000-0004-000000000001"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": false
+  },
+  "CRT-03.2": {
+   "ids": [
+    "court:e0000000-0000-0000-0004-000000000004",
+    "court:e0000000-0000-0000-0004-000000000005"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": false
+  },
+  "CRT-02.2": {
+   "ids": [
+    "court:e0000000-0000-0000-0004-000000000003",
+    "court:e0000000-0000-0000-0004-000000000004"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": false
+  },
+  "CRT-02.3": {
+   "ids": [
+    "court:e0000000-0000-0000-0004-000000000013",
+    "court:e0000000-0000-0000-0004-000000000009",
+    "court:e0000000-0000-0000-0004-000000000005"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": false
+  },
+  "LOC-11.1": {
+   "ids": [
+    "court:e0000000-0000-0000-0004-000000000010",
+    "court:e0000000-0000-0000-0004-000000000002",
+    "court:e0000000-0000-0000-0004-000000000001",
+    "court:e0000000-0000-0000-0004-000000000006",
+    "court:e0000000-0000-0000-0004-000000000012",
+    "court:e0000000-0000-0000-0004-000000000015"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": false
+  },
+  "CRT-06.1": {
+   "ids": [
+    "court:e0000000-0000-0000-0004-000000000001"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": false
+  },
+  "CRT-06.2": {
+   "ids": [
+    "court:e0000000-0000-0000-0004-000000000002"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": false
+  },
+  "CRT-06.3": {
+   "ids": [
+    "court:e0000000-0000-0000-0004-000000000004",
+    "court:e0000000-0000-0000-0004-000000000005"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": false
+  },
+  "CRT-07.1": {
+   "ids": [],
+   "broaden": "No tennis courts have a free slot this week. The soonest is Shuttle House, today at 9:30 PM, Rs 700.",
+   "mode": "keyword",
+   "vector": false
+  },
+  "CRT-06.4": {
+   "ids": [
+    "court:e0000000-0000-0000-0004-000000000006"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": false
+  },
+  "CRT-06.5": {
+   "ids": [
+    "court:e0000000-0000-0000-0004-000000000012"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": false
+  },
+  "CRT-14.1": {
+   "ids": [],
+   "broaden": "No courts have a free slot this week. The soonest is Shuttle House, today at 9:30 PM, Rs 700.",
+   "mode": "keyword",
+   "vector": false
+  },
+  "CRT-05.1": {
+   "ids": [],
+   "broaden": "No badminton courts have a free slot this week. The soonest is Smash Arena, today at 10:00 PM, Rs 400.",
+   "mode": "keyword",
+   "vector": false
+  },
+  "CRT-09.1": {
+   "ids": [],
+   "broaden": "No football courts free this weekend. The soonest is Whitefield Football Arena, Monday at 6:00 AM, Rs 1400.",
+   "mode": "keyword",
+   "vector": false
+  },
+  "CRT-09.2": {
+   "ids": [],
+   "broaden": "No badminton courts free tomorrow in the evening under Rs 100. The cheapest tomorrow in the evening is Secunderabad Badminton Hall, tomorrow at 4:00 PM, Rs 300.",
+   "mode": "keyword",
+   "vector": false
+  },
+  "CRT-09.3": {
+   "ids": [],
+   "broaden": "No tennis courts free tonight under Rs 200. The cheapest tonight is Shuttle House, today at 9:30 PM, Rs 700.",
+   "mode": "keyword",
+   "vector": false
+  },
+  "LOC-11.2": {
+   "ids": [
+    "court:e0000000-0000-0000-0004-000000000013",
+    "court:e0000000-0000-0000-0004-000000000009",
+    "court:e0000000-0000-0000-0004-000000000005"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": false
+  },
+  "CRT-09.4": {
+   "ids": [],
+   "broaden": "No football courts free tomorrow in the morning under Rs 300. The cheapest tomorrow in the morning is Kukatpally Turf Park, tomorrow at 6:00 AM, Rs 1500.",
+   "mode": "keyword",
+   "vector": false
+  },
+  "CRT-09.5": {
+   "ids": [],
+   "broaden": "No badminton courts have a free slot this week. Try another sport or area.",
+   "mode": "keyword",
+   "vector": false
+  },
+  "GLB-01.1": {
+   "ids": [
+    "court:e0000000-0000-0000-0004-000000000010",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000056",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000049",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000047",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000006",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000005",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000007",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000058",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000048",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000011",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000040",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000004",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000039",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000008",
+    "court:e0000000-0000-0000-0004-000000000002",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000003",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000002",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000041",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000010",
+    "court:e0000000-0000-0000-0004-000000000001"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GLB-02.1": {
+   "ids": [
+    "court:e0000000-0000-0000-0004-000000000010",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000039",
+    "court:e0000000-0000-0000-0004-000000000002",
+    "court:e0000000-0000-0000-0004-000000000001",
+    "court:e0000000-0000-0000-0004-000000000006",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000002"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GLB-03.1": {
+   "ids": [
+    "court:e0000000-0000-0000-0004-000000000004",
+    "court:e0000000-0000-0000-0004-000000000005"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": false
+  },
+  "GLB-01.2": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000056",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000047",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000006",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000005",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000048",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000058",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000004",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000003",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000002",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000001",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000012"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GLB-01.3": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000023",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000028",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000052",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000060",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000031",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000054"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  },
+  "GLB-02.2": {
+   "ids": [
+    "gear:affiliate:e0000000-0000-0000-0001-000000000033",
+    "court:e0000000-0000-0000-0004-000000000008",
+    "gear:affiliate:e0000000-0000-0000-0001-000000000046"
+   ],
+   "broaden": null,
+   "mode": "keyword",
+   "vector": true
+  }
+ },
+ "metrics": {
+  "perClass": {
+   "gear_brand": {
+    "n": 10,
+    "cp": 1,
+    "ndcg": {
+     "value": 0.8483336277821509,
+     "n": 10
+    },
+    "p5": {
+     "value": 0.9,
+     "n": 10
+    },
+    "hit1": {
+     "value": null,
+     "n": 0
+    },
+    "recall5": {
+     "value": null,
+     "n": 0
+    },
+    "honest": {
+     "value": 0.9,
+     "n": 10
+    },
+    "court": {
+     "value": null,
+     "n": 0
+    },
+    "grounded": {
+     "value": null,
+     "n": 0
+    },
+    "flags": {
+     "value": null,
+     "n": 0
+    },
+    "ndcgUndefined": 0
+   },
+   "gear_typo": {
+    "n": 10,
+    "cp": 1,
+    "ndcg": {
+     "value": 0.1,
+     "n": 10
+    },
+    "p5": {
+     "value": null,
+     "n": 0
+    },
+    "hit1": {
+     "value": null,
+     "n": 0
+    },
+    "recall5": {
+     "value": 0.1,
+     "n": 10
+    },
+    "honest": {
+     "value": 0.1,
+     "n": 10
+    },
+    "court": {
+     "value": null,
+     "n": 0
+    },
+    "grounded": {
+     "value": null,
+     "n": 0
+    },
+    "flags": {
+     "value": null,
+     "n": 0
+    },
+    "ndcgUndefined": 0
+   },
+   "gear_type": {
+    "n": 10,
+    "cp": 0.9080459770114943,
+    "ndcg": {
+     "value": 0.7638331712184133,
+     "n": 10
+    },
+    "p5": {
+     "value": 0.8200000000000001,
+     "n": 10
+    },
+    "hit1": {
+     "value": null,
+     "n": 0
+    },
+    "recall5": {
+     "value": null,
+     "n": 0
+    },
+    "honest": {
+     "value": 1,
+     "n": 10
+    },
+    "court": {
+     "value": null,
+     "n": 0
+    },
+    "grounded": {
+     "value": null,
+     "n": 0
+    },
+    "flags": {
+     "value": null,
+     "n": 0
+    },
+    "ndcgUndefined": 0
+   },
+   "gear_price": {
+    "n": 10,
+    "cp": 0.8723404255319149,
+    "ndcg": {
+     "value": 0.9231877114497535,
+     "n": 10
+    },
+    "p5": {
+     "value": 0.9550000000000001,
+     "n": 10
+    },
+    "hit1": {
+     "value": null,
+     "n": 0
+    },
+    "recall5": {
+     "value": null,
+     "n": 0
+    },
+    "honest": {
+     "value": 1,
+     "n": 10
+    },
+    "court": {
+     "value": null,
+     "n": 0
+    },
+    "grounded": {
+     "value": 0,
+     "n": 10
+    },
+    "flags": {
+     "value": null,
+     "n": 0
+    },
+    "ndcgUndefined": 0
+   },
+   "gear_brand_price": {
+    "n": 10,
+    "cp": 0.9523809523809523,
+    "ndcg": {
+     "value": 0.8864708679335717,
+     "n": 10
+    },
+    "p5": {
+     "value": 0.85,
+     "n": 10
+    },
+    "hit1": {
+     "value": null,
+     "n": 0
+    },
+    "recall5": {
+     "value": null,
+     "n": 0
+    },
+    "honest": {
+     "value": 0.9,
+     "n": 10
+    },
+    "court": {
+     "value": null,
+     "n": 0
+    },
+    "grounded": {
+     "value": 0,
+     "n": 10
+    },
+    "flags": {
+     "value": null,
+     "n": 0
+    },
+    "ndcgUndefined": 0
+   },
+   "gear_age_skill": {
+    "n": 10,
+    "cp": 1,
+    "ndcg": {
+     "value": 0.4797829195872868,
+     "n": 10
+    },
+    "p5": {
+     "value": null,
+     "n": 0
+    },
+    "hit1": {
+     "value": null,
+     "n": 0
+    },
+    "recall5": {
+     "value": null,
+     "n": 0
+    },
+    "honest": {
+     "value": 0.9,
+     "n": 10
+    },
+    "court": {
+     "value": null,
+     "n": 0
+    },
+    "grounded": {
+     "value": null,
+     "n": 0
+    },
+    "flags": {
+     "value": null,
+     "n": 0
+    },
+    "ndcgUndefined": 0
+   },
+   "gear_vague": {
+    "n": 10,
+    "cp": 1,
+    "ndcg": {
+     "value": 0.6308382784980128,
+     "n": 10
+    },
+    "p5": {
+     "value": null,
+     "n": 0
+    },
+    "hit1": {
+     "value": null,
+     "n": 0
+    },
+    "recall5": {
+     "value": null,
+     "n": 0
+    },
+    "honest": {
+     "value": 0.8,
+     "n": 10
+    },
+    "court": {
+     "value": null,
+     "n": 0
+    },
+    "grounded": {
+     "value": null,
+     "n": 0
+    },
+    "flags": {
+     "value": null,
+     "n": 0
+    },
+    "ndcgUndefined": 0
+   },
+   "gear_hinglish": {
+    "n": 10,
+    "cp": null,
+    "ndcg": {
+     "value": 0,
+     "n": 10
+    },
+    "p5": {
+     "value": null,
+     "n": 0
+    },
+    "hit1": {
+     "value": null,
+     "n": 0
+    },
+    "recall5": {
+     "value": 0,
+     "n": 10
+    },
+    "honest": {
+     "value": 0,
+     "n": 10
+    },
+    "court": {
+     "value": null,
+     "n": 0
+    },
+    "grounded": {
+     "value": null,
+     "n": 0
+    },
+    "flags": {
+     "value": null,
+     "n": 0
+    },
+    "ndcgUndefined": 0
+   },
+   "gear_comparison": {
+    "n": 10,
+    "cp": 0.47368421052631576,
+    "ndcg": {
+     "value": 0.08982045081530918,
+     "n": 10
+    },
+    "p5": {
+     "value": null,
+     "n": 0
+    },
+    "hit1": {
+     "value": null,
+     "n": 0
+    },
+    "recall5": {
+     "value": null,
+     "n": 0
+    },
+    "honest": {
+     "value": 1,
+     "n": 10
+    },
+    "court": {
+     "value": null,
+     "n": 0
+    },
+    "grounded": {
+     "value": 0,
+     "n": 5
+    },
+    "flags": {
+     "value": null,
+     "n": 0
+    },
+    "ndcgUndefined": 0
+   },
+   "gear_specific": {
+    "n": 10,
+    "cp": 1,
+    "ndcg": {
+     "value": 0.7946358946445092,
+     "n": 10
+    },
+    "p5": {
+     "value": null,
+     "n": 0
+    },
+    "hit1": {
+     "value": 0.7,
+     "n": 10
+    },
+    "recall5": {
+     "value": null,
+     "n": 0
+    },
+    "honest": {
+     "value": 1,
+     "n": 10
+    },
+    "court": {
+     "value": null,
+     "n": 0
+    },
+    "grounded": {
+     "value": null,
+     "n": 0
+    },
+    "flags": {
+     "value": null,
+     "n": 0
+    },
+    "ndcgUndefined": 0
+   },
+   "gear_empty": {
+    "n": 10,
+    "cp": 1,
+    "ndcg": {
+     "value": 1,
+     "n": 1
+    },
+    "p5": {
+     "value": null,
+     "n": 0
+    },
+    "hit1": {
+     "value": null,
+     "n": 0
+    },
+    "recall5": {
+     "value": null,
+     "n": 0
+    },
+    "honest": {
+     "value": 0.4,
+     "n": 10
+    },
+    "court": {
+     "value": null,
+     "n": 0
+    },
+    "grounded": {
+     "value": null,
+     "n": 0
+    },
+    "flags": {
+     "value": null,
+     "n": 0
+    },
+    "ndcgUndefined": 9
+   },
+   "gear_sport": {
+    "n": 10,
+    "cp": 1,
+    "ndcg": {
+     "value": 1,
+     "n": 10
+    },
+    "p5": {
+     "value": 1,
+     "n": 10
+    },
+    "hit1": {
+     "value": null,
+     "n": 0
+    },
+    "recall5": {
+     "value": null,
+     "n": 0
+    },
+    "honest": {
+     "value": 1,
+     "n": 10
+    },
+    "court": {
+     "value": null,
+     "n": 0
+    },
+    "grounded": {
+     "value": null,
+     "n": 0
+    },
+    "flags": {
+     "value": null,
+     "n": 0
+    },
+    "ndcgUndefined": 0
+   },
+   "gear_keystroke": {
+    "n": 6,
+    "cp": null,
+    "ndcg": {
+     "value": null,
+     "n": 0
+    },
+    "p5": {
+     "value": null,
+     "n": 0
+    },
+    "hit1": {
+     "value": null,
+     "n": 0
+    },
+    "recall5": {
+     "value": null,
+     "n": 0
+    },
+    "honest": {
+     "value": null,
+     "n": 0
+    },
+    "court": {
+     "value": null,
+     "n": 0
+    },
+    "grounded": {
+     "value": null,
+     "n": 0
+    },
+    "flags": {
+     "value": 1,
+     "n": 6
+    },
+    "ndcgUndefined": 0
+   },
+   "crt_timed": {
+    "n": 8,
+    "cp": 1,
+    "ndcg": {
+     "value": 0.9896649265891196,
+     "n": 8
+    },
+    "p5": {
+     "value": null,
+     "n": 0
+    },
+    "hit1": {
+     "value": null,
+     "n": 0
+    },
+    "recall5": {
+     "value": null,
+     "n": 0
+    },
+    "honest": {
+     "value": 1,
+     "n": 8
+    },
+    "court": {
+     "value": 1,
+     "n": 8
+    },
+    "grounded": {
+     "value": 0,
+     "n": 8
+    },
+    "flags": {
+     "value": null,
+     "n": 0
+    },
+    "ndcgUndefined": 0
+   },
+   "crt_place": {
+    "n": 6,
+    "cp": 1,
+    "ndcg": {
+     "value": 0.8314823271618553,
+     "n": 6
+    },
+    "p5": {
+     "value": null,
+     "n": 0
+    },
+    "hit1": {
+     "value": null,
+     "n": 0
+    },
+    "recall5": {
+     "value": null,
+     "n": 0
+    },
+    "honest": {
+     "value": 0.8333333333333334,
+     "n": 6
+    },
+    "court": {
+     "value": 0.6666666666666666,
+     "n": 6
+    },
+    "grounded": {
+     "value": null,
+     "n": 0
+    },
+    "flags": {
+     "value": null,
+     "n": 0
+    },
+    "ndcgUndefined": 0
+   },
+   "crt_venue": {
+    "n": 8,
+    "cp": 1,
+    "ndcg": {
+     "value": 0.6590210275379226,
+     "n": 7
+    },
+    "p5": {
+     "value": null,
+     "n": 0
+    },
+    "hit1": {
+     "value": 0.8333333333333334,
+     "n": 6
+    },
+    "recall5": {
+     "value": null,
+     "n": 0
+    },
+    "honest": {
+     "value": 0.75,
+     "n": 8
+    },
+    "court": {
+     "value": 1,
+     "n": 5
+    },
+    "grounded": {
+     "value": null,
+     "n": 0
+    },
+    "flags": {
+     "value": null,
+     "n": 0
+    },
+    "ndcgUndefined": 1
+   },
+   "crt_empty": {
+    "n": 6,
+    "cp": 1,
+    "ndcg": {
+     "value": 1,
+     "n": 1
+    },
+    "p5": {
+     "value": null,
+     "n": 0
+    },
+    "hit1": {
+     "value": null,
+     "n": 0
+    },
+    "recall5": {
+     "value": null,
+     "n": 0
+    },
+    "honest": {
+     "value": 0.8333333333333334,
+     "n": 6
+    },
+    "court": {
+     "value": 1,
+     "n": 1
+    },
+    "grounded": {
+     "value": null,
+     "n": 0
+    },
+    "flags": {
+     "value": null,
+     "n": 0
+    },
+    "ndcgUndefined": 5
+   },
+   "home": {
+    "n": 6,
+    "cp": 0.9791666666666666,
+    "ndcg": {
+     "value": 0.6437935825872748,
+     "n": 6
+    },
+    "p5": {
+     "value": null,
+     "n": 0
+    },
+    "hit1": {
+     "value": null,
+     "n": 0
+    },
+    "recall5": {
+     "value": null,
+     "n": 0
+    },
+    "honest": {
+     "value": 1,
+     "n": 6
+    },
+    "court": {
+     "value": 1,
+     "n": 4
+    },
+    "grounded": {
+     "value": 0,
+     "n": 1
+    },
+    "flags": {
+     "value": null,
+     "n": 0
+    },
+    "ndcgUndefined": 0
+   }
+  },
+  "overall": {
+   "cp": 0.9524517087667161,
+   "ndcg": {
+    "value": 0.6370586423256349,
+    "n": 139
+   },
+   "honest": {
+    "value": 0.7792207792207793,
+    "n": 154
+   },
+   "court": {
+    "value": 0.9166666666666666,
+    "n": 24
+   },
+   "grounded": {
+    "value": 0,
+    "n": 34
+   },
+   "unjudged": 0,
+   "outOfScope": 0,
+   "loc": {
+    "value": 1,
+    "n": 120
+   },
+   "slow": 0
+  }
+ }
+}
