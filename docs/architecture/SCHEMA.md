@@ -1322,6 +1322,27 @@ Debits (1000.00) equal credits (900.00 + 100.00). A coach's balance is `sum(cred
 
 Constraints: `UNIQUE(owner_type, owner_id)`.
 
+### `payout_methods` (`0130`)
+
+Where a coach or venue is paid. One row per `payout_accounts` row.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | `uuid` | pk |
+| `payout_account_id` | `uuid` | not null, unique, references `payout_accounts(id)` on delete cascade |
+| `method_type` | `text` | `bank_account` or `upi` |
+| `account_holder_name` | `text` | 2 to 100 characters |
+| `account_number` | `text` | 9 to 18 digits, required for `bank_account`, null for `upi` |
+| `ifsc` | `text` | `^[A-Z]{4}0[A-Z0-9]{6}$`, required for `bank_account` |
+| `vpa` | `text` | required for `upi` |
+| `pan` | `text` | optional until the CA settles TDS |
+| `verification_status` | `text` | `unverified`, `verified`, `rejected` |
+| `verification_note`, `verified_by`, `verified_at` | | set by `admin_verify_payout_method` |
+| `created_at`, `updated_at` | `timestamptz` | |
+
+RLS enabled with ZERO policies and no grant to `anon` or `authenticated`: every access is a
+security definer function (API-MAPPING.md, payouts). Not column-encrypted (DEBT.md).
+
 ### `transfers`
 
 | Column | Type | Constraints |
@@ -1335,6 +1356,10 @@ Constraints: `UNIQUE(owner_type, owner_id)`.
 | `created_at` | `timestamptz` | |
 
 Indexes: `idx_transfers_payout_account_id` on `payout_account_id`.
+
+`0130` adds `method` (`route`, `razorpayx`, `manual`, default `route`), `external_reference`
+(the bank UTR for a manual payout) and `created_by`, with a partial unique index on
+`(method, external_reference)` so one bank reference can only ever be one payout.
 
 ### `refunds`
 One refund attempt against one captured charge. Added 2026-07-19 in `0026_session_request_cancel_refund.sql` for PRD-02 FR-35. Deliberately shaped like `transfers`: an outbound money movement with a provider id, a status that starts optimistic and is confirmed by webhook, and a pointer to the ledger group written when it settles.

@@ -16,6 +16,7 @@ import { DrillCreate } from "./pages/drills/create";
 import { DrillShow } from "./pages/drills/show";
 import { DrillsList } from "./pages/drills/list";
 import { FeeConfigList } from "./pages/fee-config/list";
+import { PayoutsList } from "./pages/payouts/list";
 import { GearCreate } from "./pages/gear/create";
 import { GearHealth } from "./pages/gear/health";
 import { GearShow } from "./pages/gear/show";
@@ -116,6 +117,11 @@ export function App() {
             meta: { label: "Reports queue" },
           },
           {
+            name: "payouts",
+            list: "/payouts",
+            meta: { label: "Payouts" },
+          },
+          {
             name: "fee_config",
             list: "/fee-config",
             meta: { label: "Fee config" },
@@ -171,6 +177,7 @@ export function App() {
             <Route path="/reports" element={<ReportsList />} />
             <Route path="/reports/show/:id" element={<ReportShow />} />
             <Route path="/fee-config" element={<FeeConfigList />} />
+            <Route path="/payouts" element={<PayoutsList />} />
             <Route path="/bookings" element={<BookingsList />} />
             <Route path="/users" element={<UsersList />} />
             <Route path="/users/show/:id" element={<UserShow />} />

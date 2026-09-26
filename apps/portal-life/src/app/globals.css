@@ -94,7 +94,7 @@
   --popover: hsl(var(--color-surface));
   --popover-foreground: hsl(var(--color-text));
   --primary: hsl(var(--color-accent));
-  --primary-foreground: hsl(var(--color-ink-on-accent));
+  --primary-foreground: hsl(var(--color-accent-ink));
   --secondary: hsl(var(--color-surface-muted));
   --secondary-foreground: hsl(var(--color-text));
   --muted: hsl(var(--color-surface-muted));
@@ -114,7 +114,7 @@
   --sidebar: hsl(var(--color-surface));
   --sidebar-foreground: hsl(var(--color-text));
   --sidebar-primary: hsl(var(--color-accent));
-  --sidebar-primary-foreground: hsl(var(--color-ink-on-accent));
+  --sidebar-primary-foreground: hsl(var(--color-accent-ink));
   --sidebar-accent: hsl(var(--color-surface-muted));
   --sidebar-accent-foreground: hsl(var(--color-text));
   --sidebar-border: hsl(var(--color-border));
@@ -164,7 +164,7 @@
   --popover: hsl(var(--color-surface));
   --popover-foreground: hsl(var(--color-text));
   --primary: hsl(var(--color-accent));
-  --primary-foreground: hsl(var(--color-ink-on-accent));
+  --primary-foreground: hsl(var(--color-accent-ink));
   --secondary: hsl(var(--color-surface-muted));
   --secondary-foreground: hsl(var(--color-text));
   --muted: hsl(var(--color-surface-muted));
@@ -184,7 +184,7 @@
   --sidebar: hsl(var(--color-surface));
   --sidebar-foreground: hsl(var(--color-text));
   --sidebar-primary: hsl(var(--color-accent));
-  --sidebar-primary-foreground: hsl(var(--color-ink-on-accent));
+  --sidebar-primary-foreground: hsl(var(--color-accent-ink));
   --sidebar-accent: hsl(var(--color-surface-muted));
   --sidebar-accent-foreground: hsl(var(--color-text));
   --sidebar-border: hsl(var(--color-border));

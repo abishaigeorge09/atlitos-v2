@@ -11,9 +11,9 @@ const badgeVariants = cva(
         default: "bg-secondary text-foreground",
         accent: "bg-accent text-accent-foreground",
         success:
-          "bg-[color-mix(in_oklch,hsl(var(--color-success)),transparent_88%)] text-[hsl(var(--color-success))]",
+          "bg-[color-mix(in_oklch,hsl(var(--color-success)),transparent_88%)] text-[hsl(var(--color-success-ink))]",
         warning:
-          "bg-[color-mix(in_oklch,hsl(var(--color-warning)),transparent_88%)] text-[hsl(var(--color-warning))]",
+          "bg-[color-mix(in_oklch,hsl(var(--color-warning)),transparent_88%)] text-[hsl(var(--color-warning-ink))]",
         danger: "bg-destructive/10 text-destructive",
         outline: "border-border text-foreground",
       },

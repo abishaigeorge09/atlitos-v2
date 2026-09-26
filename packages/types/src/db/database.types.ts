@@ -7,155 +7,78 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5"
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
-      affiliate_products: {
+      account_deletions: {
         Row: {
-          active: boolean
-          age_range: string | null
-          brand: string | null
-          category_id: string | null
-          created_at: string
-          description: string | null
-          id: string
-          image_url: string | null
-          skill_level: string | null
-          sport: Database["public"]["Enums"]["sport"] | null
-          title: string
-          updated_at: string
+          auth_released_at: string | null
+          removed: Json
+          requested_at: string
+          retained: Json
+          user_id: string
         }
         Insert: {
-          active?: boolean
-          age_range?: string | null
-          brand?: string | null
-          category_id?: string | null
-          created_at?: string
-          description?: string | null
-          id?: string
-          image_url?: string | null
-          skill_level?: string | null
-          sport?: Database["public"]["Enums"]["sport"] | null
-          title: string
-          updated_at?: string
+          auth_released_at?: string | null
+          removed?: Json
+          requested_at?: string
+          retained?: Json
+          user_id: string
         }
         Update: {
-          active?: boolean
-          age_range?: string | null
-          brand?: string | null
-          category_id?: string | null
-          created_at?: string
-          description?: string | null
-          id?: string
-          image_url?: string | null
-          skill_level?: string | null
-          sport?: Database["public"]["Enums"]["sport"] | null
-          title?: string
-          updated_at?: string
+          auth_released_at?: string | null
+          removed?: Json
+          requested_at?: string
+          retained?: Json
+          user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "affiliate_products_category_id_fkey"
-            columns: ["category_id"]
-            isOneToOne: false
-            referencedRelation: "categories"
-            referencedColumns: ["id"]
+            foreignKeyName: "account_deletions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
           },
-        ]
-      }
-      product_offers: {
-        Row: {
-          affiliate_product_id: string
-          affiliate_url: string
-          canonical_url: string | null
-          consecutive_failures: number
-          created_at: string
-          currency: string
-          id: string
-          in_stock: boolean
-          last_check_outcome: string | null
-          last_checked_at: string
-          last_price_change_at: string | null
-          price: number
-          retailer: string
-          retailer_key: string | null
-          updated_at: string
-        }
-        Insert: {
-          affiliate_product_id: string
-          affiliate_url: string
-          canonical_url?: string | null
-          consecutive_failures?: number
-          created_at?: string
-          currency?: string
-          id?: string
-          in_stock?: boolean
-          last_check_outcome?: string | null
-          last_checked_at?: string
-          last_price_change_at?: string | null
-          price: number
-          retailer: string
-          retailer_key?: string | null
-          updated_at?: string
-        }
-        Update: {
-          affiliate_product_id?: string
-          affiliate_url?: string
-          canonical_url?: string | null
-          consecutive_failures?: number
-          created_at?: string
-          currency?: string
-          id?: string
-          in_stock?: boolean
-          last_check_outcome?: string | null
-          last_checked_at?: string
-          last_price_change_at?: string | null
-          price?: number
-          retailer?: string
-          retailer_key?: string | null
-          updated_at?: string
-        }
-        Relationships: [
           {
-            foreignKeyName: "product_offers_affiliate_product_id_fkey"
-            columns: ["affiliate_product_id"]
-            isOneToOne: false
-            referencedRelation: "affiliate_products"
+            foreignKeyName: "account_deletions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "product_offers_retailer_key_fkey"
-            columns: ["retailer_key"]
-            isOneToOne: false
-            referencedRelation: "retailer_programmes"
-            referencedColumns: ["key"]
+            foreignKeyName: "account_deletions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
           },
         ]
-      }
-      app_config: {
-        Row: {
-          key: string
-          public: boolean
-          updated_at: string
-          value: Json
-        }
-        Insert: {
-          key: string
-          public?: boolean
-          updated_at?: string
-          value: Json
-        }
-        Update: {
-          key?: string
-          public?: boolean
-          updated_at?: string
-          value?: Json
-        }
-        Relationships: []
       }
       addresses: {
         Row: {
@@ -214,6 +137,144 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      admin_email_allowlist: {
+        Row: {
+          added_at: string
+          email: string
+          note: string | null
+        }
+        Insert: {
+          added_at?: string
+          email: string
+          note?: string | null
+        }
+        Update: {
+          added_at?: string
+          email?: string
+          note?: string | null
+        }
+        Relationships: []
+      }
+      affiliate_products: {
+        Row: {
+          active: boolean
+          age_range: string | null
+          auto_delisted_at: string | null
+          brand: string | null
+          category_id: string | null
+          created_at: string
+          description: string | null
+          embedding: string | null
+          health_checked_at: string | null
+          health_status: string | null
+          id: string
+          image_path: string | null
+          image_url: string | null
+          skill_level: string | null
+          source_image_url: string | null
+          sport: Database["public"]["Enums"]["sport"] | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          age_range?: string | null
+          auto_delisted_at?: string | null
+          brand?: string | null
+          category_id?: string | null
+          created_at?: string
+          description?: string | null
+          embedding?: string | null
+          health_checked_at?: string | null
+          health_status?: string | null
+          id?: string
+          image_path?: string | null
+          image_url?: string | null
+          skill_level?: string | null
+          source_image_url?: string | null
+          sport?: Database["public"]["Enums"]["sport"] | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          age_range?: string | null
+          auto_delisted_at?: string | null
+          brand?: string | null
+          category_id?: string | null
+          created_at?: string
+          description?: string | null
+          embedding?: string | null
+          health_checked_at?: string | null
+          health_status?: string | null
+          id?: string
+          image_path?: string | null
+          image_url?: string | null
+          skill_level?: string | null
+          source_image_url?: string | null
+          sport?: Database["public"]["Enums"]["sport"] | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "affiliate_products_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "affiliate_products_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "shopper_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_spend_daily: {
+        Row: {
+          day: string
+          est_usd: number
+          input_tokens: number
+          output_tokens: number
+        }
+        Insert: {
+          day: string
+          est_usd?: number
+          input_tokens?: number
+          output_tokens?: number
+        }
+        Update: {
+          day?: string
+          est_usd?: number
+          input_tokens?: number
+          output_tokens?: number
+        }
+        Relationships: []
+      }
+      app_config: {
+        Row: {
+          key: string
+          public: boolean
+          updated_at: string
+          value: Json
+        }
+        Insert: {
+          key: string
+          public?: boolean
+          updated_at?: string
+          value: Json
+        }
+        Update: {
+          key?: string
+          public?: boolean
+          updated_at?: string
+          value?: Json
+        }
+        Relationships: []
       }
       athlete_sports: {
         Row: {
@@ -325,6 +386,67 @@ export type Database = {
           },
         ]
       }
+      blocked_users: {
+        Row: {
+          blocked_id: string
+          blocker_id: string
+          created_at: string
+        }
+        Insert: {
+          blocked_id: string
+          blocker_id: string
+          created_at?: string
+        }
+        Update: {
+          blocked_id?: string
+          blocker_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blocked_users_blocked_id_fkey"
+            columns: ["blocked_id"]
+            isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "blocked_users_blocked_id_fkey"
+            columns: ["blocked_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blocked_users_blocked_id_fkey"
+            columns: ["blocked_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blocked_users_blocker_id_fkey"
+            columns: ["blocker_id"]
+            isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "blocked_users_blocker_id_fkey"
+            columns: ["blocker_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blocked_users_blocker_id_fkey"
+            columns: ["blocker_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cart_items: {
         Row: {
           created_at: string
@@ -413,6 +535,8 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          removed_at: string | null
+          removed_reason: string | null
           sender_id: string
           text: string
           thread_id: string
@@ -420,6 +544,8 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          removed_at?: string | null
+          removed_reason?: string | null
           sender_id: string
           text: string
           thread_id: string
@@ -427,6 +553,8 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          removed_at?: string | null
+          removed_reason?: string | null
           sender_id?: string
           text?: string
           thread_id?: string
@@ -685,12 +813,65 @@ export type Database = {
           },
         ]
       }
+      clip_saves: {
+        Row: {
+          clip_id: string
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          clip_id: string
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          clip_id?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clip_saves_clip_id_fkey"
+            columns: ["clip_id"]
+            isOneToOne: false
+            referencedRelation: "clips"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clip_saves_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "clip_saves_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clip_saves_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clips: {
         Row: {
           caption: string
           cf_stream_uid: string | null
           comment_count: number
+          comments_enabled: boolean
           created_at: string
+          deleted_at: string | null
+          failure_reason: string | null
           id: string
           likes_count: number
           owner_id: string
@@ -706,7 +887,10 @@ export type Database = {
           caption: string
           cf_stream_uid?: string | null
           comment_count?: number
+          comments_enabled?: boolean
           created_at?: string
+          deleted_at?: string | null
+          failure_reason?: string | null
           id?: string
           likes_count?: number
           owner_id: string
@@ -722,7 +906,10 @@ export type Database = {
           caption?: string
           cf_stream_uid?: string | null
           comment_count?: number
+          comments_enabled?: boolean
           created_at?: string
+          deleted_at?: string | null
+          failure_reason?: string | null
           id?: string
           likes_count?: number
           owner_id?: string
@@ -1224,6 +1411,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "court_bookings_payment_intent_id_fkey"
+            columns: ["payment_intent_id"]
+            isOneToOne: false
+            referencedRelation: "unfinalized_captures"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "court_bookings_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
@@ -1399,6 +1593,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "donation_drafts_payment_intent_id_fkey"
+            columns: ["payment_intent_id"]
+            isOneToOne: true
+            referencedRelation: "unfinalized_captures"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "donation_drafts_upa_id_fkey"
             columns: ["upa_id"]
             isOneToOne: false
@@ -1485,6 +1686,13 @@ export type Database = {
             columns: ["payment_intent_id"]
             isOneToOne: false
             referencedRelation: "payment_intents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "donations_payment_intent_id_fkey"
+            columns: ["payment_intent_id"]
+            isOneToOne: false
+            referencedRelation: "unfinalized_captures"
             referencedColumns: ["id"]
           },
           {
@@ -1588,6 +1796,27 @@ export type Database = {
         }
         Relationships: []
       }
+      edge_rate_limits: {
+        Row: {
+          bucket: string
+          count: number
+          key: string
+          window_start: string
+        }
+        Insert: {
+          bucket: string
+          count?: number
+          key: string
+          window_start: string
+        }
+        Update: {
+          bucket?: string
+          count?: number
+          key?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
       feature_flags: {
         Row: {
           created_at: string
@@ -1596,6 +1825,7 @@ export type Database = {
           id: string
           key: string
           updated_at: string
+          value_numeric: number | null
         }
         Insert: {
           created_at?: string
@@ -1604,6 +1834,7 @@ export type Database = {
           id?: string
           key: string
           updated_at?: string
+          value_numeric?: number | null
         }
         Update: {
           created_at?: string
@@ -1612,6 +1843,7 @@ export type Database = {
           id?: string
           key?: string
           updated_at?: string
+          value_numeric?: number | null
         }
         Relationships: []
       }
@@ -1822,6 +2054,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "group_memberships_payment_intent_id_fkey"
+            columns: ["payment_intent_id"]
+            isOneToOne: false
+            referencedRelation: "unfinalized_captures"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "group_memberships_player_id_fkey"
             columns: ["player_id"]
             isOneToOne: false
@@ -1890,6 +2129,13 @@ export type Database = {
             columns: ["payment_intent_id"]
             isOneToOne: false
             referencedRelation: "payment_intents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ledger_entries_payment_intent_id_fkey"
+            columns: ["payment_intent_id"]
+            isOneToOne: false
+            referencedRelation: "unfinalized_captures"
             referencedColumns: ["id"]
           },
         ]
@@ -1982,6 +2228,9 @@ export type Database = {
           created_at: string
           deep_link: string
           id: string
+          push_attempts: number
+          push_claimed_at: string | null
+          pushed_at: string | null
           read_at: string | null
           title: string
           type: Database["public"]["Enums"]["notification_type"]
@@ -1992,6 +2241,9 @@ export type Database = {
           created_at?: string
           deep_link: string
           id?: string
+          push_attempts?: number
+          push_claimed_at?: string | null
+          pushed_at?: string | null
           read_at?: string | null
           title: string
           type: Database["public"]["Enums"]["notification_type"]
@@ -2002,6 +2254,9 @@ export type Database = {
           created_at?: string
           deep_link?: string
           id?: string
+          push_attempts?: number
+          push_claimed_at?: string | null
+          pushed_at?: string | null
           read_at?: string | null
           title?: string
           type?: Database["public"]["Enums"]["notification_type"]
@@ -2099,6 +2354,13 @@ export type Database = {
             columns: ["payment_intent_id"]
             isOneToOne: true
             referencedRelation: "payment_intents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_drafts_payment_intent_id_fkey"
+            columns: ["payment_intent_id"]
+            isOneToOne: true
+            referencedRelation: "unfinalized_captures"
             referencedColumns: ["id"]
           },
           {
@@ -2347,6 +2609,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "orders_payment_intent_id_fkey"
+            columns: ["payment_intent_id"]
+            isOneToOne: false
+            referencedRelation: "unfinalized_captures"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "orders_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
@@ -2376,6 +2645,10 @@ export type Database = {
           currency: string
           domain: Database["public"]["Enums"]["payment_domain"]
           entity_id: string | null
+          finalize_attempts: number
+          finalize_claimed_at: string | null
+          finalize_last_error: string | null
+          finalized_at: string | null
           id: string
           razorpay_order_id: string
           razorpay_payment_id: string | null
@@ -2389,6 +2662,10 @@ export type Database = {
           currency?: string
           domain: Database["public"]["Enums"]["payment_domain"]
           entity_id?: string | null
+          finalize_attempts?: number
+          finalize_claimed_at?: string | null
+          finalize_last_error?: string | null
+          finalized_at?: string | null
           id?: string
           razorpay_order_id: string
           razorpay_payment_id?: string | null
@@ -2402,6 +2679,10 @@ export type Database = {
           currency?: string
           domain?: Database["public"]["Enums"]["payment_domain"]
           entity_id?: string | null
+          finalize_attempts?: number
+          finalize_claimed_at?: string | null
+          finalize_last_error?: string | null
+          finalized_at?: string | null
           id?: string
           razorpay_order_id?: string
           razorpay_payment_id?: string | null
@@ -2463,6 +2744,130 @@ export type Database = {
         }
         Relationships: []
       }
+      payout_methods: {
+        Row: {
+          account_holder_name: string
+          account_number: string | null
+          created_at: string
+          id: string
+          ifsc: string | null
+          method_type: string
+          pan: string | null
+          payout_account_id: string
+          updated_at: string
+          verification_note: string | null
+          verification_status: string
+          verified_at: string | null
+          verified_by: string | null
+          vpa: string | null
+        }
+        Insert: {
+          account_holder_name: string
+          account_number?: string | null
+          created_at?: string
+          id?: string
+          ifsc?: string | null
+          method_type: string
+          pan?: string | null
+          payout_account_id: string
+          updated_at?: string
+          verification_note?: string | null
+          verification_status?: string
+          verified_at?: string | null
+          verified_by?: string | null
+          vpa?: string | null
+        }
+        Update: {
+          account_holder_name?: string
+          account_number?: string | null
+          created_at?: string
+          id?: string
+          ifsc?: string | null
+          method_type?: string
+          pan?: string | null
+          payout_account_id?: string
+          updated_at?: string
+          verification_note?: string | null
+          verification_status?: string
+          verified_at?: string | null
+          verified_by?: string | null
+          vpa?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payout_methods_payout_account_id_fkey"
+            columns: ["payout_account_id"]
+            isOneToOne: true
+            referencedRelation: "payout_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payout_methods_verified_by_fkey"
+            columns: ["verified_by"]
+            isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "payout_methods_verified_by_fkey"
+            columns: ["verified_by"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payout_methods_verified_by_fkey"
+            columns: ["verified_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_fetch_log: {
+        Row: {
+          ai_suggestion: Json | null
+          fetched_at: string
+          http_status: number | null
+          id: string
+          in_stock_seen: boolean | null
+          notes: string | null
+          offer_id: string
+          outcome: string
+          price_seen: number | null
+        }
+        Insert: {
+          ai_suggestion?: Json | null
+          fetched_at?: string
+          http_status?: number | null
+          id?: string
+          in_stock_seen?: boolean | null
+          notes?: string | null
+          offer_id: string
+          outcome: string
+          price_seen?: number | null
+        }
+        Update: {
+          ai_suggestion?: Json | null
+          fetched_at?: string
+          http_status?: number | null
+          id?: string
+          in_stock_seen?: boolean | null
+          notes?: string | null
+          offer_id?: string
+          outcome?: string
+          price_seen?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_fetch_log_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "product_offers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_media: {
         Row: {
           created_at: string
@@ -2495,6 +2900,75 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_offers: {
+        Row: {
+          affiliate_product_id: string
+          affiliate_url: string
+          canonical_url: string | null
+          consecutive_failures: number
+          created_at: string
+          currency: string
+          id: string
+          in_stock: boolean
+          last_check_outcome: string | null
+          last_checked_at: string
+          last_price_change_at: string | null
+          price: number
+          retailer: string
+          retailer_key: string | null
+          updated_at: string
+        }
+        Insert: {
+          affiliate_product_id: string
+          affiliate_url: string
+          canonical_url?: string | null
+          consecutive_failures?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          in_stock?: boolean
+          last_check_outcome?: string | null
+          last_checked_at?: string
+          last_price_change_at?: string | null
+          price: number
+          retailer: string
+          retailer_key?: string | null
+          updated_at?: string
+        }
+        Update: {
+          affiliate_product_id?: string
+          affiliate_url?: string
+          canonical_url?: string | null
+          consecutive_failures?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          in_stock?: boolean
+          last_check_outcome?: string | null
+          last_checked_at?: string
+          last_price_change_at?: string | null
+          price?: number
+          retailer?: string
+          retailer_key?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_offers_affiliate_product_id_fkey"
+            columns: ["affiliate_product_id"]
+            isOneToOne: false
+            referencedRelation: "affiliate_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_offers_retailer_key_fkey"
+            columns: ["retailer_key"]
+            isOneToOne: false
+            referencedRelation: "retailer_programmes"
+            referencedColumns: ["key"]
           },
         ]
       }
@@ -2728,6 +3202,24 @@ export type Database = {
           },
         ]
       }
+      query_embedding_cache: {
+        Row: {
+          created_at: string
+          embedding: string
+          query_hash: string
+        }
+        Insert: {
+          created_at?: string
+          embedding: string
+          query_hash: string
+        }
+        Update: {
+          created_at?: string
+          embedding?: string
+          query_hash?: string
+        }
+        Relationships: []
+      }
       refunds: {
         Row: {
           amount: number
@@ -2777,6 +3269,13 @@ export type Database = {
             columns: ["payment_intent_id"]
             isOneToOne: false
             referencedRelation: "payment_intents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "refunds_payment_intent_id_fkey"
+            columns: ["payment_intent_id"]
+            isOneToOne: false
+            referencedRelation: "unfinalized_captures"
             referencedColumns: ["id"]
           },
         ]
@@ -2859,6 +3358,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      retailer_programmes: {
+        Row: {
+          active: boolean
+          affiliate_tag_template: string | null
+          display_name: string
+          extractor: Json | null
+          fetch_policy: Json
+          fetchable: boolean
+          key: string
+          url_patterns: string[]
+        }
+        Insert: {
+          active?: boolean
+          affiliate_tag_template?: string | null
+          display_name: string
+          extractor?: Json | null
+          fetch_policy?: Json
+          fetchable?: boolean
+          key: string
+          url_patterns?: string[]
+        }
+        Update: {
+          active?: boolean
+          affiliate_tag_template?: string | null
+          display_name?: string
+          extractor?: Json | null
+          fetch_policy?: Json
+          fetchable?: boolean
+          key?: string
+          url_patterns?: string[]
+        }
+        Relationships: []
       }
       roadmap_stages: {
         Row: {
@@ -3085,6 +3617,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "sessions_payment_intent_id_fkey"
+            columns: ["payment_intent_id"]
+            isOneToOne: false
+            referencedRelation: "unfinalized_captures"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "sessions_player_id_fkey"
             columns: ["player_id"]
             isOneToOne: false
@@ -3154,6 +3693,13 @@ export type Database = {
             columns: ["payment_intent_id"]
             isOneToOne: false
             referencedRelation: "payment_intents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_reservations_payment_intent_id_fkey"
+            columns: ["payment_intent_id"]
+            isOneToOne: false
+            referencedRelation: "unfinalized_captures"
             referencedColumns: ["id"]
           },
           {
@@ -3227,6 +3773,27 @@ export type Database = {
           },
         ]
       }
+      sweep_failures: {
+        Row: {
+          arm: string
+          created_at: string
+          error: string
+          id: string
+        }
+        Insert: {
+          arm: string
+          created_at?: string
+          error: string
+          id?: string
+        }
+        Update: {
+          arm?: string
+          created_at?: string
+          error?: string
+          id?: string
+        }
+        Relationships: []
+      }
       training_groups: {
         Row: {
           active: boolean
@@ -3288,9 +3855,12 @@ export type Database = {
         Row: {
           amount: number
           created_at: string
+          created_by: string | null
+          external_reference: string | null
           failure_reason: string | null
           id: string
           ledger_entry_group_id: string
+          method: string
           payout_account_id: string
           razorpay_transfer_id: string | null
           reversal_ledger_entry_group_id: string | null
@@ -3300,9 +3870,12 @@ export type Database = {
         Insert: {
           amount: number
           created_at?: string
+          created_by?: string | null
+          external_reference?: string | null
           failure_reason?: string | null
           id?: string
           ledger_entry_group_id: string
+          method?: string
           payout_account_id: string
           razorpay_transfer_id?: string | null
           reversal_ledger_entry_group_id?: string | null
@@ -3312,9 +3885,12 @@ export type Database = {
         Update: {
           amount?: number
           created_at?: string
+          created_by?: string | null
+          external_reference?: string | null
           failure_reason?: string | null
           id?: string
           ledger_entry_group_id?: string
+          method?: string
           payout_account_id?: string
           razorpay_transfer_id?: string | null
           reversal_ledger_entry_group_id?: string | null
@@ -3322,6 +3898,27 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "transfers_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "transfers_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transfers_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "transfers_payout_account_id_fkey"
             columns: ["payout_account_id"]
@@ -3584,12 +4181,13 @@ export type Database = {
           city: string | null
           cover_url: string | null
           created_at: string
+          deleted_at: string | null
           dob: string | null
           handle: string | null
           id: string
           name: string
-          phone: string | null
           notification_prefs: Json
+          phone: string | null
           show_donor_name: boolean
           sports: Database["public"]["Enums"]["sport"][]
           state: string | null
@@ -3605,12 +4203,13 @@ export type Database = {
           city?: string | null
           cover_url?: string | null
           created_at?: string
+          deleted_at?: string | null
           dob?: string | null
           handle?: string | null
           id: string
           name: string
-          phone?: string | null
           notification_prefs?: Json
+          phone?: string | null
           show_donor_name?: boolean
           sports?: Database["public"]["Enums"]["sport"][]
           state?: string | null
@@ -3626,12 +4225,13 @@ export type Database = {
           city?: string | null
           cover_url?: string | null
           created_at?: string
+          deleted_at?: string | null
           dob?: string | null
           handle?: string | null
           id?: string
           name?: string
-          phone?: string | null
           notification_prefs?: Json
+          phone?: string | null
           show_donor_name?: boolean
           sports?: Database["public"]["Enums"]["sport"][]
           state?: string | null
@@ -3730,6 +4330,7 @@ export type Database = {
       venues: {
         Row: {
           address: string
+          booking_url: string | null
           city: string
           created_at: string
           description: string | null
@@ -3739,13 +4340,13 @@ export type Database = {
           name: string
           partner_user_id: string
           pincode: string
-          booking_url: string | null
           rejection_reason: string | null
           status: Database["public"]["Enums"]["venue_status"]
           updated_at: string
         }
         Insert: {
           address: string
+          booking_url?: string | null
           city: string
           created_at?: string
           description?: string | null
@@ -3755,13 +4356,13 @@ export type Database = {
           name: string
           partner_user_id: string
           pincode: string
-          booking_url?: string | null
           rejection_reason?: string | null
           status?: Database["public"]["Enums"]["venue_status"]
           updated_at?: string
         }
         Update: {
           address?: string
+          booking_url?: string | null
           city?: string
           created_at?: string
           description?: string | null
@@ -3771,7 +4372,6 @@ export type Database = {
           name?: string
           partner_user_id?: string
           pincode?: string
-          booking_url?: string | null
           rejection_reason?: string | null
           status?: Database["public"]["Enums"]["venue_status"]
           updated_at?: string
@@ -3952,34 +4552,6 @@ export type Database = {
           state: string | null
           user_id: string | null
         }
-        Insert: {
-          bio?: string | null
-          city?: string | null
-          coaching_style?: string | null
-          created_at?: string | null
-          experience_years?: number | null
-          players_coached_count?: number | null
-          rating?: number | null
-          rating_count?: number | null
-          specialization?: string[] | null
-          sport?: Database["public"]["Enums"]["sport"] | null
-          state?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          bio?: string | null
-          city?: string | null
-          coaching_style?: string | null
-          created_at?: string | null
-          experience_years?: number | null
-          players_coached_count?: number | null
-          rating?: number | null
-          rating_count?: number | null
-          specialization?: string[] | null
-          sport?: Database["public"]["Enums"]["sport"] | null
-          state?: string | null
-          user_id?: string | null
-        }
         Relationships: [
           {
             foreignKeyName: "coach_profiles_user_id_fkey"
@@ -4101,6 +4673,73 @@ export type Database = {
         }
         Relationships: []
       }
+      unfinalized_captures: {
+        Row: {
+          amount: number | null
+          created_at: string | null
+          domain: Database["public"]["Enums"]["payment_domain"] | null
+          entity_id: string | null
+          finalize_attempts: number | null
+          finalize_claimed_at: string | null
+          finalize_last_error: string | null
+          id: string | null
+          razorpay_order_id: string | null
+          razorpay_payment_id: string | null
+          stuck_for: string | null
+          user_id: string | null
+        }
+        Insert: {
+          amount?: number | null
+          created_at?: string | null
+          domain?: Database["public"]["Enums"]["payment_domain"] | null
+          entity_id?: string | null
+          finalize_attempts?: number | null
+          finalize_claimed_at?: string | null
+          finalize_last_error?: string | null
+          id?: string | null
+          razorpay_order_id?: string | null
+          razorpay_payment_id?: string | null
+          stuck_for?: never
+          user_id?: string | null
+        }
+        Update: {
+          amount?: number | null
+          created_at?: string | null
+          domain?: Database["public"]["Enums"]["payment_domain"] | null
+          entity_id?: string | null
+          finalize_attempts?: number | null
+          finalize_claimed_at?: string | null
+          finalize_last_error?: string | null
+          id?: string | null
+          razorpay_order_id?: string | null
+          razorpay_payment_id?: string | null
+          stuck_for?: never
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_intents_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "creator_stats"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "payment_intents_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_intents_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       venue_bookings_today: {
         Row: {
           booking_source: Database["public"]["Enums"]["booking_source"] | null
@@ -4166,6 +4805,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "court_bookings_payment_intent_id_fkey"
+            columns: ["payment_intent_id"]
+            isOneToOne: false
+            referencedRelation: "unfinalized_captures"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "court_bookings_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
@@ -4197,6 +4843,60 @@ export type Database = {
       }
     }
     Functions: {
+      _ledger_eligible_balance: {
+        Args: {
+          p_account_ref: string
+          p_account_type: Database["public"]["Enums"]["ledger_account_type"]
+          p_hold?: string
+        }
+        Returns: number
+      }
+      _mask_tail: {
+        Args: { p_keep?: number; p_value: string }
+        Returns: string
+      }
+      _payout_method_masked: {
+        Args: {
+          p_method: Database["public"]["Tables"]["payout_methods"]["Row"]
+        }
+        Returns: Json
+      }
+      _record_payout_core: {
+        Args: {
+          p_actor: string
+          p_amount: number
+          p_enforce_hold: boolean
+          p_external_reference: string
+          p_method: string
+          p_payout_account_id: string
+          p_razorpay_transfer_id: string
+        }
+        Returns: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          external_reference: string | null
+          failure_reason: string | null
+          id: string
+          ledger_entry_group_id: string
+          method: string
+          payout_account_id: string
+          razorpay_transfer_id: string | null
+          reversal_ledger_entry_group_id: string | null
+          status: Database["public"]["Enums"]["transfer_status"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "transfers"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      _resolve_my_payout_owner: {
+        Args: { p_owner_type: string; p_venue_id: string }
+        Returns: string
+      }
       accept_venue_staff_invite: {
         Args: { p_venue_staff_id: string }
         Returns: {
@@ -4213,10 +4913,16 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      account_deletion_mark_auth_released: {
+        Args: { p_user_id: string }
+        Returns: undefined
+      }
+      account_deletion_preview: { Args: never; Returns: Json }
       activate_group_membership_paid: {
         Args: { p_membership_id: string }
         Returns: {
           created_at: string
+          expiry_notified_at: string | null
           group_id: string
           id: string
           payment_intent_id: string | null
@@ -4225,6 +4931,7 @@ export type Database = {
           platform_fee: number
           player_id: string
           price: number
+          renewal_reminder_sent_at: string | null
           status: string
           total: number
           updated_at: string
@@ -4341,7 +5048,131 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      admin_create_venue: {
+        Args: {
+          p_address: string
+          p_booking_url: string
+          p_city: string
+          p_courts: Json
+          p_description: string
+          p_lat: number
+          p_lng: number
+          p_name: string
+          p_pincode: string
+        }
+        Returns: {
+          address: string
+          booking_url: string | null
+          city: string
+          created_at: string
+          description: string | null
+          id: string
+          lat: number | null
+          lng: number | null
+          name: string
+          partner_user_id: string
+          pincode: string
+          rejection_reason: string | null
+          status: Database["public"]["Enums"]["venue_status"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "venues"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      admin_delete_product_offer: { Args: { p_id: string }; Returns: undefined }
       admin_delete_variant: { Args: { p_id: string }; Returns: undefined }
+      admin_get_reported_entity: {
+        Args: { p_report_id: string }
+        Returns: Json
+      }
+      admin_kpi_activity: { Args: never; Returns: Json }
+      admin_kpi_money: { Args: never; Returns: Json }
+      admin_kpi_queues: { Args: never; Returns: Json }
+      admin_kpi_users: { Args: never; Returns: Json }
+      admin_payouts_due: {
+        Args: { p_min_amount?: number }
+        Returns: {
+          account_number_last4: string
+          balance: number
+          eligible_balance: number
+          has_pan: boolean
+          ifsc: string
+          in_flight: number
+          method_type: string
+          owner_id: string
+          owner_name: string
+          owner_phone: string
+          owner_type: string
+          payout_account_id: string
+          payout_status: string
+          verification_status: string
+          vpa: string
+        }[]
+      }
+      admin_record_manual_payout: {
+        Args: {
+          p_amount: number
+          p_note?: string
+          p_payout_account_id: string
+          p_reference: string
+        }
+        Returns: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          external_reference: string | null
+          failure_reason: string | null
+          id: string
+          ledger_entry_group_id: string
+          method: string
+          payout_account_id: string
+          razorpay_transfer_id: string | null
+          reversal_ledger_entry_group_id: string | null
+          status: Database["public"]["Enums"]["transfer_status"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "transfers"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      admin_reinstate_user: {
+        Args: { p_reason?: string; p_user_id: string }
+        Returns: {
+          avatar_url: string | null
+          bio: string | null
+          channel_name: string | null
+          city: string | null
+          cover_url: string | null
+          created_at: string
+          deleted_at: string | null
+          dob: string | null
+          handle: string | null
+          id: string
+          name: string
+          notification_prefs: Json
+          phone: string | null
+          show_donor_name: boolean
+          sports: Database["public"]["Enums"]["sport"][]
+          state: string | null
+          status: Database["public"]["Enums"]["user_status"]
+          suspended_reason: string | null
+          theme: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "users"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       admin_reject_verification_request: {
         Args: { p_reason: string; p_request_id: string }
         Returns: {
@@ -4388,6 +5219,78 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "upa_applications"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      admin_resolve_manual_payout: {
+        Args: { p_note?: string; p_outcome: string; p_transfer_id: string }
+        Returns: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          external_reference: string | null
+          failure_reason: string | null
+          id: string
+          ledger_entry_group_id: string
+          method: string
+          payout_account_id: string
+          razorpay_transfer_id: string | null
+          reversal_ledger_entry_group_id: string | null
+          status: Database["public"]["Enums"]["transfer_status"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "transfers"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      admin_reveal_payout_method: {
+        Args: { p_payout_account_id: string; p_reason: string }
+        Returns: Json
+      }
+      admin_set_affiliate_product_active: {
+        Args: { p_active: boolean; p_id: string }
+        Returns: {
+          active: boolean
+          age_range: string | null
+          auto_delisted_at: string | null
+          brand: string | null
+          category_id: string | null
+          created_at: string
+          description: string | null
+          embedding: string | null
+          health_checked_at: string | null
+          health_status: string | null
+          id: string
+          image_path: string | null
+          image_url: string | null
+          skill_level: string | null
+          source_image_url: string | null
+          sport: Database["public"]["Enums"]["sport"] | null
+          title: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "affiliate_products"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      admin_set_app_config: {
+        Args: { p_key: string; p_value: Json }
+        Returns: {
+          key: string
+          public: boolean
+          updated_at: string
+          value: Json
+        }
+        SetofOptions: {
+          from: "*"
+          to: "app_config"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -4450,6 +5353,37 @@ export type Database = {
           to: "product_media"
           isOneToOne: false
           isSetofReturn: true
+        }
+      }
+      admin_suspend_user: {
+        Args: { p_reason: string; p_user_id: string }
+        Returns: {
+          avatar_url: string | null
+          bio: string | null
+          channel_name: string | null
+          city: string | null
+          cover_url: string | null
+          created_at: string
+          deleted_at: string | null
+          dob: string | null
+          handle: string | null
+          id: string
+          name: string
+          notification_prefs: Json
+          phone: string | null
+          show_donor_name: boolean
+          sports: Database["public"]["Enums"]["sport"][]
+          state: string | null
+          status: Database["public"]["Enums"]["user_status"]
+          suspended_reason: string | null
+          theme: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "users"
+          isOneToOne: true
+          isSetofReturn: false
         }
       }
       admin_update_fee_config: {
@@ -4524,6 +5458,47 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      admin_upsert_affiliate_product: {
+        Args: {
+          p_age_range: string
+          p_brand: string
+          p_category_id: string
+          p_description: string
+          p_id: string
+          p_image_path?: string
+          p_image_url: string
+          p_skill_level: string
+          p_source_image_url?: string
+          p_sport: Database["public"]["Enums"]["sport"]
+          p_title: string
+        }
+        Returns: {
+          active: boolean
+          age_range: string | null
+          auto_delisted_at: string | null
+          brand: string | null
+          category_id: string | null
+          created_at: string
+          description: string | null
+          embedding: string | null
+          health_checked_at: string | null
+          health_status: string | null
+          id: string
+          image_path: string | null
+          image_url: string | null
+          skill_level: string | null
+          source_image_url: string | null
+          sport: Database["public"]["Enums"]["sport"] | null
+          title: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "affiliate_products"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       admin_upsert_drill: {
         Args: {
           p_description: string
@@ -4555,6 +5530,41 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      admin_upsert_product_offer: {
+        Args: {
+          p_affiliate_product_id: string
+          p_affiliate_url: string
+          p_canonical_url?: string
+          p_currency?: string
+          p_in_stock?: boolean
+          p_price: number
+          p_retailer: string
+          p_retailer_key?: string
+        }
+        Returns: {
+          affiliate_product_id: string
+          affiliate_url: string
+          canonical_url: string | null
+          consecutive_failures: number
+          created_at: string
+          currency: string
+          id: string
+          in_stock: boolean
+          last_check_outcome: string | null
+          last_checked_at: string
+          last_price_change_at: string | null
+          price: number
+          retailer: string
+          retailer_key: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "product_offers"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       admin_variant_stock: {
         Args: { p_product_id?: string }
         Returns: {
@@ -4569,9 +5579,94 @@ export type Database = {
           sku: string
         }[]
       }
+      admin_verify_payout_method: {
+        Args: {
+          p_decision: string
+          p_note: string
+          p_payout_account_id: string
+        }
+        Returns: Json
+      }
+      ai_search_daily_budget: { Args: never; Returns: number }
       audit_changed_fields: {
         Args: { p_after: Json; p_before: Json }
         Returns: Json
+      }
+      chat_thread_previews: {
+        Args: { p_thread_ids: string[] }
+        Returns: {
+          created_at: string
+          removed_at: string
+          sender_id: string
+          sender_name: string
+          text: string
+          thread_id: string
+        }[]
+      }
+      claim_notification_push_batch: {
+        Args: {
+          p_limit?: number
+          p_max_attempts?: number
+          p_stale_claim?: string
+        }
+        Returns: {
+          body: string
+          created_at: string
+          deep_link: string
+          id: string
+          title: string
+          type: Database["public"]["Enums"]["notification_type"]
+          user_id: string
+        }[]
+      }
+      claim_order_refund: {
+        Args: { p_amount: number; p_order_id: string }
+        Returns: {
+          amount: number
+          attempts: number
+          created_at: string
+          domain: Database["public"]["Enums"]["payment_domain"]
+          entity_id: string
+          failure_reason: string | null
+          id: string
+          ledger_entry_group_id: string | null
+          payment_intent_id: string
+          razorpay_refund_id: string | null
+          status: Database["public"]["Enums"]["refund_status"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "refunds"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      claim_payment_intent_for_finalization: {
+        Args: { p_razorpay_order_id: string; p_razorpay_payment_id: string }
+        Returns: {
+          amount: number
+          created_at: string
+          currency: string
+          domain: Database["public"]["Enums"]["payment_domain"]
+          entity_id: string | null
+          finalize_attempts: number
+          finalize_claimed_at: string | null
+          finalize_last_error: string | null
+          finalized_at: string | null
+          id: string
+          razorpay_order_id: string
+          razorpay_payment_id: string | null
+          status: Database["public"]["Enums"]["payment_intent_status"]
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "payment_intents"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       clip_transition_internal: {
         Args: {
@@ -4583,7 +5678,10 @@ export type Database = {
           caption: string
           cf_stream_uid: string | null
           comment_count: number
+          comments_enabled: boolean
           created_at: string
+          deleted_at: string | null
+          failure_reason: string | null
           id: string
           likes_count: number
           owner_id: string
@@ -4612,13 +5710,6 @@ export type Database = {
           p_city: string
           p_sports: Database["public"]["Enums"]["sport"][]
           p_state: string
-        }
-        Returns: undefined
-      }
-      set_athlete_sports: {
-        Args: {
-          p_primary: Database["public"]["Enums"]["sport"]
-          p_sports: Database["public"]["Enums"]["sport"][]
         }
         Returns: undefined
       }
@@ -4876,6 +5967,35 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      delete_my_account: { Args: never; Returns: Json }
+      delete_my_clip: {
+        Args: { p_clip_id: string }
+        Returns: {
+          caption: string
+          cf_stream_uid: string | null
+          comment_count: number
+          comments_enabled: boolean
+          created_at: string
+          deleted_at: string | null
+          failure_reason: string | null
+          id: string
+          likes_count: number
+          owner_id: string
+          playback_id: string | null
+          rejection_reason: string | null
+          sport: Database["public"]["Enums"]["sport"]
+          status: Database["public"]["Enums"]["clip_status"]
+          storage_path: string | null
+          thumb_path: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "clips"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       expire_stale_holds: { Args: never; Returns: Json }
       fail_transfer: {
         Args: {
@@ -4886,9 +6006,12 @@ export type Database = {
         Returns: {
           amount: number
           created_at: string
+          created_by: string | null
+          external_reference: string | null
           failure_reason: string | null
           id: string
           ledger_entry_group_id: string
+          method: string
           payout_account_id: string
           razorpay_transfer_id: string | null
           reversal_ledger_entry_group_id: string | null
@@ -4902,8 +6025,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      finalize_reentry_after: { Args: never; Returns: string }
       general_fund_account_ref: { Args: never; Returns: string }
       general_fund_balance: { Args: never; Returns: number }
+      get_app_config: { Args: { p_key: string }; Returns: Json }
       get_coach_busy_slots: {
         Args: { p_coach_id: string; p_from: string; p_to: string }
         Returns: {
@@ -4952,6 +6077,10 @@ export type Database = {
       }
       get_learn_home: { Args: never; Returns: Json }
       get_my_impact_summary: { Args: never; Returns: Json }
+      get_my_payout_method: {
+        Args: { p_owner_type: string; p_venue_id?: string }
+        Returns: Json
+      }
       get_my_transactions: {
         Args: { p_kind?: string; p_limit?: number; p_offset?: number }
         Returns: {
@@ -4970,7 +6099,16 @@ export type Database = {
         Args: { p_payout_account_id: string }
         Returns: number
       }
+      get_payout_eligible_balance: {
+        Args: { p_hold?: string; p_payout_account_id: string }
+        Returns: number
+      }
+      gratitude_post_exists_for_item: {
+        Args: { p_wishlist_item_id: string }
+        Returns: boolean
+      }
       has_role: { Args: { _role: string }; Returns: boolean }
+      is_actor_active: { Args: never; Returns: boolean }
       is_admin: { Args: never; Returns: boolean }
       is_chat_thread_member: {
         Args: { p_thread_id: string; p_user_id: string }
@@ -5003,6 +6141,7 @@ export type Database = {
         Args: { p_actor_id: string; p_group_id: string }
         Returns: {
           created_at: string
+          expiry_notified_at: string | null
           group_id: string
           id: string
           payment_intent_id: string | null
@@ -5011,6 +6150,7 @@ export type Database = {
           platform_fee: number
           player_id: string
           price: number
+          renewal_reminder_sent_at: string | null
           status: string
           total: number
           updated_at: string
@@ -5037,6 +6177,10 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      mark_payment_intent_finalized: {
+        Args: { p_intent_id: string }
+        Returns: undefined
+      }
       mark_wishlist_item_delivered: {
         Args: { p_item_id: string }
         Returns: {
@@ -5056,10 +6200,22 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      match_affiliate_products: {
+        Args: {
+          match_count: number
+          match_threshold: number
+          query_embedding: string
+        }
+        Returns: {
+          id: string
+          similarity: number
+        }[]
+      }
       membership_abandon_unpaid: {
         Args: { p_membership_id: string }
         Returns: {
           created_at: string
+          expiry_notified_at: string | null
           group_id: string
           id: string
           payment_intent_id: string | null
@@ -5068,6 +6224,7 @@ export type Database = {
           platform_fee: number
           player_id: string
           price: number
+          renewal_reminder_sent_at: string | null
           status: string
           total: number
           updated_at: string
@@ -5079,13 +6236,18 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      membership_grace_period: { Args: never; Returns: string }
+      membership_reminder_lead: { Args: never; Returns: string }
       moderate_clip: {
         Args: { p_action: string; p_clip_id: string; p_reason?: string }
         Returns: {
           caption: string
           cf_stream_uid: string | null
           comment_count: number
+          comments_enabled: boolean
           created_at: string
+          deleted_at: string | null
+          failure_reason: string | null
           id: string
           likes_count: number
           owner_id: string
@@ -5103,6 +6265,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      notify_session_parties: {
+        Args: { p_action: string; p_session_id: string }
+        Returns: number
       }
       order_transition: {
         Args: {
@@ -5262,6 +6428,14 @@ export type Database = {
         }
       }
       reconcile_stranded_clips: { Args: never; Returns: Json }
+      record_ai_spend: {
+        Args: {
+          p_est_usd: number
+          p_input_tokens: number
+          p_output_tokens: number
+        }
+        Returns: number
+      }
       record_donation_from_draft: {
         Args: { p_payment_intent_id: string }
         Returns: {
@@ -5283,6 +6457,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      record_payment_intent_finalize_failure: {
+        Args: { p_error: string; p_intent_id: string }
+        Returns: undefined
+      }
       record_transfer: {
         Args: {
           p_amount: number
@@ -5292,9 +6470,12 @@ export type Database = {
         Returns: {
           amount: number
           created_at: string
+          created_by: string | null
+          external_reference: string | null
           failure_reason: string | null
           id: string
           ledger_entry_group_id: string
+          method: string
           payout_account_id: string
           razorpay_transfer_id: string | null
           reversal_ledger_entry_group_id: string | null
@@ -5333,6 +6514,7 @@ export type Database = {
         Args: { p_actor_id: string; p_membership_id: string }
         Returns: {
           created_at: string
+          expiry_notified_at: string | null
           group_id: string
           id: string
           payment_intent_id: string | null
@@ -5341,6 +6523,7 @@ export type Database = {
           platform_fee: number
           player_id: string
           price: number
+          renewal_reminder_sent_at: string | null
           status: string
           total: number
           updated_at: string
@@ -5414,6 +6597,34 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "upa_applications"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      retry_failed_clip: {
+        Args: { p_clip_id: string }
+        Returns: {
+          caption: string
+          cf_stream_uid: string | null
+          comment_count: number
+          comments_enabled: boolean
+          created_at: string
+          deleted_at: string | null
+          failure_reason: string | null
+          id: string
+          likes_count: number
+          owner_id: string
+          playback_id: string | null
+          rejection_reason: string | null
+          sport: Database["public"]["Enums"]["sport"]
+          status: Database["public"]["Enums"]["clip_status"]
+          storage_path: string | null
+          thumb_path: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "clips"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -5538,6 +6749,41 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      set_athlete_sports: {
+        Args: {
+          p_primary: Database["public"]["Enums"]["sport"]
+          p_sports: Database["public"]["Enums"]["sport"][]
+        }
+        Returns: undefined
+      }
+      set_clip_comments_enabled: {
+        Args: { p_clip_id: string; p_enabled: boolean }
+        Returns: {
+          caption: string
+          cf_stream_uid: string | null
+          comment_count: number
+          comments_enabled: boolean
+          created_at: string
+          deleted_at: string | null
+          failure_reason: string | null
+          id: string
+          likes_count: number
+          owner_id: string
+          playback_id: string | null
+          rejection_reason: string | null
+          sport: Database["public"]["Enums"]["sport"]
+          status: Database["public"]["Enums"]["clip_status"]
+          storage_path: string | null
+          thumb_path: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "clips"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       settle_refund: {
         Args: { p_razorpay_refund_id?: string; p_refund_id: string }
         Returns: {
@@ -5566,9 +6812,12 @@ export type Database = {
         Returns: {
           amount: number
           created_at: string
+          created_by: string | null
+          external_reference: string | null
           failure_reason: string | null
           id: string
           ledger_entry_group_id: string
+          method: string
           payout_account_id: string
           razorpay_transfer_id: string | null
           reversal_ledger_entry_group_id: string | null
@@ -5611,6 +6860,45 @@ export type Database = {
         }
       }
       submit_venue_verification: { Args: { p_payload: Json }; Returns: string }
+      sweep_group_memberships: { Args: never; Returns: Json }
+      system_auto_delist_affiliate_product: {
+        Args: { p_id: string; p_reason: string }
+        Returns: {
+          active: boolean
+          age_range: string | null
+          auto_delisted_at: string | null
+          brand: string | null
+          category_id: string | null
+          created_at: string
+          description: string | null
+          embedding: string | null
+          health_checked_at: string | null
+          health_status: string | null
+          id: string
+          image_path: string | null
+          image_url: string | null
+          skill_level: string | null
+          source_image_url: string | null
+          sport: Database["public"]["Enums"]["sport"] | null
+          title: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "affiliate_products"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      take_rate_limit_token: {
+        Args: {
+          p_bucket: string
+          p_key: string
+          p_max: number
+          p_window_seconds: number
+        }
+        Returns: boolean
+      }
       timemultirange: { Args: never; Returns: unknown }
       toggle_clip_like: { Args: { p_clip_id: string }; Returns: Json }
       toggle_follow: { Args: { p_followee_id: string }; Returns: Json }
@@ -5651,6 +6939,13 @@ export type Database = {
         }
       }
       upa_fund_balance: { Args: { p_account_ref: string }; Returns: number }
+      upa_fund_balances: {
+        Args: { p_account_refs: string[] }
+        Returns: {
+          account_ref: string
+          balance: number
+        }[]
+      }
       upa_money_summary: { Args: { p_upa_id: string }; Returns: Json }
       upa_wishlist_item_transition_internal: {
         Args: {
@@ -5714,6 +7009,19 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      upsert_my_payout_method: {
+        Args: {
+          p_account_holder_name: string
+          p_account_number?: string
+          p_ifsc?: string
+          p_method_type: string
+          p_owner_type: string
+          p_pan?: string
+          p_venue_id?: string
+          p_vpa?: string
+        }
+        Returns: Json
+      }
       variant_available_stock: {
         Args: { p_variant_id: string }
         Returns: number
@@ -5737,6 +7045,7 @@ export type Database = {
         | "published"
         | "rejected"
         | "removed"
+        | "failed"
       coach_status: "pending_review" | "verified" | "rejected"
       court_booking_status:
         | "confirmed"
@@ -5953,6 +7262,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       app_role: [
@@ -5973,6 +7285,7 @@ export const Constants = {
         "published",
         "rejected",
         "removed",
+        "failed",
       ],
       coach_status: ["pending_review", "verified", "rejected"],
       court_booking_status: [
@@ -6070,3 +7383,4 @@ export const Constants = {
     },
   },
 } as const
+

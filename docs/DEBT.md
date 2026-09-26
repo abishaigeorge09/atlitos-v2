@@ -426,3 +426,33 @@ from growing further.
   @atlitos/mobile...` ran, which took 6 seconds against an up to date lockfile. It reads exactly
   like a broken EAS setup or a bad credential, which is the trap: check the workspace is installed
   before believing any mobile tooling failure. Owner: whoever next hits it.
+
+## 2026-09-26: manual payouts (0130) and what they leave open
+
+- **Merchant of record changed, and GST and TDS are undecided.** Route is closed to ELSHEPH until
+  about Rs 40L of taxable turnover on GST-3B, so Atlitos now receives the full booking amount and
+  pays coaches and venues as contractors. That plausibly means GST on the full amount rather than
+  the platform fee, and TDS on payee payments with a PAN from each payee. `payout_methods.pan` is
+  optional until this is decided; if the CA says TDS applies, make it required in
+  `upsert_my_payout_method` and deduct in the payout run. Owner: Abishai, with the CA.
+- **Bank details are not column-encrypted.** `payout_methods` relies on Supabase encryption at
+  rest plus zero client access and audited admin reveals. Column-level encryption (Vault or an
+  app key) is the next step if the threat model includes database dumps. Owner: whoever next
+  touches payouts.
+- **The coach payout screen has not been seen on a device.** `payout-setup.tsx` and the changed
+  `EarningsHeader` typecheck and lint clean, but CLAUDE.md requires a Release build screenshot and
+  Maestro run. Batched with the App Store Release build, which has to happen anyway. Owner: the
+  App Store submission pass.
+- **Mobile primary buttons fail contrast the same way the portals did.** White ink on ember
+  (`inkOnAccent` on `accent`) is 3.32:1 at button sizes, below AA's 4.5:1. Admin (A2 gate) and
+  both portals (this change) now use `accentInk`, dark on ember. Mobile still uses white on every
+  primary CTA. Not changed here because it restyles every button in the consumer app and needs the
+  founder's eye plus device proof. Owner: Abishai to decide, then the next mobile visual pass.
+- **Route code is deployed and unused.** `razorpay-route-onboard`, `razorpay-route-transfer`, the
+  Route webhook branches and `useCoachEarnings().setupPayoutAccount` / `initiateTransfer` stay, so
+  Route can be switched back on when eligible. Nothing in the apps calls them. Owner: none until
+  eligible.
+- **RazorpayX automatic payouts need a static egress IP.** X is active but unfunded, with no IP
+  allowlisted and no X webhook. Supabase Edge Functions have no fixed outbound IP, so an automatic
+  run needs a static egress path (a small proxy with a fixed IP, or a runner that has one) before
+  the allowlist is meaningful. Owner: Abishai to fund X; engineering to pick the egress path.

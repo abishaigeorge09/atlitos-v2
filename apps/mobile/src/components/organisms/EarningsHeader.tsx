@@ -3,27 +3,31 @@ import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
 import { formatINR, radii, spacing } from '@atlitos/theme';
 import * as Haptics from 'expo-haptics';
-import { ArrowDownToLine, Send } from 'lucide-react-native';
+import { Landmark } from 'lucide-react-native';
 import { Text, View } from 'react-native';
 
 /**
- * SPEC.md organism #35. Balance + Send/Transfer buttons + This Month +
- * Pending stats (coach only, `pending` is optional to support both roles).
+ * SPEC.md organism #35. Balance + payout details + This Month + Pending
+ * stats (coach only, `pending` is optional to support both roles).
+ *
+ * There is no Transfer button. Razorpay Route is closed to ELSHEPH, so
+ * Atlitos pays verified payout details by NEFT or UPI (migration 0130) and
+ * the coach never requests a transfer. The one action is keeping those
+ * details right.
  */
 export interface EarningsHeaderProps {
   balance: number;
   thisMonth: number;
   pending?: number;
-  onSend: () => void;
-  onTransfer: () => void;
+  onPayoutDetails: () => void;
 }
 
-export function EarningsHeader({ balance, thisMonth, pending, onSend, onTransfer }: EarningsHeaderProps) {
+export function EarningsHeader({ balance, thisMonth, pending, onPayoutDetails }: EarningsHeaderProps) {
   const colors = useThemeColors();
 
-  const handleSend = () => {
+  const handlePayoutDetails = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    onSend();
+    onPayoutDetails();
   };
 
   return (
@@ -44,15 +48,14 @@ export function EarningsHeader({ balance, thisMonth, pending, onSend, onTransfer
         <Text style={[textStyle('numericDisplay'), { color: colors.text }]}>{formatINR(balance)}</Text>
       </View>
 
-      <View style={[styles.row, { gap: spacing.sm }]}>
-        <Button variant="secondary" onPress={handleSend} style={{ flex: 1 }}>
-          <Send size={20} color={colors.text} strokeWidth={1.75} />
-          <Text style={[textStyle('label'), { color: colors.text }]}>Send</Text>
+      <View style={{ gap: spacing.sm }}>
+        <Button variant="secondary" onPress={handlePayoutDetails}>
+          <Landmark size={20} color={colors.text} strokeWidth={1.75} />
+          <Text style={[textStyle('label'), { color: colors.text }]}>Payout details</Text>
         </Button>
-        <Button onPress={onTransfer} style={{ flex: 1 }}>
-          <ArrowDownToLine size={20} color={colors.inkOnAccent} strokeWidth={1.75} />
-          <Text style={[textStyle('label'), { color: colors.inkOnAccent }]}>Transfer</Text>
-        </Button>
+        <Text style={[textStyle('caption'), { color: colors.textSecondary }]}>
+          Atlitos pays your available earnings to your bank. You do not need to request it.
+        </Text>
       </View>
 
       <View style={[styles.row, { gap: spacing.xl }]}>

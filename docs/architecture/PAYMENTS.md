@@ -194,7 +194,65 @@ Deno.serve(async (req) => {
 
 `handlePaymentFailed` updates `payment_intents.status = 'failed'` and, for `commerce`/`donation` where no domain row exists yet, does nothing further, there is nothing to unwind. For `session`/`court`, the already-created row is left in place but the client-facing polling never observes a `captured` intent, so the booking never renders as confirmed; a scheduled cleanup (not built in v1, flagged for P8 hardening) can later auto-cancel stale unpaid bookings.
 
+## Manual payouts: how coaches and venues are actually paid (`0130`, 2026-09-25)
+
+**Read this before the Route section below, which describes a path that is closed.** Razorpay Route
+can only be enabled for a merchant with more than Rs 40L of domestic taxable turnover shown on
+GST-3B returns (RBI rule, September 2025; Razorpay ticket #21108352, reply to
+routepriority@razorpay.com). ELSHEPH does not meet it, so no coach or venue could be paid at all.
+The founder's decision, 2026-09-25: collect each payee's bank or UPI details and pay them by NEFT
+or UPI from the company account. Private coaches usually have no registered business, which Route
+would have required of them anyway.
+
+**What did not change.** How money is earned. Captures, accruals at session completion, court
+credits at booking, membership credits, the balanced ledger groups: all identical. The ledger
+still says what everyone is owed.
+
+**What is new.**
+
+- `payout_methods` (SCHEMA.md): where a payee is paid. RLS on with zero policies and no client
+  grant. Owners write through `upsert_my_payout_method` and read a masked copy through
+  `get_my_payout_method`. Admins read the full number only through `admin_reveal_payout_method`,
+  which requires a reason and writes `audit_log`. Full account numbers never reach `audit_log`.
+- Any change to a payout method moves the payout account back to `pending`. `record_transfer` has
+  always refused anything not `active`, so a hijacked account cannot redirect money until an
+  admin verifies the new details (a Rs 1 test deposit). `active` now means "Route KYC done" OR
+  "bank details verified", one gate with two meanings rather than two gates.
+- **The hold.** Manual payouts draw only on the ELIGIBLE balance
+  (`_ledger_eligible_balance`): credits at least 24 hours old, and for courts, only slots that
+  ENDED at least 24 hours ago in IST, because venues are credited at booking time and a slot
+  can still be cancelled. Debits count immediately. Route's `record_transfer` keeps its original
+  full-balance behaviour so no existing caller changed.
+- **One implementation of "money left".** `_record_payout_core` holds the row lock, the balance
+  re-derivation inside the lock, and the ledger group. `record_transfer` (Route) and
+  `admin_record_manual_payout` both delegate to it. Idempotency is per method: Route on
+  Razorpay's transfer id as before, manual on the bank reference (UTR). A reused UTR against a
+  different payout is refused as `DUPLICATE_REFERENCE`, never silently returned.
+- **Lifecycle.** NEFT can bounce after the sender holds a reference, so a manual payout is
+  recorded `processing`, then `admin_resolve_manual_payout` settles it (`settle_transfer`) or
+  fails it (`fail_transfer`, which writes the reversing group and restores the balance).
+
+**Who does what.** The payee adds details once (mobile Trainings, Earnings, Payout details; or
+portal-court, Earnings). Admin, on the Payouts page: reviews and verifies new details, sends the
+money from the bank, records the UTR, then marks it received or bounced. The payee never
+requests a transfer; the coach's Transfer button and screen were removed.
+
+**Proof.** `scripts/verify-manual-payouts.mjs`, 49 checks, each money guard born red by planting
+the violation (table exposed to clients, change not resetting status, hold ignored).
+
+**Merchant of record.** Without Route, Atlitos receives the full amount and pays the payee as a
+contractor. GST on the full amount and TDS on payee payments are open questions for the CA,
+recorded in DEBT.md. Nothing here decides them.
+
+**Next.** RazorpayX is active on the account (checked 2026-09-25) but its Lite balance is
+unfunded, no IP is allowlisted and no X webhook exists. When those land, an automatic run
+replaces exactly one step, "a human sent the money", by calling `_record_payout_core` with method
+`razorpayx`. Supabase Edge Functions have no fixed egress IP, so the allowlist needs a static
+egress path; decide that before building it.
+
 ## Route: linked accounts and transfers
+
+**CLOSED to ELSHEPH until the Rs 40L turnover gate is met; see "Manual payouts" above. Kept because the code stays deployed and becomes the path again once eligible.**
 
 **When Route enters the picture (Phase 9 WS2 repositioning).** Razorpay Route linked accounts and payouts are gated on *role-account creation for a money-receiving party*, never on guest browsing or booking. The deferred-login model (PRD-01 FR-1, PRD-02 FR-1) means a visitor reaches Home, discovery, and the point of booking with no account at all; a real Supabase anonymous session is enough to browse and to raise the login gate. A `payout_accounts` row, KYC hand-off, and any Route call only become relevant once a user has (a) an account and (b) taken on a money-receiving role: a coach who finished the coach wizard, a court partner in `portal-court`, or (when built) a UPA. The charge side of the platform (a player paying for a session, court, order, or donation) is unaffected by this gating and continues to work the moment a guest converts to a signed-in player. Nothing about Route is a precondition for first open, guest browse, or reaching a booking screen.
 

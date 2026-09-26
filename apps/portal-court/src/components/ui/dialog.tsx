@@ -31,6 +31,7 @@ function DialogContent({
         {showClose ? (
           <DialogPrimitive.Close
             data-slot="dialog-close"
+            aria-label="Close"
             className="absolute top-4 right-4 rounded-md text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             <X className="size-4" strokeWidth={1.75} />

@@ -126,8 +126,7 @@ export default function CoachEarningsScreen() {
             <EarningsHeader
               balance={balance.balance}
               thisMonth={balance.thisMonth}
-              onSend={() => router.push('/(tabs)/trainings/earnings/payout-setup')}
-              onTransfer={() => router.push('/(tabs)/trainings/earnings/transfer')}
+              onPayoutDetails={() => router.push('/(tabs)/trainings/earnings/payout-setup')}
             />
           ) : null}
 
@@ -140,7 +139,7 @@ export default function CoachEarningsScreen() {
               onPress={() => setFilter('earning')}
             />
             <Chip
-              label="Transfer out"
+              label="Payouts"
               variant="filter"
               selected={filter === 'payout'}
               onPress={() => setFilter('payout')}
@@ -151,7 +150,7 @@ export default function CoachEarningsScreen() {
             <EmptyState
               icon={Wallet}
               title="No earnings yet"
-              body="Complete a session to see it appear here, then transfer it to your bank account."
+              body="Complete a session to see it here. Atlitos pays your available earnings to your bank."
             />
           ) : (
             <View style={{ gap: spacing.lg }}>

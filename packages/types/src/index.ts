@@ -4,6 +4,7 @@
 
 export * from './enums';
 export * from './errors';
+export * from './payout';
 export * from './transitions/index';
 export * from './domain/index';
 
