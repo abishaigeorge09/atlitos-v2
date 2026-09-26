@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // ATLITOS v2 - scripts/verify-court-slots.mjs
 //
-// Proves 0132 search_court_slots against fixtures built to catch each rule it
+// Proves 0134 search_court_slots against fixtures built to catch each rule it
 // adds. Everything is anchored on TOMORROW in IST so no check depends on what
 // time the script happens to run.
 //

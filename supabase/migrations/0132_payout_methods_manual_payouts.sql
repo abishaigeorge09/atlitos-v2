@@ -1,4 +1,4 @@
--- ATLITOS v2 — 0130_payout_methods_manual_payouts.sql
+-- ATLITOS v2 — 0132_payout_methods_manual_payouts.sql
 --
 -- Manual payouts to coaches and venues, and the bank details they need.
 -- docs/PLAN-PAYOUTS-CLICKS-SEARCH.md Track 1.
@@ -102,7 +102,7 @@ create table public.payout_methods (
 );
 
 comment on table public.payout_methods is
-  'Where a coach or venue is paid. RLS on with ZERO policies and no client grant: only the security definer functions in 0130 touch it. Owners see last four digits; admin reveals are audited.';
+  'Where a coach or venue is paid. RLS on with ZERO policies and no client grant: only the security definer functions in 0132 touch it. Owners see last four digits; admin reveals are audited.';
 
 create trigger payout_methods_set_updated_at
   before update on public.payout_methods

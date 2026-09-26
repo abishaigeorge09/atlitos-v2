@@ -102,7 +102,7 @@ The general rule this generalises to, for any future state machine RPC: if the t
 
 This is the schema-level expression of PLAN.md's invariant: "clients never write money rows or state transitions."
 
-### `payout_methods`: no policies at all (`0130`)
+### `payout_methods`: no policies at all (`0132`)
 
 Bank details are treated harder than money rows. RLS is enabled with ZERO policies and the table
 has no grant to `anon` or `authenticated`, so even an admin JWT gets `42501` on a direct select.
@@ -112,7 +112,7 @@ admins through the `admin_` payout functions (`has_role('admin')`, every full re
 `scripts/verify-manual-payouts.mjs` checks 1a to 1d prove the refusals, and were watched fail
 with a permissive policy planted.
 
-### `affiliate_clicks`: no policies at all (`0131`)
+### `affiliate_clicks`: no policies at all (`0133`)
 
 Same posture as `payout_methods`: RLS on, zero policies, no grant to `anon` or `authenticated`, so
 even an admin JWT gets `42501` reading raw clicks. `record_affiliate_click` writes, admins see

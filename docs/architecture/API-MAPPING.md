@@ -77,14 +77,14 @@ After the deterministic candidates load and before scoring, when the CT-2/CT-3 g
 
 Over budget or on ANY Voyage failure (bad key, timeout, non-2xx): the vector step is skipped, `vector: false`, never an error (same fail-safe posture as the existing LLM gate). Scoped to `entityType: "gear"` only, over `affiliate_products` only (ADR-011's own non-goal excludes the owned catalogue from vector search).
 
-### Affiliate click tracking (`0131`, 2026-09-26)
+### Affiliate click tracking (`0133`, 2026-09-26)
 
 | RPC | Caller | Contract |
 | --- | --- | --- |
 | `record_affiliate_click` | mobile compare view Buy button, via `useShop().buyUrlForOffer` | `p_offer_id`, optional `p_surface` (`compare` default, `search`, `home`). Granted to `anon` and `authenticated`. Returns `{ click_id, url, recorded }`; the client opens `url`. No session: `recorded: false`, the stored URL, nothing written. `NOT_FOUND` for an offer on a delisted product, `VALIDATION` for an unknown surface. The client falls back to the offer's stored URL on ANY failure, so recording never blocks a shopper |
 | `admin_affiliate_click_stats` | admin Gear list, "Buy taps, 30 days" | `p_days` (1 to 365). Per product and retailer: `clicks`, distinct `shoppers`, `with_subid`, `last_click_at`. `FORBIDDEN` for non-admins |
 
-### Court search from real availability (`0132`, `0133`, 2026-09-26)
+### Court search from real availability (`0134`, `0135`, 2026-09-26)
 
 **The defect this fixes, verified in production 2026-09-26.** Any court query with a time word
 ("badminton court tonight", "cricket turf tomorrow evening", "at 7pm", "this weekend") returned ZERO
@@ -107,7 +107,7 @@ freeSlots, otherCourtsFree }`, one hit per VENUE (the soonest court there; the r
 relaxes ONE constraint and names a real alternative ("The cheapest tomorrow in the evening is ...").
 With no time in the query, courts are searched over the coming week and show their next free slot.
 
-`get_court_available_slots` (`0133`) no longer offers past dates or slots that have ENDED today
+`get_court_available_slots` (`0135`) no longer offers past dates or slots that have ENDED today
 (IST); a slot in progress stays offered for walk ins. `book-court` accepts only slots this function
 lists, so booking a past slot is now refused as `SLOT_TAKEN`. `book-session` refuses a start time
 that has passed with `VALIDATION`.
@@ -115,7 +115,7 @@ that has passed with `VALIDATION`.
 Proof: `scripts/verify-court-search.ts` (parser, fixed clock), `scripts/verify-court-slots.mjs`
 (SQL, adversarial fixtures), `scripts/verify-court-search-e2e.mjs` (through the function).
 
-### Gear recall by full text, and the owned catalogue kept out (`0134`, 2026-09-26)
+### Gear recall by full text, and the owned catalogue kept out (`0136`, 2026-09-26)
 
 - **Recall.** The keyword path used to read the first 50 active affiliate products in no order and
   score those, so on a catalogue of hundreds an exact match was often never considered (proved: a
@@ -542,7 +542,7 @@ PLAN.md's edge function roster includes several functions v1 never had a mock fo
 | `razorpay-route-onboard` | coach Payout Account Setup, `portal-court` Payout Account | starts Route linked-account KYC hand-off. Built AT-42. `POST { owner_type: 'coach' \| 'court_partner', venue_id? }` with the caller's own JWT (`verify_jwt` true), `venue_id` required for `court_partner`. Returns `{ payout_account_id, owner_type, owner_id, razorpay_account_id, status, onboarding_url, created }`. Errors `VALIDATION` 400, `UNAUTHENTICATED` 401, `FORBIDDEN` 403, `NOT_FOUND` 404, `RAZORPAY_ERROR` 502, `ROUTE_UNAVAILABLE` 503, `INTERNAL` 500. Idempotent on `(owner_type, owner_id)`: an existing `razorpay_account_id` makes the call a status poll (`created: false`), never a second sub-merchant. Sole writer of `payout_accounts`, service role only. Route is not yet enabled on the test merchant account, see `PAYMENTS.md` |
 | `razorpay-route-transfer` | coach Transfer screen, admin never | creates a Route transfer, writes `transfers` + a balancing `ledger_entries` group. Built AT-43. `POST { amount }` (rupees, at most 2dp) with the caller's own JWT (`verify_jwt` true). The coach is resolved from `auth.uid()`, never from the body, and the amount is a request the server re-derives against, never an authority (PRD-02 FR-28). Returns `{ transfer_id, razorpay_transfer_id, amount, status, ledger_entry_group_id, balance_before, balance_after }` with `status: 'processing'`; `transfer.processed` moves it to `paid`. Errors `VALIDATION` 400, `UNAUTHENTICATED` 401, `NOT_COACH` 403, `PAYOUT_ACCOUNT_NOT_ACTIVE` 409, `INSUFFICIENT_BALANCE` 409, `RAZORPAY_ERROR` 502, `ROUTE_UNAVAILABLE` 503, `INTERNAL` 500. Every failure writes no `transfers` row and no `ledger_entries` row (FR-29). Route is not yet enabled on the test merchant account, so today every balance-passing call returns `ROUTE_UNAVAILABLE` 503, see `PAYMENTS.md` |
 
-### Payouts, manual (`0130`, 2026-09-25)
+### Payouts, manual (`0132`, 2026-09-25)
 
 Route is closed to ELSHEPH (PAYMENTS.md, "Manual payouts"), so the two Route rows above describe
 deployed but unused paths. Coaches and venues are paid by admin. All of these are Postgres RPCs;

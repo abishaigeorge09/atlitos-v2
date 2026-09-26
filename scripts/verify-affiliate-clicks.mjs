@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // ATLITOS v2 - scripts/verify-affiliate-clicks.mjs
 //
-// Proves 0131: every Buy tap is recorded exactly once, carries its own id to
+// Proves 0133: every Buy tap is recorded exactly once, carries its own id to
 // the retailer when a subid parameter is configured, and nobody but the
 // definer function and admin aggregates can touch the table.
 //

@@ -614,7 +614,7 @@ export interface SearchHit {
   sport?: Sport;
   price?: number;
   distanceKm?: number;
-  /** Courts only (migration 0132): the first free slot in the searched window,
+  /** Courts only (migration 0134): the first free slot in the searched window,
    * from the same availability the booking screen uses. `start`/`end` are
    * IST "HH:MM"; `label` is ready to show ("today at 7:00 PM"). */
   slot?: {

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // ATLITOS v2 - scripts/verify-manual-payouts.mjs
 //
-// Proves 0130: payout methods and the manual payout run. Every check is
+// Proves 0132: payout methods and the manual payout run. Every check is
 // written so the WRONG behaviour fails it, and the ones that guard money are
 // paired: proving the allowed write succeeds is never enough, the forbidden
 // one has to be refused too (CLAUDE.md, "prove the forbidden write").

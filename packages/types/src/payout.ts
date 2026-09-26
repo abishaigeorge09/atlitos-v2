@@ -1,4 +1,4 @@
-// Payout details (migration 0130). One client-side copy of the server's
+// Payout details (migration 0132). One client-side copy of the server's
 // format rules, shared by the mobile app and portal-court so a typo is caught
 // before the round trip. The server re-validates everything in
 // `upsert_my_payout_method`; this exists only to phrase the message, never to

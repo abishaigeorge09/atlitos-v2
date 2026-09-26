@@ -43,7 +43,7 @@ export function GearList() {
 
   const [items, setItems] = useState<GearWithOffers[]>([]);
   const [state, setState] = useState<LoadState>("loading");
-  // Buy taps per product over the last 30 days (0131). Loaded separately so a
+  // Buy taps per product over the last 30 days (0133). Loaded separately so a
   // failure here leaves the catalogue usable and shows a dash, not an error.
   const [clicksByProduct, setClicksByProduct] = useState<Map<string, number> | null>(null);
 

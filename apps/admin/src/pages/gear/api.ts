@@ -470,7 +470,7 @@ export async function fetchLatestSuggestions(productId: string): Promise<FetchLo
 
 
 /** Buy taps per affiliate product over the last `days` days, from
- * `admin_affiliate_click_stats` (0131, admin only). Sums across retailers.
+ * `admin_affiliate_click_stats` (0133, admin only). Sums across retailers.
  * Resolves to null on any failure so the caller can degrade quietly. */
 export async function fetchClickCounts(days: number): Promise<Map<string, number> | null> {
   const { data, error } = await supabaseClient.rpc("admin_affiliate_click_stats", { p_days: days });

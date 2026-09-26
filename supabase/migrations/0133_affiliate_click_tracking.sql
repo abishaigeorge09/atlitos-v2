@@ -1,4 +1,4 @@
--- ATLITOS v2 — 0131_affiliate_click_tracking.sql
+-- ATLITOS v2 — 0133_affiliate_click_tracking.sql
 --
 -- Records every outbound Buy tap on an affiliate offer.
 -- docs/PLAN-PAYOUTS-CLICKS-SEARCH.md Track 2.

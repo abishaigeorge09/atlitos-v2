@@ -11,7 +11,7 @@ import { Text, View } from 'react-native';
  * stats (coach only, `pending` is optional to support both roles).
  *
  * There is no Transfer button. Razorpay Route is closed to ELSHEPH, so
- * Atlitos pays verified payout details by NEFT or UPI (migration 0130) and
+ * Atlitos pays verified payout details by NEFT or UPI (migration 0132) and
  * the coach never requests a transfer. The one action is keeping those
  * details right.
  */

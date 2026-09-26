@@ -761,7 +761,7 @@ export function useShop(client: AtlitosClient) {
       return mapAffiliateProductRow(data);
     },
 
-    /** The URL to open for a Buy tap, after recording the click (0131).
+    /** The URL to open for a Buy tap, after recording the click (0133).
      * The server returns the retailer URL with this click's id appended as
      * a subid when the programme has one configured, so a line in the
      * retailer's commission report maps to exactly one click here.

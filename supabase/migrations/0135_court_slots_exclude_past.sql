@@ -1,4 +1,4 @@
--- ATLITOS v2 — 0133_court_slots_exclude_past.sql
+-- ATLITOS v2 — 0135_court_slots_exclude_past.sql
 --
 -- get_court_available_slots offered slots that had already happened: every
 -- slot earlier today, and every slot on any past date. Found 2026-09-26 while
@@ -12,7 +12,7 @@
 --
 -- A slot in progress is still offered: venue staff record walk ins for the
 -- slot being played right now. A slot is only gone once it has ENDED.
--- search_court_slots (0132) is stricter, offering only slots not yet started,
+-- search_court_slots (0134) is stricter, offering only slots not yet started,
 -- because a shopper searching for a court wants one they can still arrive for.
 --
 -- Everything else about the function is unchanged from 0009 (blackouts,
@@ -35,7 +35,7 @@ begin
     return;
   end if;
 
-  -- 0133: nothing on a day that has already gone (IST).
+  -- 0135: nothing on a day that has already gone (IST).
   if p_date < (now() at time zone 'Asia/Kolkata')::date then
     return;
   end if;
@@ -92,7 +92,7 @@ begin
       and b.slot_start = g.gen_start
       and b.status <> 'cancelled'
   )
-    -- 0133: today, only slots that have not ENDED. A slot in progress stays
+    -- 0135: today, only slots that have not ENDED. A slot in progress stays
     -- offered, because venue staff record walk ins for the slot being played.
     and (p_date > (now() at time zone 'Asia/Kolkata')::date
          or g.gen_end > (now() at time zone 'Asia/Kolkata')::time)

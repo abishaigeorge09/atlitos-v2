@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 
 /**
- * Payout details for one venue (migration 0130,
+ * Payout details for one venue (migration 0132,
  * docs/PLAN-PAYOUTS-CLICKS-SEARCH.md Track 1).
  *
  * Razorpay Route is closed to ELSHEPH, so Atlitos pays venues by NEFT or UPI

@@ -210,7 +210,7 @@ async function fetchCoaches(supabase: any, intent: ParsedIntent, city?: string):
   });
 }
 
-// Courts come from REAL availability (0132 search_court_slots), not from
+// Courts come from REAL availability (0134 search_court_slots), not from
 // matching text. Before this, "badminton court tonight" returned nothing in
 // production because "tonight" had to appear in a court's name or address.
 // Now the window is answered by the same slot function the booking screen
@@ -397,7 +397,7 @@ async function fetchProducts(supabase: any, intent: ParsedIntent): Promise<Candi
 async function fetchAffiliateProducts(supabase: any, intent: ParsedIntent, ids?: string[]): Promise<Candidate[]> {
   const SELECT = "id, title, brand, sport, skill_level, age_range, description, image_url, product_offers ( price, in_stock )";
 
-  // Keyword recall (0134). The old path read the first 50 active rows in no
+  // Keyword recall (0136). The old path read the first 50 active rows in no
   // order and scored those, so on a catalogue of hundreds a product that
   // exactly matched the query was often never looked at. Now the query's
   // meaningful terms go through the full text index and the best ranked
