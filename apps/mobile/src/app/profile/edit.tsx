@@ -198,7 +198,7 @@ export default function EditProfileScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       <AppBar variant="backTitle" title="Edit profile" onPressBack={() => router.back()} />
-      <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.xl, paddingBottom: spacing['3xl'] }}>
+      <ScrollView automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: spacing.lg, gap: spacing.xl, paddingBottom: spacing['3xl'] }}>
         <View style={{ gap: spacing.sm }}>
           <Text style={[textStyle('label'), { color: colors.text }]}>Cover photo</Text>
           <Pressable

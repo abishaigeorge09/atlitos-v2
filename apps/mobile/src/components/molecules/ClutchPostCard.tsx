@@ -1,7 +1,8 @@
 import { inkOnMedia, mediaBackdrop, spacing } from '@atlitos/theme';
 import type { Clip } from '@atlitos/types';
 import * as Haptics from 'expo-haptics';
-import { Bookmark, BookmarkCheck, EllipsisVertical, Film, Heart, MessageCircle, Share2, WifiOff } from 'lucide-react-native';
+import { Bookmark, BookmarkCheck, EllipsisVertical, Film, Heart, MessageCircle, Share2, Volume2, VolumeX, WifiOff } from 'lucide-react-native';
+import { useState } from 'react';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 
 import { ClipVideo } from '@/components/molecules/clip-video';
@@ -55,6 +56,11 @@ export interface ClutchPostCardProps {
    * clip viewer (`clutch/post/[id].tsx` outside its own feed list) and the
    * thumb-grid callers keep prior behavior. */
   mountPlayer?: boolean;
+  /** Launch runbook 5.7. Sound on the feed card. Controlled when the caller
+   * passes both (so one choice can follow the athlete down the feed),
+   * otherwise the card keeps its own state. Clips start muted (autoplay). */
+  muted?: boolean;
+  onToggleMute?: () => void;
   /** F6 (P5 fix pass): the full-feed action rail (icon + count/label stack,
    * `gap-lg` between items) was reused unmodified inside
    * `ClutchPreviewCard`'s compressed Home teaser tile (iOS QA finding
@@ -116,8 +122,13 @@ export function ClutchPostCard({
   onOpen,
   onReportOrBlock,
   bottomInset = 0,
+  muted: mutedProp,
+  onToggleMute,
 }: ClutchPostCardProps) {
   const colors = useThemeColors();
+  const [mutedLocal, setMutedLocal] = useState(true);
+  const muted = mutedProp ?? mutedLocal;
+  const toggleMute = onToggleMute ?? (() => setMutedLocal((value) => !value));
 
   const handleLike = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {
@@ -180,7 +191,7 @@ export function ClutchPostCard({
           player (mountPlayer); every other virtualized card renders its
           poster as a plain Image so it never allocates a native decoder. */}
       {mountPlayer ? (
-        <ClipVideo url={playbackUrl} thumbUrl={posterUrl ?? clip.thumbUrl} active={active} />
+        <ClipVideo url={playbackUrl} thumbUrl={posterUrl ?? clip.thumbUrl} active={active} muted={muted} />
       ) : posterUrl ?? clip.thumbUrl ? (
         <Image
           source={{ uri: posterUrl ?? clip.thumbUrl }}
@@ -266,6 +277,20 @@ export function ClutchPostCard({
         className={cn('absolute right-md items-center', compactActions ? 'gap-sm' : 'gap-lg')}
         style={{ pointerEvents: 'box-none', bottom: spacing.md + bottomInset }}
       >
+        {mountPlayer && !compactActions ? (
+          <Pressable
+            onPress={toggleMute}
+            accessibilityRole="button"
+            accessibilityLabel={muted ? 'Turn sound on' : 'Turn sound off'}
+            className="min-h-11 min-w-11 items-center justify-center"
+          >
+            {muted ? (
+              <VolumeX size={24} strokeWidth={1.75} color={inkOnMedia} />
+            ) : (
+              <Volume2 size={24} strokeWidth={1.75} color={inkOnMedia} />
+            )}
+          </Pressable>
+        ) : null}
         <Pressable
           onPress={handleLike}
           accessibilityRole="button"

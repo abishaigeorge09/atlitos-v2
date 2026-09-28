@@ -321,6 +321,10 @@ export function useCoaching(client: AtlitosClient) {
             priceFrom: minPriceByCoach.get(row.user_id),
           };
         })
+        // Launch runbook 5.6: a coach with no active session type has nothing
+        // to book and rendered "Pricing coming soon", which reads unfinished.
+        // Browse shows bookable coaches only; the profile is still reachable.
+        .filter((item) => item.priceFrom !== undefined)
         .sort(byCityFirst(filters.city));
 
       return { items, nextCursor };

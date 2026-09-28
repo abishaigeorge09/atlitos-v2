@@ -198,7 +198,7 @@ export default function ClutchUploadScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       <AppBar variant="backTitle" title="Post a clip" onPressBack={() => router.back()} />
-      <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: navInset + spacing.xl }}>
+      <ScrollView automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: navInset + spacing.xl }}>
         {retryClipId ? (
           <View className="flex-row items-center gap-sm rounded-md bg-info-tint p-md">
             <Upload size={18} strokeWidth={1.75} color={colors.info} />

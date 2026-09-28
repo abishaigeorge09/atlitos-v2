@@ -162,7 +162,7 @@ export default function AddressBookScreen() {
           onCtaPress={() => setCreating(true)}
         />
       ) : (
-        <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing['3xl'] }}>
+        <ScrollView automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing['3xl'] }}>
           {addresses.map((address) => (
             <View
               key={address.id}

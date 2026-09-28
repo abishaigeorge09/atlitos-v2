@@ -236,7 +236,13 @@ module.exports = {
         // react-native-reusables / shadcn compatibility slots. These CSS vars
         // (defined in global.css) already resolve to a full hsl(...) value,
         // so reference them with var(), not hsl(var()) (that would double wrap).
-        border: "var(--border)",
+        // Launch runbook 5.4. border and card map STRAIGHT to the palette
+        // vars. The var(--border) / var(--card) indirection (a var holding
+        // hsl(var(...))) was not re-resolved by NativeWind when the dark
+        // class flipped, so every bg-card surface stayed white in dark mode
+        // (coach-card, session-card, stat-tile, card, CategoriesRow, divider,
+        // upa-card).
+        border: "hsl(var(--color-border))",
         input: "var(--input)",
         ring: "var(--ring)",
         background: "var(--background)",
@@ -269,7 +275,7 @@ module.exports = {
           foreground: "var(--popover-foreground)",
         },
         card: {
-          DEFAULT: "var(--card)",
+          DEFAULT: "hsl(var(--color-card))",
           foreground: "var(--card-foreground)",
         },
         // Full @atlitos/theme palette, kebab case, every value traces to

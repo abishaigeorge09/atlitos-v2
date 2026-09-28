@@ -157,7 +157,7 @@ export default function LoginScreen() {
               Experience the future of <Text style={{ color: colors.accent }}>Sports</Text>
             </Text>
             <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
-              Expert coaching, Smart performance tracking, Premium merch, and more..
+              Expert coaching, courts near you and smart performance tracking.
             </Text>
           </View>
 
@@ -250,13 +250,16 @@ export default function LoginScreen() {
                   {mode === 'password' ? 'Use a one time code' : 'Use your password'}
                 </Text>
               </Pressable>
+              {/* Launch runbook 5.6: a plain name and a 44pt target. */}
               <Pressable
+                accessibilityRole="button"
                 disabled={busy}
                 hitSlop={8}
+                style={{ minHeight: 44, justifyContent: 'center' }}
                 onPress={() => void run('guest', () => continueAsGuest().then(() => undefined))}
               >
                 <Text style={[textStyle('caption'), { color: colors.textTertiary }]}>
-                  Continue on this device
+                  Browse as guest
                 </Text>
               </Pressable>
             </View>

@@ -103,7 +103,7 @@ env:
 - assertVisible: "All"
 - assertVisible: "One on one"
 - assertVisible: "Group"
-- assertVisible: "Online"
+- assertNotVisible: "Online"
 - assertVisible: ".*Cric Squad.*"
 - takeScreenshot: /tmp/groups-verify/coach-trainees
 

@@ -125,7 +125,7 @@ export default function OrderFeedbackScreen() {
           </Button>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }}>
+        <ScrollView automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }}>
           <View style={{ gap: spacing.xs }}>
             <Text style={[textStyle('h3'), { color: colors.text }]}>
               {state === 'readOnly' ? 'Thanks for the feedback' : 'How did this order go?'}

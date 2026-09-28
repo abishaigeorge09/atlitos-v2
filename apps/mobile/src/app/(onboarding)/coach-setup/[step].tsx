@@ -390,7 +390,7 @@ export default function CoachSetupStepScreen() {
                       <Text style={[textStyle('caption'), { color: colors.danger }]}>{cert.uploadError}</Text>
                     ) : null}
                   </View>
-                  <Pressable onPress={() => removeCertificate(index)} accessibilityRole="button" hitSlop={8}>
+                  <Pressable onPress={() => removeCertificate(index)} accessibilityRole="button" accessibilityLabel={`Remove ${cert.name}`} hitSlop={8}>
                     <Trash2 size={18} color={colors.textTertiary} strokeWidth={1.75} />
                   </Pressable>
                 </View>
@@ -427,7 +427,7 @@ export default function CoachSetupStepScreen() {
                 >
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Text style={[textStyle('label'), { color: colors.textSecondary }]}>Session {index + 1}</Text>
-                    <Pressable onPress={() => removeSessionType(index)} accessibilityRole="button" hitSlop={8}>
+                    <Pressable onPress={() => removeSessionType(index)} accessibilityRole="button" accessibilityLabel={`Remove session ${index + 1}`} hitSlop={8}>
                       <Trash2 size={18} color={colors.textTertiary} strokeWidth={1.75} />
                     </Pressable>
                   </View>
@@ -485,7 +485,7 @@ export default function CoachSetupStepScreen() {
                 >
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Text style={[textStyle('label'), { color: colors.textSecondary }]}>Window {index + 1}</Text>
-                    <Pressable onPress={() => removeAvailabilityWindow(index)} accessibilityRole="button" hitSlop={8}>
+                    <Pressable onPress={() => removeAvailabilityWindow(index)} accessibilityRole="button" accessibilityLabel={`Remove window ${index + 1}`} hitSlop={8}>
                       <Trash2 size={18} color={colors.textTertiary} strokeWidth={1.75} />
                     </Pressable>
                   </View>

@@ -5,7 +5,7 @@ import { Portal } from '@rn-primitives/portal';
 import * as Haptics from 'expo-haptics';
 import { CircleCheck, Flag, TriangleAlert, UserX, X } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
+import { Animated, KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
 
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
@@ -138,7 +138,14 @@ export function ModerationSheet({ visible, target, onClose, onBlocked, onReporte
 
   return (
     <Portal name="moderation-sheet">
-      <View style={[StyleSheet.absoluteFill, { pointerEvents: 'box-none' }]}>
+      {/* Launch runbook 5.1: the free text reason field sits at the bottom of
+          the sheet, and without this the keyboard covers it and Submit.
+          Reviewers always test Report. Padding shrinks this container, which
+          lifts the bottom anchored sheet above the keyboard. */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={[StyleSheet.absoluteFill, { pointerEvents: 'box-none' }]}
+      >
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Close"
@@ -299,7 +306,7 @@ export function ModerationSheet({ visible, target, onClose, onBlocked, onReporte
             ) : null}
           </View>
         </SlideUp>
-      </View>
+      </KeyboardAvoidingView>
     </Portal>
   );
 }

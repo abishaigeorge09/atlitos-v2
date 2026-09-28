@@ -109,7 +109,7 @@ export default function CheckoutAddressScreen() {
           </Button>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing['3xl'] }}>
+        <ScrollView automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing['3xl'] }}>
           {addresses.length > 0 ? (
             <View style={{ gap: spacing.md }}>
               <Text style={[textStyle('overline'), { color: colors.textTertiary }]}>Saved addresses</Text>
