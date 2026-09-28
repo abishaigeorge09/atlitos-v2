@@ -1,5 +1,5 @@
 import type { CreatorProfile } from '@atlitos/api';
-import { radii, spacing } from '@atlitos/theme';
+import { inkOnMedia, radii, spacing } from '@atlitos/theme';
 import type { Clip, ClipStatus } from '@atlitos/types';
 import { EllipsisVertical, Film, TriangleAlert, UserPlus, Users } from 'lucide-react-native';
 import { ActivityIndicator, FlatList, Pressable, View } from 'react-native';
@@ -302,7 +302,7 @@ export function ClutchProfileView({
                     backgroundColor: colors.overlay,
                   }}
                 >
-                  <EllipsisVertical size={18} strokeWidth={2} color={colors.textInverse} />
+                  <EllipsisVertical size={18} strokeWidth={2} color={inkOnMedia} />
                 </View>
               </Pressable>
             ) : null}

@@ -4392,6 +4392,7 @@ export type Database = {
           created_at: string
           description: string | null
           id: string
+          image_url: string | null
           lat: number | null
           lng: number | null
           name: string
@@ -4408,6 +4409,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          image_url?: string | null
           lat?: number | null
           lng?: number | null
           name: string
@@ -4424,6 +4426,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          image_url?: string | null
           lat?: number | null
           lng?: number | null
           name?: string

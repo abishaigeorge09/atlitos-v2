@@ -1,5 +1,5 @@
 import { useHome, type PromoBanner } from '@atlitos/api';
-import { spacing } from '@atlitos/theme';
+import { inkOnMedia, spacing } from '@atlitos/theme';
 import { router, type Href } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Dimensions, FlatList, Image, Pressable, View, type ViewToken } from 'react-native';
@@ -104,9 +104,18 @@ export function PromoCarousel({ reloadKey }: { reloadKey: number }) {
               />
             ) : null}
             <View className="absolute inset-0 justify-end gap-sm p-lg" style={{ pointerEvents: 'none' }}>
-              <Text className="font-sans-semibold text-lg text-text-inverse">{item.title}</Text>
+              {/* Over an image the scrim is dark in both themes, so the ink is
+                  fixed light; `text-inverse` went near black in dark mode. With
+                  no image the card is `surfaceMuted`, which takes body text. */}
+              <Text className="font-sans-semibold text-lg" style={{ color: item.imageUrl ? inkOnMedia : colors.text }}>
+                {item.title}
+              </Text>
               {item.body ? (
-                <Text className="text-sm text-text-inverse opacity-90" numberOfLines={2}>
+                <Text
+                  className="text-sm opacity-90"
+                  style={{ color: item.imageUrl ? inkOnMedia : colors.text }}
+                  numberOfLines={2}
+                >
                   {item.body}
                 </Text>
               ) : null}

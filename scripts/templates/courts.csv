@@ -1,0 +1,4 @@
+venue_name,address,city,pincode,sport,court_name,price_per_hour,booking_url,image_url,lat,lng,description
+Gachibowli Box Cricket Turf,"Survey No. 64, Financial District Road",Hyderabad,500032,cricket,Turf 1,1200,https://playo.co/venues/hyderabad/gachibowli-box-cricket-turf,https://images.example.com/gachibowli-turf.jpg,17.4483,78.3915,Two floodlit box cricket turfs with a synthetic pitch.
+Gachibowli Box Cricket Turf,"Survey No. 64, Financial District Road",Hyderabad,500032,cricket,Turf 2,1200,https://playo.co/venues/hyderabad/gachibowli-box-cricket-turf,,,,
+Smash Badminton Arena,"Plot 12, Madhapur Main Road",Hyderabad,500081,badminton,Court A,400,https://hudle.in/venues/smash-badminton-arena,,17.4486,78.3908,

@@ -9,15 +9,15 @@ Status legend: [ ] not started, [~] in progress, [x] done, [!] blocked.
 
 | # | Task | Window | Pri | Status | What done looks like |
 |---|------|--------|-----|--------|----------------------|
-| 25 | Push the code | Sept 9 | P0 | [ ] | 275 local commits are on the remote; remote is no longer five weeks behind |
-| 6 | Build a data entry path | Sept 9 to 11 | P0 | [ ] | Either admin create screens for coaches and products, or a CSV import an engineer runs. Unblocks tab 1 rows 1 to 4 (Kushlu, Amma, Amaeya data entry) |
-| 19 | Analytics (PostHog) | Sept 9 to 11 | P2 | [ ] | Decision recorded: wired, or explicitly deferred |
-| 5 | Build courts as an affiliate click out | Sept 9 to 12 | P0 | [ ] | Outbound link field on courts, entry path to fill it, click out screen modelled on the shop affiliate screen. In-app booking flow and its deep link routes hidden |
+| 25 | Push the code | Sept 9 | P0 | [~] | 275 local commits are on the remote; remote is no longer five weeks behind |
+| 6 | Build a data entry path | Sept 9 to 11 | P0 | [~] | Either admin create screens for coaches and products, or a CSV import an engineer runs. Unblocks tab 1 rows 1 to 4 (Kushlu, Amma, Amaeya data entry) |
+| 19 | Analytics (PostHog) | Sept 9 to 11 | P2 | [x] | Decision recorded: wired, or explicitly deferred |
+| 5 | Build courts as an affiliate click out | Sept 9 to 12 | P0 | [~] | Outbound link field on courts, entry path to fill it, click out screen modelled on the shop affiliate screen. In-app booking flow and its deep link routes hidden |
 | 11 | Account and infra verification | Sept 9 to 13 | P0 | [ ] | Leaked password protection on; MFA on Apple, Supabase, Razorpay, GitHub; prepaid credits topped up; backup restore proven; Apple agreements current |
-| 13 | Fix bugs and polish | Sept 9 to 13 | P0 | [ ] | Everything the profile days (section 2) turn up is fixed or logged in BUG-LEDGER.md |
-| 8 | Deploy what is already built | Sept 9 to 14 | P0 | [ ] | 8 pending migrations applied, 2 missing edge functions deployed, each money path smoke tested |
+| 13 | Fix bugs and polish | Sept 9 to 13 | P0 | [~] | Everything the profile days (section 2) turn up is fixed or logged in BUG-LEDGER.md |
+| 8 | Deploy what is already built | Sept 9 to 14 | P0 | [!] | 8 pending migrations applied, 2 missing edge functions deployed, each money path smoke tested |
 | 7 | Switch Razorpay to a live key | Sept 9 to 15 | P0 | [ ] | eas.json no longer pins EXPO_PUBLIC_RAZORPAY_KEY_ID to a test key for store builds. Depends on decision row 22 (Zaakpay or Razorpay) |
-| 10 | Legal and support live | Sept 10 to 13 | P0 | [ ] | Privacy, terms, support and delete account pages load; support points at an atlitos.com address |
+| 10 | Legal and support live | Sept 10 to 13 | P0 | [~] | Privacy, terms, support and delete account pages load; support points at an atlitos.com address |
 | 12 | Functional testing by profile | Sept 10 to 13 | P0 | [ ] | Four days, one profile per day, all scenarios in section 3 executed and logged per section 4 |
 | 9 | Push notifications | Sept 10 to 15 | P1 | [ ] | pg_net enabled, two vault secrets created, push sweep scheduled |
 | 14 | App Store submission pack | Sept 15 to 23 | P0 | [ ] | Listing copy, privacy label matching the app manifest, age rating for UGC, screenshots, 1024 icon, working demo account, review notes. See APP-STORE-SUBMISSION-PACK.md |
@@ -26,14 +26,58 @@ Status legend: [ ] not started, [~] in progress, [x] done, [!] blocked.
 | 15 | Replace the stale TestFlight build | Sept 22 to 30 | P0 | [ ] | Build cut from current code, internal first, then external (triggers Beta App Review) |
 | 16 | Submit and release | Sept 30 to Oct 8 | P0 | [ ] | Submitted with manual release, room for two rejection cycles |
 
+### Status notes, 2026-09-15
+
+- **19, PostHog: DEFERRED.** No analytics SDK is wired anywhere in the repo (no `posthog` reference in apps, packages or docs). The Oct 8 build ships without product analytics; Sentry (already wired) covers crashes. Revisit after launch, when there is traffic worth measuring.
+- **25, Push:** `integration/p6-reconciled` (2541742) and `fix/qa-round-2026-09-15` are on origin. What remains is the uncommitted UI work in the main checkout, which Prasanth commits himself when it is finished.
+- **13, Bugs:** external tester round of 2026-09-15 fixed as BUG-045 to BUG-049 (`docs/qa/BUG-LEDGER.md`), branch `fix/qa-round-2026-09-15`.
+- **10, Legal:** `/`, `/privacy`, `/terms`, `/support`, `/delete-account` return 200 on www.atlitos.com. Still open: `/support` points at support@elsheph.com, not an atlitos.com address, and `/content-policy` is 404 on the deployed site.
+- **5, Courts click out: CODE DONE** on `fix/qa-round-2026-09-15` (b81e9bb). `venues.booking_url` + `image_url` (migration `0130_venue_booking_url.sql`), Book on `<site>` on the court page, in-app booking hidden behind `COURT_IN_APP_BOOKING_ENABLED`. **Before this build ships: apply `0120`** (the app now selects the two columns). Then render check the Courts tab once one venue is imported.
+- **6, Data entry path: CODE DONE**, CSV import (the "an engineer runs" option, chosen for zero UI surface and whole file validation). `scripts/import-courts.mjs`, `scripts/import-equipment.mjs`, `scripts/import-coaches.mjs`, templates in `scripts/templates/`, guide in `docs/qa/DATA-ENTRY.md`. Dry run, validation and the production guard exercised; the write path runs for real on the first sheet (dry run, then `--apply`). Rows 1 to 4 are unblocked once 0120 is applied and `.env.local` holds the service role key.
+- **8, Deploy: BLOCKED on three reconciliation calls, checked against the live ledger (109 rows, top `0117`) on 2026-09-15.** Two unapplied sets now exist: main's renumbered `0118` to `0125` (see `docs/architecture/DEPLOY-RUNBOOK.md`) and this branch's own `0110`, `0112` to `0115`, `0118`, `0119`, which collide on number with main's `0118`/`0119`. Findings:
+  - `chat_thread_previews`: main's `0124` and this branch's `0113` both create it but return different columns. The deployed app parses this branch's shape (`sender_id`, `removed_at`, name from `public_profiles`). Apply `0113`, never `0124`.
+  - main's `0121` (`order_transition` audit row): body is production's plus the audit insert, so it is safe on its own, BUT the deployed `admin-order-advance` edge function still writes its own audit row, so applying it alone double-writes. Ship the RPC and the edge function change together.
+  - main's `0119` (coach video policy lock): security tightening with no counterpart here. Before applying, confirm the deployed upload flow inserts `coach_trainee_videos` with `storage_path` null first, or the tightened policy blocks every upload.
+  - The 2 missing edge functions are `delete-account` (waits on `0120`/`0123`) and `notify-push-sweep` (task 9, inert until pg_net + vault secrets).
+  - None of this blocks tasks 5 and 6, so those went first.
+
+### Path to both stores, checked against production on 2026-09-15
+
+Ordered by dependency. A is the reason the shipped app has errors today; nothing after it is worth doing first.
+
+**A. Make production match the app (blocks everything, needs a production write go)**
+1. Production is missing 15 of this branch's own migrations: `0098` to `0106`, `0110`, `0112` to `0115`, `0118`, `0119` (ledger top is `0117`; only `0107` to `0109`, `0116`, `0117` of the newer set landed). The shipped app calls `account_deletion_preview` + the `delete-account` edge function (0098, Apple 5.1.1(v)), `delete_my_clip` (0100) and `set_clip_comments_enabled` (0101) with no fallback, so Delete account, Delete my clip and Comments off are live errors. Apply in order, one file at a time per `docs/architecture/DEPLOY-RUNBOOK.md`, checking every `create or replace function` against the live definition first. Caveats: `0105` and the moved `0111` need pg_cron and vault secrets; `0113`/`0114` are the CONCURRENTLY split; `0115` must be read against live `0096`. Then `0120` (courts click out).
+2. Deploy `delete-account` (after 0098) and `notify-push-sweep` (after 0110, task 9 secrets).
+3. Prove Delete account end to end on a throwaway account. This is the Apple 5.1.1(v) gate and Play's account deletion requirement.
+
+**B. App code**
+4. Merge `fix/qa-round-2026-09-15` into `integration/p6-reconciled`, push.
+5. Port the uncommitted UI work on main onto the integration line. If it adds Google sign in (`SocialAuthButtons.tsx`, `lib/oauth.ts` are in that tree), Apple guideline 4.8 makes Sign in with Apple mandatory in the same release. Founder decision of 2026-08-12 was social login AFTER submission; either honour that or ship both together.
+6. Legal: `/support` still points at support@elsheph.com; needs an atlitos.com mailbox (Prasanth creates it) and a visible support link on the site; `/content-policy` is 404 on the deployed site.
+7. Razorpay live key: founder row 22, then set `EXPO_PUBLIC_RAZORPAY_KEY_ID` as an EAS production environment variable; `scripts/check-release-config.sh` must pass.
+
+**C. Data**
+8. Import courts, equipment, coaches from the sheets (`docs/qa/DATA-ENTRY.md`). Replace the flat colour seed images (BUG-06): reviewers and screenshots see them.
+9. Task 21 cleanup: 300 auth users of which 14 look like fixtures, 6 of 10 venues unverified fixtures, seed clips in the feed, a `trackb-verify` category. Inventory first (read only), delete on approval.
+
+**D. Native verification**
+10. EAS preview build, Maestro suite (baseline 13 pass, 1 real red, 1 not run), then the 188 profile scenarios (task 12) on a real device. Fix what comes back.
+
+**E. Store packs**
+- iOS (`docs/qa/APP-STORE-SUBMISSION-PACK.md`): demo account (still TO BE FILLED), age rating 12+ for UGC, privacy label already matches the manifest, 6.9 and 6.5 inch screenshots against real imagery, review notes. Row 23: recommend `supportsTablet: false` (no 12.9 inch screenshots, no iPad layout QA). Row 24: donations to individuals through an Atlitos held fund risk Apple 3.1.1 (in app purchase); founder decides before submit.
+- Android (no pack yet): Play Console listing, Data safety form mirroring the privacy manifest, IARC content rating (UGC), 512 icon, 1024x500 feature graphic, phone screenshots, account deletion URL (https://www.atlitos.com/delete-account, live), `google-service-account.json` for `eas submit`, Play App Signing. Check the developer account type: a personal account created after Nov 2023 must run a closed test with 12 testers for 14 days before production access, which alone can miss Oct 8.
+
+**F. Build and submit**
+- `eas build --profile production --platform all` (remote version source, auto increment), `eas submit`. TestFlight internal then external (Beta App Review); Play internal then closed then production. Two rejection cycles of buffer before Oct 8 means both submissions in by about Sept 26.
+
 Founder decisions Prasanth is waiting on (tab 1 rows 22 to 24, all Open):
 - [ ] Row 22: Zaakpay or Razorpay (only Razorpay is integrated). Blocks task 7.
 - [ ] Row 23: iPad support (supportsTablet true forces 12.9 inch screenshots). Blocks task 14.
 - [ ] Row 24: Apple commission on donations (Empower donations go through an Atlitos held fund, not a registered charity). Blocks task 14 and 16.
 
 Tab 1 rows 2 and 3 (Amaeya, both Blocked, P0) are the affiliate data entry for courts and equipment. They cannot start until tasks 5 and 6 above land, so they are tracked here as downstream:
-- [ ] Row 2: Add courts (affiliate links). Unblocked by task 5 and task 6.
-- [ ] Row 3: Add equipment (affiliate links). Unblocked by task 6.
+- [ ] Row 2: Add courts (affiliate links). Unblocked by task 5 and task 6: sheet `scripts/templates/courts.csv`, guide `docs/qa/DATA-ENTRY.md`, needs 0130 applied.
+- [ ] Row 3: Add equipment (affiliate links). Unblocked by task 6: sheet `scripts/templates/equipment.csv`.
 
 ## 2. Tab 2, Tech Schedule (day plan)
 

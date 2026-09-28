@@ -1,3 +1,4 @@
+import { Redirect } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -130,7 +131,13 @@ function ColorSwatch({ name, value }: { name: string; value: string }) {
   );
 }
 
-export default function KitchenSink() {
+// Dev only: a release build sends a deep link here back to the app root.
+export default function KitchenRoute() {
+  if (!__DEV__) return <Redirect href="/" />;
+  return <KitchenSink />;
+}
+
+function KitchenSink() {
   const colors = useThemeColors();
   const [otp, setOtp] = useState('12');
   const [rating, setRating] = useState(4);

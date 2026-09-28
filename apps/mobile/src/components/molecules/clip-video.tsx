@@ -1,4 +1,5 @@
 import { useVideoPlayer, VideoView } from 'expo-video';
+import { mediaBackdrop } from '@atlitos/theme';
 import { useEffect, useRef, useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 
@@ -61,7 +62,7 @@ export function ClipVideo({ url, thumbUrl, active, muted = true }: ClipVideoProp
   const showPoster = !firstFrame || !url;
 
   return (
-    <View style={StyleSheet.absoluteFill} className="bg-text">
+    <View style={[StyleSheet.absoluteFill, { backgroundColor: mediaBackdrop }]}>
       <VideoView
         player={player}
         style={StyleSheet.absoluteFill}
