@@ -23,182 +23,172 @@ Apple's flow is: pick every data type you collect, then for each one answer thre
 
 ## Step 1. Data types to select
 
-Select exactly these ten. Everything not listed is a deliberate "no", justified in section 3.
+Rewritten 2026-09-30. **The label must equal the privacy manifest**, `ios.privacyManifests.NSPrivacyCollectedDataTypes`
+in `apps/mobile/app.json`, because Apple compares the two. The manifest that ships is the one on
+`launch/release/ios-compliance` (commit `f9c07a5`), which is this branch's manifest plus App
+Functionality on Product Interaction. It declares exactly **17 types**, the same 17 published in App
+Store Connect on 2026-09-27. Select these 17 and nothing else.
 
-| Apple category | Data type | Select? |
-|---|---|---|
-| Contact Info | Name | Yes |
-| Contact Info | Email Address | Yes |
-| Contact Info | Phone Number | Yes |
-| Contact Info | Physical Address | Yes |
-| Financial Info | Purchase History | Yes |
-| Location | Coarse Location | Yes |
-| User Content | Photos or Videos | Yes |
-| User Content | Audio Data | Yes |
-| User Content | Customer Support | No |
-| User Content | Other User Content | Yes |
-| Identifiers | User ID | Yes |
-| Identifiers | Device ID | Yes |
-| Usage Data | Product Interaction | No, see section 3 |
-| Diagnostics | Crash Data | Yes |
-| Diagnostics | Performance Data | Yes |
-| Diagnostics | Other Diagnostic Data | Yes |
-| Search History | Search History | Yes |
-| Health & Fitness, Sensitive Info, Browsing History, Contacts, Financial Info > Payment Info, Financial Info > Credit Info, Financial Info > Other Financial Info, Location > Precise Location | | No, see section 3 |
+| # | Apple category | Data type | Manifest key (`NSPrivacyCollectedDataType...`) | Linked | Tracking | Purposes |
+|---|---|---|---|---|---|---|
+| 1 | Contact Info | Name | `Name` | Yes | No | App Functionality |
+| 2 | Contact Info | Email Address | `EmailAddress` | Yes | No | App Functionality |
+| 3 | Contact Info | Phone Number | `PhoneNumber` | Yes | No | App Functionality |
+| 4 | Contact Info | Physical Address | `PhysicalAddress` | Yes | No | App Functionality |
+| 5 | Location | Coarse Location | `CoarseLocation` | Yes | No | App Functionality |
+| 6 | User Content | Photos or Videos | `PhotosorVideos` | Yes | No | App Functionality |
+| 7 | User Content | Emails or Text Messages | `EmailsOrTextMessages` | Yes | No | App Functionality |
+| 8 | User Content | Other User Content | `OtherUserContent` | Yes | No | App Functionality |
+| 9 | Financial Info | Payment Info | `PaymentInfo` | Yes | No | App Functionality |
+| 10 | Purchases | Purchase History | `PurchaseHistory` | Yes | No | App Functionality |
+| 11 | Identifiers | User ID | `UserID` | Yes | No | App Functionality |
+| 12 | Usage Data | Product Interaction | `ProductInteraction` | Yes | No | App Functionality, Analytics |
+| 13 | Search History | Search History | `SearchHistory` | **No** | No | App Functionality |
+| 14 | Diagnostics | Crash Data | `CrashData` | **No** | No | App Functionality |
+| 15 | Diagnostics | Performance Data | `PerformanceData` | **No** | No | App Functionality |
+| 16 | Diagnostics | Other Diagnostic Data | `OtherDiagnosticData` | **No** | No | App Functionality |
+| 17 | Other Data | Other Data Types | `OtherDataTypes` | Yes | No | App Functionality |
+
+Linked: 13 types. Not linked: 4 types (Search History and the three Diagnostics). Tracking: No for
+all 17, and `NSPrivacyTracking` is `false` with an empty `NSPrivacyTrackingDomains`.
+
+**Not selected** (not in the manifest; reasons in step 3): Device ID, Audio Data, Customer Support,
+Precise Location, Health, Fitness, Sensitive Info, Contacts, Browsing History, Advertising Data,
+Other Usage Data, Credit Info, Other Financial Info, Gameplay Content, Advertising identifier.
+
+How to check the two still agree before submitting:
+
+```
+python3 -c 'import json; t=json.load(open("apps/mobile/app.json"))["expo"]["ios"]["privacyManifests"]["NSPrivacyCollectedDataTypes"]; k="NSPrivacyCollectedDataType"; [print(x[k].replace(k,""), "linked" if x[k+"Linked"] else "NOT linked", "tracking" if x[k+"Tracking"] else "no tracking", [p.replace(k+"Purpose","") for p in x[k+"Purposes"]]) for x in t]; print(len(t), "types")'
+```
+
+If a row here and a row in the manifest ever differ, change both in the same commit.
 
 ---
 
 ## Step 2. Per data type answers
 
-For every row below, the answer to "Used for tracking" is **No**, for one reason that holds across
-the whole app: there is no advertising identifier, no App Tracking Transparency prompt, no
-attribution SDK and no ad network in the binary. Verified by grep over `apps/mobile` and
-`packages` for `AppTrackingTransparency`, `expo-tracking-transparency`, `IDFA` and
-`getAdvertisingId`, zero matches, with a positive control on `expo-location` to prove the grep
-matched at all. Cross checked against the dependency list at `apps/mobile/package.json:24-69`.
+For every type the answer to "Used for tracking" is **No**, for one reason that holds across the
+whole app: there is no advertising identifier, no App Tracking Transparency prompt, no attribution
+SDK and no ad network in the binary. Verified by grep over `apps/mobile` and `packages` for
+`AppTrackingTransparency`, `expo-tracking-transparency`, `IDFA` and `getAdvertisingId`, zero
+matches, with a positive control on `expo-location` to prove the grep matched at all.
 
-### Contact Info > Name
+### 1. Contact Info > Name
 
-- **Purposes:** App Functionality
-- **Linked to the user:** Yes
-- **Used for tracking:** No
-- **Evidence:** collected at `apps/mobile/src/app/(auth)/register.tsx:84`, stored in `public.users.name` (`supabase/migrations/0001_identity.sql:65`), written by the signup trigger at `supabase/migrations/0073_signup_metadata.sql:43-53`.
-- **Note:** the name is also passed to Razorpay as checkout prefill (`apps/mobile/src/app/(tabs)/courts/book/pay.tsx:102`), which is still App Functionality.
+- **Purposes:** App Functionality. **Linked:** Yes. **Tracking:** No.
+- **Evidence:** collected at sign up (`apps/mobile/src/app/(auth)/register.tsx`), stored in `public.users.name` (`supabase/migrations/0001_identity.sql:65`), written by the signup trigger (`0073_signup_metadata.sql`). Also sent to Razorpay as checkout prefill for coaching and group payments, which is still App Functionality.
 
-### Contact Info > Email Address
+### 2. Contact Info > Email Address
 
-- **Purposes:** App Functionality
-- **Linked to the user:** Yes
-- **Used for tracking:** No
-- **Evidence:** `apps/mobile/src/app/(auth)/register.tsx:85` into `client.auth.signUp({ email })` at `packages/api/src/hooks.ts:88-89`. It is the account key.
-- **Note:** the app has no marketing email send. `notification_prefs.email_enabled` exists (`supabase/migrations/0002_notifications.sql:57-65`) but no marketing sender is wired. Do NOT tick "Developer's Advertising or Marketing" unless and until one ships.
+- **Purposes:** App Functionality. **Linked:** Yes. **Tracking:** No.
+- **Evidence:** the account key, `client.auth.signUp({ email })` in `packages/api/src/hooks.ts`. Sign in with Apple may supply a private relay address instead.
+- **Note:** there is no marketing email send. Do NOT tick "Developer's Advertising or Marketing" unless one ships.
 
-### Contact Info > Phone Number
+### 3. Contact Info > Phone Number
 
-- **Purposes:** App Functionality
-- **Linked to the user:** Yes
-- **Used for tracking:** No
-- **Evidence:** required field at `apps/mobile/src/app/(auth)/register.tsx:86`, validated at `:68`, carried in signup metadata at `packages/api/src/hooks.ts:94`, written to `public.users.phone` by `supabase/migrations/0073_signup_metadata.sql:26,43-53`. Also a login identifier at `packages/api/src/hooks.ts:73-74`.
+- **Purposes:** App Functionality. **Linked:** Yes. **Tracking:** No.
+- **Evidence:** required at sign up, written to `public.users.phone` (`0073_signup_metadata.sql`); also a sign in identifier.
 
-### Contact Info > Physical Address
+### 4. Contact Info > Physical Address
 
-- **Purposes:** App Functionality
-- **Linked to the user:** Yes
-- **Used for tracking:** No
-- **Evidence:** `public.addresses` (line1, line2, city, state, 6 digit pincode) at `supabase/migrations/0001_identity.sql:145-155`. Collected only when a user places a shop order.
+- **Purposes:** App Functionality. **Linked:** Yes. **Tracking:** No.
+- **Evidence:** `public.addresses` (line1, line2, city, state, pincode), `0001_identity.sql:145-155`, saved from `apps/mobile/src/app/account/addresses.tsx`. The owned shop is off (`shop.owned_enabled` false), so nothing is shipped, but a user can still save an address, so it stays declared.
 
-### Financial Info > Purchase History
+### 5. Location > Coarse Location
 
-- **Purposes:** App Functionality
-- **Linked to the user:** Yes
-- **Used for tracking:** No
-- **Evidence:** orders (`supabase/migrations/0031_commerce.sql`), court bookings (`0009_courts.sql`), coaching sessions (`0018_coaching.sql`), donations (`0048_empower_schema.sql`), and the ledger (`0010_payments_core.sql`).
+- **Purposes:** App Functionality. **Linked:** Yes. **Tracking:** No.
+- **Evidence:** `apps/mobile/src/store/location-store.ts` requests `Location.Accuracy.Balanced`, foreground only (`requestForegroundPermissionsAsync`); coordinates sent to `ai-search` are rounded to 2 decimals on the device. They arrive inside an authenticated request, used for a distance sort and discarded (`supabase/functions/ai-search/index.ts`); no migration defines a user location column. Apple's "linked" is about collection, not retention, so Yes.
 
-### Financial Info > Payment Info: **DO NOT SELECT**
+### 6. User Content > Photos or Videos
 
-The app never touches a card, bank or UPI credential. Razorpay's native checkout sheet collects
-them inside its own SDK and returns only opaque ids.
+- **Purposes:** App Functionality. **Linked:** Yes. **Tracking:** No.
+- **Evidence:** clip video and thumbnail (`0041_clutch_schema.sql:62-82`), avatar (`0001_identity.sql:68`), coach certificate files (`apps/mobile/src/app/(onboarding)/coach-setup/[step].tsx`). Everything arrives through the system photo picker, so only the item the user picks is shared. A clip's soundtrack travels inside the video file and is covered here, which is why Audio Data is not a separate type.
 
-- **Evidence:** `apps/mobile/src/lib/razorpay-checkout.native.ts:17-25` passes only `key`, `amount`, `currency`, `order_id`, `name`, `description`, `prefill`. `:27-31` returns only `razorpay_order_id`, `razorpay_payment_id`, `razorpay_signature`. There is no card field in the call or in `apps/mobile/src/lib/razorpay-checkout.types.ts`.
-- If Razorpay's own SDK disclosure says it collects payment info, that is Razorpay's declaration on their SDK, not Atlitos collecting it through the app. See the UNRESOLVED row in `DATA-INVENTORY.md` section 11.
+### 7. User Content > Emails or Text Messages
 
-### Location > Coarse Location
+- **Purposes:** App Functionality. **Linked:** Yes. **Tracking:** No.
+- **Evidence:** in app chat, one to one and group: `public.chat_messages` (`supabase/migrations/0022_chat.sql`) and group chat (`0078_group_chat_and_notes.sql`). Added to the manifest in `4ad911a`.
 
-- **Purposes:** App Functionality
-- **Linked to the user:** Yes
-- **Used for tracking:** No
-- **Evidence:** `apps/mobile/src/store/location-store.ts:84-86` requests `Location.Accuracy.Balanced`, which is approximate, not precise. Foreground only (`:78`, `requestForegroundPermissionsAsync`), no background location declared anywhere in `apps/mobile/app.json`. Purpose string at `apps/mobile/app.json:50`.
-- **Why "linked" even though nothing is stored:** the coordinates are sent to the backend inside an authenticated request (`apps/mobile/src/app/(tabs)/courts/index.tsx:90`, `apps/mobile/src/app/home/search.tsx:139-140`), so they arrive attached to a session. They are used for a haversine distance and discarded (`supabase/functions/ai-search/index.ts:231-235`); no migration defines a user location column. Apple's "linked" question is about the collection, not the retention, so Yes is the honest answer.
+### 8. User Content > Other User Content
 
-### Location > Precise Location: **DO NOT SELECT**
+- **Purposes:** App Functionality. **Linked:** Yes. **Tracking:** No.
+- **Evidence:** clip captions (`0041_clutch_schema.sql:73`), clip comments (`:118-124`), reports filed (`0097_report_block.sql`), profile bio text.
 
-`Accuracy.Balanced` is the only accuracy the app ever asks for (`location-store.ts:84-86`).
+### 9. Financial Info > Payment Info
 
-Caveat the engineer must close first: `apps/mobile/app.json:29-30` declares
-`ACCESS_FINE_LOCATION` on Android. That does not change the iOS answer (iOS accuracy is decided by
-the `Accuracy` enum, not the manifest), but it should be dropped so the Android declaration is
-consistent. Listed in `SUBMISSION-CHECKLIST.md`.
+- **Purposes:** App Functionality. **Linked:** Yes. **Tracking:** No.
+- **Evidence:** coaches and venue partners register payout details for manual payouts: account holder name, bank account number, IFSC, UPI ID and PAN (`supabase/migrations/0132_payout_methods_manual_payouts.sql`). Owners only ever see the last four digits; admin reveals write an `audit_log` row. Added to the manifest in `4ad911a`.
+- **What it is not:** the app never touches an athlete's card, bank or UPI credential. Razorpay's checkout sheet collects those inside its own SDK and returns only opaque ids (`apps/mobile/src/lib/razorpay-checkout.native.ts` passes `key`, `amount`, `currency`, `order_id`, `name`, `description`, `prefill` and receives `razorpay_order_id`, `razorpay_payment_id`, `razorpay_signature`). Payment references and amounts are Purchase History, below.
 
-### User Content > Photos or Videos
+### 10. Purchases > Purchase History
 
-- **Purposes:** App Functionality
-- **Linked to the user:** Yes
-- **Used for tracking:** No
-- **Evidence:** clip video and thumbnail at `supabase/migrations/0041_clutch_schema.sql:62-82` (`storage_path`, `thumb_path`); avatar at `supabase/migrations/0001_identity.sql:68`; coach certificate documents uploaded from the app at `apps/mobile/src/app/(onboarding)/coach-setup/[step].tsx:19,142-161`. Permission strings at `apps/mobile/app.json:56-57`.
+- **Purposes:** App Functionality. **Linked:** Yes. **Tracking:** No.
+- **Evidence:** coaching sessions (`0018_coaching.sql`), group memberships (`0076_training_groups.sql`), the payment and ledger records (`0010_payments_core.sql`), and any donation history from Android or the web, which an iOS user still sees in My Impact. Courts are booked on the venue's own website, so no court purchase is recorded.
 
-### User Content > Audio Data
+### 11. Identifiers > User ID
 
-- **Purposes:** App Functionality
-- **Linked to the user:** Yes
-- **Used for tracking:** No
-- **Evidence:** the audio track of a clip picked from the library (the microphone purpose string at `apps/mobile/app.json:233` exists only because `expo-image-picker` links the API; the app never records). There is no standalone voice recorder in the app; audio only ever arrives as the audio track of a clip.
+- **Purposes:** App Functionality. **Linked:** Yes. **Tracking:** No.
+- **Evidence:** `public.users.id`, the auth user UUID (`0001_identity.sql:64`), the foreign key on every owned row.
 
-### User Content > Other User Content
+### 12. Usage Data > Product Interaction
 
-- **Purposes:** App Functionality
-- **Linked to the user:** Yes
-- **Used for tracking:** No
-- **Evidence:** clip captions (`supabase/migrations/0041_clutch_schema.sql:73`), clip comments (`:118-124`), chat messages (`supabase/migrations/0022_chat.sql:126-132`), group chat (`supabase/migrations/0078_group_chat_and_notes.sql`), reports (`supabase/migrations/0097_report_block.sql`).
+- **Purposes:** App Functionality, Analytics. **Linked:** Yes. **Tracking:** No.
+- **Evidence:** `0133_affiliate_click_tracking.sql`: every Buy tap on a retailer offer is recorded in `affiliate_clicks` against the signed in user, to open the right retailer link (App Functionality) and to measure the shop and settle retailer commissions (Analytics). The retailer only ever receives a random click id. No third party analytics SDK is installed.
 
-### Identifiers > User ID
+### 13. Search History (NOT linked)
 
-- **Purposes:** App Functionality
-- **Linked to the user:** Yes
-- **Used for tracking:** No
-- **Evidence:** `public.users.id` is the auth user UUID (`supabase/migrations/0001_identity.sql:64`) and the foreign key on every owned row.
+- **Purposes:** App Functionality. **Linked:** **No**. **Tracking:** No.
+- **Evidence:** the search text is sent to the `ai-search` edge function and, when smart search is on, to Anthropic and Voyage AI to interpret and embed it. The only server side copy is `query_embedding_cache` (`0121_gear_search_vectors.sql:72-76`), keyed by a sha256 hash of the normalised query with its embedding, kept 10 minutes, with **no user id**, and the providers receive the text with no user identifier. The per user spend guard (`supabase/functions/ai-search/spend-guard.ts`) counts calls per user but stores no query text. Hence Not Linked, as the manifest says. Recent searches are also kept on the device in AsyncStorage, which never leaves it.
 
-### Identifiers > Device ID
+### 14. Diagnostics > Crash Data (NOT linked)
 
-- **Purposes:** App Functionality
-- **Linked to the user:** Yes
-- **Used for tracking:** No
-- **Evidence:** the Expo push token is a per device delivery identifier stored against the account. Table `public.push_tokens` at `supabase/migrations/0002_notifications.sql:47-53`; registered at `apps/mobile/src/hooks/use-push-registration.ts:69`; upserted at `packages/api/src/use-push.ts:47-48`; deleted on sign out at `packages/api/src/use-push.ts:64`.
-- Collected only if the user grants notification permission, so it is optional in practice.
+- **Purposes:** App Functionality. **Linked:** **No**. **Tracking:** No.
+- **Evidence:** `apps/mobile/src/lib/sentry.ts`. `Sentry.setUser` is never called, so no account identifier is attached. `enabled: !__DEV__`, DSN baked into the production profile.
 
-### Diagnostics > Crash Data
+### 15. Diagnostics > Performance Data (NOT linked)
 
-- **Purposes:** App Functionality
-- **Linked to the user:** **No**
-- **Used for tracking:** No
-- **Evidence:** `apps/mobile/src/lib/sentry.ts:11-16`. `Sentry.setUser` is not called anywhere in the app, so no account identifier is attached to an event. DSN is baked into the production build profile (`apps/mobile/eas.json`, `EXPO_PUBLIC_SENTRY_DSN`), and `enabled: !__DEV__` means it is live in a store build.
+- **Purposes:** App Functionality. **Linked:** **No**. **Tracking:** No.
+- **Evidence:** `apps/mobile/src/lib/sentry.ts`, `tracesSampleRate: 0.1`.
 
-### Diagnostics > Performance Data
+### 16. Diagnostics > Other Diagnostic Data (NOT linked)
 
-- **Purposes:** App Functionality
-- **Linked to the user:** No
-- **Used for tracking:** No
-- **Evidence:** `apps/mobile/src/lib/sentry.ts:14`, `tracesSampleRate: 0.1`, so one in ten sessions sends a performance trace.
+- **Purposes:** App Functionality. **Linked:** **No**. **Tracking:** No.
+- **Evidence:** the Sentry SDK attaches device model, OS version, app version, breadcrumbs and the client IP address by default; `sendDefaultPii` is not disabled.
 
-### Diagnostics > Other Diagnostic Data
+### 17. Other Data > Other Data Types
 
-- **Purposes:** App Functionality
-- **Linked to the user:** No
-- **Used for tracking:** No
-- **Evidence:** the Sentry React Native SDK attaches device model, OS version, app version, breadcrumbs and the client IP address by default. `sendDefaultPii` is not disabled at `apps/mobile/src/lib/sentry.ts:11-16`, so the default applies. Declaring this is the honest answer while that stays true.
-
-### Search History
-
-- **Purposes:** App Functionality
-- **Linked to the user:** Yes
-- **Used for tracking:** No
-- **Evidence:** the free text search query is POSTed to the `ai-search` edge function (`apps/mobile/src/app/home/search.tsx:139`) and, because `ANTHROPIC_API_KEY` is set in production, forwarded to Anthropic's Messages API as the user message (`supabase/functions/ai-search/llm.ts:174`). Recent searches are additionally cached on device in AsyncStorage (`apps/mobile/src/app/home/search.tsx:104`), which is local only.
-- The query is transmitted inside an authenticated request, hence Linked. No search query is written to any database table; there is no search log migration.
+- **Purposes:** App Functionality. **Linked:** Yes. **Tracking:** No.
+- **Evidence:** profile facts that fit no other Apple type: the sports you play (`public.users.sports`, `public.athlete_sports` from 0088), the city and state you type into Settings (`public.users.city`, `state`, `0001_identity.sql:70-72`), an optional date of birth (`public.users.dob`, `0001_identity.sql:67`), and the qualification details a coach submits for verification.
 
 ---
 
 ## Step 3. Data types deliberately NOT selected, and why
 
+None of these is in the manifest. If any answer changes, add the type to the manifest and the
+label together.
+
 | Apple data type | Answer | Justification |
 |---|---|---|
-| Health & Fitness | Not collected | No HealthKit entitlement, no health SDK. Grep for `HealthKit`, `expo-health`, `react-native-health` over `apps/mobile` and `packages`: zero matches. The app's "training" features are bookings and drills, never body or fitness measurements |
+| Identifiers > Device ID | Not selected | The only per device value stored is the Expo push token (`public.push_tokens`, `0002_notifications.sql:47-53`), a rotating delivery address for notifications, not a hardware or advertising identifier, and only present if the user allows notifications. It is not in the manifest. If the founder decides to treat it as a Device ID, add `NSPrivacyCollectedDataTypeDeviceID` to the manifest and select it here in the same change |
+| User Content > Audio Data | Not selected | The app never records audio. The microphone usage string exists in the binary only because a linked library references the API (see the permissions note below); the app never requests it. A clip's soundtrack is part of the video file, declared under Photos or Videos |
+| User Content > Customer Support | Not selected | Support is by email to support@elsheph.com. The app has no in app support form; `support_tickets` is not written from `apps/mobile` or `packages/api` |
+| Location > Precise Location | Not selected | `Accuracy.Balanced` is the only accuracy the app requests |
+| Health, Fitness | Not collected | No HealthKit entitlement, no health SDK. Grep for `HealthKit`, `expo-health`, `react-native-health`: zero matches. The motion usage string exists only because `expo-location` links the motion API; the app never requests it |
 | Contacts | Not collected | No contacts SDK. Grep for `expo-contacts`, `CNContact`, `READ_CONTACTS`: zero matches |
-| Sensitive Info | Not collected **by the app** | Government ID proof and guardian consent documents exist as `public.upa_evidence` kinds (`supabase/migrations/0048_empower_schema.sql:122-129`) but the only surface that writes them is the web portal `apps/portal-life/src/app/(app)/apply/apply-wizard.tsx`. Confirmed no reference in `apps/mobile` or `packages`. **Reopen this answer the moment a UPA application flow lands in the app** |
-| Browsing History | Not collected | The app has no web browser and logs no browsing |
-| Usage Data > Product Interaction | Not collected | No product analytics SDK is installed. Sentry performance traces are declared under Diagnostics instead, which is where Apple puts them. If a product analytics SDK is added later, this answer changes |
-| Usage Data > Advertising Data | Not collected | No ad network in the binary |
-| Financial Info > Credit Info, Other Financial Info | Not collected | The app stores transaction records, not credit or bank data. Payout account references are created from the coach and partner portals, not the app |
-| Identifiers > Advertising identifier | Not collected | No IDFA access, no ATT prompt. See the tracking justification in step 2 |
-| Diagnostics > Precise Location within diagnostics | Not applicable | Covered under Location above |
+| Sensitive Info | Not collected **by the app** | Government ID and guardian consent documents exist as `public.upa_evidence` kinds (`0048_empower_schema.sql:122-129`) but only the web portal `apps/portal-life` writes them. **Reopen this the moment a UPA application flow lands in the app** |
+| Browsing History | Not collected | Venue booking pages, retailer pages and legal pages open in the in app browser, and nothing about what the person does there is logged |
+| Usage Data > Advertising Data, Other Usage Data | Not collected | No ad network. Product Interaction above covers the only usage event recorded |
+| Financial Info > Credit Info, Other Financial Info | Not collected | Transaction records and payout details only, declared above |
+| Identifiers > Advertising identifier | Not collected | No IDFA access, no ATT prompt |
+
+**Permissions note (ITMS-90683).** `NSCameraUsageDescription`, `NSMicrophoneUsageDescription` and
+`NSMotionUsageDescription` must be present in the binary because linked libraries
+(`expo-image-picker`, `expo-location`) reference those APIs, and App Store Connect rejects the upload
+(ITMS-90683) if a referenced API has no purpose string. The strings are being restored on
+`launch/release/ios-compliance` for that reason. The app never requests camera, microphone or motion
+access, so none of them adds a data type. Photos arrive through the system photo picker, so no photo
+library prompt appears either.
 
 ---
 
@@ -209,7 +199,8 @@ consistent. Listed in `SUBMISSION-CHECKLIST.md`.
 **No.** Nothing in this app links user or device data to third party data for advertising or
 measurement, and nothing is shared with a data broker. There is no ATT prompt because there is
 nothing that would require one. Anthropic, Sentry, Expo push, Razorpay and Supabase are all
-service providers acting on Atlitos' instructions, which Apple does not count as tracking.
+service providers acting on Atlitos' instructions, which Apple does not count as tracking. Voyage AI
+(search embeddings) is in the same position.
 
 ---
 
@@ -218,25 +209,16 @@ service providers acting on Atlitos' instructions, which Apple does not count as
 | Field | Value | Evidence |
 |---|---|---|
 | Privacy Policy URL | `https://www.atlitos.com/privacy` | HTTP 200 verified 2026-08-13 |
-| Account deletion | See the note below. There is currently **no in app deletion path** | |
+| Account deletion | In app: Settings, Account, Delete account (type DELETE). Immediate | `apps/mobile/src/app/profile/delete-account.tsx`, `delete-account` edge function, `delete_my_account()` (0098) |
 | Data collection disclosure for third party SDKs | Razorpay's SDK disclosure is UNRESOLVED, see `DATA-INVENTORY.md` section 11 | |
 
 ---
 
-## Account deletion and Guideline 5.1.1(v): the honest position
+## Account deletion and Guideline 5.1.1(v)
 
-Guideline 5.1.1(v) requires that an app which supports account creation must also let the user
-**initiate account deletion from inside the app**.
-
-What actually exists today:
-
-- A live web page at `https://www.atlitos.com/delete-account` (HTTP 200 verified 2026-08-13) that describes a **request by email** mechanism: the user emails `support@elsheph.com` and Atlitos verifies ownership and actions the request within 30 days (`apps/landing/delete-account.html:53,74`).
-- **No deletion entry point in the app at all.** The Settings surface is Appearance, Preferred sports, Location, Notifications, then an Account section holding only Edit profile, Become a coach and Sign out (`apps/mobile/src/components/organisms/settings/SettingsContent.tsx:256-401`). There is not even a link out to the deletion page.
-- There is no deletion RPC. Grep for `delete_account` and `deleteAccount` over `apps/mobile`, `packages` and `supabase`: zero matches outside the landing page.
-
-This is the single most likely cause of a first submission rejection. It is ranked and detailed in
-`SUBMISSION-CHECKLIST.md`. The minimum viable fix is a Settings row that deep links to
-`https://www.atlitos.com/delete-account`, which is a one screen change in `apps/mobile`, a path
-this track does not own. A real in app deletion flow is the correct fix and pairs naturally with
-the Sign in with Apple work in Phase 8, since Apple additionally requires Sign in with Apple
-accounts to be revocable from the app.
+Resolved. The app lets a person delete their account from inside the app: Settings, then Account,
+then Delete account, confirmed by typing DELETE. Deletion is immediate
+(`delete_my_account()` in 0098, called by the `delete-account` edge function, which also releases
+the sign in, removes stored files and, as of 0139, revokes the Sign in with Apple token so the app
+disappears from the person's Apple ID settings). `https://www.atlitos.com/delete-account` describes
+the same flow and keeps email as the fallback for someone who can no longer sign in.
