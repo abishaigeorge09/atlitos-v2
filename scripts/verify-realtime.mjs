@@ -404,6 +404,12 @@ async function main() {
   const coach2 = await signIn(COACH2_EMAIL); // user C, non-participant
   console.log(`[verify-realtime] signed in: A=player(${player.userId}) B=coach1(${coach1.userId}) C=coach2(${coach2.userId})\n`);
 
+  // 0138: coach1 sends the probe messages below, and every chat message is
+  // refused until its sender has agreed to the content rules. Agree through
+  // the same RPC the app's rules sheet calls (a no op if already agreed).
+  const { error: termsError } = await coach1.client.rpc("accept_content_terms");
+  if (termsError) throw new Error(`[verify-realtime] accept_content_terms failed: ${termsError.message}`);
+
   const sessionId = await ensureSessionBetween(player.client, player.userId, coach1.client, coach1.userId);
   const threadId = await ensureThread(player.client, player.userId, coach1.userId, sessionId);
   console.log(`[verify-realtime] using session ${sessionId}, thread ${threadId}\n`);

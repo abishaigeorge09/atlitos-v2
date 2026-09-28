@@ -65,6 +65,10 @@ async function someoneElsesClip(client, notOwnerId) {
  * it. Placeholder bytes are this repo's established fixture convention
  * (clutch.spec.ts CL-10). */
 async function ownUploadedClip(client) {
+  // 0138: stream-upload-url refuses CONTENT_TERMS_REQUIRED until the caller
+  // has agreed to the content rules; this fixture is not testing that gate.
+  const { error: termsError } = await client.rpc("accept_content_terms");
+  if (termsError) throw termsError;
   const { data: ticket, error } = await client.functions.invoke("stream-upload-url", {
     body: { caption: `e2e SEC ${randomUUID().slice(0, 8)}`, sport: "football" },
   });

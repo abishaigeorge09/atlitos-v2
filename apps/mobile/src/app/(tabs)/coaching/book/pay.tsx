@@ -19,6 +19,7 @@ import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
+import { offerPushPrimer } from '@/store/push-primer-store';
 
 type ScreenState = 'reserving' | 'ready' | 'paying' | 'confirmed' | 'error';
 
@@ -126,6 +127,8 @@ export default function BookSessionPayScreen() {
       });
 
       setState('confirmed');
+      // 3.6: the first real reason to want notifications.
+      void offerPushPrimer();
     } catch (err) {
       // Two distinct error shapes can land here, same as Courts' own pay
       // screen: a real `ApiError` from `verifySessionPayment`, or a plain

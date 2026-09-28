@@ -2,7 +2,26 @@ import { useProfile } from '@atlitos/api';
 import { radii, spacing } from '@atlitos/theme';
 import { SPORTS, type Sport } from '@atlitos/types';
 import { router } from 'expo-router';
-import { Bell, ChevronRight, LogIn, LogOut, Monitor, Moon, Palette, Star, Sun, Trash2, UserRoundPen, UserRoundPlus, UserRoundX, Volleyball } from 'lucide-react-native';
+import {
+  Bell,
+  ChevronRight,
+  FileText,
+  LifeBuoy,
+  LogIn,
+  LogOut,
+  Monitor,
+  Moon,
+  Palette,
+  ScrollText,
+  ShieldCheck,
+  Star,
+  Sun,
+  Trash2,
+  UserRoundPen,
+  UserRoundPlus,
+  UserRoundX,
+  Volleyball,
+} from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, ScrollView, Switch, View } from 'react-native';
 
@@ -11,6 +30,7 @@ import { Chip } from '@/components/ui/chip';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { applyTheme, type ThemePref } from '@/lib/apply-theme';
+import { openSitePage, type SitePath } from '@/lib/site';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
 import { textStyle } from '@/theme/text-style';
@@ -33,6 +53,16 @@ const NOTIFICATION_ROWS: Array<{ key: 'sessions' | 'messages' | 'promotions'; la
   { key: 'sessions', label: 'Session updates', body: 'Requests, confirmations and reminders for your sessions.' },
   { key: 'messages', label: 'Messages', body: 'New messages from your coaches and trainees.' },
   { key: 'promotions', label: 'Offers and news', body: 'Occasional deals, drops and Atlitos updates.' },
+];
+
+/** Legal and support pages live on the landing site (apps/landing) so the app,
+ * the store listing and the web all show one text. Apple reviewers look for the
+ * privacy policy inside the app: this keeps it three taps from the You tab. */
+const ABOUT_ROWS: Array<{ label: string; path: SitePath; icon: typeof Sun }> = [
+  { label: 'Terms', path: '/terms', icon: FileText },
+  { label: 'Privacy policy', path: '/privacy', icon: ShieldCheck },
+  { label: 'Content policy', path: '/content-policy', icon: ScrollText },
+  { label: 'Support', path: '/support', icon: LifeBuoy },
 ];
 
 /** Section wrapper: label plus a card of rows, used for every group so the
@@ -408,6 +438,15 @@ export function SettingsContent() {
           </Section>
         </>
       ) : null}
+
+      {/* Visible to guests too: the policies apply before an account exists. */}
+      <Section title="About">
+        {ABOUT_ROWS.map((row, index) => (
+          <View key={row.path} style={index === 0 ? undefined : { borderTopWidth: 1, borderTopColor: colors.border }}>
+            <ActionRow icon={row.icon} label={row.label} onPress={() => openSitePage(row.path)} />
+          </View>
+        ))}
+      </Section>
 
       {error ? <Text style={[textStyle('caption'), { color: colors.danger }]}>{error}</Text> : null}
       {busy ? <Text style={[textStyle('caption'), { color: colors.textTertiary }]}>Saving...</Text> : null}

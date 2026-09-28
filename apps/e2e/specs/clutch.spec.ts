@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "../fixtures";
 import { serviceClient } from "../helpers/sql.mjs";
-import { EMAIL, signInAs } from "./support/rls.mjs";
+import { acceptContentTerms, EMAIL, signInAs } from "./support/rls.mjs";
 
 test.beforeEach(async ({}, testInfo) => {
   test.skip(testInfo.project.name !== "athlete-web", "CL domain targets athlete-web only");
@@ -42,6 +42,15 @@ async function anyPublishedClipId(client) {
  * anyway). Caller is responsible for cleanup via deleteScratchClip. */
 async function insertScratchClip(ownerId, status) {
   const svc = serviceClient();
+  // 0138: the clips BEFORE INSERT trigger refuses an owner who has not agreed
+  // to the content rules, service role or not. Record agreement for the
+  // fixture owner first (only if unset, so a real first time is kept).
+  const { error: termsError } = await svc
+    .from("users")
+    .update({ content_terms_accepted_at: new Date().toISOString() })
+    .eq("id", ownerId)
+    .is("content_terms_accepted_at", null);
+  if (termsError) throw termsError;
   const { data, error } = await svc
     .from("clips")
     .insert({ owner_id: ownerId, caption: `e2e scratch ${randomUUID().slice(0, 8)}`, sport: "football", status })
@@ -215,6 +224,8 @@ test.describe("CL — Clutch (short-video social feed)", () => {
 
     test("CL-07 submitting a comment inserts the own row and increments the header commentCount", async ({ page }) => {
       const player = await signInAs(EMAIL.player);
+      // 0138: the UI send would otherwise open the content rules sheet.
+      await acceptContentTerms(player);
       const clipId = await anyPublishedClipId(player.client);
       await page.goto(`/clutch/post/${clipId}`);
 
@@ -244,6 +255,9 @@ test.describe("CL — Clutch (short-video social feed)", () => {
   test("CL-09 a non-author's direct delete of another user's comment is rejected server side", async ({}) => {
     const player = await signInAs(EMAIL.player);
     const coach1 = await signInAs(EMAIL.coach1);
+    // 0138: player's fixture comment is refused until player has agreed.
+    await acceptContentTerms(player);
+    expect(player.userId, "author and deleter must be different people").not.toBe(coach1.userId);
     const clipId = await anyPublishedClipId(player.client);
 
     const { data: inserted, error: insertError } = await player.client
@@ -293,6 +307,8 @@ test.describe("CL — Clutch (short-video social feed)", () => {
       // placeholder bytes"); the pipeline accepts them, only decode-in-
       // browser needs a real MP4 (CL-01).
       writeFileSync(fixturePath, Buffer.from("ATLITOS E2E CL-10 PLACEHOLDER MP4 BYTES"));
+      // 0138: Post clip would otherwise open the content rules sheet first.
+      await acceptContentTerms(await signInAs(EMAIL.player));
 
       await page.goto("/clutch/upload");
 
@@ -471,6 +487,8 @@ test.describe("CL — Clutch (short-video social feed)", () => {
 
   test("CL-18 displayed like/comment/follow counts match SQL aggregates exactly after a burst", async ({}) => {
     const player = await signInAs(EMAIL.player);
+    // 0138: the burst's comment is refused until player has agreed.
+    await acceptContentTerms(player);
     const clipId = await anyPublishedClipId(player.client);
 
     // A small real burst: like, unlike, like (net +1 from wherever it

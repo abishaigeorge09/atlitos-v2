@@ -209,6 +209,15 @@ const main = async () => {
     admin: admin.userId,
   });
 
+  // 0138: clips, comments and chat messages are refused until the author has
+  // agreed to the content rules. player uploads the clip and coach1 posts the
+  // comment and the chat message below, so both agree first (a no op when
+  // they already have), through the same RPC the app's rules sheet calls.
+  for (const persona of [player, coach1]) {
+    const { error: termsError } = await persona.client.rpc("accept_content_terms");
+    if (termsError) throw new Error(`[verify-moderation] accept_content_terms failed: ${termsError.message}`);
+  }
+
   // ===== C1: clip comment report reaches the queue =====
   const clipId = await ensurePublishedClip(player, admin);
   record("fixture: published clip", true, { clipId });

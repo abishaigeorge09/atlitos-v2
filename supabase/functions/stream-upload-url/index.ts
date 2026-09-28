@@ -30,9 +30,12 @@
 
 import { handleCorsPreflight } from "../_shared/cors.ts";
 import { jsonResponse, withErrorHandling } from "../_shared/http.ts";
-import { AppError } from "../_shared/app-error.ts";
+import { AppError, appErrorFromPostgrestMessage } from "../_shared/app-error.ts";
 import { getAuthenticatedUser, serviceRoleClient } from "../_shared/supabase.ts";
 import { CLIPS_BUCKET } from "../_shared/clip-access.ts";
+
+// 0138 trigger refusals on clips. Surfaced as themselves, not as INTERNAL.
+const CONTENT_RULE_ERROR = /^(CONTENT_TERMS_REQUIRED|CONTENT_BLOCKED):/;
 
 // The sport enum values (0001: public.sport). Mirrored here so an unknown
 // sport is a clean 400 VALIDATION rather than a Postgres enum-cast 500 on
@@ -102,6 +105,27 @@ Deno.serve((req) =>
     const user = await getAuthenticatedUser(request);
     const supabase = serviceRoleClient();
 
+    // 0. Guests cannot post (0138, launch runbook 3.3). A guest is an
+    //    anonymous session with no user_roles row, the same definition as
+    //    public.is_guest(). The clips insert below runs under the service role,
+    //    which bypasses clips_insert_own, so the check has to live here too.
+    //    The content rules acceptance is checked here as well so the client
+    //    gets a clean CONTENT_TERMS_REQUIRED before any upload starts; the
+    //    0138 trigger on clips enforces it again at insert.
+    const [{ count: roleCount, error: roleError }, { data: author, error: authorError }] = await Promise.all([
+      supabase.from("user_roles").select("role", { count: "exact", head: true }).eq("user_id", user.id),
+      supabase.from("users").select("content_terms_accepted_at").eq("id", user.id).maybeSingle<{ content_terms_accepted_at: string | null }>(),
+    ]);
+    if (roleError || authorError) {
+      throw new AppError("INTERNAL", "Failed to load your account.", 500);
+    }
+    if (!roleCount) {
+      throw new AppError("GUEST_FORBIDDEN", "Create an account to post a clip.", 403);
+    }
+    if (!author?.content_terms_accepted_at) {
+      throw new AppError("CONTENT_TERMS_REQUIRED", "Agree to the content rules before posting.", 403);
+    }
+
     // 1. The clip row. Reuse an existing OWN uploading row on a retry, else
     //    create one. Ownership is enforced in TypeScript here (service role
     //    bypasses RLS): a caller can only ever touch a row they own, and can
@@ -137,6 +161,9 @@ Deno.serve((req) =>
         .eq("id", existing.id)
         .select("id, owner_id, status")
         .single<ClipRow>();
+      if (updateError && CONTENT_RULE_ERROR.test(updateError.message)) {
+        throw appErrorFromPostgrestMessage(updateError.message);
+      }
       if (updateError || !updated) {
         throw new AppError("INTERNAL", `Failed to update clip: ${updateError?.message}`, 500);
       }
@@ -152,6 +179,9 @@ Deno.serve((req) =>
         })
         .select("id, owner_id, status")
         .single<ClipRow>();
+      if (insertError && CONTENT_RULE_ERROR.test(insertError.message)) {
+        throw appErrorFromPostgrestMessage(insertError.message);
+      }
       if (insertError || !created) {
         throw new AppError("INTERNAL", `Failed to create clip: ${insertError?.message}`, 500);
       }

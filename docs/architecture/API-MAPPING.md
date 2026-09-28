@@ -700,3 +700,13 @@ server side aggregate; that is recorded, not half-fixed.
 `packages/api/src` and classifies it. It is negative-tested: planting one
 unbounded read moves the count and removing it moves it back. Run it before
 adding a read.
+
+## iOS launch compliance (0138, 0139)
+
+| Call | Surface | Backend | Notes |
+|---|---|---|---|
+| `profile.acceptContentTerms()` | `ContentTermsGate` (one time sheet before the first clip, comment or chat message) | RPC `accept_content_terms()` | returns the acceptance time; idempotent; `GUEST_FORBIDDEN` for a guest (the sheet says "Sign in to post."). Inserts before it fail with `CONTENT_TERMS_REQUIRED` (403): chat, clip comments and clip upload reopen the sheet and retry once. Text with a listed word fails with `CONTENT_BLOCKED` (400), shown inline under the composer as "This breaks our content policy. Change it and try again." |
+| `functions.invoke("apple-token-store", { authorization_code })` | `lib/oauth.ts` after native Sign in with Apple, fire and forget (failures go to Sentry, sign in never waits on it) | edge function `apple-token-store` | exchanges the code at Apple, requires the `sub` of the id_token in Apple's reply to equal the caller's own Apple identity, then stores the refresh token in `apple_sign_in_tokens`. `403 FORBIDDEN` for no Apple identity or a code issued to a different Apple user (nothing stored); `400 VALIDATION` when Apple refuses the code; `500 APPLE_NOT_CONFIGURED` when `APPLE_TEAM_ID`, `APPLE_SIGNIN_KEY_ID` or `APPLE_SIGNIN_PRIVATE_KEY` is unset |
+| `functions.invoke("delete-account")` | account deletion | edge function `delete-account` | now also revokes the stored Apple token. Apple `400 invalid_grant` (already revoked or expired) counts as revoked and the row is deleted. Any other failure is logged without secrets and never blocks deletion; the row is kept for a retry. Response adds `apple_revoked` and `apple_error` (a code such as `APPLE_REVOKE_FAILED 500` or `APPLE_NOT_CONFIGURED`, never Apple's raw body) |
+| `functions.invoke("stream-upload-url")` | clip upload | edge function | now refuses guests (`GUEST_FORBIDDEN`) and callers who have not agreed to the content rules (`CONTENT_TERMS_REQUIRED`) |
+| `useSearch().aiSearch({ lat, lng })` | smart search | edge function `ai-search` | `lat` and `lng` are rounded to 2 decimals on the device (coarse location) |

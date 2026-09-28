@@ -59,6 +59,11 @@ const main = async () => {
   rec("ids", { player: player.uid, admin: admin.uid, other: other.uid,
     player_ne_other: player.uid !== other.uid, player_ne_admin: player.uid !== admin.uid });
 
+  // 0138: stream-upload-url refuses CONTENT_TERMS_REQUIRED until the uploader
+  // has agreed to the content rules; agree first (a no op if already done).
+  const terms = await player.client.rpc("accept_content_terms");
+  rec("0138 accept_content_terms (player)", { error: terms.error?.message ?? null });
+
   // ===== PRIORITY 1: scripted end-to-end pipeline =====
   const up = await callFn("stream-upload-url", { caption: "Track F scripted proof clip", sport: "football" }, player.token);
   rec("P1a stream-upload-url", up);

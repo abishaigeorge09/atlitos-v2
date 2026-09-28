@@ -36,6 +36,10 @@ export function appErrorFromPostgrestMessage(message: string): AppError {
 
 const STATUS_BY_CODE: Record<string, number> = {
   UNAUTHENTICATED: 401,
+  GUEST_FORBIDDEN: 403,
+  // 0138: the content rules gate and the word filter.
+  CONTENT_TERMS_REQUIRED: 403,
+  CONTENT_BLOCKED: 400,
   FORBIDDEN: 403,
   NOT_FOUND: 404,
   VALIDATION: 400,

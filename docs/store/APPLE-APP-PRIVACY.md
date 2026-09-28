@@ -131,7 +131,7 @@ consistent. Listed in `SUBMISSION-CHECKLIST.md`.
 - **Purposes:** App Functionality
 - **Linked to the user:** Yes
 - **Used for tracking:** No
-- **Evidence:** microphone permission at `apps/mobile/app.json:58`, declared so an uploaded clip keeps its audio track. There is no standalone voice recorder in the app; audio only ever arrives as the audio track of a clip.
+- **Evidence:** the audio track of a clip picked from the library (the microphone purpose string at `apps/mobile/app.json:233` exists only because `expo-image-picker` links the API; the app never records). There is no standalone voice recorder in the app; audio only ever arrives as the audio track of a clip.
 
 ### User Content > Other User Content
 

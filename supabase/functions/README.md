@@ -56,6 +56,24 @@ secrets panel) for the deployed project, and locally in `supabase/.env` for
 | `RAZORPAY_KEY_SECRET` | Yes | `book-court` (order creation), `verify-payment` (payment signature verification) | Never logged, never returned in any response, never hardcoded in source. Lives in `supabase/.env` locally and as an edge function env var in the deployed project. |
 | `RAZORPAY_WEBHOOK_SECRET` | Optional for the local/demo path | `razorpay-webhook` only | Only needed if a public webhook URL is actually registered with Razorpay. This phase's demo relies on `verify-payment` (the client-callback fallback) to finalize payments, so a local/demo run with no public URL and no webhook secret configured still completes bookings end to end; `razorpay-webhook` simply cannot be invoked usefully without a real Razorpay-delivered signature to verify, and returns a `500` configuration error if called with the secret unset rather than silently accepting unverified events. |
 | `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_ANON_KEY` | Yes | all three | Auto-provided in every Supabase edge function's runtime environment; never set manually. |
+| `APPLE_TEAM_ID` | Yes, for Sign in with Apple | `apple-token-store`, `delete-account` (via `_shared/apple.ts`) | Developer team id (`4U493SXP52`), the `iss` of the client secret JWT. |
+| `APPLE_SIGNIN_KEY_ID` | Yes, for Sign in with Apple | same | Key id of the Sign in with Apple `.p8` key, the JWT `kid`. |
+| `APPLE_SIGNIN_PRIVATE_KEY` | Yes, for Sign in with Apple | same | Full contents of the `.p8` file (PEM, newlines kept or escaped as `\n`). Never logged, never returned. |
+| `APPLE_SIGNIN_CLIENT_ID` | Optional | same | Defaults to the bundle id `com.atlitos.app`. |
+
+If any of the three required Apple secrets is missing, `apple-token-store`
+answers `500 APPLE_NOT_CONFIGURED` (the app ignores it, sign in still
+succeeds, and the failure reaches Sentry), and `delete-account` still deletes
+the account but reports `apple_revoked: false, apple_error:
+"APPLE_NOT_CONFIGURED"` and keeps the token row so the revoke can be retried
+once the secrets are set. Set them before 0139 and the 1.0.0 build go live:
+
+```
+supabase secrets set APPLE_TEAM_ID=4U493SXP52 APPLE_SIGNIN_KEY_ID=<key id>
+supabase secrets set APPLE_SIGNIN_PRIVATE_KEY="$(cat AuthKey_<key id>.p8)"
+supabase functions deploy apple-token-store
+supabase functions deploy delete-account
+```
 
 ## Deploy list (this phase)
 

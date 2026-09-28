@@ -68,6 +68,24 @@ if node -e '
   failed=1
 fi
 
+# 4. Launch runbook 3.8. apps/mobile/src/lib/supabase.ts only WARNS when the
+#    Supabase URL is missing, and the app then crashes on first launch, which
+#    a reviewer sees as a crash on open. So a production build refuses to start
+#    without the three values. This runs where the values actually exist: inside
+#    an EAS production build (EAS_BUILD_PROFILE=production, wired through the
+#    eas-build-post-install hook in apps/mobile/package.json), or locally with
+#    --require-env after exporting the production values. Plain `pnpm lint`
+#    has no env and skips it.
+if [ "${EAS_BUILD_PROFILE:-}" = "production" ] || [ "${1:-}" = "--require-env" ]; then
+  for var in EXPO_PUBLIC_SUPABASE_URL EXPO_PUBLIC_SUPABASE_ANON_KEY EXPO_PUBLIC_SENTRY_DSN; do
+    if [ -z "${!var:-}" ]; then
+      echo "check-release-config: $var is not set for this production build."
+      echo "  Set it with: eas env:create --environment production --name $var"
+      failed=1
+    fi
+  done
+fi
+
 if [ "$failed" -ne 0 ]; then
   exit 1
 fi

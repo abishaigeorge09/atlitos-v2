@@ -1752,3 +1752,55 @@ already discloses.
    `coach-certificates/<uid>` are removed, recursively (avatars nests cover
    photos under `<uid>/cover/`), along with the
    `clips/coach-videos/<coach>/<player>/` paths collected before the RPC runs.
+
+## iOS launch compliance (0138, 0139)
+
+### `users.content_terms_accepted_at` (0138)
+
+`timestamptz`, null until the person agrees to the content rules (zero tolerance for
+objectionable content or abusive users). Set by `accept_content_terms()` (security definer,
+authenticated, refuses guests, first acceptance wins). Not backfilled: existing accounts agree
+once before their next post. The mobile app reads it as `MeRow.contentTermsAcceptedAt`.
+
+### `content_blocked_terms` (0138)
+
+| column | type | notes |
+|---|---|---|
+| `term` | text PK | lowercase, non blank |
+| `note` | text | why it was added |
+| `added_at` | timestamptz | default now() |
+
+Matched case insensitively on word boundaries by `contains_blocked_term(text)`, which builds one
+combined regex from the whole list (`\m(t1|t2|...)\M`, terms escaped) so a row is scanned once.
+Seeded with a short English starter list including common inflections (fucked, fucker, bitches,
+retarded and so on); the moderation owner extends it.
+
+### `enforce_content_rules()` triggers (0138)
+
+BEFORE INSERT on `clip_comments` (user_id, text), `chat_messages` (sender_id, text) and `clips`
+(owner_id, caption), plus BEFORE UPDATE OF caption on `clips`. Raises
+`CONTENT_TERMS_REQUIRED` when the author has not agreed, and `CONTENT_BLOCKED` when the text
+contains a listed term. A trigger rather than an RLS clause because clips are inserted by
+`stream-upload-url` under the service role. Fixtures in seed and verify scripts must accept the
+terms for their users before inserting content (the e2e helper `acceptContentTerms`, or
+`content_terms_accepted_at = now()` in SQL fixtures).
+
+On `chat_messages` only, a client insert (auth.uid() set) whose caller is not the sender or not in
+the thread skips both checks and returns the row unchanged, so the RLS WITH CHECK refuses it and a
+non member never learns whether the text would have hit the word filter. Service role and
+migration inserts are always checked.
+
+Deploy order: 0138 goes live in the same window as the 1.0.0 build that ships the content rules
+sheet. An older binary cannot agree, so its posts are refused; only internal TestFlight testers
+run one, and they lose posting until they update.
+
+### `apple_sign_in_tokens` (0139)
+
+| column | type | notes |
+|---|---|---|
+| `user_id` | uuid PK, FK `auth.users` on delete cascade | |
+| `refresh_token` | text | Apple refresh token from the authorization code exchange |
+| `created_at`, `updated_at` | timestamptz | |
+
+Written by the `apple-token-store` edge function, read and deleted by `delete-account`, which
+revokes the token at Apple (Guideline 5.1.1(v)). Service role only.

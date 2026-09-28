@@ -687,6 +687,30 @@ never a hard delete) and a `user` remove arm (resolves the report as
 `actioned` with no further row mutation; account enforcement is Track B's
 separate, separately audited `admin_suspend_user`).
 
+## iOS launch compliance (`0138`, `0139`)
+
+- `content_blocked_terms`: RLS on, one policy `content_blocked_terms_admin_all` (all commands,
+  `has_role('admin')`). Nobody else can read the list, so it cannot be probed. Plus the three
+  restrictive `_active_insert/_update/_delete` suspension guards.
+- `apple_sign_in_tokens`: RLS on, zero policies, no grant to `anon` or `authenticated`. Service
+  role only (the `apple-token-store` and `delete-account` functions).
+- `clips_insert_own` and `support_tickets_insert_own` now also require `not is_guest()`, matching
+  `clip_comments_insert_own` and the report insert policy. `stream-upload-url` inserts clips
+  under the service role, so it refuses guests itself (`GUEST_FORBIDDEN`).
+- The content rules and word filter are BEFORE INSERT triggers (`enforce_content_rules`), not
+  policies, so they hold on the service role path too. See SCHEMA.md.
+- Trigger ordering: a BEFORE trigger runs ahead of the RLS WITH CHECK, so on its own it would
+  tell a non member of a chat thread `CONTENT_BLOCKED` or `CONTENT_TERMS_REQUIRED` before RLS
+  refused them, which leaks whether a text trips the word filter. For `chat_messages` the trigger
+  therefore returns the row untouched when the caller (auth.uid()) is not the sender or is not a
+  participant or seated member (`is_chat_thread_member`) of the thread, and RLS refuses it with
+  42501. Clip comments keep the plain order: a comment on a clip the caller cannot see is refused
+  by RLS too, but the filter verdict can surface first; accepted, since the only thing learned is
+  whether a word is on the list, and that is equally learnable by commenting on one's own clip.
+- Isolation tests for chat inserts (e2e CH-06, `verify-rls-matrix.mjs`) agree to the content rules
+  as the outsider first and assert the refusal is 42501, so the gate cannot make them pass
+  vacuously.
+
 ## Account deletion (migration `0098`)
 
 Apple Guideline 5.1.1(v). Three policy-surface changes, all additive.

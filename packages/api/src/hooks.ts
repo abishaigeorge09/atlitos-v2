@@ -246,6 +246,9 @@ export interface MeRow {
   theme: "system" | "light" | "dark";
   /** Per category notification opt ins (0087). */
   notificationPrefs: { sessions: boolean; messages: boolean; promotions: boolean };
+  /** When the caller agreed to the content rules (0138). null means every
+   * clip, comment and chat message insert is refused until they agree. */
+  contentTermsAcceptedAt: string | null;
 }
 
 /** Notification opt ins default when the column is absent/unseeded. */
@@ -307,6 +310,11 @@ export interface SubmitCoachVerificationPayload {
   availabilityWindows: Array<{ dayOfWeek: number; from: string; to: string }>;
 }
 
+/** Two decimal places, about 1 km: coarse location (3.6). */
+function roundCoord(value: number | undefined | null): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? Math.round(value * 100) / 100 : undefined;
+}
+
 export function makeProfileApi(client: AtlitosClient) {
   return {
     /** v1 `getMe`. RLS restricts every read here to the caller's own row. */
@@ -364,7 +372,16 @@ export function makeProfileApi(client: AtlitosClient) {
           ...DEFAULT_NOTIFICATION_PREFS,
           ...((userRow.notification_prefs as Partial<MeRow["notificationPrefs"]> | null) ?? {}),
         },
+        contentTermsAcceptedAt: userRow.content_terms_accepted_at ?? null,
       };
+    },
+
+    /** 0138. Records that the caller agreed to the content rules. Idempotent:
+     * the first acceptance time is kept. Returns that time. */
+    async acceptContentTerms(): Promise<string> {
+      const { data, error } = await client.rpc("accept_content_terms");
+      if (error) throw mapPostgrestError(error);
+      return data as string;
     },
 
     /** v1 `setupPlayer` -> `complete_player_setup` RPC. */
@@ -562,8 +579,11 @@ export function useSearch(client: AtlitosClient) {
             entityTypes: input.entityTypes,
             sport: input.sport,
             priceMax: input.priceMax,
-            lat: input.lat,
-            lng: input.lng,
+            // Rounded to 2 decimals (about 1 km) before it leaves the device,
+            // which keeps the App Store privacy label's "coarse location" true
+            // (launch runbook 3.6). Distance sorting does not need more.
+            lat: roundCoord(input.lat),
+            lng: roundCoord(input.lng),
             city: input.city,
             limit: input.limit,
             rerank: input.rerank,

@@ -20,6 +20,13 @@ import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
+import {
+  CONTENT_BLOCKED_MESSAGE,
+  ensureContentTerms,
+  isContentBlocked,
+  isContentTermsRequired,
+  reconfirmContentTerms,
+} from '@/store/content-terms-store';
 
 const SPORTS: Sport[] = ['football', 'cricket', 'badminton', 'tennis'];
 const MAX_CAPTION = 140;
@@ -138,8 +145,10 @@ export default function ClutchUploadScreen() {
     }
   }
 
-  async function handlePost() {
+  async function handlePost(afterReconfirm = false) {
     if (!asset || !sport || !caption.trim()) return;
+    // 0138: agree to the content rules once before the first clip.
+    if (!afterReconfirm && !(await ensureContentTerms())) return;
     setState('uploading');
     setError(null);
     try {
@@ -167,7 +176,20 @@ export default function ClutchUploadScreen() {
       await clutch.finalizeUpload(ticket.clipId, thumbPath ?? undefined);
       setState('done');
     } catch (err) {
-      setError(err as ApiError);
+      // 0138: the server says the person has not agreed yet (a stale cached
+      // profile, or a second device). stream-upload-url refuses before any
+      // bytes move, so reopen the rules sheet and, on agree, post again.
+      if (!afterReconfirm && isContentTermsRequired(err)) {
+        setState('idle');
+        if (await reconfirmContentTerms()) await handlePost(true);
+        else {
+          setError({ ...(err as ApiError), message: 'Agree to the content rules to post a clip.' });
+          setState('error');
+        }
+        return;
+      }
+      // The caption word filter gets the policy line, not the raw server text.
+      setError(isContentBlocked(err) ? { ...(err as ApiError), message: CONTENT_BLOCKED_MESSAGE } : (err as ApiError));
       setState('error');
     }
   }

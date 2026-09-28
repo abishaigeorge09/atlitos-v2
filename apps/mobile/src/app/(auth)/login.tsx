@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ConsentLine } from '@/components/organisms/auth/ConsentLine';
 import { AppleSignInButton, GoogleSignInButton } from '@/components/organisms/SocialAuthButtons';
 import { Input } from '@/components/ui/input';
 import { OTPInput } from '@/components/ui/otp-input';
@@ -215,6 +216,7 @@ export default function LoginScreen() {
               <Text style={[textStyle('button'), { color: colors.inkOnAccent }]}>{primaryLabel}</Text>
             </Button>
 
+            <ConsentLine />
             <GoogleSignInButton
               loading={pending === 'google'}
               disabled={busy}

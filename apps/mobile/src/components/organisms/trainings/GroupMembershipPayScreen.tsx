@@ -19,6 +19,7 @@ import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
+import { offerPushPrimer } from '@/store/push-primer-store';
 
 type ScreenState = 'reserving' | 'ready' | 'paying' | 'confirmed' | 'error';
 
@@ -115,6 +116,8 @@ export function GroupMembershipPayScreen({
       });
 
       setState('confirmed');
+      // 3.6: the first real reason to want notifications.
+      void offerPushPrimer();
     } catch (err) {
       // Same two error shapes book/pay.tsx handles: a real ApiError from
       // verifyMembershipPayment, or a plain Error (checkout dismissed or

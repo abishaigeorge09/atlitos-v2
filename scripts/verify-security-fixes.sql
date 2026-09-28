@@ -420,9 +420,13 @@ declare
   v_seen bigint;
 begin
   insert into auth.users (id) values (v_a), (v_b), (v_c);
-  insert into public.users (id, name) values
-    (v_a, 'Blocker'), (v_b, 'Blocked'), (v_c, 'Bystander')
-  on conflict (id) do update set name = excluded.name;
+  -- content_terms_accepted_at: 0138 refuses clips and comments from anyone
+  -- who has not agreed to the content rules. These fixtures have, so the
+  -- blocking assertions below test 0092 and not that gate.
+  insert into public.users (id, name, content_terms_accepted_at) values
+    (v_a, 'Blocker', now()), (v_b, 'Blocked', now()), (v_c, 'Bystander', now())
+  on conflict (id) do update set name = excluded.name,
+    content_terms_accepted_at = excluded.content_terms_accepted_at;
 
   insert into public.clips (owner_id, caption, sport, status)
     values (v_b, 'clip by b', 'cricket', 'published') returning id into v_clip_b;
@@ -481,10 +485,12 @@ declare
   v_clip uuid;
 begin
   insert into auth.users (id) values (v_user), (v_other);
-  insert into public.users (id, name, phone, city, avatar_url)
-    values (v_user, 'Real Name', '+919000000001', 'Hyderabad', 'https://example.test/a.png')
+  -- content_terms_accepted_at: the fixture clip below needs it (0138).
+  insert into public.users (id, name, phone, city, avatar_url, content_terms_accepted_at)
+    values (v_user, 'Real Name', '+919000000001', 'Hyderabad', 'https://example.test/a.png', now())
   on conflict (id) do update set name = excluded.name, phone = excluded.phone,
-    city = excluded.city, avatar_url = excluded.avatar_url;
+    city = excluded.city, avatar_url = excluded.avatar_url,
+    content_terms_accepted_at = excluded.content_terms_accepted_at;
   insert into public.users (id, name) values (v_other, 'Someone Else')
   on conflict (id) do update set name = excluded.name;
   -- handle_new_user() already seeded the default 'player' role.

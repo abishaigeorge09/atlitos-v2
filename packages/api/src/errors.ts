@@ -46,6 +46,10 @@ export function mapPostgrestError(error: { message: string; code?: string }): Ap
       "UNAUTHENTICATED",
       "GUEST_FORBIDDEN",
       "FORBIDDEN",
+      // 0138 content rules gate and word filter; both drive UI (the one time
+      // agree sheet, and an inline "change it" message).
+      "CONTENT_TERMS_REQUIRED",
+      "CONTENT_BLOCKED",
       "VALIDATION",
       "NOT_FOUND",
       "ALREADY_SETUP",
@@ -98,7 +102,7 @@ export function mapPostgrestError(error: { message: string; code?: string }): Ap
       const status =
         code === "UNAUTHENTICATED"
           ? 401
-          : code === "FORBIDDEN"
+          : code === "FORBIDDEN" || code === "CONTENT_TERMS_REQUIRED"
             ? 403
             : code === "NO_RESERVATION"
               ? 500

@@ -16,6 +16,13 @@ import { useKeyboardShown } from '@/lib/use-keyboard-shown';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
 import { supabase } from '@/lib/supabase';
+import {
+  CONTENT_BLOCKED_MESSAGE,
+  ensureContentTerms,
+  isContentBlocked,
+  isContentTermsRequired,
+  reconfirmContentTerms,
+} from '@/store/content-terms-store';
 import { useSessionStore } from '@/store/session-store';
 import { useThemeColors } from '@/theme/use-theme-colors';
 
@@ -62,6 +69,9 @@ export default function ChatThreadScreen() {
   const [error, setError] = useState<ApiError | null>(null);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
+  // Why the last send was refused, shown under the composer. Kept apart from
+  // `error`, which only renders in the full screen load failure state.
+  const [sendError, setSendError] = useState<string | null>(null);
   const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>('connected');
   const [members, setMembers] = useState<ChatThreadMember[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
@@ -163,9 +173,12 @@ export default function ChatThreadScreen() {
     return unsubscribe;
   }, [id, me?.id]);
 
-  async function handleSend() {
+  async function handleSend(afterReconfirm = false) {
     const text = draft.trim();
     if (!text || sending || !me) return;
+    // 0138: agree to the content rules once before the first message.
+    if (!afterReconfirm && !(await ensureContentTerms())) return;
+    setSendError(null);
 
     const optimisticId = `optimistic:${Date.now()}`;
     const optimisticMessage: DisplayMessage = {
@@ -199,7 +212,18 @@ export default function ChatThreadScreen() {
       // athlete or coach can retry rather than silently lose the message.
       setMessages((previous) => previous.filter((existing) => existing.id !== optimisticId));
       setDraft(text);
-      setError(err as ApiError);
+      setSending(false);
+      // 0138: the server says the person has not agreed yet (a stale cached
+      // profile, or a second device). Reopen the rules sheet and, on agree,
+      // send the same message once more.
+      if (!afterReconfirm && isContentTermsRequired(err)) {
+        if (await reconfirmContentTerms()) await handleSend(true);
+        else setSendError('Agree to the content rules to send messages.');
+        return;
+      }
+      setSendError(
+        isContentBlocked(err) ? CONTENT_BLOCKED_MESSAGE : 'Could not send that. Check your connection and try again.',
+      );
     } finally {
       setSending(false);
     }
@@ -304,27 +328,34 @@ export default function ChatThreadScreen() {
               keyboard up the bar is behind the keys and the padding would
               only open a gap. */}
           <View
-            className="flex-row items-end gap-sm border-t border-border bg-bg px-lg py-md"
+            className="gap-xs border-t border-border bg-bg px-lg py-md"
             style={{ paddingBottom: keyboardShown ? spacing.md : navInset + spacing.md }}
           >
-            <TextInput
-              value={draft}
-              onChangeText={setDraft}
-              placeholder="Message"
-              placeholderTextColor={colors.textTertiary}
-              multiline
-              accessibilityLabel="Message input"
-              className="min-h-11 max-h-24 flex-1 rounded-sm border border-border bg-surface-muted px-md py-sm font-sans text-base text-text"
-            />
-            <Pressable
-              onPress={() => void handleSend()}
-              disabled={!draft.trim() || sending}
-              accessibilityRole="button"
-              accessibilityLabel="Send message"
-              className="h-11 w-11 items-center justify-center rounded-pill bg-accent active:bg-accent-pressed disabled:opacity-40"
-            >
-              <Send size={20} strokeWidth={1.75} color={colors.inkOnAccent} />
-            </Pressable>
+            <View className="flex-row items-end gap-sm">
+              <TextInput
+                value={draft}
+                onChangeText={setDraft}
+                placeholder="Message"
+                placeholderTextColor={colors.textTertiary}
+                multiline
+                accessibilityLabel="Message input"
+                className="min-h-11 max-h-24 flex-1 rounded-sm border border-border bg-surface-muted px-md py-sm font-sans text-base text-text"
+              />
+              <Pressable
+                onPress={() => void handleSend()}
+                disabled={!draft.trim() || sending}
+                accessibilityRole="button"
+                accessibilityLabel="Send message"
+                className="h-11 w-11 items-center justify-center rounded-pill bg-accent active:bg-accent-pressed disabled:opacity-40"
+              >
+                <Send size={20} strokeWidth={1.75} color={colors.inkOnAccent} />
+              </Pressable>
+            </View>
+            {sendError ? (
+              <Text accessibilityLiveRegion="polite" className="font-sans text-xs text-danger">
+                {sendError}
+              </Text>
+            ) : null}
           </View>
         </KeyboardAvoidingView>
       )}

@@ -13,7 +13,8 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "ios:local": "scripts/run-local.sh",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "eas-build-post-install": "bash ../../scripts/check-release-config.sh"
   },
   "dependencies": {
     "@atlitos/api": "workspace:*",

@@ -88,6 +88,11 @@ can comment. Every one of the required controls is in the app:
   Settings > Account > Blocked accounts.
 - MODERATION: videos are reviewed before they appear publicly. Reports go to
   an internal review queue.
+- TERMS: before their first clip, comment or chat message, every member
+  agrees once to our content rules (no tolerance for objectionable content or
+  abusive users). The server refuses posts until they have.
+- FILTER: comments, chat messages and captions are checked against a word
+  list; a refused post says why and keeps the draft so it can be changed.
 - Content policy: https://www.atlitos.com/content-policy
 
 Account deletion: Settings > Account > Delete account. Two confirmations,
@@ -100,7 +105,11 @@ Permissions we request, and why:
   coaching certificate. We never scan the library.
 - Location, while using the app only: to sort courts by distance. The app
   works fully if you deny it.
-We request no camera, microphone or background location access.
+We request no camera, microphone or background location access. The
+Info.plist does carry camera, microphone and motion purpose strings, because
+the photo picker and location libraries we use link those system APIs and
+App Store Connect requires a string for any linked API. Each string says the
+app never asks for that access, and it never does.
 
 Payments: coaching sessions are real world services, delivered in person or
 live one to one, and court bookings are real world venue time, so both are

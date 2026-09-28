@@ -56,7 +56,13 @@ function nativePlatform(): PushPlatform | null {
  * callers can treat "no token" as a normal, non-fatal outcome rather than an
  * error to surface to the user.
  */
-export async function registerForPushTokenAsync(): Promise<{
+/**
+ * Resolves the device's Expo push token. `prompt: false` (the default) never
+ * shows the system dialog: it registers only when permission was already
+ * granted. The dialog is shown only after a first booking or group join,
+ * behind the push primer (launch runbook 3.6, see store/push-primer-store.ts).
+ */
+export async function registerForPushTokenAsync(options: { prompt?: boolean } = {}): Promise<{
   token: string;
   platform: PushPlatform;
 } | null> {
@@ -70,7 +76,7 @@ export async function registerForPushTokenAsync(): Promise<{
   try {
     const settings = await Notifications.getPermissionsAsync();
     let granted = settings.granted;
-    if (!granted) {
+    if (!granted && options.prompt && settings.canAskAgain) {
       const requested = await Notifications.requestPermissionsAsync();
       granted = requested.granted;
     }
@@ -142,5 +148,16 @@ export async function deletePushTokenWithAccessToken(
     );
   } catch (err) {
     console.log('[push] sign-out token cleanup request failed:', err);
+  }
+}
+
+/** True when the system has never been asked (so the primer is worth showing). */
+export async function canOfferPushPrompt(): Promise<boolean> {
+  if (!nativePlatform() || !EXPO_PROJECT_ID) return false;
+  try {
+    const settings = await Notifications.getPermissionsAsync();
+    return !settings.granted && settings.status === 'undetermined' && settings.canAskAgain;
+  } catch {
+    return false;
   }
 }

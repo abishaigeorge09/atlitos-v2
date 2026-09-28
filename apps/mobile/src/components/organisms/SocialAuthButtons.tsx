@@ -1,11 +1,13 @@
 import { radii, spacing, vendorBrand } from '@atlitos/theme';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import { useColorScheme } from 'nativewind';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
 import { Text } from '@/components/ui/text';
 import { isAppleSignInAvailable } from '@/lib/oauth';
 import { textStyle } from '@/theme/text-style';
+import { useThemeColors } from '@/theme/use-theme-colors';
 
 /**
  * Third party sign in buttons, PRD-01 3.1.
@@ -60,6 +62,11 @@ export interface GoogleSignInButtonProps {
  */
 export function GoogleSignInButton({ onPress, loading, disabled }: GoogleSignInButtonProps) {
   const isDisabled = disabled || loading;
+  const colors = useThemeColors();
+  const { colorScheme } = useColorScheme();
+  // A white plate on a light page has no edge; a hairline keeps it a button
+  // (launch runbook 3.7). In dark mode the plate already stands out.
+  const isLight = colorScheme !== 'dark';
   return (
     <Pressable
       accessibilityRole="button"
@@ -83,6 +90,8 @@ export function GoogleSignInButton({ onPress, loading, disabled }: GoogleSignInB
           gap: spacing.sm,
           borderRadius: radii.pill,
           backgroundColor: vendorBrand.googleButtonSurface,
+          borderWidth: isLight ? 1 : 0,
+          borderColor: colors.borderStrong,
         }}
       >
         {loading ? (
@@ -112,13 +121,22 @@ export interface AppleSignInButtonProps {
  * does not exist.
  */
 export function AppleSignInButton({ onPress, disabled }: AppleSignInButtonProps) {
+  const { colorScheme } = useColorScheme();
   if (!isAppleSignInAvailable()) return null;
 
   return (
     <View style={{ opacity: disabled ? 0.6 : 1 }} pointerEvents={disabled ? 'none' : 'auto'}>
       <AppleAuthentication.AppleAuthenticationButton
         buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
-        buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
+        // BLACK on a light page, WHITE on a dark one, so the button is always
+        // visible (Apple HIG; launch runbook 3.7). The key forces a remount,
+        // because the native button ignores a style change after mount.
+        key={colorScheme === 'dark' ? 'apple-dark' : 'apple-light'}
+        buttonStyle={
+          colorScheme === 'dark'
+            ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
+            : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
+        }
         cornerRadius={radii.pill}
         style={{ height: 44, width: '100%' }}
         onPress={onPress}

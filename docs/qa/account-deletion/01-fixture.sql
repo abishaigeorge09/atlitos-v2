@@ -26,7 +26,10 @@ update public.users set
   avatar_url = 'avatars/' || id || '.jpg',
   bio = 'Midfielder chasing a state cap.',
   handle = 'user' || substr(md5(id::text), 1, 8),
-  sports = '{football}';
+  sports = '{football}',
+  -- 0138: clips, comments and chat messages below need the author's
+  -- agreement to the content rules.
+  content_terms_accepted_at = now();
 
 insert into public.user_roles (user_id, role) values
   (:coa, 'coach'), (:par, 'court_partner'), (:adm, 'admin'), (:adm2, 'admin');

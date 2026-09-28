@@ -69,11 +69,8 @@ export default function PlayerSetupStepScreen() {
   }
 
   async function handlePickPhoto() {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      setError('Photo library access was not granted.');
-      return;
-    }
+    // The system photo picker (PHPicker) needs no library permission, so none
+    // is requested (launch runbook 3.6). Only the picked file is shared.
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
