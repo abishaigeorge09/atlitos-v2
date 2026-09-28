@@ -9,7 +9,7 @@
  *   NODE_PATH=apps/e2e/node_modules node docs/qa/evidence/admin-ux/capture-kitchen.mjs
  *
  * Requires the local Supabase stack up and admin@atlitos.dev /
- * AtlitosDemo!2026 seeded (local only), same as
+ * $ATLITOS_DEMO_PASSWORD seeded (local only), same as
  * docs/qa/evidence/shop-search/capture-track-e.cjs.
  *
  * Captures /_kitchen full page at 1440x960 and 1024x768, light and dark
@@ -35,7 +35,7 @@ const VIEWPORTS = [
 async function login(page) {
   await page.goto(`${BASE}/login`);
   await page.locator('input[type="email"]').fill("admin@atlitos.dev");
-  await page.locator('input[type="password"]').fill("AtlitosDemo!2026");
+  await page.locator('input[type="password"]').fill(process.env.ATLITOS_DEMO_PASSWORD);
   await page.getByRole("button", { name: /sign in/i }).click();
   await page.waitForURL((url) => !url.pathname.includes("/login"), { timeout: 15000 });
 }

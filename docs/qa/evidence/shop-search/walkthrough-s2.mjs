@@ -47,7 +47,7 @@ let productId = null;
 try {
   await page.goto("http://localhost:5199/login");
   await page.fill('input[type="email"]', "admin@atlitos.dev");
-  await page.fill('input[type="password"]', "AtlitosDemo!2026");
+  await page.fill('input[type="password"]', process.env.ATLITOS_DEMO_PASSWORD);
   await page.click('button[type="submit"]');
   await page.waitForURL((u) => !u.pathname.startsWith("/login"), { timeout: 20000 });
 

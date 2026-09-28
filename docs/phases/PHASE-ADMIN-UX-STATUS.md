@@ -96,7 +96,7 @@ and dont stop till all screens are done".
    `scripts/seed-demo-users.mjs`. That file exists because five admin lists had zero rows
    locally, so every page rendered an empty state and proved nothing.
 4. Dev server: `cd apps/admin && VITE_SUPABASE_URL=http://127.0.0.1:54321 VITE_SUPABASE_ANON_KEY=$(supabase status -o env | grep ^ANON_KEY | cut -d= -f2 | tr -d '"') pnpm exec vite --port 5199`.
-   Login `admin@atlitos.dev` / `AtlitosDemo!2026`. The sandbox refuses to read `.env*`, which is
+   Login `admin@atlitos.dev` / `$ATLITOS_DEMO_PASSWORD`. The sandbox refuses to read `.env*`, which is
    why the env is passed inline.
 
 ## Traps this phase hit

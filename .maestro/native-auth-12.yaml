@@ -5,7 +5,7 @@ appId: com.atlitos.app
 # without crash, and prove the session is authenticated (Profile no longer
 # raises the guest login gate).
 #
-# Test-infra note: this flow types a SEED persona password (AtlitosDemo!2026,
+# Test-infra note: this flow types a SEED persona password (${ATLITOS_DEMO_PASSWORD},
 # scripts/seed-demo-users.mjs) into the local sim's login form. That is test
 # automation against a local simulator, not real-credential handling.
 - launchApp:
@@ -23,7 +23,7 @@ appId: com.atlitos.app
 - tapOn: "Email or phone input"
 - inputText: "player@atlitos.dev"
 - tapOn: "Password input"
-- inputText: "AtlitosDemo!2026"
+- inputText: "${ATLITOS_DEMO_PASSWORD}"
 # "Log in" is both the screen heading and the submit button; the button is the
 # second occurrence. The button sits above the keyboard so no hideKeyboard is
 # needed (hideKeyboard proved flaky on this build).

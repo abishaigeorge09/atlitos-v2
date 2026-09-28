@@ -120,7 +120,7 @@ Not run (report only, per scope): MAESTRO native lane 7 (AUTH-12, CL-15, CL-16, 
 Method: three sequential Chrome-extension seat walks against the live Life portal
 (atlitos-portal-life.vercel.app) plus the consumer Empower Hub (atlitos-app.vercel.app),
 read against a full code inventory of apps/portal-life and PRD-05. Seeded accounts
-(EmpowerDemo!2026): upa.verified@ (verified, 3 wishlist items + 1 gratitude post),
+($EMPOWER_DEMO_PASSWORD): upa.verified@ (verified, 3 wishlist items + 1 gratitude post),
 upa.tennis@ (under_review), donor@. The interview script is the founder's fixed six
 questions. Verdicts: WORKS / EXISTS-BUT-LIMITED / MISSING, with live evidence.
 

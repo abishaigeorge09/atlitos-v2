@@ -60,7 +60,7 @@ appId: com.atlitos.app
 - tapOn: "Email or phone input"
 - inputText: "coach1@atlitos.dev"
 - tapOn: "Password input"
-- inputText: "AtlitosDemo!2026"
+- inputText: "${ATLITOS_DEMO_PASSWORD}"
 - tapOn:
     text: "Log in"
     index: 1

@@ -10,7 +10,7 @@ have now, by clicking, as a shopper.
 `apps/mobile` served by `npx expo start --web --port 8090`. Port 8081 untouched.
 
 The shopper session was minted **by script** with `signInWithPassword` against
-the documented fixture `player@atlitos.dev` / `AtlitosDemo!2026` (the same
+the documented fixture `player@atlitos.dev` / `$ATLITOS_DEMO_PASSWORD` (the same
 constant `scripts/verify-commerce-rls.mjs` uses) and injected into
 `localStorage` under `sb-syzzfgaudpifwvbpycyi-auth-token`. **No password, card
 number, or other credential was ever typed into the browser.**

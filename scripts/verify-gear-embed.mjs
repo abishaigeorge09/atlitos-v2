@@ -29,6 +29,7 @@
 //   SUPABASE_SERVICE_ROLE_KEY default the local demo service role key
 //   SUPABASE_DB_URL           default the local Postgres connection string
 
+import { ATLITOS_PASSWORD } from './lib/demo-credentials.mjs';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { writeFileSync, unlinkSync } from 'node:fs';
@@ -91,7 +92,7 @@ async function playerToken() {
   const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
     method: 'POST',
     headers: { apikey: ANON_KEY, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'player@atlitos.dev', password: 'AtlitosDemo!2026' }),
+    body: JSON.stringify({ email: 'player@atlitos.dev', password: ATLITOS_PASSWORD }),
   });
   const json = await res.json();
   if (!json.access_token) throw new Error(`[verify-gear-embed] player sign in failed: ${JSON.stringify(json)}`);

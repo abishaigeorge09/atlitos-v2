@@ -35,7 +35,7 @@ appId: com.atlitos.app
 - tapOn: "Email or phone input"
 - inputText: "player@atlitos.dev"
 - tapOn: "Password input"
-- inputText: "AtlitosDemo!2026"
+- inputText: "${ATLITOS_DEMO_PASSWORD}"
 - hideKeyboard
 - tapOn:
     id: "auth-cta"

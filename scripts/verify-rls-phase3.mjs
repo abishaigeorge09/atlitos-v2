@@ -22,6 +22,7 @@
 //   (reads apps/mobile/.env for EXPLAIN_PUBLIC_SUPABASE_URL / ANON_KEY, the
 //    repo's established verify-script pattern; two users below must exist.)
 
+import { ATLITOS_PASSWORD } from './lib/demo-credentials.mjs';
 import { readFileSync } from 'node:fs';
 
 function readEnvFile(p) {
@@ -38,7 +39,7 @@ function readEnvFile(p) {
 const env = readEnvFile('apps/mobile/.env');
 const URL = process.env.SUPABASE_URL || env.EXPO_PUBLIC_SUPABASE_URL;
 const ANON = process.env.SUPABASE_ANON_KEY || env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-const PW = process.env.ATLITOS_DEMO_PW || 'AtlitosDemo!2026';
+const PW = process.env.ATLITOS_DEMO_PW || ATLITOS_PASSWORD;
 // Two seeded demo accounts on distinct owners. Override via env if seeds differ.
 const USER_A = process.env.RLS_USER_A || 'player@atlitos.dev';
 const USER_B = process.env.RLS_USER_B || 'coach1@atlitos.dev';

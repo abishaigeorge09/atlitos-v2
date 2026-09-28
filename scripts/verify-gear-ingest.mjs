@@ -37,6 +37,7 @@
 //   SUPABASE_ANON_KEY         default the local demo anon key
 //   SUPABASE_SERVICE_ROLE_KEY default the local demo service role key
 
+import { ATLITOS_PASSWORD } from './lib/demo-credentials.mjs';
 import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -222,7 +223,7 @@ async function signIn(email) {
   const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
     method: 'POST',
     headers: { apikey: ANON_KEY, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password: 'AtlitosDemo!2026' }),
+    body: JSON.stringify({ email, password: ATLITOS_PASSWORD }),
   });
   const json = await res.json();
   if (!json.access_token) throw new Error(`[verify-gear-ingest] sign in failed for ${email}: ${JSON.stringify(json)}`);
