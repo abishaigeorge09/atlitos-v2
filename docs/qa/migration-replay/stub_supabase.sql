@@ -62,6 +62,9 @@ create table if not exists auth.users (
   encrypted_password text,
   raw_user_meta_data jsonb default '{}'::jsonb,
   raw_app_meta_data jsonb default '{}'::jsonb,
+  -- 0128 and 0137 read these; GoTrue has both on the real table.
+  email_confirmed_at timestamptz,
+  is_anonymous boolean default false,
   created_at timestamptz default now(),
   updated_at timestamptz default now(),
   deleted_at timestamptz

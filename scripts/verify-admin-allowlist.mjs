@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 // ATLITOS v2 - scripts/verify-admin-allowlist.mjs
 //
-// Proves 0128: an allowlisted address becomes an admin on sign up, and
-// nobody else does, and nobody but the service role can touch the list.
+// Proves 0128 as hardened by 0137: an allowlisted address becomes an admin
+// on a GOOGLE sign up, and nobody else does (an email and password signup of
+// the same kind of address included), and nobody but the service role can
+// touch the list.
 //
 // Every check is written so the WRONG behaviour fails it. The one that
 // matters most is check 2: if the trigger granted admin to everyone, or to
@@ -42,11 +44,15 @@ const ALLOWED = `verify.allowed.${stamp}@atlitos.com`;
 const OUTSIDER = `verify.outsider.${stamp}@example.com`;
 const PASSWORD = `Verify-${randomUUID()}`;
 
-async function createConfirmedUser(email) {
+// provider 'google' mirrors what GoTrue writes to raw_app_meta_data on a
+// Google OAuth signup. The admin API cannot run a real OAuth round trip, and
+// app_metadata is service role only, so this is the closest faithful shape.
+async function createConfirmedUser(email, provider = 'email') {
   const { data, error } = await svc.auth.admin.createUser({
     email,
     password: PASSWORD,
     email_confirm: true,
+    ...(provider === 'google' ? { app_metadata: { provider: 'google', providers: ['google'] } } : {}),
   });
   if (error) throw new Error(`createUser ${email}: ${error.message}`);
   return data.user;
@@ -68,8 +74,8 @@ async function main() {
   let allowed = null;
   let outsider = null;
   try {
-    allowed = await createConfirmedUser(ALLOWED);
-    outsider = await createConfirmedUser(OUTSIDER);
+    allowed = await createConfirmedUser(ALLOWED, 'google');
+    outsider = await createConfirmedUser(OUTSIDER, 'google');
 
     // Non vacuous: two different accounts, or checks 1 and 2 are the same check.
     check('the two test accounts are distinct', allowed.id !== outsider.id, `${allowed.id.slice(0, 8)} vs ${outsider.id.slice(0, 8)}`);
@@ -77,7 +83,7 @@ async function main() {
     const allowedRoles = await rolesOf(allowed.id);
     const outsiderRoles = await rolesOf(outsider.id);
 
-    check('1. an allowlisted signup holds admin', allowedRoles.includes('admin'), allowedRoles.join(', '));
+    check('1. an allowlisted GOOGLE signup holds admin', allowedRoles.includes('admin'), allowedRoles.join(', '));
     check('2. a signup that is NOT allowlisted holds no admin', !outsiderRoles.includes('admin'), outsiderRoles.join(', '));
     check('   both still get the default player role', allowedRoles.includes('player') && outsiderRoles.includes('player'), `${allowedRoles.join('+')} / ${outsiderRoles.join('+')}`);
 
@@ -118,6 +124,34 @@ async function main() {
       check('6. an allowlisted but UNCONFIRMED address holds no admin', false, `could not create: ${unconfirmedErr?.message}`);
     }
     await svc.from('admin_email_allowlist').delete().eq('email', unconfirmedEmail);
+
+    // 7. 0137: the takeover hole. Production auto confirms email and password
+    // signups, so a stranger registering an allowlisted address with a
+    // password is confirmed at once. That account must NOT be admin.
+    const pwEmail = `verify.password.${stamp}@atlitos.com`;
+    await svc.from('admin_email_allowlist').insert({ email: pwEmail, note: 'throwaway' });
+    let pwUser = null;
+    try {
+      pwUser = await createConfirmedUser(pwEmail, 'email');
+      const pwRoles = await rolesOf(pwUser.id);
+      check('   the password account is confirmed (the auto confirm case)', Boolean(pwUser.email_confirmed_at), String(pwUser.email_confirmed_at));
+      check('7. an allowlisted, CONFIRMED email and password signup holds no admin', !pwRoles.includes('admin'), pwRoles.join(', '));
+    } finally {
+      if (pwUser) await svc.auth.admin.deleteUser(pwUser.id).catch(() => {});
+      await svc.from('admin_email_allowlist').delete().eq('email', pwEmail);
+    }
+
+    // 8. 0137: changing an existing account's email to an allowlisted one
+    // never grants, Google account or not.
+    const changeTarget = `verify.change.${stamp}@atlitos.com`;
+    await svc.from('admin_email_allowlist').insert({ email: changeTarget, note: 'throwaway' });
+    try {
+      const { error: changeErr } = await svc.auth.admin.updateUserById(outsider.id, { email: changeTarget, email_confirm: true });
+      const changedRoles = await rolesOf(outsider.id);
+      check('8. changing an email TO an allowlisted address grants no admin', !changeErr && !changedRoles.includes('admin'), changeErr?.message ?? changedRoles.join(', '));
+    } finally {
+      await svc.from('admin_email_allowlist').delete().eq('email', changeTarget);
+    }
 
     const { count: escalated } = await svc
       .from('admin_email_allowlist')

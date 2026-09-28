@@ -750,3 +750,36 @@ behaviour the retained rows depend on.
 `deleted_at is not null`, so the twelve RESTRICTIVE insert policies from 0120
 cover deletion with no new policy. `custom_access_token_hook` refuses the token,
 and `getAuthenticatedUser` refuses on the next edge request.
+
+## Admin email allowlist (`0128`, hardened by `0137`)
+
+`admin_email_allowlist` has RLS on and zero policies, and `anon` and
+`authenticated` hold no grant: only the service role reads or writes it. An
+admin who could add a row could promote anyone, so the admin JWT is refused too.
+
+The grant itself is the `on_auth_user_created_grant_admin` trigger on
+`auth.users`, calling `grant_admin_if_allowlisted()` (security definer). As of
+`0137` it grants `admin` only when all of these hold:
+
+- the account was created through Google sign in
+  (`raw_app_meta_data->>'provider' = 'google'`, written by GoTrue and not
+  client writable);
+- it is the account's first confirmation: fired on insert, or on update of
+  `email_confirmed_at` from null to a value. The trigger no longer watches
+  `email`, so changing an address to an allowlisted one never grants;
+- the confirmed email is on the list.
+
+Why: production auto confirms email and password signups, so under `0128`
+anyone who registered an unclaimed allowlisted address with a password became
+admin. `scripts/verify-admin-allowlist.mjs` checks 7 and 8 fail if that ever
+comes back. A staff member who signed up with a password first and linked
+Google later is not granted automatically. Do not grant that account by hand
+without first confirming it has no `email` provider identity in
+`auth.identities`: a password account that later linked Google is exactly what
+a pre claim attacker would leave behind. The safe path is to delete the account
+and have the staff member sign up again with Google.
+
+Grants made under `0128` before `0137` was applied are not revoked by `0137`.
+The launch runbook's stage 1 audits every current admin row (email, provider,
+created at) and revokes anything that is not a known person signed in through
+Google.
