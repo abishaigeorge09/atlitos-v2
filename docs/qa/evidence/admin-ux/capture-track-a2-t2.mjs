@@ -29,7 +29,7 @@ const ROUTES = [
 async function login(page) {
   await page.goto(`${BASE}/login`);
   await page.locator('input[type="email"]').fill("admin@atlitos.dev");
-  await page.locator('input[type="password"]').fill("AtlitosDemo!2026");
+  await page.locator('input[type="password"]').fill(process.env.ATLITOS_DEMO_PASSWORD);
   await page.getByRole("button", { name: /sign in/i }).click();
   await page.waitForURL((url) => !url.pathname.includes("/login"), { timeout: 20000 });
 }

@@ -32,6 +32,7 @@
 // Env (all optional, default to the local stack the Supabase CLI prints):
 //   SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
 
+import { ATLITOS_PASSWORD } from './lib/demo-credentials.mjs';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { writeFileSync, unlinkSync } from 'node:fs';
@@ -113,7 +114,7 @@ async function playerToken() {
   const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
     method: 'POST',
     headers: { apikey: ANON_KEY, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'player@atlitos.dev', password: 'AtlitosDemo!2026' }),
+    body: JSON.stringify({ email: 'player@atlitos.dev', password: ATLITOS_PASSWORD }),
   });
   const json = await res.json();
   if (!json.access_token) throw new Error(`[verify-search-hybrid] player sign in failed: ${JSON.stringify(json)}`);

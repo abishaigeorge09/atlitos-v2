@@ -58,7 +58,7 @@ marked `RETIRED` with a one-line reason, not removed, so IDs stay stable for his
   `donor@atlitos.dev` returned `invalid_credentials` against the live DB. Root cause: all 5 accounts already existed
   in prod, and `seed-empower-upa-users.mjs` only sets a password at account-creation time, so re-running it never
   fixed the credential. Password reset directly via `auth.admin.updateUserById` and verified live with a real
-  `signInWithPassword` call for all 5. `EmpowerDemo!2026` now works for all 5 personas; EM/AUTH/XP cases that were
+  `signInWithPassword` call for all 5. `$EMPOWER_DEMO_PASSWORD` now works for all 5 personas; EM/AUTH/XP cases that were
   `BLOCKED` on this can proceed.
 - athlete-web (`atlitos-app.vercel.app`) serves six 404s for `@expo-google-fonts` TTFs (Inter 400/500/600/700,
   JetBrains Mono 500/600), silently falling back to system fonts, including for numeric readouts. This trips the

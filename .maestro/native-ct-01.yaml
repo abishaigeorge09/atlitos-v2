@@ -28,7 +28,7 @@ appId: com.atlitos.app
 - tapOn: "Email or phone input"
 - inputText: "player@atlitos.dev"
 - tapOn: "Password input"
-- inputText: "AtlitosDemo!2026"
+- inputText: "${ATLITOS_DEMO_PASSWORD}"
 - tapOn:
     text: "Log in"
     index: 1

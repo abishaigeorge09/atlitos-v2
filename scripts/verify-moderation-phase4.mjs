@@ -29,6 +29,7 @@
 //                        NEXT_PUBLIC_SUPABASE_ANON_KEY (never service role).
 //   SUPABASE_URL       — optional, defaults to the project URL below.
 
+import { ATLITOS_PASSWORD } from './lib/demo-credentials.mjs';
 import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? "https://syzzfgaudpifwvbpycyi.supabase.co";
@@ -41,7 +42,7 @@ if (!ANON_KEY) {
   process.exit(1);
 }
 
-const DEMO_PASSWORD = "AtlitosDemo!2026"; // matches scripts/seed-demo-users.mjs
+const DEMO_PASSWORD = ATLITOS_PASSWORD; // matches scripts/seed-demo-users.mjs
 const PLAYER_EMAIL = "player@atlitos.dev"; // user A: reporter, blocker
 const COACH1_EMAIL = "coach1@atlitos.dev"; // user B: reported/blocked
 const COACH2_EMAIL = "coach2@atlitos.dev"; // user C: non-admin, forbidden-call proof

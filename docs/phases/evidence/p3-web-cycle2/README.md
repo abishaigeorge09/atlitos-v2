@@ -4,7 +4,7 @@
 Driven against `apps/mobile` running as `npx expo start --web --port 8090` in a
 Chrome tab, using script-minted Supabase sessions (`@supabase/supabase-js`
 `signInWithPassword`, fixtures `player@atlitos.dev` / `coach1@atlitos.dev`,
-password `AtlitosDemo!2026`) injected directly into `localStorage` under the
+password `$ATLITOS_DEMO_PASSWORD`) injected directly into `localStorage` under the
 `sb-syzzfgaudpifwvbpycyi-auth-token` key. No credentials were ever typed into
 the browser.
 

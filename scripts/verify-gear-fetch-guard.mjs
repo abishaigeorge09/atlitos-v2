@@ -14,6 +14,7 @@
 // below returned a fetch attempt (a 422 "Could not read a product" after a
 // real outbound request, or a draft). After the guard each returns 422 with a
 // guard reason before any request is made.
+import { ATLITOS_PASSWORD } from './lib/demo-credentials.mjs';
 import { createClient } from '@supabase/supabase-js';
 import { assertWritableTarget } from './lib/guard-target.mjs';
 
@@ -36,7 +37,7 @@ function check(name, ok, detail) {
 const admin = createClient(SUPABASE_URL, ANON, { auth: { persistSession: false } });
 const { data: session, error: signInError } = await admin.auth.signInWithPassword({
   email: 'admin@atlitos.dev',
-  password: 'AtlitosDemo!2026',
+  password: ATLITOS_PASSWORD,
 });
 if (signInError) {
   console.error('admin sign in failed (run scripts/seed-demo-users.mjs first):', signInError.message);

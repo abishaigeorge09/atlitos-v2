@@ -26,7 +26,7 @@ appId: com.atlitos.app
 # ATLITOS_DEMO_PASSWORD (nothing here changes) or edit this default.
 # Full procedure: scripts/lib/demo-credentials.mjs
 env:
-  ATLITOS_DEMO_PASSWORD: "AtlitosDemo!2026"
+  ATLITOS_DEMO_PASSWORD: ""
 ---
 - launchApp
 - runFlow:

@@ -4,7 +4,7 @@
 
 **Migrations applied (confirmed):** `0057_learn_schema` … `0061_admin_drill_rpcs`, all present in `supabase_migrations.schema_migrations`.
 
-**Repro:** `node scripts/verify-learn-p7.mjs` (own-row REST path with the documented fixture password `AtlitosDemo!2026`, never typed). Web pass: Expo web on `:8090`, script-minted `sb-syzzfgaudpifwvbpycyi-auth-token` session for `player@atlitos.dev` injected (never typed credentials).
+**Repro:** `node scripts/verify-learn-p7.mjs` (own-row REST path with the documented fixture password `$ATLITOS_DEMO_PASSWORD`, never typed). Web pass: Expo web on `:8090`, script-minted `sb-syzzfgaudpifwvbpycyi-auth-token` session for `player@atlitos.dev` injected (never typed credentials).
 
 ## Verdict: GATE PASSES. No CRITICAL or HIGH failures. Findings are MEDIUM/LOW/INFO, listed at the end.
 

@@ -7,7 +7,7 @@
  *   NODE_PATH=apps/e2e/node_modules node docs/qa/evidence/shop-search/capture-track-e.cjs
  *
  * Requires: `pnpm exec vite --port 5199` running in apps/admin against the
- * local stack, and admin@atlitos.dev / AtlitosDemo!2026 seeded (local only).
+ * local stack, and admin@atlitos.dev / $ATLITOS_DEMO_PASSWORD seeded (local only).
  */
 const { chromium } = require("@playwright/test");
 
@@ -17,7 +17,7 @@ const OUT = __dirname;
 async function login(page) {
   await page.goto(`${BASE}/login`);
   await page.locator('input[type="email"]').fill("admin@atlitos.dev");
-  await page.locator('input[type="password"]').fill("AtlitosDemo!2026");
+  await page.locator('input[type="password"]').fill(process.env.ATLITOS_DEMO_PASSWORD);
   await page.getByRole("button", { name: /sign in/i }).click();
   await page.waitForURL((url) => !url.pathname.includes("/login"), { timeout: 15000 });
 }

@@ -15,10 +15,11 @@
 // locally, and scripts/seed-demo-users.mjs already run so admin@atlitos.dev
 // and player@atlitos.dev exist.
 
+import { ATLITOS_PASSWORD } from './lib/demo-credentials.mjs';
 const URL_BASE = process.env.SUPABASE_URL ?? 'http://127.0.0.1:54321';
 const ANON = process.env.SUPABASE_ANON_KEY;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const PASSWORD = 'AtlitosDemo!2026';
+const PASSWORD = ATLITOS_PASSWORD;
 
 if (!ANON || !SERVICE_ROLE_KEY) {
   console.error(

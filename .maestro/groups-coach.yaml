@@ -49,7 +49,7 @@ appId: com.atlitos.app
 # ATLITOS_DEMO_PASSWORD (nothing here changes) or edit this default.
 # Full procedure: scripts/lib/demo-credentials.mjs
 env:
-  ATLITOS_DEMO_PASSWORD: "AtlitosDemo!2026"
+  ATLITOS_DEMO_PASSWORD: ""
 ---
 # Fresh app state every run: a leftover logged-in session from a prior
 # flow makes the atlitos://login deep link a no-op (it just lands on

@@ -273,7 +273,7 @@
 }, {
   "command" : {
     "inputTextCommand" : {
-      "text" : "AtlitosDemo!2026",
+      "text" : "${ATLITOS_DEMO_PASSWORD}",
       "optional" : false
     }
   },
@@ -285,7 +285,7 @@
     "depth" : 0,
     "evaluatedCommand" : {
       "inputTextCommand" : {
-        "text" : "AtlitosDemo!2026",
+        "text" : "${ATLITOS_DEMO_PASSWORD}",
         "optional" : false
       }
     }

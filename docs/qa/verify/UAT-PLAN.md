@@ -56,7 +56,7 @@ Two more preconditions that are not blocking but will waste your time if skipped
 ### Accounts
 
 Verified present in `auth.users` joined to `public.user_roles` on 2026-08-14. Password for the
-seeded set is `AtlitosDemo!2026`, confirmed working by the Maestro flows that logged in on
+seeded set is `$ATLITOS_DEMO_PASSWORD`, confirmed working by the Maestro flows that logged in on
 13 August.
 
 | Email | Name | Roles | Use for |

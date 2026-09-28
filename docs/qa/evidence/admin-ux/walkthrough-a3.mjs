@@ -82,7 +82,7 @@ let createdId = null;
 try {
   await page.goto(`${BASE}/login`);
   await page.fill('input[type="email"]', "admin@atlitos.dev");
-  await page.fill('input[type="password"]', "AtlitosDemo!2026");
+  await page.fill('input[type="password"]', process.env.ATLITOS_DEMO_PASSWORD);
   await page.getByRole("button", { name: /sign in/i }).click();
   await page.waitForURL((u) => !u.pathname.startsWith("/login"), { timeout: 30000 });
 
