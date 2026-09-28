@@ -45,10 +45,19 @@ Transparency prompt. Declare all of these as **Linked to the user**, used for
 **App Functionality**:
 
 Name, Email Address, Phone Number, Physical Address, Coarse Location,
-Photos or Videos, Other User Content, Purchase History, User ID, Other Data.
+Photos or Videos, Other User Content, Purchase History, User ID, Other Data,
+Payment Info (coach and venue bank or UPI details for payouts, 0132),
+Emails or Text Messages (in app chat).
 
-Plus, for Sentry, **Not linked to the user**, not used for tracking, App
-Functionality: Crash Data, Performance Data, Other Diagnostic Data.
+Product Interaction: **Linked**, used for **Analytics**, not tracking. Buy taps
+are recorded against the signed in user (0133 `affiliate_clicks`); the retailer
+only ever receives a random click id.
+
+**Not linked to the user**, not used for tracking, App Functionality: Search
+History (the ai-search cache keeps query text with no user id), and, for
+Sentry, Crash Data, Performance Data, Other Diagnostic Data.
+
+Published in App Store Connect on 2026-09-27 with exactly these 17 types.
 
 This matches `ios.privacyManifests` in `app.json` exactly. If you change one,
 change the other, because Apple compares them.
