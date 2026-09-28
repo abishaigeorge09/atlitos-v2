@@ -1,7 +1,7 @@
 import { useNotifications } from '@atlitos/api';
 import { radii, spacing } from '@atlitos/theme';
 import { router, useFocusEffect } from 'expo-router';
-import { X } from 'lucide-react-native';
+import { RefreshCw, WifiOff, X } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -22,6 +22,7 @@ import { Text } from '@/components/ui/text';
 import { usePendingAuthAction } from '@/hooks/use-pending-auth-action';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
+import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
 import { DONATIONS_ENABLED } from '@/lib/feature-flags';
 
@@ -44,8 +45,6 @@ export default function HomeScreen() {
   const me = useSessionStore((state) => state.me);
   const requiresAuthGate = status !== 'signed_in';
 
-  const signOut = useSessionStore((state) => state.signOut);
-
   // NAV-01. The cart badge in the header. Refreshed on focus rather than once
   // on mount, so returning from Shop after adding something shows the new
   // count instead of a stale one. Guests have no cart, so it stays 0 and the
@@ -53,7 +52,6 @@ export default function HomeScreen() {
   // RECONCILIATION 2026-09-14: a cart count badge for the app bar (origin/main
   // f1a5fa2) was NOT taken. It fetched the whole cart on every Home focus for
   // every signed in user, purely to draw a number. Revisit with a cached count.
-  const continueAsGuest = useSessionStore((state) => state.continueAsGuest);
 
   const [gateVisible, setGateVisible] = useState(false);
   // F8 (P5 fix pass, PRD-01 FR-4): the Notifications and Profile taps below
@@ -61,8 +59,18 @@ export default function HomeScreen() {
   const { requireAuth, clearPendingAction } = usePendingAuthAction(requiresAuthGate);
   const [hasUnread, setHasUnread] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  // Launch runbook 5.7. Which network backed rails loaded on the last pass.
+  // When every one of them failed (offline, or the backend unreachable), Home
+  // shows one retry card instead of a page of silently empty sections.
+  const [railResults, setRailResults] = useState<Record<string, boolean>>({});
+  const reportRail = useCallback((key: string, ok: boolean) => {
+    setRailResults((previous) => (previous[key] === ok ? previous : { ...previous, [key]: ok }));
+  }, []);
+  const onPromoLoaded = useCallback((ok: boolean) => reportRail('promo', ok), [reportRail]);
+  const onClutchLoaded = useCallback((ok: boolean) => reportRail('clutch', ok), [reportRail]);
+  const railKeys = Object.keys(railResults);
+  const everyRailFailed = railKeys.length >= 2 && railKeys.every((key) => railResults[key] === false);
   const [refreshing, setRefreshing] = useState(false);
-  const [loggingOut, setLoggingOut] = useState(false);
   const [setupCardDismissed, setSetupCardDismissed] = useState(false);
 
   const notifications = useNotifications(supabase);
@@ -96,28 +104,10 @@ export default function HomeScreen() {
     setGateVisible(true);
   }
 
-  async function handleLogout() {
-    // FR-65: logout clears the session and returns the app to guest mode at
-    // Home, not to the login screen. The mockup's own layout has no sign out
-    // affordance and nothing elsewhere in the app exposes one yet, so this
-    // stays as a quiet text row at the very end of the scroll rather than
-    // being dropped along with the rest of the old placeholder layout.
-    setLoggingOut(true);
-    try {
-      await signOut();
-      await continueAsGuest();
-    } catch {
-      // Guest re-sign-in failed (e.g. anonymous sign ins disabled): never
-      // leave a signed_out user stranded inside tabs; splash owns the
-      // signed_out state and its login entry points (Track D defect 10).
-      router.replace('/(auth)/splash');
-    } finally {
-      setLoggingOut(false);
-    }
-  }
 
   function onRefresh() {
     setRefreshing(true);
+    setRailResults({});
     setReloadKey((key) => key + 1);
     // Each section reloads itself off `reloadKey`; there is no single
     // "everything settled" promise across five independent domain reads, so
@@ -191,21 +181,44 @@ export default function HomeScreen() {
           </View>
         ) : null}
 
-        <PromoCarousel reloadKey={reloadKey} />
+        {everyRailFailed ? (
+          <View
+            accessibilityLiveRegion="polite"
+            style={{
+              alignItems: 'center',
+              gap: spacing.sm,
+              padding: spacing.lg,
+              borderRadius: radii.lg,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.card,
+            }}
+          >
+            <WifiOff size={28} color={colors.textSecondary} strokeWidth={1.75} />
+            <Text style={[textStyle('h3'), { color: colors.text, textAlign: 'center' }]}>Could not load Home</Text>
+            <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
+              Check your connection and try again.
+            </Text>
+            <Button variant="secondary" onPress={onRefresh}>
+              <RefreshCw size={16} strokeWidth={1.75} color={colors.text} />
+              <Text style={{ color: colors.text }}>Try again</Text>
+            </Button>
+          </View>
+        ) : null}
+
+        <PromoCarousel reloadKey={reloadKey} onLoaded={onPromoLoaded} />
 
         <RecentlyViewedRail reloadKey={reloadKey} />
 
-        <ClutchPreviewCard reloadKey={reloadKey} />
+        <ClutchPreviewCard reloadKey={reloadKey} onLoaded={onClutchLoaded} />
 
         {DONATIONS_ENABLED ? <EmpowerRail reloadKey={reloadKey} /> : null}
 
         <BrandFooter />
 
-        {status === 'signed_in' ? (
-          <Button variant="text" loading={loggingOut} onPress={() => void handleLogout()}>
-            <Text style={{ color: colors.textSecondary }}>Log out</Text>
-          </Button>
-        ) : null}
+        {/* Launch runbook 5.6: the duplicate Log out row that sat here is gone.
+            Sign out lives in Settings, Account, which returns to guest
+            browsing the same way. */}
       </ScrollView>
 
       <LoginGateModal

@@ -12,6 +12,7 @@ import { getRecentlyViewedProductIds } from '@/lib/recently-viewed';
 import { supabase } from '@/lib/supabase';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
+import { openGear } from '@/lib/gear-route';
 
 /**
  * Home's product rail (PRD-01 3.2). Prefers "Recently viewed": the client
@@ -120,7 +121,7 @@ export function RecentlyViewedRail({ reloadKey }: { reloadKey: number }) {
             imageUri={product.imageUrl}
             title={product.title}
             price={product.priceFrom}
-            onPress={() => router.push({ pathname: '/shop/product/[id]', params: { id: product.id } })}
+            onPress={() => openGear(product.id)}
           />
         ))}
       </ScrollView>

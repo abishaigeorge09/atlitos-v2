@@ -226,7 +226,7 @@ export default function RegisterScreen() {
 
             <AuthReveal index={2}>
               <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.xs }}>
-                <Text style={[textStyle('body'), { color: colors.textSecondary }]}>Already have an account.</Text>
+                <Text style={[textStyle('body'), { color: colors.textSecondary }]}>Already have an account?</Text>
                 {/* `replace`, not a push. login.tsx's afterAuth() returns the
                     user with router.back() when there is something beneath,
                     which is right when a gate pushed login on top of the

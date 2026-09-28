@@ -192,13 +192,25 @@ export function CoachBrowseList({ onOpenCoach, header, onRefresh }: CoachBrowseL
     setRefreshing(false);
   }
 
+  // Launch runbook 5.2. listCoaches never drops other cities, it sorts the
+  // athlete's city first. So outside a covered city (an App Review tester in
+  // Cupertino) the list is every coach, and the line above it must say so
+  // rather than claim they are nearby.
+  const hasCoachInCity =
+    !city || items.length === 0 || items.some((item) => item.city?.trim().toLowerCase() === city.trim().toLowerCase());
+
   const refreshControl = <RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} />;
 
   const listHeader = (
     <View style={{ gap: spacing.sm, paddingBottom: spacing.md }}>
       {header}
 
-      <LocationStatusRow resolvedLabel={`Showing coaches near ${city}`} profileCity={profileCity} />
+      <LocationStatusRow
+        resolvedLabel={
+          hasCoachInCity ? `Showing coaches near ${city}` : `No coaches in ${city} yet. Showing all.`
+        }
+        profileCity={profileCity}
+      />
 
       <FlatList
         horizontal

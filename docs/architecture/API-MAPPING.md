@@ -163,6 +163,7 @@ Response `{ checked: number; outcomes: Array<{ offerId, outcome }>; autoDelisted
 - `cursor` is base64 of the JSON tuple `[created_at_iso, user_id]`, the exact key the order sorts by; decoded and applied as `(created_at, user_id) < (cursorCreatedAt, cursorUserId)` via a PostgREST `.or()` predicate (`created_at.lt.X,and(created_at.eq.X,user_id.lt.Y)`), since the JS client has no native tuple comparison.
 - `nextCursor` is `null` exactly on the last page. `CoachBrowseList` (`apps/mobile/src/components/organisms/coaching/CoachBrowseList.tsx`) paginates via `FlatList.onEndReached`, appending pages rather than refetching from the top; a sport/city filter change still resets to page 1 through the existing `load()` path.
 - `sport`/`city` filtering and the same-city-first client sort are unchanged; the sort only reorders items already on a page, it never moves a row across a page boundary.
+- 2026-09-29 (launch runbook 5.6): coaches with no active session type are dropped after the page is read, so a single keyset page can be empty while more exist. One `listCoaches` call therefore keeps reading pages (same `.limit(limit + 1)` each) until at least one item survives or `nextCursor` is `null`, capped at 5 pages per call (`COACH_LIST_MAX_PAGES_PER_CALL`). Without this the browse screen showed Empty with a live cursor, and `onEndReached` never fired on an empty list.
 
 ### session types and pricing (PRD-02 FR-4)
 

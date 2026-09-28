@@ -23,7 +23,7 @@ export interface PromoCarouselHandle {
  * entirely on an empty read or an error, this section is decoration, never
  * worth a Home level error state.
  */
-export function PromoCarousel({ reloadKey }: { reloadKey: number }) {
+export function PromoCarousel({ reloadKey, onLoaded }: { reloadKey: number; onLoaded?: (ok: boolean) => void }) {
   const colors = useThemeColors();
   const home = useHome(supabase);
 
@@ -35,8 +35,10 @@ export function PromoCarousel({ reloadKey }: { reloadKey: number }) {
     try {
       const rows = await home.listPromoBanners();
       setBanners(rows);
+      onLoaded?.(true);
     } catch {
       setBanners([]);
+      onLoaded?.(false);
     } finally {
       setState('ready');
     }

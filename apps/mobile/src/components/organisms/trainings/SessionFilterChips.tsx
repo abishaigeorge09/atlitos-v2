@@ -17,7 +17,9 @@ const FILTERS: Array<{ key: SessionFilterKey; label: string }> = [
   { key: 'all', label: 'All' },
   { key: 'one_on_one', label: 'One on one' },
   { key: 'group', label: 'Group' },
-  { key: 'online', label: 'Online' },
+  // 'Online' is not offered (launch runbook 5.6): there is no online
+  // session feature, so the chip led to an always empty list. The key stays in
+  // SessionFilterKey so the screens' filter branches still compile.
 ];
 
 export interface SessionFilterChipsProps {

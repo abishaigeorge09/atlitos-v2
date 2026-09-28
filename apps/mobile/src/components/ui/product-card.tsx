@@ -177,6 +177,7 @@ function ProductCard({
                 onQuantityChange?.(Math.max(1, quantity - 1));
               }}
               accessibilityRole="button"
+              accessibilityLabel="Reduce quantity"
               className="h-11 w-11 items-center justify-center rounded-sm border border-border-strong active:bg-surface-muted"
             >
               <Minus size={16} strokeWidth={1.75} color={colors.text} />
@@ -197,6 +198,7 @@ function ProductCard({
                 onQuantityChange?.(quantity + 1);
               }}
               accessibilityRole="button"
+              accessibilityLabel="Increase quantity"
               className="h-11 w-11 items-center justify-center rounded-sm border border-border-strong active:bg-surface-muted"
             >
               <Plus size={16} strokeWidth={1.75} color={colors.text} />

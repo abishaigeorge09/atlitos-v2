@@ -302,7 +302,7 @@ export default function CoachTraineeDetailScreen() {
 
               <View style={{ flexDirection: 'row', gap: spacing.md }}>
                 <StatTile label="Total sessions" value={totalSessions} />
-                <StatTile label="Attendance rate" value={attendanceRate !== undefined ? `${attendanceRate}%` : '—'} />
+                <StatTile label="Attendance rate" value={attendanceRate !== undefined ? `${attendanceRate}%` : 'No data'} />
               </View>
             </ScrollView>
           ) : null}

@@ -25,7 +25,7 @@ import { useThemeColors } from '@/theme/use-theme-colors';
  * bare storage path. Hides entirely on an empty feed or a failed read, this
  * is a teaser, never a Home level error state.
  */
-export function ClutchPreviewCard({ reloadKey }: { reloadKey: number }) {
+export function ClutchPreviewCard({ reloadKey, onLoaded }: { reloadKey: number; onLoaded?: (ok: boolean) => void }) {
   const colors = useThemeColors();
   const clutch = useClutch(supabase);
   const requiresAuthGate = useSessionStore((state) => state.status !== 'signed_in');
@@ -54,8 +54,10 @@ export function ClutchPreviewCard({ reloadKey }: { reloadKey: number }) {
           // Card still renders with whatever poster the clip row carries.
         }
       }
+      onLoaded?.(true);
     } catch {
       setClip(null);
+      onLoaded?.(false);
     } finally {
       setState('ready');
     }

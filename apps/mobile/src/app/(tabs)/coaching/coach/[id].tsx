@@ -247,7 +247,7 @@ export default function CoachProfileScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       <AppBar variant="back" onPressBack={() => router.back()} />
 
-      <ScrollView contentContainerStyle={{ paddingBottom: spacing['4xl'], gap: spacing.lg }}>
+      <ScrollView automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: spacing['4xl'], gap: spacing.lg }}>
         <View style={{ paddingHorizontal: spacing.lg, gap: spacing.sm }}>
           <View className="flex-row items-center gap-md">
             <Avatar uri={coach.user?.avatarUrl} name={coach.user?.name} size={80} verifiedBadge />

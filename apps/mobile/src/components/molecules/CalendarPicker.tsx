@@ -68,13 +68,13 @@ export function CalendarPicker({ value, onChange, minDate }: CalendarPickerProps
   return (
     <View className="gap-md">
       <View className="flex-row items-center justify-between">
-        <Pressable onPress={goPrevMonth} role="button" className="h-11 w-11 items-center justify-center">
+        <Pressable onPress={goPrevMonth} role="button" accessibilityLabel="Previous month" className="h-11 w-11 items-center justify-center">
           <ChevronLeft size={20} strokeWidth={1.75} color={colors.text} />
         </Pressable>
         <Text className="font-sans-semibold text-lg text-text">
           {MONTH_LABELS[viewMonth]} {viewYear}
         </Text>
-        <Pressable onPress={goNextMonth} role="button" className="h-11 w-11 items-center justify-center">
+        <Pressable onPress={goNextMonth} role="button" accessibilityLabel="Next month" className="h-11 w-11 items-center justify-center">
           <ChevronRight size={20} strokeWidth={1.75} color={colors.text} />
         </Pressable>
       </View>

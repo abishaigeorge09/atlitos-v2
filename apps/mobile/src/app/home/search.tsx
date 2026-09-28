@@ -23,6 +23,7 @@ import { useLocationStore } from '@/store/location-store';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
 import { DONATIONS_ENABLED } from '@/lib/feature-flags';
+import { openGear } from '@/lib/gear-route';
 
 type LoadState = 'idle' | 'loading' | 'empty' | 'populated' | 'error';
 
@@ -195,7 +196,7 @@ export default function SearchScreen() {
   function openHit(hit: SearchHit) {
     switch (hit.entityType) {
       case 'gear':
-        router.push({ pathname: '/shop/product/[id]', params: { id: hit.entityId } });
+        openGear(hit.entityId);
         break;
       case 'coach':
         router.push({ pathname: '/(tabs)/coaching/coach/[id]', params: { id: hit.entityId } });

@@ -127,12 +127,15 @@ function AppBar({
       {!showBack ? (
         <View className="flex-row items-center gap-xs">
           {onPressCart ? (
-            <IconButton onPress={onPressCart}>
+            <IconButton
+              onPress={onPressCart}
+              accessibilityLabel={cartCount > 0 ? `Cart, ${cartCount} ${cartCount === 1 ? 'item' : 'items'}` : 'Cart'}
+            >
               <View>
                 <ShoppingCart size={24} strokeWidth={1.75} color={colors.text} />
                 {cartCount > 0 ? (
-                  <View className="absolute -right-1 -top-1 h-4 min-w-4 items-center justify-center rounded-pill bg-accent px-[3px]">
-                    <Text className="font-mono text-[10px] text-ink-on-accent">
+                  <View className="absolute -right-1 -top-1 h-4 min-w-4 items-center justify-center rounded-pill bg-accent px-1">
+                    <Text className="font-mono text-xs leading-4 text-ink-on-accent">
                       {cartCount > 9 ? '9+' : cartCount}
                     </Text>
                   </View>
@@ -140,7 +143,10 @@ function AppBar({
               </View>
             </IconButton>
           ) : null}
-          <IconButton onPress={onPressNotifications}>
+          <IconButton
+            onPress={onPressNotifications}
+            accessibilityLabel={hasUnreadNotifications ? 'Notifications, unread' : 'Notifications'}
+          >
             <View>
               <Bell size={24} strokeWidth={1.75} color={colors.text} />
               {hasUnreadNotifications ? (
