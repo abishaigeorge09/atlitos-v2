@@ -202,20 +202,43 @@ function timingSafeEqual(a: string, b: string): boolean {
 
 /**
  * Verifies `x-razorpay-signature` on an incoming webhook POST: HMAC SHA-256
- * of the raw request body, keyed by RAZORPAY_WEBHOOK_SECRET (the secret
- * configured in the Razorpay dashboard's webhook settings, distinct from
- * RAZORPAY_KEY_SECRET). `rawBody` must be the exact, unparsed request body
- * text; re-serializing parsed JSON would not reproduce the same bytes
- * Razorpay signed.
+ * of the raw request body, keyed by the webhook secret configured in the
+ * Razorpay dashboard (distinct from the key secret). `rawBody` must be the
+ * exact, unparsed request body text.
+ *
+ * 0140, launch runbook 4.1. Test and live dashboards each have their own
+ * webhook and their own secret: RAZORPAY_WEBHOOK_SECRET_TEST and
+ * RAZORPAY_WEBHOOK_SECRET_LIVE. The event is checked against both, and the
+ * mode whose secret matched is returned, so the caller can ignore an event
+ * from the account this deployment is not using. The legacy single
+ * RAZORPAY_WEBHOOK_SECRET is still honoured, as the current mode, so a
+ * deployment mid migration keeps working. Returns null for a bad signature.
+ * Throws when no webhook secret is configured at all.
  */
 export async function verifyWebhookSignature(
   rawBody: string,
   signatureHeader: string,
-): Promise<boolean> {
-  if (!signatureHeader) return false;
-  const webhookSecret = requiredEnv("RAZORPAY_WEBHOOK_SECRET");
-  const expected = await hmacSha256Hex(webhookSecret, rawBody);
-  return timingSafeEqual(signatureHeader, expected);
+): Promise<RazorpayMode | null> {
+  const candidates: Array<{ mode: RazorpayMode; secret: string }> = [];
+  const live = Deno.env.get("RAZORPAY_WEBHOOK_SECRET_LIVE");
+  const test = Deno.env.get("RAZORPAY_WEBHOOK_SECRET_TEST");
+  const legacy = Deno.env.get("RAZORPAY_WEBHOOK_SECRET");
+  if (live) candidates.push({ mode: "live", secret: live });
+  if (test) candidates.push({ mode: "test", secret: test });
+  if (legacy) candidates.push({ mode: razorpayMode(), secret: legacy });
+  if (candidates.length === 0) {
+    throw new AppError(
+      "INTERNAL",
+      "Server misconfiguration: no Razorpay webhook secret is set.",
+      500,
+    );
+  }
+  if (!signatureHeader) return null;
+  for (const candidate of candidates) {
+    const expected = await hmacSha256Hex(candidate.secret, rawBody);
+    if (timingSafeEqual(signatureHeader, expected)) return candidate.mode;
+  }
+  return null;
 }
 
 /**
@@ -232,7 +255,10 @@ export async function verifyPaymentSignature(
   signature: string,
 ): Promise<boolean> {
   if (!signature) return false;
-  const keySecret = requiredEnv("RAZORPAY_KEY_SECRET");
+  // The ACTIVE mode's key secret (0140). Reading the un-prefixed name here
+  // verified live payments with the test secret once the mode specific names
+  // are in use, so every live client callback would have failed.
+  const { keySecret } = credentials();
   const expected = await hmacSha256Hex(
     keySecret,
     `${razorpayOrderId}|${razorpayPaymentId}`,

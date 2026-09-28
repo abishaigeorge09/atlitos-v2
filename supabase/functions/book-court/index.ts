@@ -75,7 +75,7 @@ import {
   getAuthenticatedUser,
   serviceRoleClient,
 } from "../_shared/supabase.ts";
-import { createOrder, razorpayKeyId } from "../_shared/razorpay.ts";
+import { createOrder, razorpayKeyId, razorpayMode } from "../_shared/razorpay.ts";
 import { getActiveFeeConfig, round2 } from "../_shared/fee-config.ts";
 
 interface BookCourtRequestBody {
@@ -329,6 +329,7 @@ async function handleWalkInBooking(
   const { data: intent, error: intentInsertError } = await supabase
     .from("payment_intents")
     .insert({
+      razorpay_mode: razorpayMode(),
       user_id: user.id,
       domain: "court",
       entity_id: booking.id,
@@ -559,6 +560,7 @@ Deno.serve((req) =>
     const { data: intent, error: intentInsertError } = await supabase
       .from("payment_intents")
       .insert({
+        razorpay_mode: razorpayMode(),
         user_id: user.id,
         domain: "court",
         entity_id: booking.id,

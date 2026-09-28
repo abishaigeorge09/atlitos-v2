@@ -31,7 +31,7 @@
 
 import { corsHeaders } from "../_shared/cors.ts";
 import { serviceRoleClient } from "../_shared/supabase.ts";
-import { verifyWebhookSignature } from "../_shared/razorpay.ts";
+import { razorpayMode, verifyWebhookSignature, type RazorpayMode } from "../_shared/razorpay.ts";
 import { finalizePaymentCaptured } from "../_shared/finalize-payment.ts";
 import { captureEdgeError } from "../_shared/sentry.ts";
 
@@ -142,6 +142,31 @@ async function handlePaymentFailed(
       releaseError.message,
     );
   }
+}
+
+/**
+ * 0140. The mode of the payment intent an event is about, or null when the
+ * event does not name one we hold (transfers, unknown orders), in which case
+ * the existing handlers decide as before.
+ */
+async function intentModeForEvent(
+  supabase: ReturnType<typeof serviceRoleClient>,
+  event: RazorpayWebhookEvent,
+): Promise<RazorpayMode | null> {
+  const payment = event.payload.payment?.entity;
+  const refund = event.payload.refund?.entity;
+  const [column, value] = payment?.order_id
+    ? ["razorpay_order_id", payment.order_id]
+    : refund?.payment_id
+      ? ["razorpay_payment_id", refund.payment_id]
+      : [null, null];
+  if (!column || !value) return null;
+  const { data } = await supabase
+    .from("payment_intents")
+    .select("razorpay_mode")
+    .eq(column, value)
+    .maybeSingle<{ razorpay_mode: RazorpayMode }>();
+  return data?.razorpay_mode ?? null;
 }
 
 /**
@@ -384,9 +409,11 @@ Deno.serve(async (req) => {
   const rawBody = await req.text();
   const signatureHeader = req.headers.get("x-razorpay-signature") ?? "";
 
-  let signatureValid: boolean;
+  let signedMode: RazorpayMode | null;
+  let currentMode: RazorpayMode;
   try {
-    signatureValid = await verifyWebhookSignature(rawBody, signatureHeader);
+    signedMode = await verifyWebhookSignature(rawBody, signatureHeader);
+    currentMode = razorpayMode();
   } catch (err) {
     // requiredEnv throws if RAZORPAY_WEBHOOK_SECRET is unset. This function
     // cannot operate without it (README.md documents it as optional only in
@@ -398,8 +425,15 @@ Deno.serve(async (req) => {
     return plainResponse("webhook not configured", 500);
   }
 
-  if (!signatureValid) {
+  if (!signedMode) {
     return plainResponse("invalid signature", 400);
+  }
+
+  // 0140. An event signed by the OTHER Razorpay account (for example a late
+  // test webhook after the switch to live) is acknowledged and ignored, so it
+  // can never move a live row, and Razorpay stops retrying it.
+  if (signedMode !== currentMode) {
+    return plainResponse(`ok (ignored: ${signedMode} event, deployment is ${currentMode})`, 200);
   }
 
   let event: RazorpayWebhookEvent;
@@ -422,6 +456,15 @@ Deno.serve(async (req) => {
   }
 
   const supabase = serviceRoleClient();
+
+  // 0140. Same rule at the intent level: an intent created in the other mode
+  // (every row before 0140 is test) is never finalized, failed or refunded by
+  // this deployment. Checked before the idempotency insert so a later
+  // redelivery after a mode switch back is still processed.
+  const intentMode = await intentModeForEvent(supabase, event);
+  if (intentMode && intentMode !== currentMode) {
+    return plainResponse(`ok (ignored: ${intentMode} intent, deployment is ${currentMode})`, 200);
+  }
 
   // Idempotency gate: insert-before-act. A duplicate delivery of the same
   // event id (Razorpay retries on any non-2xx response, and can redeliver

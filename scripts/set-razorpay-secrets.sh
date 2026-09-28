@@ -26,7 +26,14 @@
 #   RAZORPAY_TEST_KEY_SECRET=xxxxxxxx
 #   RAZORPAY_LIVE_KEY_ID=rzp_live_xxxxxxxx
 #   RAZORPAY_LIVE_KEY_SECRET=xxxxxxxx
-#   RAZORPAY_WEBHOOK_SECRET=xxxxxxxx     # one secret, both webhooks
+#   RAZORPAY_WEBHOOK_SECRET_TEST=xxxxxxxx   # the TEST dashboard webhook's secret
+#   RAZORPAY_WEBHOOK_SECRET_LIVE=xxxxxxxx   # the LIVE dashboard webhook's secret
+#
+# 0140: test and live each have their own webhook secret. razorpay-webhook
+# checks both, knows which account signed the event, and ignores an event
+# from the account this deployment is not using. The old single
+# RAZORPAY_WEBHOOK_SECRET is still accepted (as the current mode) until it is
+# removed with: supabase secrets unset RAZORPAY_WEBHOOK_SECRET
 #
 # Both pairs can live here at once. RAZORPAY_MODE decides which one the edge
 # functions use, and _shared/razorpay.ts refuses to run if the mode and the key
@@ -70,10 +77,19 @@ if [ "$MODE" != "--verify-only" ]; then
   esac
 
   [ -n "$ACTIVE_ID" ] && [ -n "$ACTIVE_SECRET" ] || { echo "no key pair for mode \"${RZP_MODE:-unset}\" in $ENV_FILE"; exit 2; }
-  [ -n "${RAZORPAY_WEBHOOK_SECRET:-}" ] || { echo "missing from the file: RAZORPAY_WEBHOOK_SECRET"; exit 2; }
+  case "$RZP_MODE" in
+    live) WH_ACTIVE="${RAZORPAY_WEBHOOK_SECRET_LIVE:-${RAZORPAY_WEBHOOK_SECRET:-}}"; WH_NAME=RAZORPAY_WEBHOOK_SECRET_LIVE ;;
+    *)    WH_ACTIVE="${RAZORPAY_WEBHOOK_SECRET_TEST:-${RAZORPAY_WEBHOOK_SECRET:-}}"; WH_NAME=RAZORPAY_WEBHOOK_SECRET_TEST ;;
+  esac
+  [ -n "$WH_ACTIVE" ] || { echo "missing from the file: $WH_NAME (the webhook secret for the active mode)"; exit 2; }
+  if [ -n "${RAZORPAY_WEBHOOK_SECRET_TEST:-}" ] && [ -n "${RAZORPAY_WEBHOOK_SECRET_LIVE:-}" ] \
+     && [ "$RAZORPAY_WEBHOOK_SECRET_TEST" = "$RAZORPAY_WEBHOOK_SECRET_LIVE" ]; then
+    echo "REFUSING: the test and live webhook secrets are identical, so a test event could not be told apart from a live one."
+    exit 2
+  fi
 
   echo "read from $ENV_FILE:"
-  for k in RAZORPAY_MODE RAZORPAY_TEST_KEY_ID RAZORPAY_TEST_KEY_SECRET RAZORPAY_LIVE_KEY_ID RAZORPAY_LIVE_KEY_SECRET RAZORPAY_KEY_ID RAZORPAY_KEY_SECRET RAZORPAY_WEBHOOK_SECRET; do
+  for k in RAZORPAY_MODE RAZORPAY_TEST_KEY_ID RAZORPAY_TEST_KEY_SECRET RAZORPAY_LIVE_KEY_ID RAZORPAY_LIVE_KEY_SECRET RAZORPAY_KEY_ID RAZORPAY_KEY_SECRET RAZORPAY_WEBHOOK_SECRET RAZORPAY_WEBHOOK_SECRET_TEST RAZORPAY_WEBHOOK_SECRET_LIVE; do
     [ -n "${!k:-}" ] && printf '  %-26s %s\n' "$k" "$(redact "${!k}")"
   done
 
@@ -138,7 +154,9 @@ echo "Webhook, which this script cannot set for you:"
 echo "  URL    https://$PROJECT_REF.supabase.co/functions/v1/razorpay-webhook"
 echo "  Events payment.captured, payment.failed, refund.processed,"
 echo "         transfer.processed, transfer.failed"
-echo "  The secret you enter there must equal RAZORPAY_WEBHOOK_SECRET above."
+echo "  Set it in BOTH the test and the live Razorpay dashboards, same URL."
+echo "  The test webhook's secret must equal RAZORPAY_WEBHOOK_SECRET_TEST,"
+echo "  the live one's must equal RAZORPAY_WEBHOOK_SECRET_LIVE."
 
 if [ "$MODE" = "--shred" ]; then
   echo

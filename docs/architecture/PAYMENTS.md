@@ -138,10 +138,10 @@ Deno.serve(async (req) => {
   const rawBody = await req.text();
   const signature = req.headers.get('x-razorpay-signature') ?? '';
 
-  const expected = await hmacSha256Hex(RAZORPAY_WEBHOOK_SECRET, rawBody);
-  if (!timingSafeEqual(signature, expected)) {
-    return new Response('invalid signature', { status: 400 });
-  }
+  // 0140: checked against the test AND live secrets; returns the mode that signed.
+  const signedMode = await verifyWebhookSignature(rawBody, signature);
+  if (!signedMode) return new Response('invalid signature', { status: 400 });
+  if (signedMode !== razorpayMode()) return new Response('ok (ignored)', { status: 200 });
 
   const event = JSON.parse(rawBody);
 
@@ -193,6 +193,34 @@ Deno.serve(async (req) => {
 5. Writes a `notifications` row and calls `notify-dispatch`.
 
 `handlePaymentFailed` updates `payment_intents.status = 'failed'` and, for `commerce`/`donation` where no domain row exists yet, does nothing further, there is nothing to unwind. For `session`/`court`, the already-created row is left in place but the client-facing polling never observes a `captured` intent, so the booking never renders as confirmed; a scheduled cleanup (not built in v1, flagged for P8 hardening) can later auto-cancel stale unpaid bookings.
+
+## Payment mode: test and live never mix (`0140`, 2026-09-29)
+
+Production ran Razorpay in test mode until launch, and test payments were stored in the same
+tables as real ones. `0140` separates them:
+
+- `payment_intents.razorpay_mode` is `test` or `live`, not null. Every row that existed before
+  `0140` was backfilled as `test`. Every function that creates an intent (`book-session`,
+  `checkout`, `donate`, `join-group`, `renew-group-membership`, `book-court`, including the walk
+  in path) writes `razorpayMode()`, the mode it is running in. The column keeps a default of
+  `test` only to cover the deploy window; once every payment function is redeployed, run
+  `alter table public.payment_intents alter column razorpay_mode drop default;` as a reviewed
+  SQL file so a missed stamp fails loudly.
+- `_ledger_eligible_balance` and `admin_payouts_due` count only ledger rows whose intent is
+  `live`. Rows with no intent (manual adjustments, payout debits) still count.
+- Webhook secrets are per mode: `RAZORPAY_WEBHOOK_SECRET_TEST` and `RAZORPAY_WEBHOOK_SECRET_LIVE`,
+  set by `scripts/set-razorpay-secrets.sh`. `verifyWebhookSignature` returns which mode signed
+  the event. `razorpay-webhook` acknowledges and ignores (200) an event signed by the other
+  account, and an event about an intent whose `razorpay_mode` differs from `RAZORPAY_MODE`.
+  The legacy single `RAZORPAY_WEBHOOK_SECRET` is still accepted as the current mode.
+- `verifyPaymentSignature` (the `verify-payment` client callback) now uses the active mode's key
+  secret, not the un-prefixed `RAZORPAY_KEY_SECRET`.
+
+Going live (founder only, launch runbook 4.2 and 4.3): apply `0140`, redeploy the payment
+functions, run a Rs 1 test cycle, push the live keys and both webhook secrets with
+`set-razorpay-secrets.sh`, point the live dashboard's webhook at `razorpay-webhook`, set
+`RAZORPAY_MODE=live`, run a Rs 1 live cycle. Check with
+`select razorpay_mode, count(*) from payment_intents group by 1;`.
 
 ## Manual payouts: how coaches and venues are actually paid (`0132`, 2026-09-25)
 
