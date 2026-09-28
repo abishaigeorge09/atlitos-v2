@@ -23,7 +23,9 @@ Apple's flow is: pick every data type you collect, then for each one answer thre
 
 ## Step 1. Data types to select
 
-Select exactly these ten. Everything not listed is a deliberate "no", justified in section 3.
+Updated 2026-09-29 (launch runbook 7.2): Product Interaction and Payment Info are now selected, to
+match the code (affiliate clicks, 0133) and the privacy manifest in `apps/mobile/app.json`.
+Everything marked No is a deliberate "no", justified in section 3.
 
 | Apple category | Data type | Select? |
 |---|---|---|
@@ -39,7 +41,8 @@ Select exactly these ten. Everything not listed is a deliberate "no", justified 
 | User Content | Other User Content | Yes |
 | Identifiers | User ID | Yes |
 | Identifiers | Device ID | Yes |
-| Usage Data | Product Interaction | No, see section 3 |
+| Usage Data | Product Interaction | Yes |
+| Financial Info | Payment Info | Yes |
 | Diagnostics | Crash Data | Yes |
 | Diagnostics | Performance Data | Yes |
 | Diagnostics | Other Diagnostic Data | Yes |
@@ -94,20 +97,29 @@ matched at all. Cross checked against the dependency list at `apps/mobile/packag
 - **Used for tracking:** No
 - **Evidence:** orders (`supabase/migrations/0031_commerce.sql`), court bookings (`0009_courts.sql`), coaching sessions (`0018_coaching.sql`), donations (`0048_empower_schema.sql`), and the ledger (`0010_payments_core.sql`).
 
-### Financial Info > Payment Info: **DO NOT SELECT**
+### Financial Info > Payment Info
 
-The app never touches a card, bank or UPI credential. Razorpay's native checkout sheet collects
-them inside its own SDK and returns only opaque ids.
+- **Purposes:** App Functionality
+- **Linked to the user:** Yes
+- **Used for tracking:** No
+- **Why selected:** the privacy manifest (`apps/mobile/app.json`, `NSPrivacyCollectedDataTypePaymentInfo`) declares it, and the App Store label must match the manifest. The app stores payment references (Razorpay order and payment ids, amounts) linked to the account, and coaches and venue partners register payout details. It never touches a card, bank or UPI credential: Razorpay's native checkout sheet collects those inside its own SDK and returns only opaque ids.
 
 - **Evidence:** `apps/mobile/src/lib/razorpay-checkout.native.ts:17-25` passes only `key`, `amount`, `currency`, `order_id`, `name`, `description`, `prefill`. `:27-31` returns only `razorpay_order_id`, `razorpay_payment_id`, `razorpay_signature`. There is no card field in the call or in `apps/mobile/src/lib/razorpay-checkout.types.ts`.
 - If Razorpay's own SDK disclosure says it collects payment info, that is Razorpay's declaration on their SDK, not Atlitos collecting it through the app. See the UNRESOLVED row in `DATA-INVENTORY.md` section 11.
+
+### Usage Data > Product Interaction
+
+- **Purposes:** App Functionality, Analytics
+- **Linked to the user:** Yes
+- **Used for tracking:** No
+- **Evidence:** `0133_affiliate_click_tracking.sql`: every outbound Buy tap on a retailer offer is recorded in `affiliate_clicks` with the user id, to measure the shop and settle retailer commissions. No third party analytics SDK is installed.
 
 ### Location > Coarse Location
 
 - **Purposes:** App Functionality
 - **Linked to the user:** Yes
 - **Used for tracking:** No
-- **Evidence:** `apps/mobile/src/store/location-store.ts:84-86` requests `Location.Accuracy.Balanced`, which is approximate, not precise. Foreground only (`:78`, `requestForegroundPermissionsAsync`), no background location declared anywhere in `apps/mobile/app.json`. Purpose string at `apps/mobile/app.json:50`.
+- **Evidence:** `apps/mobile/src/store/location-store.ts:84-86` requests `Location.Accuracy.Balanced`, which is approximate, not precise, and coordinates sent to `ai-search` are rounded to 2 decimals on the device (`packages/api/src/hooks.ts`, runbook 3.6). Foreground only (`:78`, `requestForegroundPermissionsAsync`), no background location declared anywhere in `apps/mobile/app.json`. Purpose string at `apps/mobile/app.json:50`.
 - **Why "linked" even though nothing is stored:** the coordinates are sent to the backend inside an authenticated request (`apps/mobile/src/app/(tabs)/courts/index.tsx:90`, `apps/mobile/src/app/home/search.tsx:139-140`), so they arrive attached to a session. They are used for a haversine distance and discarded (`supabase/functions/ai-search/index.ts:231-235`); no migration defines a user location column. Apple's "linked" question is about the collection, not the retention, so Yes is the honest answer.
 
 ### Location > Precise Location: **DO NOT SELECT**
@@ -193,10 +205,9 @@ consistent. Listed in `SUBMISSION-CHECKLIST.md`.
 | Health & Fitness | Not collected | No HealthKit entitlement, no health SDK. Grep for `HealthKit`, `expo-health`, `react-native-health` over `apps/mobile` and `packages`: zero matches. The app's "training" features are bookings and drills, never body or fitness measurements |
 | Contacts | Not collected | No contacts SDK. Grep for `expo-contacts`, `CNContact`, `READ_CONTACTS`: zero matches |
 | Sensitive Info | Not collected **by the app** | Government ID proof and guardian consent documents exist as `public.upa_evidence` kinds (`supabase/migrations/0048_empower_schema.sql:122-129`) but the only surface that writes them is the web portal `apps/portal-life/src/app/(app)/apply/apply-wizard.tsx`. Confirmed no reference in `apps/mobile` or `packages`. **Reopen this answer the moment a UPA application flow lands in the app** |
-| Browsing History | Not collected | The app has no web browser and logs no browsing |
-| Usage Data > Product Interaction | Not collected | No product analytics SDK is installed. Sentry performance traces are declared under Diagnostics instead, which is where Apple puts them. If a product analytics SDK is added later, this answer changes |
+| Browsing History | Not collected | External pages (venue booking, retailer, legal pages) open in the in app browser sheet, and nothing about what the person does there is logged |
 | Usage Data > Advertising Data | Not collected | No ad network in the binary |
-| Financial Info > Credit Info, Other Financial Info | Not collected | The app stores transaction records, not credit or bank data. Payout account references are created from the coach and partner portals, not the app |
+| Financial Info > Credit Info, Other Financial Info | Not collected | The app stores transaction records, not credit data |
 | Identifiers > Advertising identifier | Not collected | No IDFA access, no ATT prompt. See the tracking justification in step 2 |
 | Diagnostics > Precise Location within diagnostics | Not applicable | Covered under Location above |
 
@@ -218,25 +229,16 @@ service providers acting on Atlitos' instructions, which Apple does not count as
 | Field | Value | Evidence |
 |---|---|---|
 | Privacy Policy URL | `https://www.atlitos.com/privacy` | HTTP 200 verified 2026-08-13 |
-| Account deletion | See the note below. There is currently **no in app deletion path** | |
+| Account deletion | In app: Settings, Account, Delete account (type DELETE). Immediate | `apps/mobile/src/app/profile/delete-account.tsx`, `delete-account` edge function, `delete_my_account()` (0098) |
 | Data collection disclosure for third party SDKs | Razorpay's SDK disclosure is UNRESOLVED, see `DATA-INVENTORY.md` section 11 | |
 
 ---
 
-## Account deletion and Guideline 5.1.1(v): the honest position
+## Account deletion and Guideline 5.1.1(v)
 
-Guideline 5.1.1(v) requires that an app which supports account creation must also let the user
-**initiate account deletion from inside the app**.
-
-What actually exists today:
-
-- A live web page at `https://www.atlitos.com/delete-account` (HTTP 200 verified 2026-08-13) that describes a **request by email** mechanism: the user emails `support@elsheph.com` and Atlitos verifies ownership and actions the request within 30 days (`apps/landing/delete-account.html:53,74`).
-- **No deletion entry point in the app at all.** The Settings surface is Appearance, Preferred sports, Location, Notifications, then an Account section holding only Edit profile, Become a coach and Sign out (`apps/mobile/src/components/organisms/settings/SettingsContent.tsx:256-401`). There is not even a link out to the deletion page.
-- There is no deletion RPC. Grep for `delete_account` and `deleteAccount` over `apps/mobile`, `packages` and `supabase`: zero matches outside the landing page.
-
-This is the single most likely cause of a first submission rejection. It is ranked and detailed in
-`SUBMISSION-CHECKLIST.md`. The minimum viable fix is a Settings row that deep links to
-`https://www.atlitos.com/delete-account`, which is a one screen change in `apps/mobile`, a path
-this track does not own. A real in app deletion flow is the correct fix and pairs naturally with
-the Sign in with Apple work in Phase 8, since Apple additionally requires Sign in with Apple
-accounts to be revocable from the app.
+Resolved. The app lets a person delete their account from inside the app: Settings, then Account,
+then Delete account, confirmed by typing DELETE. Deletion is immediate
+(`delete_my_account()` in 0098, called by the `delete-account` edge function, which also releases
+the sign in, removes stored files and, as of 0139, revokes the Sign in with Apple token so the app
+disappears from the person's Apple ID settings). `https://www.atlitos.com/delete-account` describes
+the same flow and keeps email as the fallback for someone who can no longer sign in.

@@ -8,6 +8,8 @@ Both store questionnaires are legal declarations. Every row below is traced to a
 Where evidence could not be established the row says UNRESOLVED and names what was tried.
 
 Verified on 2026-08-13 against branch `phase-11/p6-store` (branched from `phase-11/launch-p4`).
+Updated 2026-09-29 for iOS 1.0.0 (launch runbook 7.2): Sign in with Apple and Google, coach trainee
+videos, affiliate clicks, the search cache, Voyage AI, and the Apple refresh token.
 
 ---
 
@@ -24,6 +26,10 @@ Verified on 2026-08-13 against branch `phase-11/p6-store` (branched from `phase-
 | Sports played, skill level | Yes | `public.users.sports` (`0001_identity.sql:72`), `public.athlete_sports` (same migration) | Yes | No | Optional |
 | Profile photo (avatar) | Yes | `public.users.avatar_url` (`0001_identity.sql:68`), uploaded via `uploadAvatar` in `apps/mobile/src/app/(onboarding)/coach-setup/[step].tsx:19` and the player setup wizard | Yes | No | Optional |
 | Creator channel name | Yes | `public.users.channel_name` (`0001_identity.sql:69`) | Yes | No | Optional |
+| Sign in with Apple identity | Yes, if chosen | `apps/mobile/src/lib/oauth.ts` (`signInWithIdToken`, provider apple). Apple shares the name (first sign in only, saved to `users.name`) and an email or private relay address | Yes | No | Optional |
+| Apple refresh token | Yes, if Sign in with Apple is used | `public.apple_sign_in_tokens` (0139), written by `apple-token-store`, used only to revoke on account deletion. Service role only | Yes | No | Automatic |
+| Sign in with Google identity | Yes, if chosen | `apps/mobile/src/lib/oauth.ts` (`signInWithGoogle`). Google shares name and email | Yes | No | Optional |
+| Content rules acceptance time | Yes | `public.users.content_terms_accepted_at` (0138) | Yes | No | Required before posting |
 
 ## 2. Payments
 
@@ -115,6 +121,7 @@ tracking".
 | Chat messages, one to one and group | `public.chat_messages` | `supabase/migrations/0022_chat.sql:126-132`. 210 rows in production. Group threads at `supabase/migrations/0078_group_chat_and_notes.sql` |
 | UPA story text and photo | `public.upa_applications` | `supabase/migrations/0048_empower_schema.sql:75-94`. Authored in `portal-life`, not in the mobile app |
 | Reports filed against content or users | `public.reports` | `supabase/migrations/0097_report_block.sql`, UI at `apps/mobile/src/components/organisms/moderation/ModerationSheet.tsx` |
+| Coach trainee videos (a coach uploads videos of a player's sessions) | `public.coach_trainee_videos`, stored at `clips/coach-videos/<coach_id>/<player_id>/`; `coach-trainee-video-upload-url`, `get-coach-trainee-video-url`. Visible only to that coach and that player |
 | Block list | `public.blocked_users` | `supabase/migrations/0097_report_block.sql:28-53`. 0 rows in production (nobody has blocked anyone yet) |
 
 ## 7. Identifiers and diagnostics
@@ -139,6 +146,8 @@ not disabled here. IP address must therefore be declared as diagnostics/device d
 | Order history and order status | `supabase/migrations/0031_commerce.sql`, `0035_order_state_machine.sql` |
 | Cart and wishlist | `supabase/migrations/0034_cart_wishlist_rpcs.sql`, `0088_clip_saves.sql` |
 | Affiliate click outs to external retailers | `supabase/migrations/0086_affiliate_marketplace.sql:1-34`. Browse plus compare plus click out only, no cart, no stock, no in app payment |
+| Affiliate clicks (which retailer offer a user opened) | `public.affiliate_clicks` (0133), written by `record_affiliate_click`, linked to the user id, read only through admin aggregates. Declared as Product Interaction (App Functionality, Analytics) |
+| Search cache | `query_embedding_cache`: the search text and its embedding, kept 10 minutes to avoid re embedding repeated queries. Not linked to a user |
 
 ## 9. Third parties that receive data
 
@@ -148,6 +157,10 @@ not disabled here. IP address must therefore be declared as diagnostics/device d
 | Razorpay | Order id, amount, currency, and the payer's name and phone as prefill. Plus whatever its own SDK collects to take the card, which Atlitos never sees | `apps/mobile/src/lib/razorpay-checkout.native.ts:17-25`; prefill call sites in section 2 | Yes |
 | Expo push service | The device push token and the notification payload | `apps/mobile/src/hooks/use-push-registration.ts`, `supabase/functions/notify-dispatch` | Yes |
 | Sentry | Crash and performance events, device and OS metadata, client IP | `apps/mobile/src/lib/sentry.ts:11-16`, `supabase/functions/_shared/sentry.ts` | Yes. Mobile DSN in `eas.json`, edge `SENTRY_DSN` confirmed in the secret list |
+| Voyage AI | The free text search query, to embed it for matching against gear, courts and coaches | `supabase/functions/_shared/embeddings.ts`, `gear-embed`, `ai-search` | Yes |
+| Apple | Sign in with Apple identity token exchange, the one time authorization code (exchanged for a refresh token), and the revoke call on deletion | `apps/mobile/src/lib/oauth.ts`, `supabase/functions/_shared/apple.ts` | Yes |
+| Google | Sign in with Google (OAuth through Supabase Auth) | `apps/mobile/src/lib/oauth.ts` | Yes |
+| Retailers | When a user taps Buy, the retailer's page is opened with a click reference. The retailer's own privacy policy applies from there | `0133_affiliate_click_tracking.sql` | Yes |
 | Anthropic | The free text search query, and the candidate list for reranking (entity id, type, title, subtitle, price) | Query: `supabase/functions/ai-search/llm.ts:174` (`messages: [{ role: "user", content: query }]`). Candidates: `llm.ts:250-256`. **No coordinates, no user id and no auth token are in either payload**, verified by reading both request bodies | **Yes.** `ANTHROPIC_API_KEY` is present in `supabase secrets list --project-ref syzzfgaudpifwvbpycyi` (2026-08-13) |
 
 Anthropic caveat worth stating plainly in the privacy policy (it already is, at

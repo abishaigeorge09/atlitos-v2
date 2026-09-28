@@ -16,15 +16,15 @@ does. Copy the blocks marked COPY straight into the form.
 
 ## Age rating
 
-The app carries user generated video with no age restriction on what members
-post, so answer the questionnaire honestly rather than optimistically:
+Answer the questionnaire for what the app **can** produce (launch runbook 9.3):
 
-- **Unrestricted web access:** No
-- **User generated content:** **Yes**, with moderation, reporting and blocking
+- **User generated content:** **Yes**, with the content rules, a word filter, reporting, blocking and moderation
+- **Messaging and chat:** **Yes**, one to one and group chat
+- **Unrestricted web access:** **Yes**. Book on a court opens the venue's own site and Buy on gear opens a retailer's site, in the in app browser. Answering No here is a near certain rejection
 - Realistic violence, sexual content, profanity, gambling, drugs: **None**
 
-Expect a 12+ rating from the user generated content answer alone. Rate for
-what the app **can** produce, not what you hope it produces.
+Accept whatever rating the console calculates. Separately, the app is for people 18 and over
+(terms, privacy policy, and the consent line on sign up and sign in).
 
 ## Sign in with Apple
 
@@ -64,92 +64,88 @@ change the other, because Apple compares them.
 
 ## Review notes
 
-COPY:
+Rewritten 2026-09-29 (launch runbook 7.3) for the iOS 1.0.0 build. COPY:
 
 ```
-Atlitos is a sports app for athletes in India: find courts, book coaching,
-post match clips, and compare prices on sports gear.
+Atlitos is a sports app for athletes in India: find courts, train with
+verified coaches, join coached groups, post and watch sports clips, and
+compare gear prices across retailers.
 
-To test:
-1. Open the app. You can browse courts, coaches and the Clutch feed as a
-   guest, with no account.
-2. Sign in with the demo account below to see the full experience.
-3. Home shows courts and coaches near you. Courts requires location
-   permission; deny it and the app still works, it just cannot sort by
-   distance.
-4. Clutch is the video feed. Swipe vertically.
+DEMO ACCOUNT
+Email: appreview@elsheph.com
+Password: (in the Sign-In Information fields)
+It has an upcoming coaching session, a chat with a coach, an approved clip
+and a completed profile. You can also browse as a guest with no account.
 
-User generated content. Members post short sports videos with captions, and
-can comment. Every one of the required controls is in the app:
-- REPORT: on any post in Clutch, tap the vertical dots on the right of the
-  video, then "Report post", then pick a reason.
-- BLOCK: same menu, "Block". The blocked member's posts and comments
-  disappear immediately and everywhere. Manage or undo this in
-  Settings > Account > Blocked accounts.
-- MODERATION: videos are reviewed before they appear publicly. Reports go to
-  an internal review queue.
-- TERMS: before their first clip, comment or chat message, every member
-  agrees once to our content rules (no tolerance for objectionable content or
-  abusive users). The server refuses posts until they have.
-- FILTER: comments, chat messages and captions are checked against a word
-  list; a refused post says why and keeps the draft so it can be changed.
-- Content policy: https://www.atlitos.com/content-policy
+HOW THINGS WORK
+- Courts: tap a venue, then Book. This opens the venue's own booking
+  website. Atlitos does not take payment for courts.
+- Coaching sessions and group memberships are real world, in person
+  services with a human coach, paid through Razorpay under guideline
+  3.1.3(e). Group memberships are paid month by month and never renew
+  automatically.
+- Gear: Atlitos compares prices across retailers. Buy opens the retailer's
+  website. No gear is sold in the app.
+- No digital content is sold anywhere in the app, and donations are turned
+  off on iOS.
 
-Account deletion: Settings > Account > Delete account. Two confirmations,
-then the account is deleted immediately. Personal data is erased. Order and
-payment records are retained in anonymised form because Indian tax law
-requires it, and the privacy policy says so.
+USER GENERATED CONTENT (guideline 1.2)
+- Before a first clip, comment or chat message, the user agrees to our
+  content rules: no tolerance for objectionable content or abusive users.
+  A server side word filter refuses listed words in comments and messages.
+- REPORT A CLIP: tap the vertical dots on the right of the video, then
+  "Report post", pick a reason, add free text if you like, Submit.
+- REPORT A COMMENT: open comments, press and hold the comment, Report.
+- REPORT A CHAT MESSAGE: press and hold the message, Report.
+- BLOCK: the same menus, "Block". The member's posts, comments and messages
+  disappear everywhere at once. Undo in Settings, Account, Blocked accounts.
+- Clips are reviewed before they appear publicly. We act on every report
+  within 24 hours. Content policy: https://www.atlitos.com/content-policy
 
-Permissions we request, and why:
-- Photo library: only when you tap to pick a video, a profile picture or a
-  coaching certificate. We never scan the library.
-- Location, while using the app only: to sort courts by distance. The app
-  works fully if you deny it.
-We request no camera, microphone or background location access. The
-Info.plist does carry camera, microphone and motion purpose strings, because
-the photo picker and location libraries we use link those system APIs and
-App Store Connect requires a string for any linked API. Each string says the
-app never asks for that access, and it never does.
+ACCOUNT DELETION (guideline 5.1.1(v))
+Settings, Account, Delete account, type DELETE. The account is deleted
+immediately. For Sign in with Apple accounts we also revoke the Apple token,
+so Atlitos disappears from the Apple ID's Sign in with Apple list. Payment
+records are kept in anonymised form because Indian tax law requires it.
 
-Payments: coaching sessions are real world services, delivered in person or
-live one to one, and court bookings are real world venue time, so both are
-paid through Razorpay under guideline 3.1.3(d)/(e). Gear opens the partner
-retailer's own site. Card details never reach our servers.
-[Confirm the live Razorpay key is in the production build before submitting.]
-
-Third parties that receive data: Supabase (our backend), Razorpay
-(payments), Anthropic and Voyage AI (search text only), Sentry (crash
-reports, not linked to the account), Apple and Google (only for their own
-sign in). No analytics, no advertising, no tracking.
+PERMISSIONS
+- Location, while using the app only: to show courts and coaches near you.
+  Everything works if you deny it.
+- Photos: through the system photo picker, so no library permission is
+  requested. Only the photo or video you pick is shared.
+- Notifications: asked only after your first booking or group join, behind
+  a short explanation.
+No camera, microphone, background location or tracking.
 
 Privacy policy: https://www.atlitos.com/privacy
 Terms: https://www.atlitos.com/terms
-Support: founder@synthsports.co
+Support: https://www.atlitos.com/support
 ```
+
+Before pasting: replace nothing inside the block except to confirm the demo address (runbook 6.6)
+and that the support address on `/support` is the one picked in runbook 2.6. The password goes in
+App Store Connect's Sign-In Information fields only, never in this repo.
 
 ## Demo account
 
-REQUIRED, because parts of the app need sign in. Reviewers reject on a demo
-account that does not work more often than on almost anything else.
+REQUIRED. Runbook 6.6: an email and password account on a team owned address,
+`appreview@elsheph.com`, created by a founder. Never a personal address, never deleted after
+approval (Apple reuses it for every update).
 
 | Field | Value |
 |---|---|
-| Username | TO BE FILLED |
-| Password | TO BE FILLED |
+| Username | `appreview@elsheph.com` |
+| Password | entered only in App Store Connect, never in this repo |
 
-Before submitting, verify by hand that the demo account:
-
-- signs in on a real device, on the exact build being submitted
-- has at least one upcoming booking, one past order and some Clutch content
-  visible, so the reviewer sees a populated app rather than empty states
-- is NOT the account you use daily, and holds no real personal data
-- is not suspended, and its phone or email is not a real person's
+It must have accepted the content rules (it posts a clip and chats), and carry one upcoming
+coaching session, one chat thread with a coach, one approved clip and a completed profile. Sign in
+with it on the exact TestFlight build before submitting.
 
 ## Support and marketing URLs
 
 | Field | Value |
 |---|---|
-| Support URL | https://www.atlitos.com (add a visible support link, currently mailto only) |
+| Support URL | https://www.atlitos.com/support |
 | Marketing URL | https://www.atlitos.com |
 | Privacy policy URL | https://www.atlitos.com/privacy |
 
