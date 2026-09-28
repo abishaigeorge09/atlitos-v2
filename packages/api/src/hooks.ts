@@ -605,6 +605,10 @@ export interface CourtListFilters {
    * PostGIS/geo index yet, see SCHEMA.md); it does not filter the query
    * itself, sorting by distance is the caller's job. */
   near?: { lat: number; lng: number } | null;
+  /** Release task 5: only courts whose venue has an outbound booking page.
+   * The courts tab passes this while in-app booking is switched off, so a
+   * venue with no way to book never shows up as a dead end. */
+  bookingUrlOnly?: boolean;
 }
 
 export interface AvailableSlot {
@@ -678,6 +682,8 @@ interface CourtQueryRow {
     lat: number | null;
     lng: number | null;
     status: string;
+    booking_url: string | null;
+    image_url: string | null;
     venue_photos: { storage_path: string; position: number }[] | null;
   } | null;
 }
@@ -699,7 +705,11 @@ function resolveVenuePhotoUrls(client: AtlitosClient, photos: { storage_path: st
 
 function mapCourtRow(client: AtlitosClient, row: CourtQueryRow, near?: { lat: number; lng: number } | null): Court {
   const venue = row.venues;
-  const images = resolveVenuePhotoUrls(client, venue?.venue_photos ?? null);
+  // An imported venue's external cover photo leads; partner uploads follow.
+  const images = [
+    ...(venue?.image_url ? [venue.image_url] : []),
+    ...resolveVenuePhotoUrls(client, venue?.venue_photos ?? null),
+  ];
   const lat = venue?.lat ?? 0;
   const lng = venue?.lng ?? 0;
 
@@ -720,6 +730,7 @@ function mapCourtRow(client: AtlitosClient, row: CourtQueryRow, near?: { lat: nu
     ratingCount: 0,
     images,
     active: row.active,
+    bookingUrl: venue?.booking_url ?? undefined,
     distanceKm:
       near && venue?.lat != null && venue?.lng != null
         ? haversineKm(near, { lat: venue.lat, lng: venue.lng })
@@ -747,7 +758,7 @@ const COURTS_PAGE_SIZE = 100;
 
 const COURT_SELECT = `
   id, venue_id, name, sport, base_price_per_hour, active,
-  venues!inner ( id, name, address, city, lat, lng, status, venue_photos ( storage_path, position ) )
+  venues!inner ( id, name, address, city, lat, lng, status, booking_url, image_url, venue_photos ( storage_path, position ) )
 `;
 
 export function useCourts(client: AtlitosClient) {
@@ -768,6 +779,9 @@ export function useCourts(client: AtlitosClient) {
 
       if (filters.sport) {
         query = query.eq("sport", filters.sport);
+      }
+      if (filters.bookingUrlOnly) {
+        query = query.not("venues.booking_url", "is", null);
       }
 
       const { data, error } = await query.returns<CourtQueryRow[]>();

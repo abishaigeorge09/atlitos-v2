@@ -1,7 +1,7 @@
 import { useEmpower, toApiError, type EmpowerStats, type HubUpa } from '@atlitos/api';
 import type { ApiError, Sport } from '@atlitos/types';
 import { formatINR, spacing } from '@atlitos/theme';
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import { HeartHandshake, RefreshCw, SlidersHorizontal, TriangleAlert } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 // useMemo is used for derived filter lists below.
@@ -20,6 +20,7 @@ import { SPORT_LABEL } from '@/lib/sport-display';
 import { supabase } from '@/lib/supabase';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
+import { DONATIONS_ENABLED } from '@/lib/feature-flags';
 
 type LoadState = 'loading' | 'ready' | 'error';
 
@@ -32,7 +33,14 @@ type LoadState = 'loading' | 'ready' | 'error';
  * stats never move when a chip toggles. Every list read is verified only, an
  * `.eq("status","verified")` the hook applies explicitly (RLS is not scoping).
  */
-export default function EmpowerHubScreen() {
+// Donations are off on this platform (DONATIONS_ENABLED); a deep link, a
+// stale push or a search hit lands on Home instead.
+export default function EmpowerHubRoute() {
+  if (!DONATIONS_ENABLED) return <Redirect href="/" />;
+  return <EmpowerHubScreen />;
+}
+
+function EmpowerHubScreen() {
   const colors = useThemeColors();
   const empower = useEmpower(supabase);
 

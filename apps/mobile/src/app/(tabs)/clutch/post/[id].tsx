@@ -1,5 +1,5 @@
 import { useClutch } from '@atlitos/api';
-import { radii, spacing } from '@atlitos/theme';
+import { inkOnMedia, mediaBackdrop, radii, spacing } from '@atlitos/theme';
 import type { ApiError, Clip, Comment } from '@atlitos/types';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -483,7 +483,7 @@ export default function ClutchPostViewerScreen() {
   // light flash before the video mounts.
   if (state !== 'ready') {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.text }}>
+      <View style={{ flex: 1, backgroundColor: mediaBackdrop }}>
         <SafeAreaView style={{ flex: 1 }} edges={['top']}>
           <View style={{ paddingHorizontal: spacing.sm, paddingTop: spacing.sm }}>
             <Pressable
@@ -493,7 +493,7 @@ export default function ClutchPostViewerScreen() {
               onPress={() => router.back()}
               style={{ height: 44, width: 44, alignItems: 'center', justifyContent: 'center' }}
             >
-              <ChevronLeft size={28} color={colors.textInverse} strokeWidth={2} />
+              <ChevronLeft size={28} color={inkOnMedia} strokeWidth={2} />
             </Pressable>
           </View>
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md, padding: spacing.lg }}>
@@ -501,17 +501,17 @@ export default function ClutchPostViewerScreen() {
               <ActivityIndicator color={colors.accent} />
             ) : state === 'notFound' ? (
               <>
-                <MessageCircle size={40} color={colors.textInverse} strokeWidth={1.75} />
-                <Text style={[textStyle('h3'), { color: colors.textInverse, textAlign: 'center' }]}>Clip unavailable</Text>
-                <Text style={[textStyle('callout'), { color: colors.textInverse, textAlign: 'center', opacity: 0.8 }]}>
+                <MessageCircle size={40} color={inkOnMedia} strokeWidth={1.75} />
+                <Text style={[textStyle('h3'), { color: inkOnMedia, textAlign: 'center' }]}>Clip unavailable</Text>
+                <Text style={[textStyle('callout'), { color: inkOnMedia, textAlign: 'center', opacity: 0.8 }]}>
                   This clip may have been removed or is not published yet.
                 </Text>
               </>
             ) : (
               <>
                 <TriangleAlert size={40} color={colors.danger} strokeWidth={1.75} />
-                <Text style={[textStyle('h3'), { color: colors.textInverse, textAlign: 'center' }]}>Couldn't load clip</Text>
-                <Text style={[textStyle('callout'), { color: colors.textInverse, textAlign: 'center', opacity: 0.8 }]}>
+                <Text style={[textStyle('h3'), { color: inkOnMedia, textAlign: 'center' }]}>Couldn't load clip</Text>
+                <Text style={[textStyle('callout'), { color: inkOnMedia, textAlign: 'center', opacity: 0.8 }]}>
                   {error?.message ?? 'Something went wrong. Please try again.'}
                 </Text>
                 <Button variant="secondary" onPress={() => void load()}>
@@ -527,7 +527,7 @@ export default function ClutchPostViewerScreen() {
 
   return (
     <View
-      style={{ flex: 1, backgroundColor: colors.text }}
+      style={{ flex: 1, backgroundColor: mediaBackdrop }}
       onLayout={(event) => setContainerH(event.nativeEvent.layout.height)}
     >
       {containerH > 0 ? (
@@ -735,7 +735,7 @@ function ClipPage({
   const navInset = useNavBarInset();
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.text }}>
+    <View style={{ flex: 1, backgroundColor: mediaBackdrop }}>
       {/* F1: only the near-visible window mounts a real player; every other
           virtualized page renders its poster only. */}
       {mountPlayer ? (
@@ -770,9 +770,9 @@ function ClipPage({
             onPress={onBack}
             style={{ height: 44, width: 44, alignItems: 'center', justifyContent: 'center' }}
           >
-            <ChevronLeft size={28} color={colors.textInverse} strokeWidth={2} />
+            <ChevronLeft size={28} color={inkOnMedia} strokeWidth={2} />
           </Pressable>
-          <Text style={[textStyle('h3'), { color: colors.textInverse }]}>Clutch</Text>
+          <Text style={[textStyle('h3'), { color: inkOnMedia }]}>Clutch</Text>
         </View>
 
         <Pressable
@@ -789,10 +789,10 @@ function ClipPage({
         >
           <Avatar uri={clip.channelAvatarUrl ?? undefined} name={clip.channel} size={40} />
           <View style={{ flex: 1 }}>
-            <Text style={[textStyle('label'), { color: colors.textInverse }]} numberOfLines={1}>
+            <Text style={[textStyle('label'), { color: inkOnMedia }]} numberOfLines={1}>
               {clip.channel}
             </Text>
-            <Text className="font-mono text-xs" style={{ color: colors.textInverse, opacity: 0.8 }} numberOfLines={1}>
+            <Text className="font-mono text-xs" style={{ color: inkOnMedia, opacity: 0.8 }} numberOfLines={1}>
               {clip.sport} · {timeAgo(clip.createdAt)}
             </Text>
           </View>
@@ -817,10 +817,10 @@ function ClipPage({
             <Heart
               size={30}
               strokeWidth={1.75}
-              color={clip.likedByMe ? colors.danger : colors.textInverse}
+              color={clip.likedByMe ? colors.danger : inkOnMedia}
               fill={clip.likedByMe ? colors.danger : 'transparent'}
             />
-            <Text className="font-mono text-xs" style={{ color: colors.textInverse }}>
+            <Text className="font-mono text-xs" style={{ color: inkOnMedia }}>
               {clip.likes}
             </Text>
           </Pressable>
@@ -830,8 +830,8 @@ function ClipPage({
             accessibilityLabel="Comments"
             className="min-h-11 min-w-11 items-center justify-center gap-xs"
           >
-            <MessageCircle size={30} strokeWidth={1.75} color={colors.textInverse} />
-            <Text className="font-mono text-xs" style={{ color: colors.textInverse }}>
+            <MessageCircle size={30} strokeWidth={1.75} color={inkOnMedia} />
+            <Text className="font-mono text-xs" style={{ color: inkOnMedia }}>
               {clip.commentCount}
             </Text>
           </Pressable>
@@ -844,7 +844,7 @@ function ClipPage({
             {clip.savedByMe ? (
               <BookmarkCheck size={30} strokeWidth={1.75} color={colors.accent} fill={colors.accent} />
             ) : (
-              <Bookmark size={30} strokeWidth={1.75} color={colors.textInverse} />
+              <Bookmark size={30} strokeWidth={1.75} color={inkOnMedia} />
             )}
           </Pressable>
           <Pressable
@@ -853,7 +853,7 @@ function ClipPage({
             accessibilityLabel="Share"
             className="min-h-11 min-w-11 items-center justify-center gap-xs"
           >
-            <Share2 size={30} strokeWidth={1.75} color={colors.textInverse} />
+            <Share2 size={30} strokeWidth={1.75} color={inkOnMedia} />
           </Pressable>
           {onReport ? (
             <Pressable
@@ -862,7 +862,7 @@ function ClipPage({
               accessibilityLabel="Report or block"
               className="min-h-11 min-w-11 items-center justify-center gap-xs"
             >
-              <Flag size={26} strokeWidth={1.75} color={colors.textInverse} />
+              <Flag size={26} strokeWidth={1.75} color={inkOnMedia} />
             </Pressable>
           ) : onOwnerMenu ? (
             <Pressable
@@ -871,7 +871,7 @@ function ClipPage({
               accessibilityLabel="Clip options"
               className="min-h-11 min-w-11 items-center justify-center gap-xs"
             >
-              <EllipsisVertical size={26} strokeWidth={1.75} color={colors.textInverse} />
+              <EllipsisVertical size={26} strokeWidth={1.75} color={inkOnMedia} />
             </Pressable>
           ) : null}
         </View>
@@ -896,7 +896,7 @@ function ClipPage({
         >
           <View style={{ flex: 1, gap: spacing.xs }}>
             {clip.caption ? (
-              <Text style={{ color: colors.textInverse }} numberOfLines={3}>
+              <Text style={{ color: inkOnMedia }} numberOfLines={3}>
                 {clip.caption}
               </Text>
             ) : null}
@@ -916,9 +916,9 @@ function ClipPage({
             }}
           >
             {muted ? (
-              <VolumeX size={20} color={colors.textInverse} strokeWidth={1.75} />
+              <VolumeX size={20} color={inkOnMedia} strokeWidth={1.75} />
             ) : (
-              <Volume2 size={20} color={colors.textInverse} strokeWidth={1.75} />
+              <Volume2 size={20} color={inkOnMedia} strokeWidth={1.75} />
             )}
           </Pressable>
         </View>

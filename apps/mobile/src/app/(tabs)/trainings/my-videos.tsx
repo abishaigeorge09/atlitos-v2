@@ -1,5 +1,5 @@
 import { useMyTraineeVideos } from '@atlitos/api';
-import { radii, spacing } from '@atlitos/theme';
+import { mediaBackdrop, radii, spacing } from '@atlitos/theme';
 import type { ApiError } from '@atlitos/types';
 import { router } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
@@ -178,7 +178,7 @@ export default function MyTraineeVideosScreen() {
       )}
 
       <Modal visible={playbackUrl != null} animationType="slide" onRequestClose={closePlayback}>
-        <View style={{ flex: 1, backgroundColor: colors.text }}>
+        <View style={{ flex: 1, backgroundColor: mediaBackdrop }}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Close video"

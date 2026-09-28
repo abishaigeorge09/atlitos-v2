@@ -17,6 +17,7 @@ import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
+import { DONATIONS_ENABLED } from '@/lib/feature-flags';
 
 type LoadState = 'loading' | 'ready' | 'error';
 
@@ -117,8 +118,8 @@ export default function MyImpactScreen() {
           icon={HeartHandshake}
           title="No donations yet"
           body="Support a verified athlete and your giving will show up here."
-          ctaLabel="Explore Empower"
-          onCtaPress={() => router.push('/home/empower')}
+          ctaLabel={DONATIONS_ENABLED ? 'Explore Empower' : undefined}
+          onCtaPress={DONATIONS_ENABLED ? () => router.push('/home/empower') : undefined}
         />
       </SafeAreaView>
     );

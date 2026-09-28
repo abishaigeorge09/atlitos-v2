@@ -14,8 +14,7 @@
       "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSPhotoLibraryUsageDescription": "Atlitos needs your photo library so you can pick a video for Clutch, set a profile picture, and attach your coaching certificates.",
-        "NSMotionUsageDescription": "Atlitos uses motion data only to improve the accuracy of your location when finding courts near you."
+        "NSPhotoLibraryUsageDescription": "Atlitos needs your photo library so you can pick a video for Clutch, set a profile picture, and attach your coaching certificates."
       },
       "privacyManifests": {
         "NSPrivacyTracking": false,
@@ -120,6 +119,30 @@
             "NSPrivacyCollectedDataTypePurposes": [
               "NSPrivacyCollectedDataTypePurposeAppFunctionality"
             ]
+          },
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeCrashData",
+            "NSPrivacyCollectedDataTypeLinked": false,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": [
+              "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+            ]
+          },
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypePerformanceData",
+            "NSPrivacyCollectedDataTypeLinked": false,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": [
+              "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+            ]
+          },
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeOtherDiagnosticData",
+            "NSPrivacyCollectedDataTypeLinked": false,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": [
+              "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+            ]
           }
         ]
       }
@@ -160,15 +183,16 @@
           "locationAlwaysPermission": false,
           "locationAlwaysAndWhenInUsePermission": false,
           "isIosBackgroundLocationEnabled": false,
-          "isAndroidBackgroundLocationEnabled": false
+          "isAndroidBackgroundLocationEnabled": false,
+          "motionUsagePermission": "Atlitos does not use motion or fitness data. The location feature that finds courts near you includes this permission, and the app never asks for it."
         }
       ],
       [
         "expo-image-picker",
         {
           "photosPermission": "Atlitos needs your photo library so you can pick a video for Clutch, set a profile picture, and attach your coaching certificates.",
-          "cameraPermission": "Atlitos uses your camera to capture clutch clips and profile photos.",
-          "microphonePermission": "Atlitos needs microphone access so uploaded video clips keep their sound."
+          "cameraPermission": "Atlitos does not open your camera. You choose clips and photos from your library, and the app never asks for camera access.",
+          "microphonePermission": "Atlitos does not record audio. Clips you pick from your library keep their own sound, and the app never asks for microphone access."
         }
       ],
       "expo-font",

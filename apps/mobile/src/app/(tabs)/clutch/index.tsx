@@ -1,5 +1,5 @@
 import { useClutch } from '@atlitos/api';
-import { spacing } from '@atlitos/theme';
+import { inkOnMedia, mediaBackdrop, spacing } from '@atlitos/theme';
 import type { ApiError, Clip } from '@atlitos/types';
 import { router } from 'expo-router';
 import { Play, Plus, TriangleAlert } from 'lucide-react-native';
@@ -351,20 +351,21 @@ export default function ClutchFeedScreen() {
 
   return (
     <View
-      className="flex-1 bg-text"
+      className="flex-1"
+      style={{ backgroundColor: mediaBackdrop }}
       onLayout={(event) => setContainerH(event.nativeEvent.layout.height)}
     >
       {state === 'loading' ? (
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator color={colors.textInverse} />
+          <ActivityIndicator color={inkOnMedia} />
         </View>
       ) : state === 'error' ? (
         <View className="flex-1 items-center justify-center gap-md p-lg">
           <TriangleAlert size={40} color={colors.danger} strokeWidth={1.75} />
-          <Text style={[textStyle('h3'), { color: colors.textInverse, textAlign: 'center' }]}>
+          <Text style={[textStyle('h3'), { color: inkOnMedia, textAlign: 'center' }]}>
             Couldn't load Clutch
           </Text>
-          <Text style={[textStyle('callout'), { color: colors.textInverse, textAlign: 'center', opacity: 0.8 }]}>
+          <Text style={[textStyle('callout'), { color: inkOnMedia, textAlign: 'center', opacity: 0.8 }]}>
             {error?.message ?? 'Something went wrong. Please try again.'}
           </Text>
           <Button variant="secondary" onPress={() => void load()}>
@@ -448,7 +449,7 @@ export default function ClutchFeedScreen() {
         style={{ pointerEvents: 'box-none', position: 'absolute', top: insets.top, left: 0, right: 0, paddingHorizontal: spacing.lg }}
         className="flex-row items-center justify-between"
       >
-        <Text style={[textStyle('h2'), { color: colors.textInverse }]}>Clutch</Text>
+        <Text style={[textStyle('h2'), { color: inkOnMedia }]}>Clutch</Text>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Upload a clip"
