@@ -50,7 +50,7 @@ import { handleCorsPreflight } from "../_shared/cors.ts";
 import { jsonResponse, withErrorHandling } from "../_shared/http.ts";
 import { AppError, appErrorFromPostgrestMessage } from "../_shared/app-error.ts";
 import { serviceRoleClient, userScopedClient } from "../_shared/supabase.ts";
-import { razorpayRequest } from "../_shared/razorpay.ts";
+import { assertRefundModeMatches, razorpayRequest } from "../_shared/razorpay.ts";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -209,6 +209,33 @@ Deno.serve((req) =>
     const actorId = await requireAdmin(request);
     const body = parseBody(await request.json().catch(() => null));
     const supabase = serviceRoleClient();
+
+    // ------------------------------------------------------------------
+    // 0. REFUND_MODE_MISMATCH (0140), before the claim. The claim inserts a
+    //    pending refunds row that blocks every later claim on the order
+    //    (REFUND_IN_PROGRESS), so a refund that can never reach Razorpay
+    //    must be refused before it exists. A missing order or intent falls
+    //    through to the claim RPC, which names it.
+    // ------------------------------------------------------------------
+    const { data: preOrder, error: preOrderError } = await supabase
+      .from("orders")
+      .select("payment_intent_id")
+      .eq("id", body.orderId)
+      .maybeSingle<{ payment_intent_id: string | null }>();
+    if (preOrderError) {
+      throw new AppError("INTERNAL", `Failed to read order ${body.orderId}: ${preOrderError.message}`, 500);
+    }
+    if (preOrder?.payment_intent_id) {
+      const { data: preIntent, error: preIntentError } = await supabase
+        .from("payment_intents")
+        .select("razorpay_mode")
+        .eq("id", preOrder.payment_intent_id)
+        .maybeSingle<{ razorpay_mode: string }>();
+      if (preIntentError) {
+        throw new AppError("INTERNAL", `Failed to read the payment for order ${body.orderId}: ${preIntentError.message}`, 500);
+      }
+      assertRefundModeMatches(preIntent?.razorpay_mode);
+    }
 
     // ------------------------------------------------------------------
     // 1. Claim. The RPC enforces the state machine and the refundable

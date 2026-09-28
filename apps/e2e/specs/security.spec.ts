@@ -272,6 +272,8 @@ test.describe("SEC — payment finalization recovery (SEC-F2)", () => {
         razorpay_order_id: `e2e_sec05_${randomUUID()}`,
         status: "captured",
         finalized_at: null,
+        // 0141 drops the column default; every insert stamps its mode.
+        razorpay_mode: "test",
       })
       .select("id")
       .single();

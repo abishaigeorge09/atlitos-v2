@@ -194,33 +194,103 @@ Deno.serve(async (req) => {
 
 `handlePaymentFailed` updates `payment_intents.status = 'failed'` and, for `commerce`/`donation` where no domain row exists yet, does nothing further, there is nothing to unwind. For `session`/`court`, the already-created row is left in place but the client-facing polling never observes a `captured` intent, so the booking never renders as confirmed; a scheduled cleanup (not built in v1, flagged for P8 hardening) can later auto-cancel stale unpaid bookings.
 
-## Payment mode: test and live never mix (`0140`, 2026-09-29)
+## Payment mode: test and live never mix (`0140`, `0141`, 2026-09-29)
 
 Production ran Razorpay in test mode until launch, and test payments were stored in the same
-tables as real ones. `0140` separates them:
+tables as real ones. `0140` separates them.
+
+### The column
 
 - `payment_intents.razorpay_mode` is `test` or `live`, not null. Every row that existed before
   `0140` was backfilled as `test`. Every function that creates an intent (`book-session`,
   `checkout`, `donate`, `join-group`, `renew-group-membership`, `book-court`, including the walk
-  in path) writes `razorpayMode()`, the mode it is running in. The column keeps a default of
-  `test` only to cover the deploy window; once every payment function is redeployed, run
-  `alter table public.payment_intents alter column razorpay_mode drop default;` as a reviewed
-  SQL file so a missed stamp fails loudly.
-- `_ledger_eligible_balance` and `admin_payouts_due` count only ledger rows whose intent is
-  `live`. Rows with no intent (manual adjustments, payout debits) still count.
-- Webhook secrets are per mode: `RAZORPAY_WEBHOOK_SECRET_TEST` and `RAZORPAY_WEBHOOK_SECRET_LIVE`,
-  set by `scripts/set-razorpay-secrets.sh`. `verifyWebhookSignature` returns which mode signed
-  the event. `razorpay-webhook` acknowledges and ignores (200) an event signed by the other
-  account, and an event about an intent whose `razorpay_mode` differs from `RAZORPAY_MODE`.
-  The legacy single `RAZORPAY_WEBHOOK_SECRET` is still accepted as the current mode.
-- `verifyPaymentSignature` (the `verify-payment` client callback) now uses the active mode's key
+  in path) writes `razorpayMode()`, the mode it is running in.
+- `0140` leaves a column default of `test` for the deploy window only. `0141` drops it, and
+  applying `0141` is a **required go live step**, not a cleanup (see the order below). With the
+  default still in place after `RAZORPAY_MODE=live`, a real payment created by a stale function
+  build would be stamped `test`, `razorpay-webhook` would acknowledge and ignore its capture, and
+  the coach or venue would never be paid. With no default, a stale build's insert fails the not
+  null constraint and the booking fails loudly before any money moves. Test harnesses that insert
+  intents (`scripts/verify-security-fixes.sql`, `apps/e2e/specs/security.spec.ts`) stamp `test`.
+
+### Every balance read, decided one by one
+
+The predicate is the same everywhere: a ledger row counts when
+`le.payment_intent_id is null or pi.razorpay_mode = 'live'`. Rows with no intent (payout debits,
+payout reversals, manual adjustments) always count, because they are real.
+
+| Read | Used by | Decision |
+|---|---|---|
+| `_ledger_eligible_balance` | manual payout gate (`_record_payout_core` with the hold), `get_payout_eligible_balance`, `admin_payouts_due`, `get_my_payout_method.eligible_balance` | Filtered (`0140`). |
+| `admin_payouts_due` (`balance` column) | admin Payouts list | Filtered (`0140`). |
+| `get_payout_account_balance` | `razorpay-route-transfer` amount check, `_record_payout_core` without the hold (`record_transfer`) | Filtered (`0140`). Without it, test era credits were withdrawable as real money through the Route path. |
+| `get_coach_wallet_balance` | coach Earnings screen (mobile), `use-coach.ts` | Filtered (`0140`), all four figures, so balance, lifetime earned, lifetime transferred and this month agree. |
+| `get_my_payout_method.balance` | coach and venue payout details, portal-court Earnings "pending balance" | Filtered (`0140`). portal-court no longer sums `ledger_entries` in the browser: the browser cannot read other payers' intents, so it could not apply the filter; it reads this RPC instead. |
+| `admin_kpi_money` | admin dashboard "Gross captured, 7d" | Filtered to live captures (`0140`). Sums `payment_intents`, not the ledger, but it is a money total. |
+| `upa_fund_balance`, `upa_fund_balances`, `general_fund_balance`, `get_empower_stats`, `public_upa_profile`, `upa_money_summary` | Empower hub, UPA profiles, portal-life "Total raised" | **Left unfiltered, deliberately.** No payout, transfer or withdrawal path reads a `upa_fund` balance (there is no `upa_fund` payout account type), so test money here can never leave the platform. And the same surface also reads `donations` rows, `upa_wishlist_items.funded_amount` and item status, none of which are ledger rows: filtering only the ledger total would make "total raised" disagree with the item bars and the supporters list on the same screen. Test era Empower data is a launch data decision; `scripts/sql/check-payments-go-live.sql` block 7 lists it. |
+| `get_my_transactions` | athlete and coach transaction history | **Left unfiltered.** A history list of the caller's own rows, not a balance, and nothing reads it to decide an amount. |
+| `get_my_impact_summary` | donor My Impact | **Left unfiltered.** Sums the caller's own `donations`, not the ledger; a history of what that donor did. |
+| portal-court Earnings "gross this month" and chart | venue partner | **Left unfiltered.** Booking volume from `court_bookings`, not a balance, and it must include walk in bookings, which have no payment intent at all. |
+| `unfinalized_captures` (view, `0109`) | ops sweeps | **Left unfiltered.** A stuck test capture is still stuck; it lists work, not money owed. |
+
+Any new function that sums `ledger_entries` into a coach or venue balance must carry the predicate
+above. `scripts/sql/check-payments-go-live.sql` block 2 fails if a listed function loses it.
+
+### Webhook secrets
+
+Per mode: `RAZORPAY_WEBHOOK_SECRET_TEST` and `RAZORPAY_WEBHOOK_SECRET_LIVE`, set by
+`scripts/set-razorpay-secrets.sh`. `verifyWebhookSignature` checks both and returns which mode
+signed the event; `razorpay-webhook` acknowledges and ignores (200) an event signed by the other
+account, and an event about an intent whose `razorpay_mode` differs from `RAZORPAY_MODE`.
+
+- The legacy single `RAZORPAY_WEBHOOK_SECRET` dates from test mode. It is accepted **only** as a
+  fallback for `RAZORPAY_WEBHOOK_SECRET_TEST` while `RAZORPAY_MODE=test`. In live mode it is
+  ignored entirely and `RAZORPAY_WEBHOOK_SECRET_LIVE` is required.
+- Fail closed: the webhook answers 500 (Razorpay retries) when the current mode's secret is
+  missing, when the test and live secrets are equal, or when the intent mode lookup hits a
+  database error. A lookup error is never read as "no intent".
+- `set-razorpay-secrets.sh` refuses a file whose test and live webhook secrets are equal
+  (including the legacy secret standing in for the test one), refuses live mode without
+  `_LIVE`, and prints the `unset` reminder for the legacy secret.
+- `verifyPaymentSignature` (the `verify-payment` client callback) uses the active mode's key
   secret, not the un-prefixed `RAZORPAY_KEY_SECRET`.
 
-Going live (founder only, launch runbook 4.2 and 4.3): apply `0140`, redeploy the payment
-functions, run a Rs 1 test cycle, push the live keys and both webhook secrets with
-`set-razorpay-secrets.sh`, point the live dashboard's webhook at `razorpay-webhook`, set
-`RAZORPAY_MODE=live`, run a Rs 1 live cycle. Check with
-`select razorpay_mode, count(*) from payment_intents group by 1;`.
+### Refunds across modes: `REFUND_MODE_MISMATCH`
+
+`cancel-session-refund`, `decline-session-refund` and `admin-order-refund` read the intent's
+`razorpay_mode` before anything changes and refuse with `REFUND_MODE_MISMATCH` (409) when it is
+not the current mode: no state transition, no `refunds` row, no Razorpay call. The session ones
+answer only the session's own athlete or coach this way; anyone else falls through to the
+transition RPC, which refuses them as before. The out of stock auto refund inside
+`finalize-order-payment` must not throw, so it logs the mismatch and returns `refund_pending`
+without claiming a row. All transitions still go through the existing RPCs.
+
+### Go live guard: payout rows with no intent
+
+Payout debits (`_record_payout_core`) and payout reversals (`fail_transfer`,
+`admin_resolve_manual_payout`) are written with `payment_intent_id` null, so they always count,
+in either mode. A payout recorded against test era credits would, after cutover, sit as a debit
+against real money. On 2026-09-29 production had 0 `transfers` rows and 0 ledger rows with a null
+intent, so there is nothing to reconcile today. **Before cutover, blocks 4a and 4b of
+`scripts/sql/check-payments-go-live.sql` must return zero rows, or every row must be reviewed and
+the decision written into the launch runbook.** Do not record any payout (manual or Route)
+between that check and step 7 below.
+
+### Going live (founder only, launch runbook 4.2 and 4.3). Order matters.
+
+1. Apply `0140` (production).
+2. Redeploy every intent creating function from the `0140` build: `book-session`, `book-court`,
+   `checkout`, `donate`, `join-group`, `renew-group-membership`. Also redeploy `razorpay-webhook`,
+   `verify-payment`, `cancel-session-refund`, `decline-session-refund`, `admin-order-refund`.
+3. Run a Rs 1 test cycle. Run `scripts/sql/check-payments-go-live.sql`: blocks 2, 4a, 4b empty;
+   review block 6 (test era refunds that will be refused) and block 7.
+4. Push the live keys and BOTH webhook secrets with `set-razorpay-secrets.sh` (it refuses equal
+   secrets). Point the live dashboard's webhook at `razorpay-webhook` with the `_LIVE` secret.
+5. Apply `0141` (drops the `test` default). Required, see above. Only after step 2.
+6. `supabase secrets unset RAZORPAY_WEBHOOK_SECRET` (the legacy secret).
+7. Set `RAZORPAY_MODE=live`.
+8. Run a Rs 1 live cycle, then run the check script again: block 1 `column_default` is null,
+   block 3 shows the live intent, blocks 4a and 4b still empty.
 
 ## Manual payouts: how coaches and venues are actually paid (`0132`, 2026-09-25)
 
@@ -459,7 +529,7 @@ A transfers-style row was chosen because `transfers` already models exactly this
 
 ### `admin-order-refund`, as built (Phase 4 LAUNCH, Track A, migration `0095_admin_order_refund.sql`)
 
-`POST { order_id (uuid), amount (rupees, 2dp), reason (non-empty) }` with the ADMIN's own JWT (`verify_jwt` true). Admin is verified by reading the caller's own `user_roles` through the caller's JWT, the `admin-order-advance` pattern, NOT `app_metadata` (GoTrue's `getUser` does not carry the minted `roles` claim; see admin-order-advance's header). 200 returns `{ refund_id, order_id, refunded_amount, remaining_refundable, payment_intent_status: 'refunded' | 'partially_refunded', refund_status: 'processed' | 'pending' }`. Errors: 401 `UNAUTHENTICATED`, 403 `FORBIDDEN` (non-admin), 400 `VALIDATION`, 404 `NOT_FOUND`, 409 `INVALID_TRANSITION`, 409 `AMOUNT_EXCEEDS_REFUNDABLE`, 409 `REFUND_IN_PROGRESS`. Exactly one `audit_log` row per success (PRD-04 FR-53).
+`POST { order_id (uuid), amount (rupees, 2dp), reason (non-empty) }` with the ADMIN's own JWT (`verify_jwt` true). Admin is verified by reading the caller's own `user_roles` through the caller's JWT, the `admin-order-advance` pattern, NOT `app_metadata` (GoTrue's `getUser` does not carry the minted `roles` claim; see admin-order-advance's header). 200 returns `{ refund_id, order_id, refunded_amount, remaining_refundable, payment_intent_status: 'refunded' | 'partially_refunded', refund_status: 'processed' | 'pending' }`. Errors: 401 `UNAUTHENTICATED`, 403 `FORBIDDEN` (non-admin), 400 `VALIDATION`, 404 `NOT_FOUND`, 409 `INVALID_TRANSITION`, 409 `AMOUNT_EXCEEDS_REFUNDABLE`, 409 `REFUND_IN_PROGRESS`, 409 `REFUND_MODE_MISMATCH` (0140: the order was paid in the other Razorpay mode; checked before the claim, so no `refunds` row is created). Exactly one `audit_log` row per success (PRD-04 FR-53).
 
 **The domain is `commerce`, not `order`.** The plan text (PHASE-4-STATUS.md decision 1) named the refund domain `'order'`, but there is no `'order'` value in `payment_domain` (the enum is session, court, commerce, donation, payout, membership). An order's capture group, its `payment_intents` row, and therefore its refund rows and reversing group all carry `domain='commerce', entity_id = orders.id`. Every index predicate and ledger check in `0095` uses `'commerce'`.
 

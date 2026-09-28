@@ -4,7 +4,12 @@
 // docs/architecture/PAYMENTS.md's "razorpay-webhook: signature verification
 // and idempotency" section is this function's blueprint verbatim:
 //
-//   1. Verify `x-razorpay-signature` against the raw body (RAZORPAY_WEBHOOK_SECRET).
+//   1. Verify `x-razorpay-signature` against the raw body, with the per mode
+//      secrets RAZORPAY_WEBHOOK_SECRET_TEST and RAZORPAY_WEBHOOK_SECRET_LIVE
+//      (0140). The legacy single RAZORPAY_WEBHOOK_SECRET is accepted only as
+//      the test secret, and only while RAZORPAY_MODE=test. An event signed by
+//      the other account, or about an intent of the other mode, is
+//      acknowledged and ignored.
 //   2. Idempotency: insert the event id into `webhook_events` before any
 //      side effect; a `23505` unique violation means this exact event was
 //      already processed, acknowledge and stop.
@@ -148,6 +153,10 @@ async function handlePaymentFailed(
  * 0140. The mode of the payment intent an event is about, or null when the
  * event does not name one we hold (transfers, unknown orders), in which case
  * the existing handlers decide as before.
+ *
+ * THROWS on a database error. "Could not look" must never be read as "no
+ * intent": that would let a test intent's event through to the handlers
+ * after the switch to live. The caller answers 500 so Razorpay retries.
  */
 async function intentModeForEvent(
   supabase: ReturnType<typeof serviceRoleClient>,
@@ -161,11 +170,14 @@ async function intentModeForEvent(
       ? ["razorpay_payment_id", refund.payment_id]
       : [null, null];
   if (!column || !value) return null;
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("payment_intents")
     .select("razorpay_mode")
     .eq(column, value)
     .maybeSingle<{ razorpay_mode: RazorpayMode }>();
+  if (error) {
+    throw new Error(`payment_intents mode lookup failed: ${error.message}`);
+  }
   return data?.razorpay_mode ?? null;
 }
 
@@ -415,11 +427,12 @@ Deno.serve(async (req) => {
     signedMode = await verifyWebhookSignature(rawBody, signatureHeader);
     currentMode = razorpayMode();
   } catch (err) {
-    // requiredEnv throws if RAZORPAY_WEBHOOK_SECRET is unset. This function
-    // cannot operate without it (README.md documents it as optional only in
-    // the sense that the demo does not depend on a working public webhook,
-    // relying on verify-payment instead); a 500 here is a configuration
-    // error, not a signature failure.
+    // verifyWebhookSignature / razorpayMode throw on a configuration fault:
+    // RAZORPAY_MODE unset or invalid, the current mode's webhook secret
+    // missing (RAZORPAY_WEBHOOK_SECRET_LIVE in live mode, where the legacy
+    // RAZORPAY_WEBHOOK_SECRET is not accepted; _TEST or the legacy secret in
+    // test mode), or the test and live secrets identical. A 500 here is a
+    // configuration error, not a signature failure, and Razorpay retries.
     console.error("razorpay-webhook misconfigured:", err);
     await captureEdgeError(err, { fn: "razorpay-webhook", stage: "misconfigured" });
     return plainResponse("webhook not configured", 500);
@@ -461,7 +474,21 @@ Deno.serve(async (req) => {
   // (every row before 0140 is test) is never finalized, failed or refunded by
   // this deployment. Checked before the idempotency insert so a later
   // redelivery after a mode switch back is still processed.
-  const intentMode = await intentModeForEvent(supabase, event);
+  let intentMode: RazorpayMode | null;
+  try {
+    intentMode = await intentModeForEvent(supabase, event);
+  } catch (err) {
+    // Not acknowledged: nothing has been recorded yet, and a 500 makes
+    // Razorpay redeliver, by which time the read will normally succeed.
+    console.error("razorpay-webhook: intent mode lookup failed:", err);
+    await captureEdgeError(err, {
+      fn: "razorpay-webhook",
+      stage: "intent mode lookup",
+      eventId,
+      eventType: event.event,
+    });
+    return plainResponse("failed to read payment intent", 500);
+  }
   if (intentMode && intentMode !== currentMode) {
     return plainResponse(`ok (ignored: ${intentMode} intent, deployment is ${currentMode})`, 200);
   }

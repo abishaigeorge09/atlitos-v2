@@ -293,14 +293,14 @@ declare
   v_sweep jsonb;
 begin
   -- A charge that landed and whose handler never finished.
-  insert into public.payment_intents (user_id, domain, amount, razorpay_order_id, status, finalized_at)
-  values (v_member, 'court', 500, 'order_sec_stranded', 'captured', null)
+  insert into public.payment_intents (user_id, domain, amount, razorpay_order_id, status, finalized_at, razorpay_mode)
+  values (v_member, 'court', 500, 'order_sec_stranded', 'captured', null, 'test')
   returning id into v_stranded;
 
   -- And one that completed, to prove the backlog discriminates rather than
   -- listing every captured row.
-  insert into public.payment_intents (user_id, domain, amount, razorpay_order_id, status, finalized_at)
-  values (v_member, 'court', 500, 'order_sec_done', 'captured', now())
+  insert into public.payment_intents (user_id, domain, amount, razorpay_order_id, status, finalized_at, razorpay_mode)
+  values (v_member, 'court', 500, 'order_sec_done', 'captured', now(), 'test')
   returning id into v_done;
 
   select count(*) into v_backlog
@@ -329,8 +329,8 @@ begin
   perform pg_temp.assert(v_sweep ? 'payments_unfinalized', 'SEC-F2 expire_stale_holds reports a payments arm');
 
   -- A created (unpaid) intent is not backlog: only captured money counts.
-  insert into public.payment_intents (user_id, domain, amount, razorpay_order_id, status)
-  values (v_member, 'court', 500, 'order_sec_created', 'created');
+  insert into public.payment_intents (user_id, domain, amount, razorpay_order_id, status, razorpay_mode)
+  values (v_member, 'court', 500, 'order_sec_created', 'created', 'test');
   select count(*) into v_backlog
   from public.payment_finalization_backlog(interval '0')
   where razorpay_order_id = 'order_sec_created';
@@ -502,8 +502,8 @@ begin
   insert into public.orders (user_id, subtotal, total, ship_to_line1, ship_to_city, ship_to_state, ship_to_pincode)
     values (v_user, 500, 500, '1 Road', 'Hyderabad', 'TS', '500001')
     returning id into v_order;
-  insert into public.payment_intents (user_id, domain, entity_id, razorpay_order_id, amount, status)
-    values (v_user, 'commerce', v_order, 'order_test_del_1', 500, 'captured');
+  insert into public.payment_intents (user_id, domain, entity_id, razorpay_order_id, amount, status, razorpay_mode)
+    values (v_user, 'commerce', v_order, 'order_test_del_1', 500, 'captured', 'test');
 
   perform pg_temp.act_as(v_user, array['player']);
   perform public.delete_my_account();

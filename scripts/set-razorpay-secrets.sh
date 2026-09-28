@@ -32,8 +32,14 @@
 # 0140: test and live each have their own webhook secret. razorpay-webhook
 # checks both, knows which account signed the event, and ignores an event
 # from the account this deployment is not using. The old single
-# RAZORPAY_WEBHOOK_SECRET is still accepted (as the current mode) until it is
-# removed with: supabase secrets unset RAZORPAY_WEBHOOK_SECRET
+# RAZORPAY_WEBHOOK_SECRET dates from test mode, so it is accepted ONLY as a
+# fallback for RAZORPAY_WEBHOOK_SECRET_TEST while RAZORPAY_MODE=test. In live
+# mode it is ignored entirely and RAZORPAY_WEBHOOK_SECRET_LIVE is required.
+# Remove it at go live with: supabase secrets unset RAZORPAY_WEBHOOK_SECRET
+#
+# This script REFUSES when the test and live webhook secrets are the same
+# string (including the legacy secret standing in for the test one): the
+# webhook could then not tell which account signed an event.
 #
 # Both pairs can live here at once. RAZORPAY_MODE decides which one the edge
 # functions use, and _shared/razorpay.ts refuses to run if the mode and the key
@@ -77,14 +83,31 @@ if [ "$MODE" != "--verify-only" ]; then
   esac
 
   [ -n "$ACTIVE_ID" ] && [ -n "$ACTIVE_SECRET" ] || { echo "no key pair for mode \"${RZP_MODE:-unset}\" in $ENV_FILE"; exit 2; }
+  # Mirrors verifyWebhookSignature in _shared/razorpay.ts: live mode takes
+  # ONLY the _LIVE secret; test mode takes _TEST, or the legacy secret when
+  # _TEST is absent.
   case "$RZP_MODE" in
-    live) WH_ACTIVE="${RAZORPAY_WEBHOOK_SECRET_LIVE:-${RAZORPAY_WEBHOOK_SECRET:-}}"; WH_NAME=RAZORPAY_WEBHOOK_SECRET_LIVE ;;
-    *)    WH_ACTIVE="${RAZORPAY_WEBHOOK_SECRET_TEST:-${RAZORPAY_WEBHOOK_SECRET:-}}"; WH_NAME=RAZORPAY_WEBHOOK_SECRET_TEST ;;
+    live) WH_ACTIVE="${RAZORPAY_WEBHOOK_SECRET_LIVE:-}"; WH_NAME=RAZORPAY_WEBHOOK_SECRET_LIVE
+          WH_TEST_EFFECTIVE="${RAZORPAY_WEBHOOK_SECRET_TEST:-}" ;;
+    *)    WH_ACTIVE="${RAZORPAY_WEBHOOK_SECRET_TEST:-${RAZORPAY_WEBHOOK_SECRET:-}}"; WH_NAME=RAZORPAY_WEBHOOK_SECRET_TEST
+          WH_TEST_EFFECTIVE="$WH_ACTIVE" ;;
   esac
-  [ -n "$WH_ACTIVE" ] || { echo "missing from the file: $WH_NAME (the webhook secret for the active mode)"; exit 2; }
-  if [ -n "${RAZORPAY_WEBHOOK_SECRET_TEST:-}" ] && [ -n "${RAZORPAY_WEBHOOK_SECRET_LIVE:-}" ] \
-     && [ "$RAZORPAY_WEBHOOK_SECRET_TEST" = "$RAZORPAY_WEBHOOK_SECRET_LIVE" ]; then
+  if [ -z "$WH_ACTIVE" ]; then
+    if [ "$RZP_MODE" = "live" ] && [ -n "${RAZORPAY_WEBHOOK_SECRET:-}" ]; then
+      echo "missing from the file: RAZORPAY_WEBHOOK_SECRET_LIVE. The legacy RAZORPAY_WEBHOOK_SECRET is not accepted in live mode."
+    else
+      echo "missing from the file: $WH_NAME (the webhook secret for the active mode)"
+    fi
+    exit 2
+  fi
+  if [ -n "$WH_TEST_EFFECTIVE" ] && [ -n "${RAZORPAY_WEBHOOK_SECRET_LIVE:-}" ] \
+     && [ "$WH_TEST_EFFECTIVE" = "$RAZORPAY_WEBHOOK_SECRET_LIVE" ]; then
     echo "REFUSING: the test and live webhook secrets are identical, so a test event could not be told apart from a live one."
+    exit 2
+  fi
+  if [ -n "${RAZORPAY_WEBHOOK_SECRET:-}" ] && [ -n "${RAZORPAY_WEBHOOK_SECRET_LIVE:-}" ] \
+     && [ "$RAZORPAY_WEBHOOK_SECRET" = "$RAZORPAY_WEBHOOK_SECRET_LIVE" ]; then
+    echo "REFUSING: the legacy RAZORPAY_WEBHOOK_SECRET equals RAZORPAY_WEBHOOK_SECRET_LIVE. The legacy secret is a test era value; remove it from the file."
     exit 2
   fi
 
@@ -157,6 +180,14 @@ echo "         transfer.processed, transfer.failed"
 echo "  Set it in BOTH the test and the live Razorpay dashboards, same URL."
 echo "  The test webhook's secret must equal RAZORPAY_WEBHOOK_SECRET_TEST,"
 echo "  the live one's must equal RAZORPAY_WEBHOOK_SECRET_LIVE."
+
+if [ "${RZP_MODE:-}" = "live" ] || [ -n "${RAZORPAY_WEBHOOK_SECRET:-}" ]; then
+  echo
+  echo "GO LIVE REMINDER: the legacy single webhook secret must not outlive the"
+  echo "switch to live (it is ignored in live mode, and is a test era value)."
+  echo "Remove it from the file and from the project:"
+  echo "  supabase secrets unset --project-ref $PROJECT_REF RAZORPAY_WEBHOOK_SECRET"
+fi
 
 if [ "$MODE" = "--shred" ]; then
   echo

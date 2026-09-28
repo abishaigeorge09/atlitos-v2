@@ -1319,11 +1319,12 @@ Indexes: `idx_payment_intents_user_id` on `user_id`, `idx_payment_intents_razorp
 
 **Resolved against account deletion, p6 integration audit, 2026-08-14.** `payment_intents.user_id references public.users (id) on delete cascade` (`0010_payments_core.sql`), so if a `public.users` row for a payer were ever hard-deleted, its `payment_intents` would cascade away and immediately hit the new `RESTRICT` on `ledger_entries`/`group_memberships`, aborting the transaction. That never happens, checked against the actual implementation rather than assumed: `delete_my_account()` (`0098_account_deletion.sql`, on `phase-11/p6-account-deletion`, not yet merged to this integration branch) never issues `delete from public.users` or `delete from auth.users`; it UPDATEs `public.users` in place (PII scrubbed, `deleted_at` set) and explicitly RETAINS `payment_intents`, `ledger_entries`, `sessions`, `group_memberships` and `training_groups` untouched, by its own docblock's table-by-table list. The edge function leg (`supabase/functions/delete-account/index.ts:191`) calls `admin.auth.admin.updateUserById(userId, { ..., ban_duration: DELETED_BAN_DURATION })`, a soft ban, never `admin.auth.admin.deleteUser`. So the cascade path the RESTRICT would ever block is one account deletion was already built to avoid, for the same underlying reason the RESTRICT exists (0098's own header cites the identical naive `delete from auth.users` cascade as the bug it replaces, independently of track 5). No code change is required in either migration; when `0098` merges, verify this holds with a live read against `pg_constraint`/`pg_trigger` rather than re-trusting this note, the same way it was checked here.
 
-### `payment_intents.razorpay_mode` (0140)
+### `payment_intents.razorpay_mode` (0140, 0141)
 
-`text not null`, `test` or `live` (check constraint), default `test` during the deploy window
-only. Pre 0140 rows are all `test`. Only ledger rows whose intent is `live` count toward coach
-and venue payouts. See PAYMENTS.md, "Payment mode".
+`text not null`, `test` or `live` (check constraint). `0140` sets a default of `test` for the
+deploy window; `0141`, applied at go live before `RAZORPAY_MODE=live`, drops it, so every insert
+must stamp the mode. Pre 0140 rows are all `test`. Only ledger rows with no intent, or whose intent
+is `live`, count toward coach and venue balances. See PAYMENTS.md, "Payment mode".
 
 ### `ledger_entries`
 Double-entry. Every money event writes two or more rows whose `amount` sum, respecting `direction`, is zero within one `entry_group_id`. This table is the single source of truth for every balance the app displays (coach earnings, court partner earnings, UPA totals raised, platform revenue); no balance is ever a denormalized mutable column.
