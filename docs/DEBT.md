@@ -1,5 +1,15 @@
 # Debt and incident log
 
+## 2026-09-29: "Confirm email" stays off in production for now (decision, launch runbook 1.5)
+
+Production auto confirms email and password signups. That is what made the `0128` admin
+allowlist exploitable, and `0137` closes that hole without depending on confirmation (admin is
+granted only to Google signups). Turning "Confirm email" on is still right long term, but not
+before two things exist: custom SMTP (the built in Supabase mailer sends only a few emails an
+hour, which a launch day would exhaust), and a "check your inbox" state on the register screen
+(`apps/mobile/app/(auth)/register.tsx`) plus handling for the unconfirmed sign in error.
+Owner: engineering, after custom SMTP is configured. Launch is safe without it.
+
 ## 2026-08-14: a plain `CI=1 pnpm install` left `@atlitos/admin` unbuildable
 ## on this machine; `--force` fixed it, cause not fully root-caused
 
