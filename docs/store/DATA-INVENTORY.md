@@ -176,9 +176,15 @@ queries must be treated as potentially containing personal information.
 |---|---|
 | Government ID proof, guardian consent documents | `public.upa_evidence` kinds `id_proof` and `guardian_consent`, `supabase/migrations/0048_empower_schema.sql:122-129`. The only surface that writes them is the web portal `apps/portal-life/src/app/(app)/apply/apply-wizard.tsx`. Confirmed by grep: no reference in `apps/mobile` or `packages`. 4 rows in production |
 | Payout bank account references | `razorpay-route-onboard` edge function, driven from the coach and partner portals |
+| Payout details (holder name, bank account number, IFSC, UPI ID, PAN) | `public.payout_methods` (`supabase/migrations/0132_payout_methods_manual_payouts.sql`), written only through `upsert_my_payout_method` from the coach and partner portals. On account deletion (`0142`) the row is kept but masked: last four digits of the account number and the IFSC stay for the payout record, the UPI ID becomes `XXXX@<psp>`, PAN is nulled, the holder name becomes `Deleted user` |
 
 If a UPA application flow is ever added to the mobile app, both questionnaires must be reopened.
 Government ID and a minor's guardian consent are the most sensitive data this platform holds.
+
+On account deletion the `delete-account` edge function removes the stored objects behind these
+rows as well: `upa-evidence/<application_id>/`, `upa-photos/<user_id or application_id>/`,
+`gratitude-photos/<user_id>/` and `venue-media/<venue_id>/` for the deleting user's own
+applications and venues (`0142`). The `upa_evidence` rows themselves are retained, as before.
 
 ## 11. UNRESOLVED
 
