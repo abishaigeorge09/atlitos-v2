@@ -1,10 +1,10 @@
 <!doctype html>
-<!-- ATLITOS account + data deletion request page. Required by Google Play / App Store for
+<!-- ATLITOS account + data deletion page. Required by Google Play / App Store for
      apps with account creation. Static page, reuses styles.css tokens.
-     NOTE (fast-follow debt): there is no automated in-app deletion or backend delete-user
-     function yet; this page is the request mechanism (email support@elsheph.com), which is
-     store-acceptable. A real deletion RPC + in-app "Delete account" row is planned.
-     Store data-deletion URL: https://atlitos-landing.vercel.app/delete-account -->
+     In-app deletion exists (Settings, Account, Delete account; delete_my_account()
+     from migration 0098 via the delete-account edge function) and is immediate.
+     Email remains the fallback for someone who can no longer sign in.
+     Store data-deletion URL: https://www.atlitos.com/delete-account -->
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -43,16 +43,17 @@
     </div>
 
     <h1>Delete your account and data</h1>
-    <p class="eff">Effective 7 August 2026</p>
+    <p class="eff">Effective 29 September 2026</p>
 
-    <p>You can ask us to delete your Atlitos account and the personal data associated with it. This page explains how to request deletion, what is removed, and what we are required to keep.</p>
+    <p>You can delete your Atlitos account and the personal data associated with it at any time. This page explains how, what is removed, and what we are required to keep.</p>
 
-    <h2>How to request deletion</h2>
+    <h2>How to delete your account</h2>
     <div class="legal-card">
-      <p style="margin:4px 0 12px;">Email <strong>support@elsheph.com</strong> from the email address on your Atlitos account, with the subject line <strong>Delete my account</strong>. Include your account email so we can verify the request.</p>
+      <p style="margin:4px 0 12px;"><strong>In the app:</strong> Settings, then Account, then Delete account. Deletion is immediate.</p>
+      <p style="margin:4px 0 12px;">If you can no longer sign in, email <strong>support@elsheph.com</strong> from your account email and we will delete it within 30 days.</p>
       <a class="legal-cta" href="mailto:support@elsheph.com?subject=Delete%20my%20account&body=Please%20delete%20my%20Atlitos%20account%20and%20associated%20data.%20My%20account%20email%20is%3A%20">Email a deletion request</a>
     </div>
-    <p>We verify that the request comes from the account owner before deleting anything, so we may reply to confirm your identity.</p>
+    <p>For an emailed request we verify that it comes from the account owner before deleting anything, so we may reply to confirm your identity.</p>
 
     <h2>What gets deleted</h2>
     <ul>
@@ -71,7 +72,7 @@
     </ul>
 
     <h2>Timeline</h2>
-    <p>We action verified deletion requests within <strong>30 days</strong> and email you when it is complete. Records we are legally required to keep are retained only for the period the law requires, and then deleted.</p>
+    <p>Deleting in the app takes effect immediately. We action verified emailed requests within <strong>30 days</strong> and email you when it is complete. Records we are legally required to keep are retained only for the period the law requires, and then deleted.</p>
 
     <h2>Contact</h2>
     <div class="legal-card">

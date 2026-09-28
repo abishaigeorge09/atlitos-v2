@@ -8,8 +8,12 @@
      migration 0093.
 
      NOT LEGAL ADVICE. This states accurately what the software does so a
-     lawyer can review it cheaply. Two decisions are marked REVIEW below and
-     must be settled by a person before this is published. -->
+     lawyer can review it cheaply. Updated 2026-09-29 for launch runbook 2.3
+     (affiliate clicks from 0133, coach trainee videos, the query_embedding_cache
+     search cache, retailers, DPDP Grievance Officer, hosting region). Two items
+     are still marked REVIEW below and must be settled by a founder before this
+     is deployed: the Grievance Officer's name and address, and the names of the
+     email and SMS code providers. -->
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -42,7 +46,7 @@
 
 <main id="main">
   <h1>Privacy policy</h1>
-  <p class="updated">Last updated 7 September 2026</p>
+  <p class="updated">Last updated 29 September 2026</p>
 
   <p class="lede">
     This explains what Atlitos collects, why we collect it, who else receives it,
@@ -53,8 +57,9 @@
   <div class="callout">
     <p><strong>The short version.</strong> We collect what the app needs to work:
     your profile, what you book, what you buy, what you post, and who you talk to.
-    We do not sell your data. We do not track you across other apps or websites,
-    and we carry no advertising or analytics software. You can delete your account
+    We do not sell your data. We do not track you across other apps or websites.
+    We record which retailer offers you open, to measure the shop. We carry no
+    advertising or third party analytics software. You can delete your account
     from inside the app at any time.</p>
   </div>
 
@@ -64,6 +69,16 @@
     grievance under India's Digital Personal Data Protection Act, write to
     <a href="mailto:support@elsheph.com">support@elsheph.com</a>. We
     respond to data requests within 30 days.
+  </p>
+
+  <h3>Grievance Officer</h3>
+  <!-- REVIEW (FOUNDER, blocking before deploy): fill in the Grievance Officer's
+       name and the registered postal address, then delete this comment. -->
+  <p>
+    Grievance Officer: <strong>[NAME]</strong>,
+    <a href="mailto:support@elsheph.com">support@elsheph.com</a>,
+    701 Giridhari Executive Park, Peerancheruvu, Golconda, Hyderabad, Telangana 500008, India. We acknowledge a grievance within 72 hours and resolve
+    it within 30 days.
   </p>
 
   <h2>What we collect, and why</h2>
@@ -83,6 +98,21 @@
           <td>Content you post</td>
           <td>Videos and captions you upload, comments, likes, who you follow</td>
           <td>To show your posts to other members, which is the point of posting them</td>
+        </tr>
+        <tr>
+          <td>Training videos</td>
+          <td>Videos your coach uploads of your sessions</td>
+          <td>So you and your coach can review your training. Only you and that coach can see them</td>
+        </tr>
+        <tr>
+          <td>Shop activity</td>
+          <td>Which retailer offers you open, linked to your account, with a click reference</td>
+          <td>To measure the shop and settle retailer commissions. It is not used for advertising</td>
+        </tr>
+        <tr>
+          <td>Search</td>
+          <td>The words you type into search</td>
+          <td>To find results. Search text is kept for 10 minutes in a short lived cache, then removed</td>
         </tr>
         <tr>
           <td>Messages</td>
@@ -136,9 +166,9 @@
   <h3>What we never collect</h3>
   <p>
     We do not collect your card number, CVV, UPI PIN or bank credentials. Those go
-    directly to our payment provider and never reach our servers. We carry no
-    advertising software, no analytics software, and no cross app tracking, so
-    there is nothing to opt out of.
+    directly to our payment provider and never reach our servers. We record which
+    retailer offers you open, to measure the shop. We carry no advertising or third
+    party analytics software, and no cross app tracking.
   </p>
 
   <h2>Who else receives your data</h2>
@@ -174,6 +204,20 @@
           <td>Apple and Google</td>
           <td>Only if you choose Sign in with Apple or Google: they confirm who you are and share your name and email, or an Apple private relay address</td>
           <td>Signing you in. We never see your Apple or Google password</td>
+        </tr>
+        <tr>
+          <td>Email and SMS code providers</td>
+          <!-- REVIEW (FOUNDER): confirm in Supabase, Authentication, Emails and
+               SMS settings which providers send one time codes, and name them
+               here (for example the Supabase built in mailer, or a custom SMTP
+               service, and an SMS provider if phone sign in is on). -->
+          <td>Your email address or phone number, and the one time code</td>
+          <td>Sending sign in and password reset codes</td>
+        </tr>
+        <tr>
+          <td>Retailers</td>
+          <td>When you tap Buy on a retailer's offer we send you to that retailer with a click reference</td>
+          <td>Taking you to the product. Their own privacy policy applies from there</td>
         </tr>
         <tr>
           <td>Expo and Vercel</td>
@@ -236,19 +280,16 @@
     <li><strong>See what we hold about you.</strong> Ask us and we will send it.</li>
     <li><strong>Correct it.</strong> Most of it you can edit yourself in the app.</li>
     <li><strong>Delete it.</strong> Use Delete account in the app, or ask us.</li>
-    <li><strong>Withdraw consent.</strong> Turn off location or notifications in your device settings at any time. The rest of the app keeps working.</li>
+    <li><strong>Withdraw consent.</strong> Turn off location or notifications in your device settings at any time. The rest of the app keeps working. To withdraw consent entirely, delete your account.</li>
+    <li><strong>Nominate someone.</strong> You can nominate a person to exercise these rights for you in the event of your death or incapacity. Write to us to do so.</li>
     <li><strong>Complain.</strong> Write to us first at <a href="mailto:support@elsheph.com">support@elsheph.com</a>. You may also complain to the Data Protection Board of India.</li>
   </ul>
 
   <h2>Age</h2>
   <p>
-    <!-- REVIEW: this is the single most consequential open decision on this page.
-         Youth sports strongly implies members under 18, and the DPDP Act places
-         significantly stricter obligations on processing a child's data,
-         including verifiable parental consent. Setting 18 is the conservative
-         default. If under 18s are meant to use Atlitos, this section and the
-         signup flow both have to change, and retrofitting an age gate after
-         launch means removing existing accounts. Settle this before publishing. -->
+    <!-- Settled for iOS 1.0.0 (launch runbook 2.6): Atlitos is 18+. Sign up and
+         sign in show "confirm you are 18 or older". Allowing minors would need
+         verifiable parental consent under DPDP first. -->
     You must be at least 18 to create an Atlitos account. Atlitos is not directed
     at children, and we do not knowingly collect data from anyone under 18. If you
     believe a child has created an account, write to us and we will remove it.
@@ -269,13 +310,10 @@
 
   <h2>Where your data is processed</h2>
   <p>
-    <!-- REVIEW: confirm the Supabase project region and Razorpay's processing
-         location before publishing, and name them here. DPDP allows cross border
-         transfer except to restricted countries, but the policy should be
-         specific rather than vague. -->
-    Our database and files are hosted by Supabase. Payments are processed by
-    Razorpay in India. Some processing may take place outside India, protected by
-    contractual safeguards with each provider.
+    Our database and files are hosted by Supabase in Mumbai, India (AWS
+    ap-south-1). Payments are processed by Razorpay in India. Some processing,
+    such as search, crash reports and app delivery, may take place outside India,
+    protected by contractual safeguards with each provider.
   </p>
 
   <h2>Changes</h2>
