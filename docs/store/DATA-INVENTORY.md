@@ -72,17 +72,20 @@ permission and the declaration must cover precise location. This is a code chang
 
 ## 4. Camera, photos, microphone
 
-| Permission | Declared string | Evidence | What it is for |
-|---|---|---|---|
-| Photo library | "Atlitos needs your photo library so you can pick a video for Clutch, set a profile picture, and attach your coaching certificates." | `apps/mobile/app.json:231` | Clip upload, avatar, coach certificates |
-| Camera | "Atlitos does not open your camera. ..." (never requested) | `apps/mobile/app.json:232` | Nothing. Declared only because `expo-image-picker` links AVCaptureDevice |
-| Microphone | "Atlitos does not record audio. ..." (never requested) | `apps/mobile/app.json:233` | Nothing. Declared for the same reason; a picked clip keeps its own audio track |
-| Motion | "Atlitos does not use motion or fitness data. ..." (never requested) | `apps/mobile/app.json:225` | Nothing. Declared because `expo-location` links CoreMotion |
+Updated 2026-09-30. Strings live in the `expo-image-picker` and `expo-location` plugin config in
+`apps/mobile/app.json`.
 
-Provided by `expo-image-picker` and `expo-location`. The camera, microphone and motion strings
-must stay: `@expo/config-plugins` deletes an Info.plist key whose value is `false`, and App Store
-Connect rejects a binary that links those APIs without a purpose string (ITMS-90683). There is
-no standalone audio recorder in the app.
+| Permission | Requested at runtime? | What it is for |
+|---|---|---|
+| Photo library | No prompt. Media is chosen in the system photo picker, so only the item the user picks is shared | Clip upload, avatar, coach certificates |
+| Camera | **Never requested.** The string exists because `expo-image-picker` links the camera API | Nothing |
+| Microphone | **Never requested.** The string exists because `expo-image-picker` links the microphone API | Nothing. A picked clip keeps its own soundtrack inside the video file |
+| Motion | **Never requested.** The string exists because `expo-location` links the motion API | Nothing |
+
+The camera, microphone and motion strings must stay in the binary: App Store Connect rejects an
+upload (ITMS-90683) when a linked library references an API that has no purpose string. They are
+being restored on `launch/release/ios-compliance` for that reason. There is no camera capture and
+no audio recorder in the app.
 
 Uploaded media that leaves the device:
 - Clip video and thumbnail, into a private `clips` bucket. `supabase/migrations/0041_clutch_schema.sql:62-82` (`storage_path`, `thumb_path`, `caption`).

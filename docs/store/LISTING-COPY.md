@@ -57,10 +57,10 @@ gates discovery (`0030_verified_coach_discovery_rls.sql`).
 Atlitos is one app for your whole game. Find a court, train with a coach, join a group, post and watch clips, and compare gear prices across retailers.
 
 FIND A COURT
-Browse courts near you by sport. See the venue, its courts and its timings, then book on the venue's own booking page in one tap. Football, cricket, badminton and tennis.
+Browse courts near you by sport. See the venue, its courts and its timings, then book and pay on the venue's own website in one tap. Football, cricket, badminton and tennis.
 
 TRAIN WITH A COACH
-Find a verified coach by sport, price and schedule. Request a one to one session, pay securely, message your coach in the app, and keep every session in one place.
+Find a verified coach by sport, price and schedule. Request a one to one session in person, pay securely, message your coach in the app, and keep every session in one place.
 
 JOIN A TRAINING GROUP
 Prefer training with others? Join a coached group, pay month by month with no automatic renewal, and see the schedule and your attendance.
@@ -88,7 +88,7 @@ Privacy policy: https://www.atlitos.com/privacy
 Terms: https://www.atlitos.com/terms
 ```
 
-Measured 1657 characters.
+Measured 1670 characters (re measured 2026-09-30).
 
 ## 5. iOS keywords, 100 character limit
 
@@ -179,7 +179,7 @@ Measured 2252 characters, well inside the 4000 limit.
 | Marketing URL | `https://www.atlitos.com` | |
 | Privacy policy URL | `https://www.atlitos.com/privacy` | |
 | Copyright | `2026 ELSHEPH SYSTEMS INDIA PRIVATE LIMITED` | |
-| Contact email | the address the founder picked in runbook 2.6 | `support@elsheph.com` on the site today |
+| Contact email | `support@elsheph.com` | The same address on every page of atlitos.com |
 | Version | 1.0.0 | Rename the ASC version from 1.0 |
 
 ## 9. Age rating questionnaire inputs (runbook 9.3)
