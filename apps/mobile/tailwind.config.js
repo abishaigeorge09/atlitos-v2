@@ -25,11 +25,13 @@ module.exports = {
         // hsl(var(...))) was not re-resolved by NativeWind when the dark
         // class flipped, so every bg-card surface stayed white in dark mode
         // (coach-card, session-card, stat-tile, card, CategoriesRow, divider,
-        // upa-card).
+        // upa-card). input, ring, background and card foreground follow the
+        // same rule, each to the palette var its global.css slot holds in
+        // BOTH the light and dark blocks, so light values are unchanged.
         border: "hsl(var(--color-border))",
-        input: "var(--input)",
-        ring: "var(--ring)",
-        background: "var(--background)",
+        input: "hsl(var(--color-border))",
+        ring: "hsl(var(--color-accent))",
+        background: "hsl(var(--color-bg))",
         foreground: "var(--foreground)",
         primary: {
           DEFAULT: "var(--primary)",
@@ -60,7 +62,7 @@ module.exports = {
         },
         card: {
           DEFAULT: "hsl(var(--color-card))",
-          foreground: "var(--card-foreground)",
+          foreground: "hsl(var(--color-text))",
         },
         // Full @atlitos/theme palette, kebab case, every value traces to
         // packages/theme/src/colors.ts (bg-accent, text-danger, bg-success-tint, ...)

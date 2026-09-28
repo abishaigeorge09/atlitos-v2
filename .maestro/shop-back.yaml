@@ -29,20 +29,40 @@ appId: com.atlitos.app
       visible: "Continue as guest"
     commands:
       - tapOn: "Continue as guest"
-- scrollUntilVisible:
-    element:
-      text: "Log out"
-    direction: DOWN
-    timeout: 25000
-    speed: 60
+# Sign out of any session a previous flow left behind. Home no longer has a
+# log out control; it lives in Settings, reached from the You tab's
+# "Settings" button (apps/mobile/src/app/profile/index.tsx), and the row is
+# "Sign out" (SettingsContent.tsx). A guest's You tab shows a sign in prompt
+# with no Settings button, so every step here is optional or conditional and
+# the guest state passes straight through. Sign out replaces to Home; a guest
+# is still on You, so the "Home" tap brings both back to the same place.
+- tapOn:
+    text: "You"
     optional: true
+- waitForAnimationToEnd:
+    timeout: 2000
 - runFlow:
     when:
-      visible: "Log out"
+      visible: "Settings"
     commands:
-      - tapOn: "Log out"
+      - tapOn: "Settings"
+      - scrollUntilVisible:
+          element:
+            text: "Sign out"
+          direction: DOWN
+          timeout: 15000
+          speed: 60
+          optional: true
+      - tapOn:
+          text: "Sign out"
+          optional: true
       - waitForAnimationToEnd:
           timeout: 3000
+- tapOn:
+    text: "Home"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 2000
 - scrollUntilVisible:
     element:
       text: "What are you looking for..."

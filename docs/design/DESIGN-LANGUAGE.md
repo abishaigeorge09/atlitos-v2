@@ -288,3 +288,7 @@ A small gallery screen/page renders both accent candidates side by side against 
 indirection `var(--card)` / `var(--border)`. NativeWind did not re-resolve the nested var when the
 dark class flipped, so every `bg-card` surface stayed white in dark mode. The app bar cart badge
 also dropped its arbitrary `px-[3px]` / `text-[10px]` for `px-1` / `text-xs`.
+
+The same direct mapping now covers `background` (`hsl(var(--color-bg))`), `input` (`hsl(var(--color-border))`),
+`ring` (`hsl(var(--color-accent))`) and `card-foreground` (`hsl(var(--color-text))`). Each is the palette var that
+its `global.css` slot already held in both the light and dark blocks, so light values are identical.

@@ -97,6 +97,9 @@ const PLAYER_SESSION_PAGE_SIZE = 100;
 
 const COACH_LIST_DEFAULT_LIMIT = 20;
 const COACH_LIST_MAX_LIMIT = 50;
+/** listCoaches reads at most this many keyset pages per call while every
+ * row on them is filtered out (unpriced coaches). */
+const COACH_LIST_MAX_PAGES_PER_CALL = 5;
 
 /** CT-5 cursor codec: base64 of the JSON tuple `[created_at_iso, user_id]`,
  * the exact `(created_at desc, id desc)` key the stable order sorts by.
@@ -251,83 +254,104 @@ export function useCoaching(client: AtlitosClient) {
     async listCoaches(filters: CoachListFilters = {}): Promise<CoachListPage> {
       const limit = Math.min(Math.max(filters.limit ?? COACH_LIST_DEFAULT_LIMIT, 1), COACH_LIST_MAX_LIMIT);
 
-      let query = client
-        .from("coach_profiles_public")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .order("user_id", { ascending: false })
-        .limit(limit + 1); // one extra row: its presence is how nextCursor is decided, never returned itself.
-      if (filters.sport) query = query.eq("sport", filters.sport);
-      if (filters.cursor) {
-        const decoded = decodeCoachCursor(filters.cursor);
-        if (decoded) {
-          const { createdAt, userId } = decoded;
-          query = query.or(`created_at.lt.${createdAt},and(created_at.eq.${createdAt},user_id.lt.${userId})`);
+      // One keyset page, with unpriced coaches already dropped. A page can
+      // therefore come back empty while more pages exist.
+      const fetchPage = async (cursor: string | undefined): Promise<CoachListPage> => {
+        let query = client
+          .from("coach_profiles_public")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .order("user_id", { ascending: false })
+          .limit(limit + 1); // one extra row: its presence is how nextCursor is decided, never returned itself.
+        if (filters.sport) query = query.eq("sport", filters.sport);
+        if (cursor) {
+          const decoded = decodeCoachCursor(cursor);
+          if (decoded) {
+            const { createdAt, userId } = decoded;
+            query = query.or(`created_at.lt.${createdAt},and(created_at.eq.${createdAt},user_id.lt.${userId})`);
+          }
         }
+
+        const { data: coachRows, error: coachError } = await query.returns<CoachProfilePublicRow[]>();
+        if (coachError) throw mapPostgrestError(coachError);
+
+        const fetched = (coachRows ?? []).filter((row): row is CoachProfilePublicRow & { user_id: string } => !!row.user_id);
+        const hasNextPage = fetched.length > limit;
+        const pageRows = hasNextPage ? fetched.slice(0, limit) : fetched;
+        const nextCursor =
+          hasNextPage && pageRows.length > 0
+            ? encodeCoachCursor(pageRows[pageRows.length - 1]!.created_at, pageRows[pageRows.length - 1]!.user_id)
+            : null;
+
+        if (pageRows.length === 0) return { items: [], nextCursor };
+
+        const ids = pageRows.map((row) => row.user_id);
+
+        const [{ data: profileRows, error: profileError }, { data: typeRows, error: typeError }] = await Promise.all([
+          // Unbounded and safe: primary key `.in()`, one row per id, and `ids` is
+          // the current listCoaches page (limit + 1).
+          client.from("public_profiles").select("id, name, avatar_url").in("id", ids).returns<PublicProfileRow[]>(),
+          client
+            .from("session_types")
+            .select("id, coach_id, name, duration_minutes, price, active")
+            // NOT input-bounded: `.in()` on a non unique column returns one row
+            // per session type per coach, so this is (page of coaches) x (types
+            // each). Bounded to the page size times a generous per coach ceiling.
+            .in("coach_id", ids)
+            .eq("active", true)
+            .limit(ids.length * COACH_SESSION_TYPES_PER_COACH)
+            .returns<SessionTypeRow[]>(),
+        ]);
+        if (profileError) throw mapPostgrestError(profileError);
+        if (typeError) throw mapPostgrestError(typeError);
+
+        const profileById = new Map((profileRows ?? []).map((row) => [row.id, row]));
+        const minPriceByCoach = new Map<string, number>();
+        for (const type of typeRows ?? []) {
+          const current = minPriceByCoach.get(type.coach_id);
+          if (current === undefined || type.price < current) minPriceByCoach.set(type.coach_id, type.price);
+        }
+
+        const items = pageRows
+          .map((row) => {
+            const profile = profileById.get(row.user_id);
+            return {
+              userId: row.user_id,
+              name: profile?.name ?? "Coach",
+              avatarUrl: profile?.avatar_url ?? undefined,
+              sport: row.sport,
+              experienceYears: row.experience_years,
+              rating: row.rating,
+              ratingCount: row.rating_count,
+              city: row.city,
+              priceFrom: minPriceByCoach.get(row.user_id),
+            };
+          })
+          // Launch runbook 5.6: a coach with no active session type has nothing
+          // to book and rendered "Pricing coming soon", which reads unfinished.
+          // Browse shows bookable coaches only; the profile is still reachable.
+          .filter((item) => item.priceFrom !== undefined);
+
+        return { items, nextCursor };
+      };
+
+      // Keep reading pages until something is visible or the list ends, so a
+      // run of unpriced coaches never renders Empty with a live nextCursor
+      // (the list only calls loadMore once it has rows to scroll past).
+      // Capped per call so a long unpriced run cannot loop without bound;
+      // after the cap the caller still gets the cursor and can ask again.
+      const items: CoachListPage["items"] = [];
+      let cursor = filters.cursor;
+      let nextCursor: string | null = null;
+      for (let page = 0; page < COACH_LIST_MAX_PAGES_PER_CALL; page += 1) {
+        const result = await fetchPage(cursor);
+        items.push(...result.items);
+        nextCursor = result.nextCursor;
+        if (items.length > 0 || !nextCursor) break;
+        cursor = nextCursor;
       }
 
-      const { data: coachRows, error: coachError } = await query.returns<CoachProfilePublicRow[]>();
-      if (coachError) throw mapPostgrestError(coachError);
-
-      const fetched = (coachRows ?? []).filter((row): row is CoachProfilePublicRow & { user_id: string } => !!row.user_id);
-      const hasNextPage = fetched.length > limit;
-      const pageRows = hasNextPage ? fetched.slice(0, limit) : fetched;
-      const nextCursor =
-        hasNextPage && pageRows.length > 0
-          ? encodeCoachCursor(pageRows[pageRows.length - 1]!.created_at, pageRows[pageRows.length - 1]!.user_id)
-          : null;
-
-      if (pageRows.length === 0) return { items: [], nextCursor };
-
-      const ids = pageRows.map((row) => row.user_id);
-
-      const [{ data: profileRows, error: profileError }, { data: typeRows, error: typeError }] = await Promise.all([
-        // Unbounded and safe: primary key `.in()`, one row per id, and `ids` is
-        // the current listCoaches page (limit + 1).
-        client.from("public_profiles").select("id, name, avatar_url").in("id", ids).returns<PublicProfileRow[]>(),
-        client
-          .from("session_types")
-          .select("id, coach_id, name, duration_minutes, price, active")
-          // NOT input-bounded: `.in()` on a non unique column returns one row
-          // per session type per coach, so this is (page of coaches) x (types
-          // each). Bounded to the page size times a generous per coach ceiling.
-          .in("coach_id", ids)
-          .eq("active", true)
-          .limit(ids.length * COACH_SESSION_TYPES_PER_COACH)
-          .returns<SessionTypeRow[]>(),
-      ]);
-      if (profileError) throw mapPostgrestError(profileError);
-      if (typeError) throw mapPostgrestError(typeError);
-
-      const profileById = new Map((profileRows ?? []).map((row) => [row.id, row]));
-      const minPriceByCoach = new Map<string, number>();
-      for (const type of typeRows ?? []) {
-        const current = minPriceByCoach.get(type.coach_id);
-        if (current === undefined || type.price < current) minPriceByCoach.set(type.coach_id, type.price);
-      }
-
-      const items = pageRows
-        .map((row) => {
-          const profile = profileById.get(row.user_id);
-          return {
-            userId: row.user_id,
-            name: profile?.name ?? "Coach",
-            avatarUrl: profile?.avatar_url ?? undefined,
-            sport: row.sport,
-            experienceYears: row.experience_years,
-            rating: row.rating,
-            ratingCount: row.rating_count,
-            city: row.city,
-            priceFrom: minPriceByCoach.get(row.user_id),
-          };
-        })
-        // Launch runbook 5.6: a coach with no active session type has nothing
-        // to book and rendered "Pricing coming soon", which reads unfinished.
-        // Browse shows bookable coaches only; the profile is still reachable.
-        .filter((item) => item.priceFrom !== undefined)
-        .sort(byCityFirst(filters.city));
-
-      return { items, nextCursor };
+      return { items: items.sort(byCityFirst(filters.city)), nextCursor };
     },
 
     /** v1 `coaches.get`. Full profile: `coach_profiles_public` row, the

@@ -255,7 +255,7 @@ export default function LoginScreen() {
                 accessibilityRole="button"
                 disabled={busy}
                 hitSlop={8}
-                style={{ minHeight: 44, justifyContent: 'center' }}
+                className="min-h-11 justify-center"
                 onPress={() => void run('guest', () => continueAsGuest().then(() => undefined))}
               >
                 <Text style={[textStyle('caption'), { color: colors.textTertiary }]}>

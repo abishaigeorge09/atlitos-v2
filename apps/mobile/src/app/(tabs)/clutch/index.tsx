@@ -80,6 +80,11 @@ export default function ClutchFeedScreen() {
 
   const [containerH, setContainerH] = useState(0);
   const [activeId, setActiveId] = useState<string | null>(null);
+  // Launch runbook 5.7. One sound choice for the whole feed, like
+  // clutch/post/[id].tsx: unmuting one clip keeps sound on as the athlete
+  // swipes, instead of every card starting muted again. Autoplay starts muted.
+  const [muted, setMuted] = useState(true);
+  const toggleMute = useCallback(() => setMuted((value) => !value), []);
   const [playbackUrls, setPlaybackUrls] = useState<Record<string, string>>({});
   // Signed poster URL per card. thumb_path is a raw private-bucket path (blank
   // as an <Image> source), so the poster the card shows is the SIGNED thumb URL
@@ -430,6 +435,8 @@ export default function ClutchFeedScreen() {
                 // no error and no way forward.
                 playbackFailed={mintFailed[item.id] === true}
                 onRetryPlayback={() => retryMint(item.id)}
+                muted={muted}
+                onToggleMute={toggleMute}
                 onOpen={() => openDetail(item.id)}
                 onComment={() => openDetail(item.id)}
                 onLike={() => void handleLike(item)}
