@@ -773,4 +773,13 @@ Why: production auto confirms email and password signups, so under `0128`
 anyone who registered an unclaimed allowlisted address with a password became
 admin. `scripts/verify-admin-allowlist.mjs` checks 7 and 8 fail if that ever
 comes back. A staff member who signed up with a password first and linked
-Google later is not granted automatically; a founder grants that by hand.
+Google later is not granted automatically. Do not grant that account by hand
+without first confirming it has no `email` provider identity in
+`auth.identities`: a password account that later linked Google is exactly what
+a pre claim attacker would leave behind. The safe path is to delete the account
+and have the staff member sign up again with Google.
+
+Grants made under `0128` before `0137` was applied are not revoked by `0137`.
+The launch runbook's stage 1 audits every current admin row (email, provider,
+created at) and revokes anything that is not a known person signed in through
+Google.

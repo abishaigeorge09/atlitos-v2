@@ -35,13 +35,24 @@
 --
 -- KNOWN LIMIT. A staff member who first signed up with email and password and
 -- later links Google keeps provider "email" and is not granted automatically.
--- A founder grants that case by hand with a reviewed insert into user_roles.
+-- Do NOT simply grant that account by hand: it has exactly the shape of the
+-- pre claim attack (a stranger registers the address with a password, the real
+-- staff member's Google login then links into that account, and the stranger
+-- still knows the password). Before any manual grant, confirm the account has
+-- no identity with provider 'email' in auth.identities, or delete the account
+-- and have the staff member sign up again with Google.
 --
 -- Also fixes the comment on the function, which said "INSERT only" while the
 -- trigger fired on update too.
 --
 -- Existing admin rows are not touched. Stage 1.1 and 1.2 of the launch
--- runbook (founder, SQL editor) remove or claim the unclaimed addresses.
+-- runbook (founder, SQL editor) remove or claim the unclaimed addresses, and
+-- audit every current admin, because a grant made under 0128 before this
+-- migration survives it:
+--   select u.email, u.raw_app_meta_data->>'provider', u.created_at
+--     from public.user_roles r join auth.users u on u.id = r.user_id
+--    where r.role = 'admin';
+-- Revoke any row that is not a known person, or whose provider is not google.
 
 create or replace function public.grant_admin_if_allowlisted()
 returns trigger
