@@ -16,10 +16,5 @@
   "workspaces": [
     "apps/*",
     "packages/*"
-  ],
-  "pnpm": {
-    "patchedDependencies": {
-      "expo-modules-jsi@57.0.3": "patches/expo-modules-jsi@57.0.3.patch"
-    }
-  }
+  ]
 }
