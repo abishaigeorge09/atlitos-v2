@@ -215,6 +215,13 @@ const messages = [
   [coach, 'Bring your own gloves, pads are provided.'],
 ];
 out.messages = [];
+// 0138: a chat message is refused until its sender has agreed to the content
+// rules. The seeded senders agree first through the same RPC the app's rules
+// sheet calls (first acceptance wins, so a re-run is a no op).
+for (const sender of new Set(messages.map(([s]) => s))) {
+  const terms = await rest(sender.token, 'POST', 'rpc/accept_content_terms', {});
+  if (terms.status >= 300) throw new Error(`accept_content_terms failed for ${sender.email}: ${JSON.stringify(terms.json)}`);
+}
 for (const [sender, text] of messages) {
   const sent = await rest(sender.token, 'POST', 'chat_messages', {
     thread_id: threadId,

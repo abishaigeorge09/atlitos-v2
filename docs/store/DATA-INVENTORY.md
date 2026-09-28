@@ -68,12 +68,15 @@ permission and the declaration must cover precise location. This is a code chang
 
 | Permission | Declared string | Evidence | What it is for |
 |---|---|---|---|
-| Photo library | "Atlitos uses your photo library to upload clutch clips and profile photos." | `apps/mobile/app.json:56` | Clip upload, avatar, coach certificates |
-| Camera | "Atlitos uses your camera to capture clutch clips and profile photos." | `apps/mobile/app.json:57` | Clip capture, avatar |
-| Microphone | "Atlitos needs microphone access so uploaded video clips keep their sound." | `apps/mobile/app.json:58` | Audio track of an uploaded clip |
+| Photo library | "Atlitos needs your photo library so you can pick a video for Clutch, set a profile picture, and attach your coaching certificates." | `apps/mobile/app.json:231` | Clip upload, avatar, coach certificates |
+| Camera | "Atlitos does not open your camera. ..." (never requested) | `apps/mobile/app.json:232` | Nothing. Declared only because `expo-image-picker` links AVCaptureDevice |
+| Microphone | "Atlitos does not record audio. ..." (never requested) | `apps/mobile/app.json:233` | Nothing. Declared for the same reason; a picked clip keeps its own audio track |
+| Motion | "Atlitos does not use motion or fitness data. ..." (never requested) | `apps/mobile/app.json:225` | Nothing. Declared because `expo-location` links CoreMotion |
 
-Provided by `expo-image-picker` (`apps/mobile/package.json:35`). There is no standalone audio
-recorder in the app.
+Provided by `expo-image-picker` and `expo-location`. The camera, microphone and motion strings
+must stay: `@expo/config-plugins` deletes an Info.plist key whose value is `false`, and App Store
+Connect rejects a binary that links those APIs without a purpose string (ITMS-90683). There is
+no standalone audio recorder in the app.
 
 Uploaded media that leaves the device:
 - Clip video and thumbnail, into a private `clips` bucket. `supabase/migrations/0041_clutch_schema.sql:62-82` (`storage_path`, `thumb_path`, `caption`).

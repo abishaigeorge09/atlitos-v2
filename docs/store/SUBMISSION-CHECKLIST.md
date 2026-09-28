@@ -259,6 +259,9 @@ item names its home so the right builder picks it up.
 | B12 | Produce the 1024x500 Play feature graphic and the 1024x1024 iOS icon export | design assets | Store requirement |
 | B13 | Seed the reviewer account with booking, session, order and clip history once the founder has created it | `scripts/**` | 6 |
 | B14 | Run a real end to end paid booking on a release build against the live Razorpay key and record the evidence | verification | 2 |
+| B15 | Apply `0138_content_terms_and_chat_filter.sql` in the same window the 1.0.0 build reaches TestFlight and the App Store, not before. Older binaries cannot agree to the content rules, so their posts are refused; only internal testers run one and they lose posting until they update | `supabase/migrations/**` | 7 |
+| B16 | Set `APPLE_TEAM_ID`, `APPLE_SIGNIN_KEY_ID`, `APPLE_SIGNIN_PRIVATE_KEY`, apply `0139`, deploy `apple-token-store` and `delete-account` (see `supabase/functions/README.md`). Without the secrets, deletion still works but cannot revoke the Apple link | `supabase/**` | 1 |
+| B17 | Keep the camera, microphone and motion purpose strings in `apps/mobile/app.json`. Setting them to `false` deletes the Info.plist keys and the upload fails ITMS-90683 | `apps/mobile/app.json` | Upload |
 
 ---
 

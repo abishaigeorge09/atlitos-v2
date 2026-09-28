@@ -19,7 +19,24 @@
 -- Existing accounts are NOT backfilled. The zero tolerance terms are new, so
 -- everyone agrees once before their next post. Test and seed scripts that
 -- insert content for fixture users must call accept_content_terms() as that
--- user, or set the column with the service role, first.
+-- user, or set the column with the service role, first (the e2e chat and
+-- clutch specs, seed_p5_clutch_fixtures.sql and verify-security-fixes.sql do).
+--
+-- DEPLOY ORDER. Apply this migration in the same window the 1.0.0 build that
+-- ships the content rules sheet reaches TestFlight and the App Store, not
+-- before. A binary built before this change has no sheet and cannot call
+-- accept_content_terms(), so every clip, comment and chat message it sends is
+-- refused with CONTENT_TERMS_REQUIRED. The only people on such a binary are
+-- internal TestFlight testers; they lose posting until they update, which is
+-- accepted. Do not backfill to soften this: agreement must be a real act by
+-- the person (Guideline 1.2).
+--
+-- Chat messages from someone who is not in the thread skip the checks here
+-- and are refused by RLS, so a non member never learns whether a text would
+-- have tripped the word filter (see enforce_content_rules).
+--
+-- Idempotent: every statement is create or replace, if not exists, drop and
+-- recreate, or on conflict do nothing, so it applies twice cleanly.
 --
 -- Errors are raised with the ApiErrorCode prefix convention
 -- (packages/api/src/errors.ts): CONTENT_TERMS_REQUIRED and CONTENT_BLOCKED.
@@ -108,19 +125,35 @@ create policy content_blocked_terms_active_delete on public.content_blocked_term
 -- ordinary sport talk ("killer shot", "we got smashed").
 insert into public.content_blocked_terms (term, note) values
   ('fuck', 'starter list 0138'),
+  ('fucks', 'starter list 0138'),
+  ('fucked', 'starter list 0138'),
+  ('fucker', 'starter list 0138'),
+  ('fuckers', 'starter list 0138'),
   ('fucking', 'starter list 0138'),
   ('motherfucker', 'starter list 0138'),
+  ('motherfuckers', 'starter list 0138'),
   ('cunt', 'starter list 0138'),
+  ('cunts', 'starter list 0138'),
   ('bitch', 'starter list 0138'),
+  ('bitches', 'starter list 0138'),
   ('whore', 'starter list 0138'),
+  ('whores', 'starter list 0138'),
   ('slut', 'starter list 0138'),
+  ('sluts', 'starter list 0138'),
   ('faggot', 'starter list 0138'),
+  ('faggots', 'starter list 0138'),
   ('nigger', 'starter list 0138'),
+  ('niggers', 'starter list 0138'),
   ('retard', 'starter list 0138'),
+  ('retards', 'starter list 0138'),
+  ('retarded', 'starter list 0138'),
   ('kill yourself', 'starter list 0138'),
   ('kys', 'starter list 0138')
 on conflict (term) do nothing;
 
+-- One regex per call, built from the whole list: \m(term1|term2|...)\M with
+-- every term's regex metacharacters escaped, so a row is scanned once rather
+-- than once per term. Word boundaries keep "scunthorpe" and "classic" clean.
 create or replace function public.contains_blocked_term(p_text text)
 returns boolean
 language sql
@@ -128,12 +161,12 @@ stable
 security definer
 set search_path = public
 as $$
-  select exists (
-    select 1
-    from public.content_blocked_terms t
-    where lower(coalesce(p_text, '')) ~ (
-      '\m' || regexp_replace(t.term, '([.^$*+?()\[\]{}|\\])', '\\\1', 'g') || '\M'
-    )
+  select coalesce(
+    lower(coalesce(p_text, '')) ~ (
+      select '\m(' || string_agg(regexp_replace(t.term, '([.^$*+?()\[\]{}|\\])', '\\\1', 'g'), '|') || ')\M'
+      from public.content_blocked_terms t
+    ),
+    false
   );
 $$;
 
@@ -152,8 +185,29 @@ as $$
 declare
   v_author uuid := (to_jsonb(new) ->> tg_argv[0])::uuid;
   v_text text := to_jsonb(new) ->> tg_argv[1];
+  v_caller uuid := auth.uid();
   v_accepted timestamptz;
 begin
+  -- A BEFORE trigger runs ahead of the RLS WITH CHECK. For a client insert
+  -- into a chat thread the caller is not in (or as someone else), skip the
+  -- checks and let RLS refuse it, so a non member cannot probe the word
+  -- filter. Service role and migration writes (no auth.uid()) are always
+  -- checked.
+  if tg_table_name = 'chat_messages' and v_caller is not null then
+    if v_caller is distinct from v_author or not exists (
+      select 1
+        from public.chat_threads t
+       where t.id = new.thread_id
+         and (
+           t.participant_a = v_caller
+           or t.participant_b = v_caller
+           or public.is_chat_thread_member(t.id, v_caller)
+         )
+    ) then
+      return new;
+    end if;
+  end if;
+
   select u.content_terms_accepted_at into v_accepted
     from public.users u
    where u.id = v_author;
@@ -163,7 +217,7 @@ begin
   end if;
 
   if public.contains_blocked_term(v_text) then
-    raise exception 'CONTENT_BLOCKED: This breaks our content policy. Please change it and try again.';
+    raise exception 'CONTENT_BLOCKED: This breaks our content policy. Change it and try again.';
   end if;
 
   return new;

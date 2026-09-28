@@ -1770,8 +1770,10 @@ once before their next post. The mobile app reads it as `MeRow.contentTermsAccep
 | `note` | text | why it was added |
 | `added_at` | timestamptz | default now() |
 
-Matched case insensitively on word boundaries by `contains_blocked_term(text)`. Seeded with a
-short English starter list; the moderation owner extends it.
+Matched case insensitively on word boundaries by `contains_blocked_term(text)`, which builds one
+combined regex from the whole list (`\m(t1|t2|...)\M`, terms escaped) so a row is scanned once.
+Seeded with a short English starter list including common inflections (fucked, fucker, bitches,
+retarded and so on); the moderation owner extends it.
 
 ### `enforce_content_rules()` triggers (0138)
 
@@ -1780,7 +1782,17 @@ BEFORE INSERT on `clip_comments` (user_id, text), `chat_messages` (sender_id, te
 `CONTENT_TERMS_REQUIRED` when the author has not agreed, and `CONTENT_BLOCKED` when the text
 contains a listed term. A trigger rather than an RLS clause because clips are inserted by
 `stream-upload-url` under the service role. Fixtures in seed and verify scripts must accept the
-terms for their users before inserting content.
+terms for their users before inserting content (the e2e helper `acceptContentTerms`, or
+`content_terms_accepted_at = now()` in SQL fixtures).
+
+On `chat_messages` only, a client insert (auth.uid() set) whose caller is not the sender or not in
+the thread skips both checks and returns the row unchanged, so the RLS WITH CHECK refuses it and a
+non member never learns whether the text would have hit the word filter. Service role and
+migration inserts are always checked.
+
+Deploy order: 0138 goes live in the same window as the 1.0.0 build that ships the content rules
+sheet. An older binary cannot agree, so its posts are refused; only internal TestFlight testers
+run one, and they lose posting until they update.
 
 ### `apple_sign_in_tokens` (0139)
 

@@ -328,66 +328,66 @@ export function ClutchCommentsSheet({
                 </Pressable>
               ) : (
                 <View>
-                {sendError ? (
-                  <Text
-                    accessibilityLiveRegion="polite"
-                    style={[
-                      textStyle('caption'),
-                      { color: colors.danger, paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
-                    ]}
-                  >
-                    {sendError}
-                  </Text>
-                ) : null}
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    gap: spacing.sm,
-                    padding: spacing.lg,
-                    // BUG-008: extend through the bottom safe area so the
-                    // composer clears the home indicator instead of sitting
-                    // under it. Same fix as GroupMembersSheet.
-                    paddingBottom: spacing.lg + insets.bottom,
-                    borderTopWidth: 1,
-                    borderTopColor: colors.border,
-                  }}
-                >
-                  <TextInput
-                    value={draft}
-                    onChangeText={onDraftChange}
-                    placeholder="Add a comment"
-                    placeholderTextColor={colors.textTertiary}
-                    editable={!sending}
-                    style={[
-                      textStyle('body'),
-                      {
-                        flex: 1,
-                        color: colors.text,
-                        backgroundColor: colors.surfaceMuted,
-                        borderRadius: radii.sm,
-                        paddingHorizontal: spacing.md,
-                        height: 44,
-                      },
-                    ]}
-                  />
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Send comment"
-                    disabled={sending || !draft.trim()}
-                    onPress={onSend}
+                  {sendError ? (
+                    <Text
+                      accessibilityLiveRegion="polite"
+                      style={[
+                        textStyle('caption'),
+                        { color: colors.danger, paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
+                      ]}
+                    >
+                      {sendError}
+                    </Text>
+                  ) : null}
+                  <View
                     style={{
-                      height: 44,
-                      width: 44,
-                      borderRadius: radii.sm,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: colors.accent,
-                      opacity: sending || !draft.trim() ? 0.5 : 1,
+                      flexDirection: 'row',
+                      gap: spacing.sm,
+                      padding: spacing.lg,
+                      // BUG-008: extend through the bottom safe area so the
+                      // composer clears the home indicator instead of sitting
+                      // under it. Same fix as GroupMembersSheet.
+                      paddingBottom: spacing.lg + insets.bottom,
+                      borderTopWidth: 1,
+                      borderTopColor: colors.border,
                     }}
                   >
-                    <Send size={20} color={colors.inkOnAccent} strokeWidth={1.75} />
-                  </Pressable>
-                </View>
+                    <TextInput
+                      value={draft}
+                      onChangeText={onDraftChange}
+                      placeholder="Add a comment"
+                      placeholderTextColor={colors.textTertiary}
+                      editable={!sending}
+                      style={[
+                        textStyle('body'),
+                        {
+                          flex: 1,
+                          color: colors.text,
+                          backgroundColor: colors.surfaceMuted,
+                          borderRadius: radii.sm,
+                          paddingHorizontal: spacing.md,
+                          height: 44,
+                        },
+                      ]}
+                    />
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Send comment"
+                      disabled={sending || !draft.trim()}
+                      onPress={onSend}
+                      style={{
+                        height: 44,
+                        width: 44,
+                        borderRadius: radii.sm,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: colors.accent,
+                        opacity: sending || !draft.trim() ? 0.5 : 1,
+                      }}
+                    >
+                      <Send size={20} color={colors.inkOnAccent} strokeWidth={1.75} />
+                    </Pressable>
+                  </View>
                 </View>
               )}
             </View>

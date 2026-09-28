@@ -99,3 +99,21 @@ export async function signInAs(email, password = DEMO_PASSWORD) {
 }
 
 signInAs.reset = () => sessionCache.clear();
+
+/**
+ * 0138: every clip, clip comment and chat message insert is refused with
+ * CONTENT_TERMS_REQUIRED until its author has agreed to the content rules.
+ * Fixture personas agree through the same RPC the app's content rules sheet
+ * calls (accept_content_terms, first acceptance wins, so calling it again is
+ * a no op). Call it for every persona a spec posts as, and for any persona
+ * whose insert a spec expects RLS to refuse, so the refusal it asserts is the
+ * RLS one and not this gate.
+ */
+export async function acceptContentTerms(...sessions) {
+  for (const session of sessions) {
+    const { error } = await session.client.rpc("accept_content_terms");
+    if (error) {
+      throw new Error(`[e2e/support/rls] accept_content_terms failed for ${session.email}: ${error.message}`);
+    }
+  }
+}

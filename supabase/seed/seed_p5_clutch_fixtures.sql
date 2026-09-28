@@ -112,6 +112,13 @@ begin
   update public.users set handle = 'ananya_engager_3', city = 'Chennai', state = 'Tamil Nadu' where id = engager_3 and handle is null;
   update public.users set handle = 'karthik_engager_4', city = 'Pune', state = 'Maharashtra' where id = engager_4 and handle is null;
 
+  -- 0138: clips and clip_comments refuse an author who has not agreed to the
+  -- content rules (BEFORE INSERT trigger, even for this privileged seed).
+  -- Fixture authors agree here; an existing first acceptance is kept.
+  update public.users set content_terms_accepted_at = now()
+   where id in (creator_1, creator_2, creator_3, engager_1, engager_2, engager_3, engager_4)
+     and content_terms_accepted_at is null;
+
   -- ========================================================================
   -- PUBLISHED CLIPS (in feed, with engagement and one for reports queue)
   -- ========================================================================

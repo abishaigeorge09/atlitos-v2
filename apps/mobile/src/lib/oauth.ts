@@ -29,6 +29,7 @@ import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
 
+import { Sentry } from './sentry';
 import { supabase } from './supabase';
 
 /**
@@ -97,28 +98,49 @@ export async function signInWithApple(): Promise<OAuthOutcome> {
   if (error) throw authError(error.message, 'INVALID_CREDENTIALS');
 
   // Both follow ups are best effort: the person is signed in either way.
-  await Promise.allSettled([
-    saveAppleFullName(credential.fullName),
-    storeAppleAuthorizationCode(credential.authorizationCode),
-  ]);
+  // The name is awaited (it is a local write the next screen reads); the
+  // token exchange is a round trip to Apple through an edge function, so it
+  // is fired and forgotten, and a failure only reaches Sentry.
+  await saveAppleFullName(credential.fullName).catch((err: unknown) => captureQuietly(err, 'apple_full_name'));
+  void storeAppleAuthorizationCode(credential.authorizationCode).catch((err: unknown) =>
+    captureQuietly(err, 'apple_token_store'),
+  );
 
   return 'signed-in';
+}
+
+/** Reports a best effort sign in follow up that failed, with no payload
+ * beyond the step name (never the code or a token). */
+function captureQuietly(err: unknown, step: string) {
+  Sentry.captureException(err, { tags: { step } });
 }
 
 /**
  * Apple sends the person's name only on the FIRST authorization, never
  * again, and the identity token does not carry it. Without this the profile
  * name falls back to the local part of a private relay address. Written only
- * when Apple actually sent a name.
+ * when Apple actually sent a name AND the profile still holds a fallback the
+ * signup trigger made up (empty, the email's local part, or 'Guest'; see
+ * handle_new_user in 0073). A name the person chose is never overwritten.
  */
 async function saveAppleFullName(fullName: AppleAuthentication.AppleAuthenticationFullName | null) {
   const name = [fullName?.givenName, fullName?.familyName].filter(Boolean).join(' ').trim();
   if (!name) return;
   const { data } = await supabase.auth.getUser();
-  const userId = data.user?.id;
-  if (!userId) return;
+  const user = data.user;
+  if (!user) return;
+
+  const { data: row, error } = await supabase.from('users').select('name').eq('id', user.id).maybeSingle();
+  if (error) throw error;
+  const current = (row?.name ?? '').trim();
+  const localPart = (user.email ?? '').split('@')[0]?.trim() ?? '';
+  const isFallback =
+    current === '' || current === 'Guest' || (localPart !== '' && current.toLowerCase() === localPart.toLowerCase());
+  if (!isFallback) return;
+
   await supabase.auth.updateUser({ data: { name, full_name: name } });
-  await supabase.from('users').update({ name }).eq('id', userId);
+  const { error: updateError } = await supabase.from('users').update({ name }).eq('id', user.id);
+  if (updateError) throw updateError;
 }
 
 /**
@@ -128,7 +150,8 @@ async function saveAppleFullName(fullName: AppleAuthentication.AppleAuthenticati
  */
 async function storeAppleAuthorizationCode(code: string | null) {
   if (!code) return;
-  await supabase.functions.invoke('apple-token-store', { body: { authorization_code: code } });
+  const { error } = await supabase.functions.invoke('apple-token-store', { body: { authorization_code: code } });
+  if (error) throw error;
 }
 
 export async function signInWithGoogle(): Promise<OAuthOutcome> {

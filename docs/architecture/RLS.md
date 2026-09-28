@@ -699,6 +699,17 @@ separate, separately audited `admin_suspend_user`).
   under the service role, so it refuses guests itself (`GUEST_FORBIDDEN`).
 - The content rules and word filter are BEFORE INSERT triggers (`enforce_content_rules`), not
   policies, so they hold on the service role path too. See SCHEMA.md.
+- Trigger ordering: a BEFORE trigger runs ahead of the RLS WITH CHECK, so on its own it would
+  tell a non member of a chat thread `CONTENT_BLOCKED` or `CONTENT_TERMS_REQUIRED` before RLS
+  refused them, which leaks whether a text trips the word filter. For `chat_messages` the trigger
+  therefore returns the row untouched when the caller (auth.uid()) is not the sender or is not a
+  participant or seated member (`is_chat_thread_member`) of the thread, and RLS refuses it with
+  42501. Clip comments keep the plain order: a comment on a clip the caller cannot see is refused
+  by RLS too, but the filter verdict can surface first; accepted, since the only thing learned is
+  whether a word is on the list, and that is equally learnable by commenting on one's own clip.
+- Isolation tests for chat inserts (e2e CH-06, `verify-rls-matrix.mjs`) agree to the content rules
+  as the outsider first and assert the refusal is 42501, so the gate cannot make them pass
+  vacuously.
 
 ## Account deletion (migration `0098`)
 

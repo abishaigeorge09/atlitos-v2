@@ -48,8 +48,25 @@ export function ensureContentTerms(): Promise<boolean> {
   return useContentTermsStore.getState().open();
 }
 
+/** Opens the sheet even when the cached profile says the person already
+ * agreed. Used after the server refused a post with CONTENT_TERMS_REQUIRED,
+ * which means the cached profile is stale (another device, or a profile read
+ * from before 0138 landed). Agreeing again is harmless: the server keeps the
+ * first acceptance time. */
+export function reconfirmContentTerms(): Promise<boolean> {
+  return useContentTermsStore.getState().open();
+}
+
 /** True for the ApiError the server raises when the gate was skipped (a stale
  * profile, or a second device). Callers reopen the sheet on it. */
 export function isContentTermsRequired(error: unknown): boolean {
   return (error as { code?: string } | null)?.code === 'CONTENT_TERMS_REQUIRED';
 }
+
+/** True for the word filter refusal (0138 CONTENT_BLOCKED). */
+export function isContentBlocked(error: unknown): boolean {
+  return (error as { code?: string } | null)?.code === 'CONTENT_BLOCKED';
+}
+
+/** The one line shown under a composer when the word filter refuses a post. */
+export const CONTENT_BLOCKED_MESSAGE = 'This breaks our content policy. Change it and try again.';

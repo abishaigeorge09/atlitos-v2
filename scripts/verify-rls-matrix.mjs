@@ -189,7 +189,7 @@ async function scanOwnOnly(label, token, path, ownCheckFn) {
   return { status: res.status, count: rows.length, rows };
 }
 
-async function assertInsertRefused(label, token, path, body) {
+async function assertInsertRefused(label, token, path, body, expectCode = null) {
   const res = await rest(token, 'POST', path, body, { Prefer: 'return=representation' });
   rowsAsserted++;
   // A 5xx is NOT a clean policy refusal — it means the write was rejected
@@ -203,7 +203,15 @@ async function assertInsertRefused(label, token, path, body) {
   }
   const refused = res.status >= 400;
   if (!refused) leaksFound.push(`${label}: INSERT was NOT refused (status ${res.status}) -> ${JSON.stringify(res.json).slice(0, 200)}`);
-  return { status: res.status, refused };
+  // When the caller names the refusal it expects (e.g. 42501, the RLS WITH
+  // CHECK), a refusal for any other reason (a bad column, a trigger) is a
+  // vacuous pass and is reported as a finding (CLAUDE.md scoping rule).
+  const code = res.json && typeof res.json === 'object' ? res.json.code ?? null : null;
+  if (refused && expectCode && code !== expectCode) {
+    leaksFound.push(`${label}: refused for the WRONG reason (expected ${expectCode}, got ${code}) -> ${JSON.stringify(res.json).slice(0, 200)}`);
+    return { status: res.status, refused, code, wrong_reason: true };
+  }
+  return { status: res.status, refused, code };
 }
 
 /** PATCH/DELETE refusal, checked WITHOUT trusting a 200/204 status alone
@@ -437,7 +445,13 @@ if (!groupId) {
     out.group_chat.nonmember_thread = await scanExpectZero('chat_threads as NON-member (coach2)', coach2.token, `chat_threads?select=id&id=eq.${threadId}`);
     out.group_chat.nonmember_messages = await scanExpectZero('chat_messages as NON-member (coach2)', coach2.token, `chat_messages?select=id&thread_id=eq.${threadId}`);
 
-    out.group_chat.nonmember_insert_refused = await assertInsertRefused('chat_messages insert by NON-member (coach2)', coach2.token, 'chat_messages', { thread_id: threadId, sender_id: coach2.uid, body: 'rls matrix probe, should be refused' });
+    // coach2 agrees to the content rules first (0138), so the only thing left
+    // to refuse this insert is RLS membership; the probe then requires 42501.
+    // The column is `text` (0022): a wrong column name would be refused as
+    // PGRST204 and pass for the wrong reason.
+    const terms = await rest(coach2.token, 'POST', 'rpc/accept_content_terms', {});
+    if (terms.status >= 300) leaksFound.push(`group chat: accept_content_terms for coach2 failed (status ${terms.status})`);
+    out.group_chat.nonmember_insert_refused = await assertInsertRefused('chat_messages insert by NON-member (coach2)', coach2.token, 'chat_messages', { thread_id: threadId, sender_id: coach2.uid, text: 'rls matrix probe, should be refused' }, '42501');
     out.group_chat.nonmember_seat_self_refused = await assertInsertRefused('chat_thread_members self-seat by NON-member (coach2)', coach2.token, 'chat_thread_members', { thread_id: threadId, user_id: coach2.uid });
   }
 }

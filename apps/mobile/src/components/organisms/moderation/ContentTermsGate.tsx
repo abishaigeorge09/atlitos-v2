@@ -27,8 +27,14 @@ export function ContentTermsGate() {
       await profileApi.acceptContentTerms();
       await refreshMe();
       settle(true);
-    } catch {
-      setError('Could not save that. Check your connection and try again.');
+    } catch (err) {
+      // A guest session cannot agree (accept_content_terms raises
+      // GUEST_FORBIDDEN); telling them to check their connection would send
+      // them in circles.
+      const code = (err as { code?: string } | null)?.code;
+      setError(
+        code === 'GUEST_FORBIDDEN' ? 'Sign in to post.' : 'Could not save that. Check your connection and try again.',
+      );
     } finally {
       setSaving(false);
     }

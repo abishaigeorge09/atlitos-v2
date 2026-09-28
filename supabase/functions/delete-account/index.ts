@@ -35,7 +35,7 @@ import { handleCorsPreflight } from "../_shared/cors.ts";
 import { jsonResponse, withErrorHandling } from "../_shared/http.ts";
 import { AppError, appErrorFromPostgrestMessage } from "../_shared/app-error.ts";
 import { serviceRoleClient, userScopedClient } from "../_shared/supabase.ts";
-import { revokeAppleRefreshToken } from "../_shared/apple.ts";
+import { AppleRequestError, appleConfigured, revokeAppleRefreshToken } from "../_shared/apple.ts";
 
 // GoTrue has no "forever". 87600h is 10 years, the same literal
 // admin-user-suspend uses for a suspension ban.
@@ -190,18 +190,33 @@ Deno.serve((req) =>
 
     // Leg (c): Sign in with Apple revocation (Guideline 5.1.1(v), 0139). After
     // this, Settings, Apple ID, Sign in with Apple on the person's devices no
-    // longer lists Atlitos. A failure is reported, never fatal: the account is
+    // longer lists Atlitos. A 400 invalid_grant means the token was already
+    // dead (removed by the person, or expired), which counts as done, so the
+    // row goes either way. Any other failure is logged (status and Apple's
+    // short error code only, never the token) and never fatal: the account is
     // already deleted, and the row is kept so the revoke can be retried.
     let appleRevoked: boolean | null = null;
     let appleError: string | null = null;
     if (appleToken?.refresh_token) {
       try {
+        if (!appleConfigured()) {
+          throw new Error("APPLE_NOT_CONFIGURED");
+        }
         await revokeAppleRefreshToken(appleToken.refresh_token);
         appleRevoked = true;
-        await admin.from("apple_sign_in_tokens").delete().eq("user_id", userId);
+        const { error: tokenDeleteError } = await admin.from("apple_sign_in_tokens").delete().eq("user_id", userId);
+        if (tokenDeleteError) {
+          console.error(`delete-account: Apple token row not removed for ${userId}: ${tokenDeleteError.code ?? "error"}`);
+        }
       } catch (err) {
         appleRevoked = false;
-        appleError = err instanceof Error ? err.message : String(err);
+        appleError =
+          err instanceof AppleRequestError
+            ? `APPLE_REVOKE_FAILED ${err.status}${err.appleError ? ` ${err.appleError}` : ""}`
+            : err instanceof Error && err.message === "APPLE_NOT_CONFIGURED"
+              ? "APPLE_NOT_CONFIGURED"
+              : "APPLE_REVOKE_FAILED";
+        console.error(`delete-account: Apple revoke did not complete for ${userId}: ${appleError}`);
       }
     }
 

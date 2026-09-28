@@ -9,7 +9,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { expect, test } from "../fixtures";
-import { anonKey, EMAIL, signInAs } from "./support/rls.mjs";
+import { acceptContentTerms, anonKey, EMAIL, signInAs } from "./support/rls.mjs";
 import { serviceClient } from "../helpers/sql.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -129,6 +129,9 @@ test.describe("CH — chat + realtime messaging", () => {
     await seed.resetCoachingFixtures();
     const player = await signInAs(EMAIL.player);
     const coach1 = await signInAs(EMAIL.coach1);
+    // 0138: player sends through the UI, which would otherwise open the
+    // one time content rules sheet instead of sending.
+    await acceptContentTerms(player, coach1);
     const threadId = await ensureCoachingThread(player, coach1);
 
     const playerContext = await browser.newContext({ storageState: join(STATE_DIR, "player.json") });
@@ -179,6 +182,9 @@ test.describe("CH — chat + realtime messaging", () => {
     const coach1 = await signInAs(EMAIL.coach1);
     const player = await signInAs(EMAIL.player);
     const partner = await signInAs(EMAIL.partner);
+    // 0138: coach1 posts below; without agreement the insert is refused with
+    // CONTENT_TERMS_REQUIRED before Realtime is ever exercised.
+    await acceptContentTerms(coach1, player, partner);
 
     // No service role needed: coach1 owns the group (training_groups_select_coach)
     // and is a seated member of its chat thread (chat_threads_select_group_member,
@@ -275,13 +281,31 @@ test.describe("CH — chat + realtime messaging", () => {
     const player = await signInAs(EMAIL.player);
     const coach1 = await signInAs(EMAIL.coach1);
     const coach2 = await signInAs(EMAIL.coach2);
+    // coach2 HAS agreed to the content rules (0138), so the content gate
+    // cannot be what refuses the insert below; only RLS membership can.
+    await acceptContentTerms(coach2);
     const threadId = await ensureCoachingThread(player, coach1);
+
+    // Isolation precondition (CLAUDE.md): the outsider really is a third
+    // party, not one of the two participants, and cannot see the thread.
+    expect(new Set([player.userId, coach1.userId, coach2.userId]).size, "three distinct personas").toBe(3);
+    const { data: visible, error: visibleError } = await coach2.client
+      .from("chat_threads")
+      .select("id")
+      .eq("id", threadId);
+    if (visibleError) throw visibleError;
+    expect(visible ?? [], "coach2 must not be a participant of the thread").toEqual([]);
 
     const { data, error } = await coach2.client
       .from("chat_messages")
       .insert({ thread_id: threadId, sender_id: coach2.userId, text: "e2e CH-06 should be rejected" })
       .select("id");
     expect(error, "insert into a thread coach2 does not belong to must be rejected server side").toBeTruthy();
+    // The refusal is the RLS WITH CHECK (42501), not the 0138 content gate
+    // and not some unrelated failure that would make this pass vacuously.
+    expect(error?.code, `expected an RLS refusal, got: ${error?.message}`).toBe("42501");
+    expect(error?.message ?? "").toMatch(/row-level security/i);
+    expect(error?.message ?? "").not.toMatch(/CONTENT_TERMS_REQUIRED|CONTENT_BLOCKED/);
     expect(data ?? null).toBeNull();
   });
 
@@ -292,6 +316,8 @@ test.describe("CH — chat + realtime messaging", () => {
       await seed.resetCoachingFixtures();
       const player = await signInAs(EMAIL.player);
       const coach1 = await signInAs(EMAIL.coach1);
+      // 0138: the UI send would otherwise open the content rules sheet.
+      await acceptContentTerms(player);
       const threadId = await ensureCoachingThread(player, coach1);
 
       await page.goto(`/chat/${threadId}`);
