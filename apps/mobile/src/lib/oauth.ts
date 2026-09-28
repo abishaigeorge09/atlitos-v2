@@ -96,7 +96,39 @@ export async function signInWithApple(): Promise<OAuthOutcome> {
   });
   if (error) throw authError(error.message, 'INVALID_CREDENTIALS');
 
+  // Both follow ups are best effort: the person is signed in either way.
+  await Promise.allSettled([
+    saveAppleFullName(credential.fullName),
+    storeAppleAuthorizationCode(credential.authorizationCode),
+  ]);
+
   return 'signed-in';
+}
+
+/**
+ * Apple sends the person's name only on the FIRST authorization, never
+ * again, and the identity token does not carry it. Without this the profile
+ * name falls back to the local part of a private relay address. Written only
+ * when Apple actually sent a name.
+ */
+async function saveAppleFullName(fullName: AppleAuthentication.AppleAuthenticationFullName | null) {
+  const name = [fullName?.givenName, fullName?.familyName].filter(Boolean).join(' ').trim();
+  if (!name) return;
+  const { data } = await supabase.auth.getUser();
+  const userId = data.user?.id;
+  if (!userId) return;
+  await supabase.auth.updateUser({ data: { name, full_name: name } });
+  await supabase.from('users').update({ name }).eq('id', userId);
+}
+
+/**
+ * 0139, Guideline 5.1.1(v). The one time authorization code is exchanged
+ * server side for a refresh token, so account deletion can revoke it and the
+ * app disappears from the person's Sign in with Apple list.
+ */
+async function storeAppleAuthorizationCode(code: string | null) {
+  if (!code) return;
+  await supabase.functions.invoke('apple-token-store', { body: { authorization_code: code } });
 }
 
 export async function signInWithGoogle(): Promise<OAuthOutcome> {

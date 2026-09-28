@@ -9,6 +9,9 @@ export type ApiErrorCode =
   // common, v1-inherited
   | 'UNAUTHENTICATED'
   | 'GUEST_FORBIDDEN'
+  // 0138: posting before agreeing to the content rules, and the word filter.
+  | 'CONTENT_TERMS_REQUIRED'
+  | 'CONTENT_BLOCKED'
   | 'VALIDATION'
   | 'NOT_FOUND'
   // role/ownership check failed on an RPC or edge function (e.g.

@@ -1752,3 +1752,43 @@ already discloses.
    `coach-certificates/<uid>` are removed, recursively (avatars nests cover
    photos under `<uid>/cover/`), along with the
    `clips/coach-videos/<coach>/<player>/` paths collected before the RPC runs.
+
+## iOS launch compliance (0138, 0139)
+
+### `users.content_terms_accepted_at` (0138)
+
+`timestamptz`, null until the person agrees to the content rules (zero tolerance for
+objectionable content or abusive users). Set by `accept_content_terms()` (security definer,
+authenticated, refuses guests, first acceptance wins). Not backfilled: existing accounts agree
+once before their next post. The mobile app reads it as `MeRow.contentTermsAcceptedAt`.
+
+### `content_blocked_terms` (0138)
+
+| column | type | notes |
+|---|---|---|
+| `term` | text PK | lowercase, non blank |
+| `note` | text | why it was added |
+| `added_at` | timestamptz | default now() |
+
+Matched case insensitively on word boundaries by `contains_blocked_term(text)`. Seeded with a
+short English starter list; the moderation owner extends it.
+
+### `enforce_content_rules()` triggers (0138)
+
+BEFORE INSERT on `clip_comments` (user_id, text), `chat_messages` (sender_id, text) and `clips`
+(owner_id, caption), plus BEFORE UPDATE OF caption on `clips`. Raises
+`CONTENT_TERMS_REQUIRED` when the author has not agreed, and `CONTENT_BLOCKED` when the text
+contains a listed term. A trigger rather than an RLS clause because clips are inserted by
+`stream-upload-url` under the service role. Fixtures in seed and verify scripts must accept the
+terms for their users before inserting content.
+
+### `apple_sign_in_tokens` (0139)
+
+| column | type | notes |
+|---|---|---|
+| `user_id` | uuid PK, FK `auth.users` on delete cascade | |
+| `refresh_token` | text | Apple refresh token from the authorization code exchange |
+| `created_at`, `updated_at` | timestamptz | |
+
+Written by the `apple-token-store` edge function, read and deleted by `delete-account`, which
+revokes the token at Apple (Guideline 5.1.1(v)). Service role only.

@@ -49,6 +49,9 @@ export interface ClutchCommentsSheetProps {
    * bare black rectangle. */
   loadError: string | null;
   requiresAuthGate: boolean;
+  /** Why the last send was refused (0138: the word filter), shown above the
+   * composer so the draft and the reason stay together. */
+  sendError?: string | null;
   draft: string;
   sending: boolean;
   deletingId: string | null;
@@ -135,6 +138,7 @@ export function ClutchCommentsSheet({
   commentsEnabled,
   loadError,
   requiresAuthGate,
+  sendError,
   draft,
   sending,
   deletingId,
@@ -323,6 +327,18 @@ export function ClutchCommentsSheet({
                   </Text>
                 </Pressable>
               ) : (
+                <View>
+                {sendError ? (
+                  <Text
+                    accessibilityLiveRegion="polite"
+                    style={[
+                      textStyle('caption'),
+                      { color: colors.danger, paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
+                    ]}
+                  >
+                    {sendError}
+                  </Text>
+                ) : null}
                 <View
                   style={{
                     flexDirection: 'row',
@@ -371,6 +387,7 @@ export function ClutchCommentsSheet({
                   >
                     <Send size={20} color={colors.inkOnAccent} strokeWidth={1.75} />
                   </Pressable>
+                </View>
                 </View>
               )}
             </View>

@@ -35,6 +35,7 @@ import { handleCorsPreflight } from "../_shared/cors.ts";
 import { jsonResponse, withErrorHandling } from "../_shared/http.ts";
 import { AppError, appErrorFromPostgrestMessage } from "../_shared/app-error.ts";
 import { serviceRoleClient, userScopedClient } from "../_shared/supabase.ts";
+import { revokeAppleRefreshToken } from "../_shared/apple.ts";
 
 // GoTrue has no "forever". 87600h is 10 years, the same literal
 // admin-user-suspend uses for a suspension ban.
@@ -168,6 +169,15 @@ Deno.serve((req) =>
     // exist. Nothing is deleted yet, so a refusal below leaves no residue.
     const offPrefixClipPaths = await collectOffPrefixPaths(admin, userId);
 
+    // The stored Sign in with Apple refresh token (0139), read now and revoked
+    // only after the RPC succeeds, so a refused deletion leaves the Apple
+    // link intact.
+    const { data: appleToken } = await admin
+      .from("apple_sign_in_tokens")
+      .select("refresh_token")
+      .eq("user_id", userId)
+      .maybeSingle<{ refresh_token: string }>();
+
     // ---------------------------------------------------------------
     // The deletion itself. Caller's own JWT, never the service role, so
     // auth.uid() inside delete_my_account() is the real caller.
@@ -176,6 +186,23 @@ Deno.serve((req) =>
 
     if (rpcError) {
       throw appErrorFromPostgrestMessage(rpcError.message);
+    }
+
+    // Leg (c): Sign in with Apple revocation (Guideline 5.1.1(v), 0139). After
+    // this, Settings, Apple ID, Sign in with Apple on the person's devices no
+    // longer lists Atlitos. A failure is reported, never fatal: the account is
+    // already deleted, and the row is kept so the revoke can be retried.
+    let appleRevoked: boolean | null = null;
+    let appleError: string | null = null;
+    if (appleToken?.refresh_token) {
+      try {
+        await revokeAppleRefreshToken(appleToken.refresh_token);
+        appleRevoked = true;
+        await admin.from("apple_sign_in_tokens").delete().eq("user_id", userId);
+      } catch (err) {
+        appleRevoked = false;
+        appleError = err instanceof Error ? err.message : String(err);
+      }
     }
 
     // Leg (b): the stored bytes. Runs before the GoTrue release so a storage
@@ -206,6 +233,8 @@ Deno.serve((req) =>
       auth_error: releaseError?.message ?? null,
       storage_objects_removed: storage.removed,
       storage_failures: storage.failures,
+      apple_revoked: appleRevoked,
+      apple_error: appleError,
     });
   })
 );

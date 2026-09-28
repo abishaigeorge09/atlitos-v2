@@ -700,3 +700,13 @@ server side aggregate; that is recorded, not half-fixed.
 `packages/api/src` and classifies it. It is negative-tested: planting one
 unbounded read moves the count and removing it moves it back. Run it before
 adding a read.
+
+## iOS launch compliance (0138, 0139)
+
+| Call | Surface | Backend | Notes |
+|---|---|---|---|
+| `profile.acceptContentTerms()` | `ContentTermsGate` (one time sheet before the first clip, comment or chat message) | RPC `accept_content_terms()` | returns the acceptance time; idempotent. Inserts before it fail with `CONTENT_TERMS_REQUIRED` (403); text with a listed word fails with `CONTENT_BLOCKED` (400) |
+| `functions.invoke("apple-token-store", { authorization_code })` | `lib/oauth.ts` after native Sign in with Apple | edge function `apple-token-store` | exchanges the code at Apple, stores the refresh token in `apple_sign_in_tokens`; refuses accounts with no Apple identity |
+| `functions.invoke("delete-account")` | account deletion | edge function `delete-account` | now also revokes the stored Apple token; response adds `apple_revoked` and `apple_error` |
+| `functions.invoke("stream-upload-url")` | clip upload | edge function | now refuses guests (`GUEST_FORBIDDEN`) and callers who have not agreed to the content rules (`CONTENT_TERMS_REQUIRED`) |
+| `useSearch().aiSearch({ lat, lng })` | smart search | edge function `ai-search` | `lat` and `lng` are rounded to 2 decimals on the device (coarse location) |

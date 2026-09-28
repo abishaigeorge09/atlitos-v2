@@ -8,6 +8,7 @@ import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-na
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AuthCta, AuthGlassCard, AuthReveal, AuthScene } from '@/components/organisms/auth/AuthScene';
+import { ConsentLine } from '@/components/organisms/auth/ConsentLine';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { friendlyAuthMessage } from '@/lib/auth-copy';
@@ -219,6 +220,7 @@ export default function RegisterScreen() {
                 </View>
 
                 <AuthCta label="Create account" loading={submitting} onPress={() => void handleSubmit()} />
+                <ConsentLine />
               </AuthGlassCard>
             </AuthReveal>
 

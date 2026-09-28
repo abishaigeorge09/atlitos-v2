@@ -20,6 +20,7 @@ import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
+import { ensureContentTerms } from '@/store/content-terms-store';
 
 const SPORTS: Sport[] = ['football', 'cricket', 'badminton', 'tennis'];
 const MAX_CAPTION = 140;
@@ -140,6 +141,8 @@ export default function ClutchUploadScreen() {
 
   async function handlePost() {
     if (!asset || !sport || !caption.trim()) return;
+    // 0138: agree to the content rules once before the first clip.
+    if (!(await ensureContentTerms())) return;
     setState('uploading');
     setError(null);
     try {

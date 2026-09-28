@@ -10,6 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { GroupMembersSheet } from '@/components/organisms/chat/GroupMembersSheet';
 import { EmptyState } from '@/components/organisms/EmptyState';
 import { ModerationSheet, type ModerationTarget } from '@/components/organisms/moderation/ModerationSheet';
+import { ensureContentTerms } from '@/store/content-terms-store';
 import { AppBar } from '@/components/ui/app-bar';
 import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { useKeyboardShown } from '@/lib/use-keyboard-shown';
@@ -166,6 +167,8 @@ export default function ChatThreadScreen() {
   async function handleSend() {
     const text = draft.trim();
     if (!text || sending || !me) return;
+    // 0138: agree to the content rules once before the first message.
+    if (!(await ensureContentTerms())) return;
 
     const optimisticId = `optimistic:${Date.now()}`;
     const optimisticMessage: DisplayMessage = {

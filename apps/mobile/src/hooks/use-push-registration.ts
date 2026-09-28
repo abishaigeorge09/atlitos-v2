@@ -17,7 +17,7 @@ import { useSessionStore } from '@/store/session-store';
  * lifecycle to the session, called once from the root layout. Phase 4 Track
  * D, CT-D, PRD-01 FR-61/62.
  *
- * - On becoming `signed_in`, requests permission, resolves the device's
+ * - On becoming `signed_in`, resolves (without prompting, 3.6) the device's
  *   Expo push token, and upserts it into `push_tokens` (owner-scoped write,
  *   `use-push.ts`). Registration targets real signed-in accounts, not guest
  *   sessions: push notifications are for booking/order/chat/verification

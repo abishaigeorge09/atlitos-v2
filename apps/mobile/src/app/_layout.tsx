@@ -1,5 +1,7 @@
 import '../../global.css';
 import { AppErrorBoundary } from '@/components/organisms/AppErrorBoundary';
+import { ContentTermsGate } from '@/components/organisms/moderation/ContentTermsGate';
+import { PushPrimerGate } from '@/components/organisms/PushPrimerGate';
 
 import { PortalHost } from '@rn-primitives/portal';
 import { useFonts } from 'expo-font';
@@ -168,6 +170,8 @@ function RootLayout() {
           }}
         />
       </AppErrorBoundary>
+      <ContentTermsGate />
+      <PushPrimerGate />
       <PortalHost />
     </>
   );

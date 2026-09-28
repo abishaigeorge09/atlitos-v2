@@ -36,6 +36,7 @@ import { ClutchCommentsSheet } from '@/components/organisms/clutch/ClutchComment
 import { ConfirmSheet } from '@/components/organisms/ConfirmSheet';
 import { LoginGateModal } from '@/components/organisms/LoginGateModal';
 import { ModerationSheet, type ModerationTarget } from '@/components/organisms/moderation/ModerationSheet';
+import { ensureContentTerms } from '@/store/content-terms-store';
 import { Avatar } from '@/components/ui/avatar';
 import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
@@ -120,6 +121,7 @@ export default function ClutchPostViewerScreen() {
   const [commentCursor, setCommentCursor] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const [moderationTarget, setModerationTarget] = useState<ModerationTarget | null>(null);
 
   // C3. The comment the viewer has asked to delete, held until they confirm.
@@ -435,6 +437,9 @@ export default function ClutchPostViewerScreen() {
       setGateVisible(true);
       return;
     }
+    // 0138: agree to the content rules once before the first comment.
+    if (!(await ensureContentTerms())) return;
+    setSendError(null);
     setSending(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     const clipId = commentsClip.id;
@@ -444,8 +449,15 @@ export default function ClutchPostViewerScreen() {
       setClips((prev) => prev.map((c) => (c.id === clipId ? { ...c, commentCount: c.commentCount + 1 } : c)));
       setCommentsClip((c) => (c && c.id === clipId ? { ...c, commentCount: c.commentCount + 1 } : c));
       setDraft('');
-    } catch {
-      // Keep the draft so the athlete can retry without retyping.
+    } catch (err) {
+      // Keep the draft so the athlete can retry without retyping. The word
+      // filter (CONTENT_BLOCKED) says why; anything else gets a generic line.
+      const code = (err as { code?: string } | null)?.code;
+      setSendError(
+        code === 'CONTENT_BLOCKED'
+          ? 'This breaks our content policy. Please change it and try again.'
+          : 'Could not post that. Please try again.',
+      );
     } finally {
       setSending(false);
     }
@@ -600,6 +612,7 @@ export default function ClutchPostViewerScreen() {
         commentsEnabled={commentsClip?.commentsEnabled !== false}
         loadError={commentsError}
         requiresAuthGate={requiresAuthGate}
+        sendError={sendError}
         draft={draft}
         sending={sending}
         deletingId={deletingCommentId}

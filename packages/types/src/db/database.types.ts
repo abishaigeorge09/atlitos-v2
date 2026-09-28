@@ -4236,6 +4236,7 @@ export type Database = {
           bio: string | null
           channel_name: string | null
           city: string | null
+          content_terms_accepted_at: string | null
           cover_url: string | null
           created_at: string
           deleted_at: string | null
@@ -4258,6 +4259,7 @@ export type Database = {
           bio?: string | null
           channel_name?: string | null
           city?: string | null
+          content_terms_accepted_at?: string | null
           cover_url?: string | null
           created_at?: string
           deleted_at?: string | null
@@ -4280,6 +4282,7 @@ export type Database = {
           bio?: string | null
           channel_name?: string | null
           city?: string | null
+          content_terms_accepted_at?: string | null
           cover_url?: string | null
           created_at?: string
           deleted_at?: string | null
@@ -4961,6 +4964,7 @@ export type Database = {
         Args: { p_param: string; p_url: string; p_value: string }
         Returns: string
       }
+      accept_content_terms: { Args: never; Returns: string }
       accept_venue_staff_invite: {
         Args: { p_venue_staff_id: string }
         Returns: {
