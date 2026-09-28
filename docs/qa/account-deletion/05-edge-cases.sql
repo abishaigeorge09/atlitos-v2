@@ -26,8 +26,8 @@ end;
 $$;
 
 \echo '=== E1. User mid checkout (payment_intent still authorized) is REFUSED ==='
-insert into public.payment_intents (id, user_id, domain, entity_id, amount, status, razorpay_order_id)
-values ('d1000000-0000-0000-0000-0000000000ff', :ath, 'commerce', gen_random_uuid(), 500, 'authorized', 'order_inflight');
+insert into public.payment_intents (id, user_id, domain, entity_id, amount, status, razorpay_order_id, razorpay_mode)
+values ('d1000000-0000-0000-0000-0000000000ff', :ath, 'commerce', gen_random_uuid(), 500, 'authorized', 'order_inflight', 'test');
 select pg_temp.act(:ath, array['player']);
 select pg_temp.try_delete() as e1_result;
 delete from public.payment_intents where id = 'd1000000-0000-0000-0000-0000000000ff';

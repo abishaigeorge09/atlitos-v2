@@ -278,7 +278,10 @@ between that check and step 7 below.
 
 ### Going live (founder only, launch runbook 4.2 and 4.3). Order matters.
 
-1. Apply `0140` (production).
+1. Apply `0140` (production) on its own: paste only that file into the SQL editor, then record it in
+   `supabase_migrations.schema_migrations` as `docs/architecture/DEPLOY-RUNBOOK.md` shows. Never
+   `supabase db push` on this project: it would also apply `0141`, and every old function build would
+   then fail its payment insert until step 2 finishes.
 2. Redeploy every intent creating function from the `0140` build: `book-session`, `book-court`,
    `checkout`, `donate`, `join-group`, `renew-group-membership`. Also redeploy `razorpay-webhook`,
    `verify-payment`, `cancel-session-refund`, `decline-session-refund`, `admin-order-refund`.

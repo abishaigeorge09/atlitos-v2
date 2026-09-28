@@ -46,10 +46,10 @@ values ('c1000000-0000-0000-0000-000000000001', 'b1000000-0000-0000-0000-0000000
 -- ---------------------------------------------------------------------------
 -- Money: three captured payment intents for the deleting athlete.
 -- ---------------------------------------------------------------------------
-insert into public.payment_intents (id, user_id, domain, entity_id, amount, status, razorpay_order_id, razorpay_payment_id) values
-  ('d1000000-0000-0000-0000-000000000001', :ath, 'session',  'e1000000-0000-0000-0000-000000000001',  944.00, 'captured', 'order_sess1', 'pay_sess1'),
-  ('d1000000-0000-0000-0000-000000000002', :ath, 'court',    'e1000000-0000-0000-0000-000000000002',  708.00, 'captured', 'order_court1', 'pay_court1'),
-  ('d1000000-0000-0000-0000-000000000003', :ath, 'donation', 'e1000000-0000-0000-0000-000000000003', 1000.00, 'captured', 'order_don1', 'pay_don1');
+insert into public.payment_intents (id, user_id, domain, entity_id, amount, status, razorpay_order_id, razorpay_payment_id, razorpay_mode) values
+  ('d1000000-0000-0000-0000-000000000001', :ath, 'session',  'e1000000-0000-0000-0000-000000000001',  944.00, 'captured', 'order_sess1', 'pay_sess1', 'test'),
+  ('d1000000-0000-0000-0000-000000000002', :ath, 'court',    'e1000000-0000-0000-0000-000000000002',  708.00, 'captured', 'order_court1', 'pay_court1', 'test'),
+  ('d1000000-0000-0000-0000-000000000003', :ath, 'donation', 'e1000000-0000-0000-0000-000000000003', 1000.00, 'captured', 'order_don1', 'pay_don1', 'test');
 
 insert into public.sessions (id, coach_id, player_id, session_type_id, frequency, date, slot_start, slot_end,
                              status, price, platform_fee, total, payment_intent_id)
