@@ -52,7 +52,7 @@ import {
   getAuthenticatedUser,
   serviceRoleClient,
 } from "../_shared/supabase.ts";
-import { razorpayRequest } from "../_shared/razorpay.ts";
+import { assertRefundModeMatches, razorpayRequest } from "../_shared/razorpay.ts";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -125,6 +125,38 @@ Deno.serve((req) =>
     const body = parseRequestBody(await request.json().catch(() => null));
     const user = await getAuthenticatedUser(request);
     const supabase = serviceRoleClient();
+
+    // ------------------------------------------------------------------
+    // 0. REFUND_MODE_MISMATCH (0140), checked before ANYTHING changes. A
+    //    session paid in the other Razorpay mode (every payment before 0140
+    //    is test) cannot be refunded with this deployment's keys, so this
+    //    refuses up front: no transition, no refunds row, no Razorpay call.
+    //    Only the session's own coach gets this answer; anyone else falls
+    //    through to the transition RPC, which refuses them as before, so the
+    //    code never reveals another person's payment mode.
+    // ------------------------------------------------------------------
+    const { data: preSession, error: preSessionError } = await supabase
+      .from("sessions")
+      .select("coach_id")
+      .eq("id", body.session_id)
+      .maybeSingle<{ coach_id: string }>();
+    if (preSessionError) {
+      throw new AppError("INTERNAL", `Failed to read session ${body.session_id}: ${preSessionError.message}`, 500);
+    }
+    if (preSession?.coach_id === user.id) {
+      const { data: preIntent, error: preIntentError } = await supabase
+        .from("payment_intents")
+        .select("status, razorpay_payment_id, razorpay_mode")
+        .eq("domain", "session")
+        .eq("entity_id", body.session_id)
+        .maybeSingle<{ status: string; razorpay_payment_id: string | null; razorpay_mode: string }>();
+      if (preIntentError) {
+        throw new AppError("INTERNAL", `Failed to read the payment for session ${body.session_id}: ${preIntentError.message}`, 500);
+      }
+      if (preIntent?.status === "captured" && preIntent.razorpay_payment_id) {
+        assertRefundModeMatches(preIntent.razorpay_mode);
+      }
+    }
 
     // ------------------------------------------------------------------
     // 1. Decline, under the SERVICE ROLE via the internal entry point

@@ -56,6 +56,12 @@ export type ApiErrorCode =
   // payments (see PAYMENTS.md)
   | 'PRICE_MISMATCH'
   | 'PAYMENT_FAILED'
+  // 0140, cancel-session-refund / decline-session-refund / admin-order-refund:
+  // the payment was taken in the other Razorpay mode (a test era payment after
+  // go live), so it cannot be refunded by this deployment. Nothing changed
+  // server side: no transition, no refund row, no Razorpay call. Show the
+  // message; an admin settles it by hand.
+  | 'REFUND_MODE_MISMATCH'
   // verify-payment: the razorpay_signature triple did not verify against
   // RAZORPAY_KEY_SECRET
   | 'INVALID_SIGNATURE'

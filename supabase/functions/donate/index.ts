@@ -36,7 +36,7 @@ import {
   getAuthenticatedUser,
   serviceRoleClient,
 } from "../_shared/supabase.ts";
-import { createOrder, razorpayKeyId } from "../_shared/razorpay.ts";
+import { createOrder, razorpayKeyId, razorpayMode } from "../_shared/razorpay.ts";
 import { getActiveFeeConfig, round2 } from "../_shared/fee-config.ts";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -203,6 +203,7 @@ Deno.serve((req) =>
     const { data: intent, error: intentInsertError } = await supabase
       .from("payment_intents")
       .insert({
+        razorpay_mode: razorpayMode(),
         user_id: user.id,
         domain: "donation",
         entity_id: null,

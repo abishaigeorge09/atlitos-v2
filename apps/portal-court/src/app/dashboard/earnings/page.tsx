@@ -82,7 +82,7 @@ export default function EarningsPage() {
     const monthStart = `${todayIso().slice(0, 7)}-01`;
     const chartStart = isoDaysAgo(CHART_DAYS - 1);
 
-    const [bookingsResult, ledgerResult, payoutAccountResult] = await Promise.all([
+    const [bookingsResult, payoutAccountResult] = await Promise.all([
       courtIds.length
         ? supabase
             .from("court_bookings")
@@ -91,18 +91,18 @@ export default function EarningsPage() {
             .in("status", ["confirmed", "completed"])
             .gte("date", chartStart)
         : Promise.resolve({ data: [], error: null }),
-      supabase
-        .from("ledger_entries")
-        .select("amount, direction, created_at")
-        .eq("account_type", "court_partner")
-        .eq("account_ref", venueId),
       supabase.from("payout_accounts").select("id").eq("owner_type", "court_partner").eq("owner_id", venueId).maybeSingle(),
     ]);
 
     const payoutMethodResult = await supabase.rpc("get_my_payout_method", { p_owner_type: "court_partner", p_venue_id: venueId });
 
-    if (bookingsResult.error || ledgerResult.error) {
-      setError(bookingsResult.error?.message ?? ledgerResult.error?.message ?? "Failed to load earnings.");
+    // A failed balance read is an error state, never a silent zero. FORBIDDEN
+    // is the ordinary staff case, handled below.
+    const payoutMethodError =
+      payoutMethodResult.error && !payoutMethodResult.error.message.startsWith("FORBIDDEN") ? payoutMethodResult.error : null;
+
+    if (bookingsResult.error || payoutMethodError) {
+      setError(bookingsResult.error?.message ?? payoutMethodError?.message ?? "Failed to load earnings.");
       setStatus("error");
       return;
     }
@@ -119,29 +119,20 @@ export default function EarningsPage() {
       chartPoints.push({ date: d, amount: bookings.filter((b) => b.date === d).reduce((sum, b) => sum + b.total, 0) });
     }
 
-    // MONEY DISPLAY FIX (audit 2026-09-03 SEC-F2). `direction` was selected and
-    // then ignored, so a DEBIT was summed as +amount. `record_transfer` writes
-    // the transfer's debit leg against this same (court_partner, venue owner)
-    // account, so a payout of T was added as +T here and then subtracted again
-    // as `transferredTotal` below: net (C + T) - T = C. The partner was shown
-    // their gross accrual labelled as a withdrawable balance.
-    //
-    // This expression is now character-for-character the same arithmetic as
-    // `get_payout_account_balance` (0028), which is what
-    // `razorpay-route-transfer` actually validates against:
-    //   sum(case when direction = 'credit' then amount else -amount end)
-    //
-    // The duplication is forced: that RPC is SECURITY DEFINER over an arbitrary
-    // payout_account_id and is granted to service_role ONLY, because widening
-    // it would let any member read any partner's balance. Display-only either
-    // way: the server re-derives before moving money and refuses
-    // INSUFFICIENT_BALANCE, so this never could have caused an over-withdrawal.
-    // ponytail: duplicated formula, collapse into an owner-scoped RPC if a
-    // third caller ever needs it.
-    const pendingBalance = (ledgerResult.data ?? []).reduce(
-      (sum, e) => sum + (e.direction === "credit" ? e.amount : -e.amount),
-      0,
-    );
+    // PENDING BALANCE (0140). Read from get_my_payout_method's `balance`, the
+    // server side sum(credit minus debit) over this venue's ledger rows that
+    // counts a row only when it has no payment intent or its intent is live.
+    // This page used to sum ledger_entries in the browser (the SEC-F2 fix of
+    // 2026-09-03 made that sum respect `direction`), but the browser cannot
+    // see payment_intents rows it did not pay for, so it could not drop test
+    // era money; the one owner scoped RPC can. Staff get FORBIDDEN from that
+    // RPC, and ledger_entries RLS already showed them no rows, so staff see
+    // zero here exactly as before. Display only: every payout path re-derives
+    // the balance server side and refuses INSUFFICIENT_BALANCE.
+    const payoutRead = payoutMethodResult.error
+      ? null
+      : (payoutMethodResult.data as { balance?: number; eligible_balance?: number } | null);
+    const pendingBalance = Number(payoutRead?.balance ?? 0);
 
     let transfers: EarningsData["transfers"] = [];
     let lastPayout: EarningsData["lastPayout"] = null;
@@ -173,7 +164,7 @@ export default function EarningsPage() {
         ? { kind: "forbidden" }
         : {
             kind: "ok",
-            eligibleBalance: Number((payoutMethodResult.data as { eligible_balance?: number } | null)?.eligible_balance ?? 0),
+            eligibleBalance: Number(payoutRead?.eligible_balance ?? 0),
             method: ((payoutMethodResult.data as { method?: unknown } | null)?.method ?? null) as Extract<EarningsData["payout"], { kind: "ok" }>["method"],
           },
     });

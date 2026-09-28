@@ -87,7 +87,7 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { AppError } from "./app-error.ts";
 import { round2 } from "./fee-config.ts";
-import { razorpayRequest } from "./razorpay.ts";
+import { razorpayRequest, refundModeMatches } from "./razorpay.ts";
 import type { CapturedIntent, FinalizeResult } from "./finalize-payment.ts";
 
 // The reserved General Fund ledger anchor (AT-113). The TS mirror of the
@@ -339,15 +339,42 @@ async function refundUnfulfillableCapture(
 
   const { data: intentRow } = await supabase
     .from("payment_intents")
-    .select("id, user_id, amount, razorpay_payment_id")
+    .select("id, user_id, amount, razorpay_payment_id, razorpay_mode")
     .eq("id", intent.id)
     .maybeSingle<
-      { id: string; user_id: string; amount: number; razorpay_payment_id: string | null }
+      {
+        id: string;
+        user_id: string;
+        amount: number;
+        razorpay_payment_id: string | null;
+        razorpay_mode: string;
+      }
     >();
 
   if (!intentRow || !intentRow.razorpay_payment_id) {
     console.error(
       `finalize-order-payment: no razorpay_payment_id on intent ${intent.id}; refund left for admin.`,
+    );
+    return "refund_pending";
+  }
+
+  // 0140, REFUND_MODE_MISMATCH. This path must not throw (see above), so the
+  // mismatch is logged and left for admin rather than raised: no refunds row
+  // is claimed and Razorpay is not called. razorpay-webhook already ignores
+  // an other mode intent before it gets here; this covers any other caller.
+  let modeMatches: boolean;
+  try {
+    modeMatches = refundModeMatches(intentRow.razorpay_mode);
+  } catch (err) {
+    console.error(
+      `finalize-order-payment: could not read RAZORPAY_MODE for intent ${intent.id}; refund left for admin:`,
+      errorText(err),
+    );
+    return "refund_pending";
+  }
+  if (!modeMatches) {
+    console.error(
+      `finalize-order-payment: REFUND_MODE_MISMATCH, intent ${intent.id} is ${intentRow.razorpay_mode} mode; refund left for admin.`,
     );
     return "refund_pending";
   }

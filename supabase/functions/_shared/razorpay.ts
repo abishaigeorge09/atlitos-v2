@@ -5,9 +5,12 @@
 // (order creation, webhook signature verification, client-callback payment
 // signature verification), and pinning our own fetch calls keeps the Deno
 // edge runtime's cold start small and the surface auditable. Every function
-// here reads `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` / (for the webhook
-// path only) `RAZORPAY_WEBHOOK_SECRET` from `Deno.env`; none of these are
-// ever hardcoded or logged, per this task's instructions.
+// here reads the active mode's key pair (RAZORPAY_{TEST,LIVE}_KEY_ID /
+// _KEY_SECRET, or the un-prefixed legacy pair) and, for the webhook path only,
+// RAZORPAY_WEBHOOK_SECRET_TEST / RAZORPAY_WEBHOOK_SECRET_LIVE (the legacy
+// single RAZORPAY_WEBHOOK_SECRET is a test mode fallback only; see
+// verifyWebhookSignature) from `Deno.env`; none of these are ever hardcoded or
+// logged.
 
 import { AppError } from "./app-error.ts";
 
@@ -202,20 +205,97 @@ function timingSafeEqual(a: string, b: string): boolean {
 
 /**
  * Verifies `x-razorpay-signature` on an incoming webhook POST: HMAC SHA-256
- * of the raw request body, keyed by RAZORPAY_WEBHOOK_SECRET (the secret
- * configured in the Razorpay dashboard's webhook settings, distinct from
- * RAZORPAY_KEY_SECRET). `rawBody` must be the exact, unparsed request body
- * text; re-serializing parsed JSON would not reproduce the same bytes
- * Razorpay signed.
+ * of the raw request body, keyed by the webhook secret configured in the
+ * Razorpay dashboard (distinct from the key secret). `rawBody` must be the
+ * exact, unparsed request body text.
+ *
+ * 0140, launch runbook 4.1. Test and live dashboards each have their own
+ * webhook and their own secret: RAZORPAY_WEBHOOK_SECRET_TEST and
+ * RAZORPAY_WEBHOOK_SECRET_LIVE. The event is checked against both, and the
+ * mode whose secret matched is returned, so the caller can ignore an event
+ * from the account this deployment is not using. Returns null for a bad
+ * signature.
+ *
+ * THE LEGACY SECRET. The old single RAZORPAY_WEBHOOK_SECRET was set while the
+ * project only ever ran in test mode, so it can only ever mean "test":
+ *   - RAZORPAY_MODE=live: the legacy secret is IGNORED ENTIRELY and
+ *     RAZORPAY_WEBHOOK_SECRET_LIVE is required. Honouring it as "the current
+ *     mode" would let an event signed with the old test era secret be treated
+ *     as a live event.
+ *   - RAZORPAY_MODE=test: the legacy secret stands in for
+ *     RAZORPAY_WEBHOOK_SECRET_TEST when that is unset, and only then.
+ *
+ * FAIL CLOSED. Throws (the webhook answers 500, Razorpay retries) when the
+ * current mode's secret is missing, or when the test and live secrets are the
+ * same string, because then a test event cannot be told apart from a live one.
+ * Comparison is constant time per candidate.
  */
 export async function verifyWebhookSignature(
   rawBody: string,
   signatureHeader: string,
-): Promise<boolean> {
-  if (!signatureHeader) return false;
-  const webhookSecret = requiredEnv("RAZORPAY_WEBHOOK_SECRET");
-  const expected = await hmacSha256Hex(webhookSecret, rawBody);
-  return timingSafeEqual(signatureHeader, expected);
+): Promise<RazorpayMode | null> {
+  const current = razorpayMode();
+  const live = Deno.env.get("RAZORPAY_WEBHOOK_SECRET_LIVE") || null;
+  const legacy = Deno.env.get("RAZORPAY_WEBHOOK_SECRET") || null;
+  const test = Deno.env.get("RAZORPAY_WEBHOOK_SECRET_TEST") ||
+    (current === "test" ? legacy : null);
+
+  if (current === "live" && !live) {
+    throw new AppError(
+      "INTERNAL",
+      "Server misconfiguration: RAZORPAY_MODE is live but RAZORPAY_WEBHOOK_SECRET_LIVE is not set. The legacy RAZORPAY_WEBHOOK_SECRET is not accepted in live mode.",
+      500,
+    );
+  }
+  if (current === "test" && !test) {
+    throw new AppError(
+      "INTERNAL",
+      "Server misconfiguration: RAZORPAY_MODE is test but neither RAZORPAY_WEBHOOK_SECRET_TEST nor the legacy RAZORPAY_WEBHOOK_SECRET is set.",
+      500,
+    );
+  }
+  if (live && test && live === test) {
+    throw new AppError(
+      "INTERNAL",
+      "Server misconfiguration: the test and live webhook secrets are identical, so the signing account cannot be identified.",
+      500,
+    );
+  }
+
+  if (!signatureHeader) return null;
+
+  const candidates: Array<{ mode: RazorpayMode; secret: string }> = [];
+  if (live) candidates.push({ mode: "live", secret: live });
+  if (test) candidates.push({ mode: "test", secret: test });
+  for (const candidate of candidates) {
+    const expected = await hmacSha256Hex(candidate.secret, rawBody);
+    if (timingSafeEqual(signatureHeader, expected)) return candidate.mode;
+  }
+  return null;
+}
+
+/**
+ * 0140. Refuses a refund of a payment taken in the other Razorpay mode, before
+ * any Razorpay call and before any refund row is claimed. A test era payment
+ * cannot be refunded with live keys (and a live one must never be sent to the
+ * test account), so the honest answer is a clear refusal an admin can act on,
+ * not a Razorpay error recorded as a pending refund that retries forever.
+ * `intentMode` is payment_intents.razorpay_mode.
+ */
+export function assertRefundModeMatches(intentMode: RazorpayMode | string | null | undefined): void {
+  const current = razorpayMode();
+  if (intentMode && intentMode !== current) {
+    throw new AppError(
+      "REFUND_MODE_MISMATCH",
+      `This payment was taken in Razorpay ${intentMode} mode and payments now run in ${current} mode, so it cannot be refunded here. An admin must settle it by hand.`,
+      409,
+    );
+  }
+}
+
+/** Non throwing form of assertRefundModeMatches, for paths that must not throw. */
+export function refundModeMatches(intentMode: RazorpayMode | string | null | undefined): boolean {
+  return !intentMode || intentMode === razorpayMode();
 }
 
 /**
@@ -232,7 +312,10 @@ export async function verifyPaymentSignature(
   signature: string,
 ): Promise<boolean> {
   if (!signature) return false;
-  const keySecret = requiredEnv("RAZORPAY_KEY_SECRET");
+  // The ACTIVE mode's key secret (0140). Reading the un-prefixed name here
+  // verified live payments with the test secret once the mode specific names
+  // are in use, so every live client callback would have failed.
+  const { keySecret } = credentials();
   const expected = await hmacSha256Hex(
     keySecret,
     `${razorpayOrderId}|${razorpayPaymentId}`,

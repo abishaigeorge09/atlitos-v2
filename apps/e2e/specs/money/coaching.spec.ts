@@ -33,6 +33,21 @@ test.beforeEach(async ({}, testInfo) => {
 // portions of this file still run.
 const NEEDS_SERVICE_KEY = !process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+/**
+ * 0140: get_coach_wallet_balance counts a ledger row only when it has no
+ * payment intent (payout debits, manual adjustments) or its intent is live.
+ * The independent aggregate below applies the same predicate, so in a test
+ * mode project both sides legitimately read the same (often zero) figure.
+ */
+const LEDGER_LEG_SELECT = "direction,amount,created_at,payment_intent_id,payment_intents(razorpay_mode)";
+function countsTowardBalance(leg: { payment_intent_id: string | null; payment_intents: unknown }): boolean {
+  if (leg.payment_intent_id === null) return true;
+  const intent = (Array.isArray(leg.payment_intents) ? leg.payment_intents[0] : leg.payment_intents) as
+    | { razorpay_mode?: string }
+    | null;
+  return intent?.razorpay_mode === "live";
+}
+
 const COACH1_ID = "5b262cf1-8f95-45df-b453-0802013f82a1";
 const SESSION_TYPE_ID = "d11093c3-ef7f-42e0-ad7b-f93c10c5d422"; // coach1, "Batting Basics", price 1000, 60 min
 
@@ -102,11 +117,12 @@ test.describe("CO: coaching sessions @money", () => {
     test.skip(NEEDS_SERVICE_KEY, "needs service role key");
     const coach1 = await personaSession("coach1");
     const sql = serviceClient();
-    const { data: legs } = await sql
+    const { data: allLegs } = await sql
       .from("ledger_entries")
-      .select("direction,amount")
+      .select(LEDGER_LEG_SELECT)
       .eq("account_type", "coach")
       .eq("account_ref", COACH1_ID);
+    const legs = (allLegs ?? []).filter(countsTowardBalance);
     const credit = (legs ?? []).filter((l) => l.direction === "credit").reduce((s, l) => s + Number(l.amount), 0);
     const debit = (legs ?? []).filter((l) => l.direction === "debit").reduce((s, l) => s + Number(l.amount), 0);
     const ledgerBalance = credit - debit;
@@ -500,11 +516,12 @@ test.describe("CO: coaching sessions @money", () => {
     const walletRow = Array.isArray(wallet) ? wallet[0] : wallet;
 
     const sql = serviceClient();
-    const { data: legs } = await sql
+    const { data: allLegs } = await sql
       .from("ledger_entries")
-      .select("direction,amount,created_at")
+      .select(LEDGER_LEG_SELECT)
       .eq("account_type", "coach")
       .eq("account_ref", COACH1_ID);
+    const legs = (allLegs ?? []).filter(countsTowardBalance);
     const credit = (legs ?? []).filter((l) => l.direction === "credit").reduce((s, l) => s + Number(l.amount), 0);
     const debit = (legs ?? []).filter((l) => l.direction === "debit").reduce((s, l) => s + Number(l.amount), 0);
 

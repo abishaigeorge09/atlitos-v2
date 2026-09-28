@@ -14,8 +14,8 @@ $$;
 insert into public.training_groups (id, coach_id, name, sport, capacity, monthly_fee)
 values ('cc000000-0000-0000-0000-000000000001', :coa, 'Sunrise Squad', 'football', 8, 2000);
 
-insert into public.payment_intents (id, user_id, domain, entity_id, amount, status, razorpay_order_id)
-values ('d1000000-0000-0000-0000-0000000000aa', :ath, 'membership', 'cc000000-0000-0000-0000-000000000001', 2360, 'captured', 'order_mem1');
+insert into public.payment_intents (id, user_id, domain, entity_id, amount, status, razorpay_order_id, razorpay_mode)
+values ('d1000000-0000-0000-0000-0000000000aa', :ath, 'membership', 'cc000000-0000-0000-0000-000000000001', 2360, 'captured', 'order_mem1', 'test');
 
 insert into public.group_memberships (id, group_id, player_id, period_start, period_end, status, price, platform_fee, total, payment_intent_id)
 values ('dd000000-0000-0000-0000-000000000001', 'cc000000-0000-0000-0000-000000000001', :ath,

@@ -51,6 +51,10 @@ const STATUS_BY_CODE: Record<string, number> = {
   ALREADY_PROCESSED: 200,
   INVALID_TRANSITION: 409,
   PRICE_MISMATCH: 409,
+  // 0140: a refund of a payment taken in the other Razorpay mode (test era
+  // payments after go live). Raised by assertRefundModeMatches before any
+  // refund row is claimed or Razorpay is called.
+  REFUND_MODE_MISMATCH: 409,
   // Coaching state machine codes raised by session_transition (0021), so an
   // edge function relaying that RPC's error surfaces the same code the RPC
   // named instead of flattening everything to a 400.
