@@ -83,6 +83,9 @@ function OfferRow({ retailer, price, inStock, cheapest = false, checkedHoursAgo,
             onPress={onBuy}
             accessibilityRole="link"
             accessibilityLabel={`Buy on ${retailer}`}
+            // The link text is 16pt tall; 14 above and below reaches the 44pt
+            // minimum without growing the row (BUG-064).
+            hitSlop={{ top: 14, bottom: 14, left: 8, right: 8 }}
             className="flex-row items-center gap-xs"
           >
             <Text className="font-sans-semibold text-xs" style={{ color: colors.text }}>

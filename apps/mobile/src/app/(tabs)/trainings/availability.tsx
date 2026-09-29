@@ -16,6 +16,7 @@ import { Text } from '@/components/ui/text';
 import { supabase } from '@/lib/supabase';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
+import { formatTimeRange } from '@/lib/time-display';
 
 type ScreenState = 'loading' | 'populated' | 'error';
 
@@ -187,7 +188,7 @@ export default function CoachAvailabilityScreen() {
                       <View className="flex-row items-center gap-xs">
                         <CalendarClock size={16} strokeWidth={1.75} color={colors.textTertiary} />
                         <Text style={[textStyle('numericBase'), { color: colors.text }]}>
-                          {window.from} to {window.to}
+                          {formatTimeRange(window.from, window.to)}
                         </Text>
                       </View>
                       <Button

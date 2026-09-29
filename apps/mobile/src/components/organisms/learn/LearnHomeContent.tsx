@@ -1,9 +1,9 @@
 import { useLearn, toApiError, type Drill, type LearnHome } from '@atlitos/api';
 import type { ApiError } from '@atlitos/types';
 import { spacing, radii } from '@atlitos/theme';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { ChevronRight, Dumbbell, Map, RefreshCw, Trophy, TriangleAlert, Zap } from 'lucide-react-native';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
 import { Button } from '@/components/ui/button';
@@ -72,6 +72,17 @@ export function LearnHomeContent() {
     void load();
   }, [load]);
 
+  // Coming back from Settings with a sport chosen: reload so the roadmap
+  // appears at once. Only from the no sport state, so switching Trainings
+  // tabs does not flash the skeleton over a loaded roadmap.
+  const noSportRef = useRef(false);
+  noSportRef.current = state === 'ready' && (!home || home.sport === null);
+  useFocusEffect(
+    useCallback(() => {
+      if (noSportRef.current) void load();
+    }, [load]),
+  );
+
   if (state === 'loading') {
     return (
       <View style={{ flex: 1, padding: spacing.lg, gap: spacing.lg }}>
@@ -107,6 +118,10 @@ export function LearnHomeContent() {
           icon={Map}
           title="Pick a sport to start"
           body="Choose your primary sport to unlock a roadmap, drills and milestones tuned to it."
+          // BUG-062: this used to be a dead end with no way to pick. The
+          // sport is set in Settings, What you play (set_athlete_sports).
+          ctaLabel="Choose your sport"
+          onCtaPress={() => router.push('/settings')}
         />
       </View>
     );

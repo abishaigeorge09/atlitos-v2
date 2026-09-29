@@ -29,6 +29,7 @@ import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
+import { formatTimeRange } from '@/lib/time-display';
 
 type LoadState = 'loading' | 'populated' | 'error';
 
@@ -441,7 +442,7 @@ export default function TrainingsScreen() {
                       key={session.id}
                       variant="upcoming"
                       date={session.date}
-                      timeSlot={`${session.slot.from} to ${session.slot.to}`}
+                      timeSlot={formatTimeRange(session.slot.from, session.slot.to)}
                       personName={session.playerName ?? 'Athlete'}
                       sessionType={session.sessionTypeName ?? ''}
                       focusArea={session.focusArea || 'No focus area noted'}
@@ -469,7 +470,7 @@ export default function TrainingsScreen() {
                       <SessionCard
                         variant="request"
                         date={session.date}
-                        timeSlot={`${session.slot.from} to ${session.slot.to}`}
+                        timeSlot={formatTimeRange(session.slot.from, session.slot.to)}
                         personName={session.playerName ?? 'Athlete'}
                         sessionType={session.sessionTypeName ?? ''}
                         focusArea={session.focusArea || 'No focus area noted'}

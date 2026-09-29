@@ -28,6 +28,7 @@ import { SESSION_STATUS_PILL } from '@/lib/session-display';
 import { supabase } from '@/lib/supabase';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
+import { formatSlotWhen } from '@/lib/time-display';
 
 type ScreenState = 'loading' | 'populated' | 'error';
 type GroupTab = 'overview' | 'sessions';
@@ -214,7 +215,7 @@ export default function GroupProfileScreen() {
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text style={[textStyle('body'), { color: colors.text }]}>
-            {session.date}, {session.slotStart} to {session.slotEnd}
+            {formatSlotWhen(session.date, session.slotStart, session.slotEnd)}
           </Text>
           <StatusPill status={SESSION_STATUS_PILL[session.status]} />
         </View>

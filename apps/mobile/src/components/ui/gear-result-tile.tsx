@@ -1,5 +1,6 @@
 import { formatINR } from '@atlitos/theme';
 import { Package, Store } from 'lucide-react-native';
+import { useState } from 'react';
 import { Image, Pressable, View } from 'react-native';
 
 import { freshnessLabel } from '@/components/ui/gear-result-card';
@@ -35,6 +36,9 @@ export interface GearResultTileProps {
 
 function GearResultTile({ imageUri, brand, title, fromPrice, retailer, storeCount, previousPrice, checkedHoursAgo, onPress }: GearResultTileProps) {
   const colors = useThemeColors();
+  // A dead image URL left a blank tile (the Wilson seed photo 404s); a failed
+  // load now falls back to the same "no photo yet" glyph (BUG-070).
+  const [imageFailed, setImageFailed] = useState(false);
   const more = storeCount - 1;
   const storeLine = retailer === null ? 'No store has it in stock' : more > 0 ? `${retailer} & ${more} more` : retailer;
   const dropped = fromPrice !== null && previousPrice != null && previousPrice > fromPrice;
@@ -47,8 +51,13 @@ function GearResultTile({ imageUri, brand, title, fromPrice, retailer, storeCoun
       accessibilityLabel={`${title}, ${fromPrice === null ? 'out of stock' : formatINR(fromPrice)}, ${storeLine}`}
     >
       <View style={{ backgroundColor: colors.surface, aspectRatio: 1 }} className="w-full items-center justify-center">
-        {imageUri ? (
-          <Image source={{ uri: imageUri }} style={{ width: '80%', height: '80%' }} resizeMode="contain" />
+        {imageUri && !imageFailed ? (
+          <Image
+            source={{ uri: imageUri }}
+            style={{ width: '80%', height: '80%' }}
+            resizeMode="contain"
+            onError={() => setImageFailed(true)}
+          />
         ) : (
           <Package size={28} strokeWidth={1.5} color={colors.textTertiary} accessibilityLabel="No photo yet" />
         )}

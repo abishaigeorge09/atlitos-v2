@@ -5,6 +5,7 @@ import { Pressable, View } from 'react-native';
 
 import { PriceText } from '@/components/ui/price-text';
 import { Text } from '@/components/ui/text';
+import { COURT_IN_APP_BOOKING_ENABLED } from '@/lib/feature-flags';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
 
@@ -29,23 +30,37 @@ export function CourtSlotResult({
   const colors = useThemeColors();
   const slot = hit.slot;
   const more = slot?.otherCourtsFree ?? 0;
+  // BUG-061: while in-app booking is off the venue is booked on its own
+  // site, so "Free today at 7:00 PM" is not a promise this app can keep.
+  // The price stays; every free slot claim goes.
+  const claimSlots = COURT_IN_APP_BOOKING_ENABLED;
 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${hit.title}, free ${slot?.label ?? ''}, ${slot ? `${slot.price} rupees` : ''}`}
+      accessibilityLabel={[
+        hit.title,
+        claimSlots && slot ? `free ${slot.label}` : null,
+        slot ? `${slot.price} rupees` : null,
+      ]
+        .filter(Boolean)
+        .join(', ')}
       onPress={onPress}
-      style={({ pressed }) => ({
+      // Static style plus an `active:` class, never a `({ pressed }) => style`
+      // callback: NativeWind's interop on a Pressable drops the callback, so
+      // this row rendered with no margin, border, card or padding, text flush
+      // to the screen edge and the price clipped (BUG-060).
+      className="bg-card active:bg-surface-muted"
+      style={{
         marginHorizontal: spacing.lg,
         borderRadius: radii.xl,
         borderWidth: 1,
         borderColor: colors.border,
-        backgroundColor: pressed ? colors.surfaceMuted : colors.card,
         padding: spacing.lg,
         gap: spacing.sm,
-      })}
+      }}
     >
-      {slot ? (
+      {claimSlots && slot ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
           <CalendarCheck size={16} color={colors.successInk} strokeWidth={1.75} />
           <Text style={[textStyle('label'), { color: colors.successInk }]}>Free {slot.label}</Text>
@@ -71,10 +86,10 @@ export function CourtSlotResult({
             <Text style={[textStyle('caption'), { color: colors.textSecondary }]}>{hit.distanceKm.toFixed(1)} km</Text>
           </View>
         ) : null}
-        {showSlotCount && slot && slot.freeSlots > 1 ? (
+        {claimSlots && showSlotCount && slot && slot.freeSlots > 1 ? (
           <Text style={[textStyle('caption'), { color: colors.textSecondary }]}>{slot.freeSlots} slots free</Text>
         ) : null}
-        {more > 0 ? (
+        {claimSlots && more > 0 ? (
           <Text style={[textStyle('caption'), { color: colors.textSecondary }]}>
             {more} more {more === 1 ? 'court' : 'courts'} free here
           </Text>

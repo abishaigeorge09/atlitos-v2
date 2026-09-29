@@ -24,6 +24,7 @@ import { supabase } from '@/lib/supabase';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
 import { COURT_IN_APP_BOOKING_ENABLED } from '@/lib/feature-flags';
+import { formatSlotWhen } from '@/lib/time-display';
 
 type ScreenState = 'loading' | 'populated' | 'error';
 
@@ -230,7 +231,7 @@ function CourtBookingDetailScreen() {
             <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>{booking.location}</Text>
           ) : null}
           <Text style={[textStyle('body'), { color: colors.text }]}>
-            {booking.date}, {booking.slot.from} to {booking.slot.to}
+            {formatSlotWhen(booking.date, booking.slot.from, booking.slot.to)}
           </Text>
           {booking.sport ? (
             <Text style={[textStyle('caption'), { color: colors.textTertiary }]}>{SPORT_LABEL[booking.sport]}</Text>

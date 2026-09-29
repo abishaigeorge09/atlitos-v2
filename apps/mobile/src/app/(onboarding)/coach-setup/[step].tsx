@@ -4,7 +4,7 @@ import { SPORTS, type Sport } from '@atlitos/types';
 import { radii, spacing } from '@atlitos/theme';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
-import { CircleCheck, FileText, Plus, Trash2 } from 'lucide-react-native';
+import { Camera, CircleCheck, FileText, Plus, Trash2 } from 'lucide-react-native';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -303,7 +303,7 @@ export default function CoachSetupStepScreen() {
         <View style={{ flex: 1, gap: spacing.lg }}>
           {stepIndex === 0 ? (
             <View style={{ gap: spacing.md }}>
-              <Text style={[textStyle('h2'), { color: colors.text }]}>What do you coach.</Text>
+              <Text style={[textStyle('h2'), { color: colors.text }]}>What do you coach?</Text>
               <Text style={[textStyle('body'), { color: colors.textSecondary }]}>
                 One sport per coach profile. This cannot change once you submit.
               </Text>
@@ -324,16 +324,40 @@ export default function CoachSetupStepScreen() {
           {stepIndex === 1 ? (
             <View style={{ gap: spacing.md, alignItems: 'center' }}>
               <Text style={[textStyle('h2'), { color: colors.text, alignSelf: 'flex-start' }]}>Add a photo.</Text>
+              {/* BUG-064: an empty circle with no icon, label or hint; nothing
+                  said it was tappable, and VoiceOver announced only "button". */}
               <Pressable
                 onPress={() => void handlePickPhoto()}
                 accessibilityRole="button"
+                accessibilityLabel={draft.avatarUrl ? 'Change photo' : 'Add a photo'}
                 style={{ position: 'relative' }}
               >
                 <Avatar uri={draft.avatarUrl ?? undefined} size={80} />
+                {draft.avatarUrl ? null : (
+                  <View
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      right: 0,
+                      bottom: 0,
+                      left: 0,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Camera size={28} color={colors.accent} strokeWidth={1.75} />
+                  </View>
+                )}
               </Pressable>
               {photoUploading ? (
                 <Text style={[textStyle('caption'), { color: colors.textTertiary }]}>Uploading.</Text>
-              ) : null}
+              ) : (
+                <Text style={[textStyle('caption'), { color: colors.textSecondary, textAlign: 'center' }]}>
+                  {draft.avatarUrl
+                    ? 'Tap your photo to change it.'
+                    : 'A clear photo of your face helps athletes choose you. You can add one later.'}
+                </Text>
+              )}
             </View>
           ) : null}
 

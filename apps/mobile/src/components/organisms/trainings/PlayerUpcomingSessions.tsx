@@ -10,6 +10,7 @@ import { SessionCard } from '@/components/ui/session-card';
 import { Text } from '@/components/ui/text';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
+import { formatTimeRange } from '@/lib/time-display';
 
 function bySoonestDateTime(a: { date: string; from: string }, b: { date: string; from: string }): number {
   return a.date === b.date ? a.from.localeCompare(b.from) : a.date.localeCompare(b.date);
@@ -83,7 +84,7 @@ export function PlayerUpcomingSessions({
               key={row.session.id}
               variant="upcoming"
               date={row.session.date}
-              timeSlot={`${row.session.slot.from} to ${row.session.slot.to}`}
+              timeSlot={formatTimeRange(row.session.slot.from, row.session.slot.to)}
               personName={row.session.coachName ?? 'Coach'}
               sessionType={row.session.sessionTypeName ?? ''}
               focusArea={row.session.focusArea || 'No focus area noted'}
@@ -95,7 +96,7 @@ export function PlayerUpcomingSessions({
               key={row.entry.session.id}
               variant="upcoming"
               date={row.entry.session.date}
-              timeSlot={`${row.entry.session.slotStart} to ${row.entry.session.slotEnd}`}
+              timeSlot={formatTimeRange(row.entry.session.slotStart, row.entry.session.slotEnd)}
               personName={row.entry.groupName}
               sessionType="Group"
               focusArea={row.entry.session.focusArea || 'No focus area noted'}

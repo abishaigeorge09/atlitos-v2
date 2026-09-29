@@ -112,8 +112,11 @@ export default function TrainingsShellLayout() {
           alignItems: 'center',
           justifyContent: 'space-between',
           paddingHorizontal: spacing.lg,
-          paddingTop: spacing.lg,
+          // No top padding; the row is the AppBar's own 56pt (h-14) so the
+          // title lines up with Home's wordmark and the other tab titles
+          // (BUG-070).
         }}
+        className="h-14"
       >
         <Text style={[textStyle('h1'), { color: colors.text }]}>Trainings</Text>
         <Pressable

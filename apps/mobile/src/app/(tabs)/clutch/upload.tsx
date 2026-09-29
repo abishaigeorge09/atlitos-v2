@@ -1,12 +1,12 @@
 import { useClutch } from '@atlitos/api';
 import { spacing } from '@atlitos/theme';
 import type { ApiError, Sport } from '@atlitos/types';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as VideoThumbnails from 'expo-video-thumbnails';
 import { CheckCircle2, Film, TriangleAlert, Upload } from 'lucide-react-native';
-import { useState } from 'react';
-import { ActivityIndicator, Image, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Image, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { LoginGateModal } from '@/components/organisms/LoginGateModal';
@@ -63,6 +63,24 @@ export default function ClutchUploadScreen() {
   const [sport, setSport] = useState<Sport | null>(retrySport);
   const [state, setState] = useState<UploadState>('idle');
   const [error, setError] = useState<ApiError | null>(null);
+
+  // BUG-072: Back threw away a chosen clip, a typed caption and a sport with
+  // no word. Any way of leaving (the Back button, the edge swipe) now asks
+  // first, but only when something changed from how the screen opened, so a
+  // retry prefilled with its old caption does not count as unsaved work.
+  const navigation = useNavigation();
+  const hasDraft =
+    asset !== null || caption.trim() !== (params.retryCaption ?? '').trim() || sport !== retrySport;
+  useEffect(() => {
+    if (!hasDraft || state === 'done') return;
+    return navigation.addListener('beforeRemove', (event) => {
+      event.preventDefault();
+      Alert.alert('Discard this clip?', 'Your clip, caption and sport will not be saved.', [
+        { text: 'Keep editing', style: 'cancel' },
+        { text: 'Discard', style: 'destructive', onPress: () => navigation.dispatch(event.data.action) },
+      ]);
+    });
+  }, [navigation, hasDraft, state]);
 
   if (requiresAuthGate) {
     return (
@@ -236,7 +254,9 @@ export default function ClutchUploadScreen() {
           accessibilityLabel={asset ? 'Change clip' : 'Select a clip'}
           onPress={() => void pickVideo()}
           disabled={state === 'uploading'}
-          style={{ aspectRatio: 9 / 16, maxHeight: 320 }}
+          // Centred: a 9:16 preview capped at 320pt is narrower than the form,
+          // and left aligned it left half the screen empty (BUG-070).
+          style={{ aspectRatio: 9 / 16, maxHeight: 320, alignSelf: 'center' }}
           className="items-center justify-center overflow-hidden rounded-lg border border-border-strong bg-surface-muted"
         >
           {asset ? (

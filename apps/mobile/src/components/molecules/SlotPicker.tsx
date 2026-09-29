@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils';
 import type { TimeSlot } from '@atlitos/types';
 import * as Haptics from 'expo-haptics';
 import { Pressable, View } from 'react-native';
+import { formatTimeRange } from '@/lib/time-display';
 
 export interface SlotPickerProps {
   slots: TimeSlot[];
@@ -50,7 +51,7 @@ export function SlotPicker({ slots, value, onChange, disabledSlots = [] }: SlotP
                 isSelected ? 'text-ink-on-accent' : isDisabled ? 'text-text-tertiary' : 'text-text',
               )}
             >
-              {slot.from} to {slot.to}
+              {formatTimeRange(slot.from, slot.to)}
             </Text>
           </Pressable>
         );

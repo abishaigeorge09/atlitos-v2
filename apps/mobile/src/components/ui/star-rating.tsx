@@ -27,6 +27,17 @@ function StarRating({ mode = 'display', value, count, max = 5, onChange, size = 
   const colors = useThemeColors();
   const stars = Array.from({ length: max }, (_, i) => i + 1);
 
+  // BUG-061: a court or coach nobody has reviewed read "0.0/5 (0)" beside
+  // five empty stars, which looks like a bad score rather than no score.
+  if (mode === 'display' && count === 0) {
+    return (
+      <View className="flex-row items-center gap-xs">
+        <Star size={size} color={colors.textTertiary} fill="transparent" strokeWidth={1.75} />
+        <Text className="font-sans text-sm text-text-secondary">No reviews yet</Text>
+      </View>
+    );
+  }
+
   return (
     <View className="flex-row items-center gap-xs">
       <View className="flex-row items-center gap-xs">

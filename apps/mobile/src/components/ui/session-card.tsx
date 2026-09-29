@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/theme/use-theme-colors';
+import { formatSlotDate } from '@/lib/time-display';
 
 /**
  * Molecule 18: SessionCard. date, time slot, coach/player name, session
@@ -67,7 +68,7 @@ function SessionCard({
         <Pressable
           onPress={onPress}
           accessibilityRole="button"
-          accessibilityLabel={`${personName}, ${date}, ${timeSlot}`}
+          accessibilityLabel={`${personName}, ${formatSlotDate(date)}, ${timeSlot}`}
           style={StyleSheet.absoluteFill}
         />
       ) : null}
@@ -82,7 +83,7 @@ function SessionCard({
       </View>
 
       <View style={{ pointerEvents: 'none' }} className="gap-xs">
-        <InfoRow icon={Calendar} text={`${date}, ${timeSlot}`} />
+        <InfoRow icon={Calendar} text={`${formatSlotDate(date)}, ${timeSlot}`} />
         <InfoRow icon={Target} text={focusArea} />
         <InfoRow icon={MapPin} text={location} />
       </View>

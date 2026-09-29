@@ -24,6 +24,7 @@ import { SESSION_STATUS_PILL } from '@/lib/session-display';
 import { supabase } from '@/lib/supabase';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
+import { formatSlotWhen } from '@/lib/time-display';
 
 type ScreenState = 'loading' | 'populated' | 'error';
 
@@ -208,7 +209,7 @@ export default function GroupSessionDetailScreen() {
           </View>
           <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>Group session</Text>
           <Text style={[textStyle('body'), { color: colors.text }]}>
-            {session.date}, {session.slotStart} to {session.slotEnd}
+            {formatSlotWhen(session.date, session.slotStart, session.slotEnd)}
           </Text>
           {duration ? (
             <Text style={[textStyle('caption'), { color: colors.textTertiary }]}>Session duration: {duration}</Text>

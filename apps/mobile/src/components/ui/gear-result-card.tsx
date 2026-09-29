@@ -1,5 +1,6 @@
 import { formatINR } from '@atlitos/theme';
 import { Package } from 'lucide-react-native';
+import { useState } from 'react';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 
 import { Text } from '@/components/ui/text';
@@ -51,6 +52,8 @@ function GearResultCard({
   className,
 }: GearResultCardProps) {
   const colors = useThemeColors();
+  // A dead image URL falls back to the no photo glyph, not a blank box (BUG-070).
+  const [imageFailed, setImageFailed] = useState(false);
   const stores = `${storeCount} store${storeCount === 1 ? '' : 's'}`;
 
   return (
@@ -68,8 +71,13 @@ function GearResultCard({
       ) : null}
 
       <View style={{ pointerEvents: 'none', backgroundColor: colors.surfaceMuted }} className="h-36 w-full items-center justify-center">
-        {imageUri ? (
-          <Image source={{ uri: imageUri }} className="h-36 w-full" resizeMode="contain" />
+        {imageUri && !imageFailed ? (
+          <Image
+            source={{ uri: imageUri }}
+            className="h-36 w-full"
+            resizeMode="contain"
+            onError={() => setImageFailed(true)}
+          />
         ) : (
           <Package size={32} strokeWidth={1.75} color={colors.textTertiary} accessibilityLabel="No photo yet" />
         )}

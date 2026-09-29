@@ -1,10 +1,10 @@
-import { useNotifications } from '@atlitos/api';
+import { useNotifications, useProfile } from '@atlitos/api';
 import type { ApiError, NotificationPref, NotificationType } from '@atlitos/types';
 import { NOTIFICATION_TYPES } from '@atlitos/types';
 import { spacing } from '@atlitos/theme';
 import { router } from 'expo-router';
 import { TriangleAlert } from 'lucide-react-native';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -14,6 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
 import { notificationDisplay } from '@/lib/notification-display';
 import { supabase } from '@/lib/supabase';
+import { useSessionStore } from '@/store/session-store';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
 
@@ -25,16 +26,29 @@ interface Row {
   emailEnabled: boolean;
 }
 
+type CategoryPrefs = { sessions: boolean; messages: boolean; promotions: boolean };
+
+/** The coarser users.notification_prefs (0087) category a type also answers
+ * to, the same map `_shared/notify.ts` (TYPE_TO_0087_CATEGORY) suppresses push
+ * by. BUG-071: push is suppressed when EITHER store says no, so this screen
+ * shows push on only when both allow it, and a push toggle writes both. */
+const TYPE_TO_CATEGORY: Partial<Record<NotificationType, 'sessions' | 'messages'>> = {
+  booking: 'sessions',
+  chat: 'messages',
+};
+
 // A type with no stored pref row is push+email enabled by default (0002
 // column defaults); the screen shows that default rather than inventing a
 // persisted value.
-function toRows(prefs: NotificationPref[]): Row[] {
+function toRows(prefs: NotificationPref[], categories: CategoryPrefs | undefined): Row[] {
   const byType = new Map(prefs.map((pref) => [pref.notificationType, pref]));
   return NOTIFICATION_TYPES.map((type) => {
     const pref = byType.get(type);
+    const category = TYPE_TO_CATEGORY[type];
+    const categoryAllows = category ? categories?.[category] !== false : true;
     return {
       type,
-      pushEnabled: pref ? pref.pushEnabled : true,
+      pushEnabled: (pref ? pref.pushEnabled : true) && categoryAllows,
       emailEnabled: pref ? pref.emailEnabled : true,
     };
   });
@@ -54,6 +68,13 @@ function toRows(prefs: NotificationPref[]): Row[] {
 export default function NotificationPreferencesScreen() {
   const colors = useThemeColors();
   const notifications = useNotifications(supabase);
+  const profileApi = useProfile(supabase);
+  const categoryPrefs = useSessionStore((state) => state.me?.notificationPrefs);
+  // Read through a ref so `load` keeps a stable identity: a toggle refreshes
+  // `me`, and a changed `load` would reload the list and flash the skeleton.
+  const categoryPrefsRef = useRef(categoryPrefs);
+  categoryPrefsRef.current = categoryPrefs;
+  const refreshMe = useSessionStore((state) => state.refreshMe);
 
   const [state, setState] = useState<LoadState>('loading');
   const [rows, setRows] = useState<Row[]>([]);
@@ -65,7 +86,7 @@ export default function NotificationPreferencesScreen() {
     setError(null);
     try {
       const prefs = await notifications.listPrefs();
-      setRows(toRows(prefs));
+      setRows(toRows(prefs, categoryPrefsRef.current));
       setState('ready');
     } catch (err) {
       setError(err as ApiError);
@@ -89,6 +110,16 @@ export default function NotificationPreferencesScreen() {
         pushEnabled: next.pushEnabled,
         emailEnabled: next.emailEnabled,
       });
+      const category = TYPE_TO_CATEGORY[type];
+      if (category && patch.pushEnabled !== undefined) {
+        await profileApi.updateProfile({
+          notificationPrefs: {
+            ...(categoryPrefs ?? { sessions: true, messages: true, promotions: false }),
+            [category]: patch.pushEnabled,
+          },
+        });
+        await refreshMe();
+      }
     } catch {
       setRows((previous) => previous.map((row) => (row.type === type ? current : row)));
     } finally {

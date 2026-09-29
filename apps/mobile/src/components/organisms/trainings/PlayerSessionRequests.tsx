@@ -9,6 +9,7 @@ import { SessionCard } from '@/components/ui/session-card';
 import { Text } from '@/components/ui/text';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
+import { formatTimeRange } from '@/lib/time-display';
 
 /**
  * Athlete dashboard "Session requests" section (PRD-01 3.3): the player's
@@ -40,7 +41,7 @@ export function PlayerSessionRequests({ sessions }: PlayerSessionRequestsProps) 
             <SessionCard
               variant="upcoming"
               date={session.date}
-              timeSlot={`${session.slot.from} to ${session.slot.to}`}
+              timeSlot={formatTimeRange(session.slot.from, session.slot.to)}
               personName={session.coachName ?? 'Coach'}
               sessionType={session.sessionTypeName ?? ''}
               focusArea={session.focusArea || 'No focus area noted'}

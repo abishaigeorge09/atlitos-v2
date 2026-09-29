@@ -453,8 +453,10 @@ export default function ClutchFeedScreen() {
       {/* Floating header: wordmark + upload. Sits above the feed, safe-area
           aware. Not part of the card, so it never nests inside a card tap. */}
       <View
+        // 56pt, the AppBar's row, so the title's centre matches every other
+        // tab title (BUG-070).
         style={{ pointerEvents: 'box-none', position: 'absolute', top: insets.top, left: 0, right: 0, paddingHorizontal: spacing.lg }}
-        className="flex-row items-center justify-between"
+        className="h-14 flex-row items-center justify-between"
       >
         <Text style={[textStyle('h2'), { color: inkOnMedia }]}>Clutch</Text>
         <Pressable

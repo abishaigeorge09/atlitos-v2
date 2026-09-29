@@ -24,6 +24,7 @@ import { SESSION_FREQUENCY_LABEL, SESSION_STATUS_PILL } from '@/lib/session-disp
 import { supabase } from '@/lib/supabase';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
+import { formatSlotWhen } from '@/lib/time-display';
 
 type ScreenState = 'loading' | 'populated' | 'error';
 
@@ -322,7 +323,7 @@ export default function SessionDetailScreen() {
             <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>with {session.coachName}</Text>
           ) : null}
           <Text style={[textStyle('body'), { color: colors.text }]}>
-            {session.date}, {session.slot.from} to {session.slot.to}
+            {formatSlotWhen(session.date, session.slot.from, session.slot.to)}
           </Text>
           <Text style={[textStyle('caption'), { color: colors.textTertiary }]}>
             {SESSION_FREQUENCY_LABEL[session.frequency]}
