@@ -81,29 +81,6 @@ export default function CourtsIndexScreen() {
   const [error, setError] = useState<ApiError | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  // BUG-065: "My bookings" is hidden while in-app booking is off, which also
-  // hid bookings made BEFORE it was switched off; an athlete holding one had
-  // no way to see, cancel or rate it. The entry stays hidden for everyone
-  // else and appears for anyone with at least one court booking.
-  const signedIn = useSessionStore((state) => state.status === 'signed_in');
-  const [hasCourtBookings, setHasCourtBookings] = useState(false);
-  useEffect(() => {
-    if (COURT_IN_APP_BOOKING_ENABLED || !signedIn) return;
-    let active = true;
-    courts
-      .listMyBookings(1)
-      .then((rows) => {
-        if (active) setHasCourtBookings(rows.length > 0);
-      })
-      .catch(() => {
-        // The entry just stays hidden; the list itself is unaffected.
-      });
-    return () => {
-      active = false;
-    };
-  }, [courts, signedIn]);
-  const showMyBookings = COURT_IN_APP_BOOKING_ENABLED || hasCourtBookings;
-
   // Court search (migration 0134). Answered from real availability: "badminton
   // tonight after 7 under 500" returns courts that are actually free then, at
   // that price. Submit only, not per keystroke: each search generates slots
@@ -225,7 +202,10 @@ export default function CourtsIndexScreen() {
     <View style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, gap: spacing.sm }}>
       <View className="h-14 flex-row items-center justify-between">
         <Text style={[textStyle('h1'), { color: colors.text }]}>Courts</Text>
-        {showMyBookings ? (
+        {/* BUG-065 wontfix: while in-app booking is off the bookings screens
+            redirect back here (Release task 5), so an entry would be a dead
+            button. Every court booking in production is past test data. */}
+        {COURT_IN_APP_BOOKING_ENABLED ? (
           <Pressable
             accessibilityRole="button"
             className="min-h-11 flex-row items-center gap-xs rounded-pill px-md active:bg-surface-muted"
