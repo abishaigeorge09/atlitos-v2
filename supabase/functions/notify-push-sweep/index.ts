@@ -27,8 +27,8 @@
 // arbitrary users' notifications. The pg_cron job scheduled by
 // supabase/deploy/notification_push_sweep_schedule.sql (formerly migration
 // 0111, moved 2026-08-14 because it depends on environment-specific vault
-// secrets a migration cannot carry) calls it with the service-role key from
-// the vault.
+// secrets a migration cannot carry) calls it with NOTIFY_SWEEP_SECRET, read
+// from the vault at run time. The runtime service key is still accepted.
 
 import { handleCorsPreflight } from "../_shared/cors.ts";
 import { jsonResponse, withErrorHandling } from "../_shared/http.ts";
@@ -74,7 +74,7 @@ Deno.serve((req) =>
       throw new AppError("VALIDATION", "Only POST is supported.", 405);
     }
 
-    assertServiceRoleRequest(request);
+    assertServiceRoleRequest(request, { sharedSecretEnv: "NOTIFY_SWEEP_SECRET" });
 
     let limit = DEFAULT_CLAIM_LIMIT;
     try {

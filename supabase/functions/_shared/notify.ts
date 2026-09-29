@@ -774,11 +774,35 @@ export async function dispatchNotification(
  * key an internal edge-function caller already carries in its env; a client
  * bearing only its own user JWT is rejected.
  */
-export function assertServiceRoleRequest(req: Request): void {
+/** Compares two strings without an early exit on the first differing byte. */
+function constantTimeEqual(a: string, b: string): boolean {
+  const left = new TextEncoder().encode(a);
+  const right = new TextEncoder().encode(b);
+  let diff = left.length ^ right.length;
+  const length = Math.max(left.length, right.length);
+  for (let i = 0; i < length; i += 1) {
+    diff |= (left[i] ?? 0) ^ (right[i] ?? 0);
+  }
+  return diff === 0;
+}
+
+export function assertServiceRoleRequest(
+  req: Request,
+  options: { sharedSecretEnv?: string } = {},
+): void {
   const header = req.headers.get("Authorization") ?? "";
   const bearer = header.replace(/^Bearer\s+/i, "").trim();
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-  if (!serviceKey || bearer !== serviceKey) {
+  // Optional second credential for one named caller, matched exactly like the
+  // service key. notify-push-sweep passes NOTIFY_SWEEP_SECRET: the key the
+  // runtime injects is not shown in the dashboard, so the pg_cron job cannot
+  // hold it, and production refused every sweep with a genuine dashboard key
+  // (2026-09-29). A dedicated random secret, stored only in Vault and in this
+  // function's env, keeps the boundary an exact match.
+  const sharedSecret = options.sharedSecretEnv ? Deno.env.get(options.sharedSecretEnv) ?? "" : "";
+  const serviceKeyMatches = serviceKey.length > 0 && constantTimeEqual(bearer, serviceKey);
+  const sharedSecretMatches = sharedSecret.length >= 32 && constantTimeEqual(bearer, sharedSecret);
+  if (!serviceKeyMatches && !sharedSecretMatches) {
     throw new AppError(
       "FORBIDDEN",
       "notify-dispatch is a service-role-only endpoint.",

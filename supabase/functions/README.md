@@ -63,6 +63,7 @@ secrets panel) for the deployed project, and locally in `supabase/.env` for
 | `APPLE_SIGNIN_KEY_ID` | Yes, for Sign in with Apple | same | Key id of the Sign in with Apple `.p8` key, the JWT `kid`. |
 | `APPLE_SIGNIN_PRIVATE_KEY` | Yes, for Sign in with Apple | same | Full contents of the `.p8` file (PEM, newlines kept or escaped as `\n`). Never logged, never returned. |
 | `APPLE_SIGNIN_CLIENT_ID` | Optional | same | Defaults to the bundle id `com.atlitos.app`. |
+| `NOTIFY_SWEEP_SECRET` | Yes, for push delivery | `notify-push-sweep` | At least 32 characters (`openssl rand -hex 32`). The bearer the pg_cron sweep sends, matched exactly; the same value is Vault secret `notify_sweep_secret`. See `supabase/deploy/README.md`. |
 
 If any of the three required Apple secrets is missing, `apple-token-store`
 answers `500 APPLE_NOT_CONFIGURED` (the app ignores it, sign in still
