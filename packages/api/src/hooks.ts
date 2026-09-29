@@ -587,6 +587,7 @@ export function useSearch(client: AtlitosClient) {
             city: input.city,
             limit: input.limit,
             rerank: input.rerank,
+            bookableOnly: input.bookableOnly,
           },
         });
         if (error) throw await mapEdgeFunctionError(error);
@@ -737,6 +738,7 @@ function mapCourtRow(client: AtlitosClient, row: CourtQueryRow, near?: { lat: nu
     id: row.id,
     venueId: row.venue_id,
     name: row.name,
+    venueName: venue?.name ?? undefined,
     location: venue ? `${venue.address}, ${venue.city}` : "",
     city: venue?.city ?? "",
     lat,

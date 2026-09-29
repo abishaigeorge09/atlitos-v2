@@ -167,6 +167,9 @@ export interface Court {
   id: string;
   venueId: string;
   name: string;
+  /** The venue's own name ("Madhapur Badminton Court"). `name` is the COURT
+   * inside it ("Court 1"), which alone told the athlete nothing (BUG-061). */
+  venueName?: string;
   location: string; // venue address, hydrated
   city: string;
   lat: number;
@@ -599,6 +602,11 @@ export interface SearchInput {
   /** false while the shopper is still typing: the server skips Claude's
    * rerank and answers with the deterministic order. Omit (true) on submit. */
   rerank?: boolean;
+  /** true while in-app court booking is off: court results (and the courts
+   * "soonest is" broaden line) keep only venues with a booking page, the
+   * same rule the Courts list applies (`bookingUrlOnly`), so search never
+   * offers a venue the Courts tab hides (BUG-057). */
+  bookableOnly?: boolean;
 }
 
 /**
