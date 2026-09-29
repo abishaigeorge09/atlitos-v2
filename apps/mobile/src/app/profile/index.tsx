@@ -1,6 +1,6 @@
 import { sizedImageUrl, toApiError, useClutch, type CreatorProfile } from '@atlitos/api';
 import { COVER_IMAGE_SIZE } from '@/lib/image-sizes';
-import { inkOnMedia, spacing } from '@atlitos/theme';
+import { inkOnMedia, mediaBackdrop, spacing } from '@atlitos/theme';
 import type { ApiError, Clip, ClipStatus } from '@atlitos/types';
 import { router } from 'expo-router';
 import { Bookmark, Heart, LayoutGrid, LogIn, RotateCcw, Settings, TriangleAlert } from 'lucide-react-native';
@@ -189,10 +189,15 @@ export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {
         setClips((prev) =>
           prev.map((c) => (c.id === clip.id ? { ...c, status: 'uploading', failureReason: null } : c)),
         );
-        router.push({
-          pathname: '/(tabs)/clutch/upload',
-          params: { retryClipId: clip.id, retryCaption: clip.caption, retrySport: clip.sport },
-        });
+        // withAnchor keeps the feed under upload so the Clutch tab never gets
+        // stuck on it (BUG-050).
+        router.push(
+          {
+            pathname: '/(tabs)/clutch/upload',
+            params: { retryClipId: clip.id, retryCaption: clip.caption, retrySport: clip.sport },
+          },
+          { withAnchor: true },
+        );
       } catch (err) {
         setRetryErrors((prev) => ({ ...prev, [clip.id]: toApiError(err).message }));
       } finally {
@@ -437,7 +442,8 @@ export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {
                 onOpen={
                   isFailed
                     ? undefined
-                    : () => router.push({ pathname: '/(tabs)/clutch/post/[id]', params: { id: item.id } })
+                    : () =>
+                        router.push({ pathname: '/(tabs)/clutch/post/[id]', params: { id: item.id } }, { withAnchor: true })
                 }
               />
               {pill ? (
@@ -446,16 +452,22 @@ export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {
                 </View>
               ) : null}
               {isFailed ? (
+                // BUG-070: a see through overlay let the thumbnail's film glyph
+                // show through the copy, and the stored failure reason is a
+                // full sentence that truncated at two lines on a third of the
+                // screen width. Solid media backdrop, the short state on the
+                // tile, the full reason for VoiceOver.
                 <View
                   className="absolute inset-0 items-center justify-center gap-xs p-xs"
-                  style={{ backgroundColor: colors.overlay }}
+                  style={{ backgroundColor: mediaBackdrop }}
                 >
                   <TriangleAlert size={18} color={inkOnMedia} strokeWidth={1.75} />
                   <Text
                     style={[textStyle('caption'), { color: inkOnMedia, textAlign: 'center' }]}
-                    numberOfLines={2}
+                    numberOfLines={3}
+                    accessibilityLabel={retryError ?? item.failureReason ?? 'Upload failed'}
                   >
-                    {retryError ?? item.failureReason ?? 'Upload failed'}
+                    {retryError ?? 'Upload failed'}
                   </Text>
                   <Pressable
                     accessibilityRole="button"

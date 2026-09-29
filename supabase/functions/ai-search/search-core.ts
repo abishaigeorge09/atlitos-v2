@@ -404,6 +404,8 @@ function key(c: { entityType: EntityType; entityId: string }): string {
 export const candidateKey = key;
 
 function plural(noun: string): string {
+  // "coach" is "coaches", not "coachs" (BUG-069).
+  if (/(ch|sh|x|z)$/.test(noun)) return `${noun}es`;
   return /s$/.test(noun) ? noun : `${noun}s`;
 }
 
@@ -476,7 +478,8 @@ export function buildBroaden(candidates: Candidate[], intent: ParsedIntent): str
       : "matches";
 
   const priceClause = intent.priceMax !== undefined ? ` under ${intent.priceMax}` : "";
-  const sportClause = intent.sport !== "general" ? ` ${cap(intent.sport)}` : "";
+  // A sport is a common noun mid sentence: "No badminton coaches found."
+  const sportClause = intent.sport !== "general" ? ` ${intent.sport}` : "";
 
   // Lead sentence.
   let lead: string;

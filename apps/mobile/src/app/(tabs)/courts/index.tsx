@@ -108,6 +108,9 @@ export default function CourtsIndexScreen() {
           lng: coords?.lng,
           city: coords ? undefined : city ?? undefined,
           limit: 20,
+          // The list's own rule (bookingUrlOnly below): search must not offer
+          // a venue the list hides (BUG-057).
+          bookableOnly: !COURT_IN_APP_BOOKING_ENABLED,
         });
         setHits(res.results);
         setBroaden(res.broaden ?? null);
@@ -194,9 +197,14 @@ export default function CourtsIndexScreen() {
   }
 
   const header = (
-    <View style={{ padding: spacing.lg, gap: spacing.sm }}>
-      <View className="flex-row items-center justify-between">
+    // Title row is the AppBar's own 56pt (h-14) with no top padding, so the
+    // title sits where Home's wordmark and every other tab title sit (BUG-070).
+    <View style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, gap: spacing.sm }}>
+      <View className="h-14 flex-row items-center justify-between">
         <Text style={[textStyle('h1'), { color: colors.text }]}>Courts</Text>
+        {/* BUG-065 wontfix: while in-app booking is off the bookings screens
+            redirect back here (Release task 5), so an entry would be a dead
+            button. Every court booking in production is past test data. */}
         {COURT_IN_APP_BOOKING_ENABLED ? (
           <Pressable
             accessibilityRole="button"
@@ -414,8 +422,10 @@ export default function CourtsIndexScreen() {
           renderItem={({ item }) => (
             <CourtCard
               imageUri={item.images[0]}
-              name={item.name}
-              location={item.location}
+              // Venue first, court in the location line, same as the detail
+              // screen (BUG-061).
+              name={item.venueName ?? item.name}
+              location={item.venueName ? `${item.name}, ${item.location}` : item.location}
               pricePerHour={item.basePricePerHour}
               distanceKm={showDistances ? item.distanceKm : undefined}
               onPress={() => router.push({ pathname: '/(tabs)/courts/court/[id]', params: { id: item.id } })}

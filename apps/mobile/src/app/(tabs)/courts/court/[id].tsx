@@ -214,14 +214,19 @@ export default function CourtDetailScreen() {
 
         <View style={{ paddingHorizontal: spacing.lg, gap: spacing.sm }}>
           <View className="flex-row items-center justify-between">
-            <Text style={[textStyle('h1'), { color: colors.text, flexShrink: 1 }]}>{court.name}</Text>
+            {/* BUG-061: the title was the court's own name ("Court 1") and the
+                venue's name appeared nowhere. The venue leads; the court is
+                named on the line below. */}
+            <Text style={[textStyle('h1'), { color: colors.text, flexShrink: 1 }]}>{court.venueName ?? court.name}</Text>
             <View className="flex-row items-center gap-xs">
               <SportIcon size={18} strokeWidth={1.75} color={colors.textSecondary} />
               <Text className="font-sans text-sm text-text-secondary">{SPORT_LABEL[court.sport]}</Text>
             </View>
           </View>
 
-          <Text style={[textStyle('body'), { color: colors.textSecondary }]}>{court.location}</Text>
+          <Text style={[textStyle('body'), { color: colors.textSecondary }]}>
+            {court.venueName ? `${court.name}, ${court.location}` : court.location}
+          </Text>
 
           <StarRating mode="display" value={court.rating} count={court.ratingCount} />
 

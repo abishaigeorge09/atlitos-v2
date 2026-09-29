@@ -20,6 +20,7 @@ import { SESSION_STATUS_PILL } from '@/lib/session-display';
 import { supabase } from '@/lib/supabase';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
+import { formatSlotWhen } from '@/lib/time-display';
 
 type ScreenState = 'loading' | 'empty' | 'populated' | 'error';
 
@@ -241,7 +242,7 @@ export default function CoachingBookingsListScreen() {
                 ) : null}
                 <View className="flex-row items-center justify-between pt-xs">
                   <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
-                    {row.session.date}, {row.session.slot.from} to {row.session.slot.to}
+                    {formatSlotWhen(row.session.date, row.session.slot.from, row.session.slot.to)}
                   </Text>
                   <PriceText amount={row.session.total} size="sm" />
                 </View>
@@ -264,7 +265,7 @@ export default function CoachingBookingsListScreen() {
                 <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>Group</Text>
                 <View className="flex-row items-center justify-between pt-xs">
                   <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
-                    {row.entry.session.date}, {row.entry.session.slotStart} to {row.entry.session.slotEnd}
+                    {formatSlotWhen(row.entry.session.date, row.entry.session.slotStart, row.entry.session.slotEnd)}
                   </Text>
                 </View>
               </View>

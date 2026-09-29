@@ -122,6 +122,13 @@ interface LocationState {
    * display city on denial/failure instead of pretending they are in
    * Hyderabad. */
   requestLocation: (profileCity?: string | null) => Promise<void>;
+  /** Resolves location only when the athlete has already answered the OS
+   * permission dialog, so it never shows that dialog. Home calls this on
+   * mount (BUG-056): before it, Home read "Location is off, showing
+   * Hyderabad" on every launch, even with permission granted, until the
+   * athlete happened to open Courts. A first time athlete still gets the
+   * dialog from Courts, where the rationale copy is (PRD-01 FR-12). */
+  resolveIfAlreadyAnswered: (profileCity?: string | null) => Promise<void>;
   setManualCity: (city: string) => void;
 }
 
@@ -207,6 +214,20 @@ export const useLocationStore = create<LocationState>((set, get) => ({
     } catch {
       fallBack('unavailable');
     }
+  },
+
+  resolveIfAlreadyAnswered: async (profileCity) => {
+    if (get().requested || get().status === 'loading') return;
+    try {
+      const current = await Location.getForegroundPermissionsAsync();
+      // Undetermined: asking now would show the OS dialog with no rationale.
+      if (current.status === Location.PermissionStatus.UNDETERMINED) return;
+    } catch {
+      return;
+    }
+    // Granted or denied: requestForegroundPermissionsAsync returns the stored
+    // answer without a dialog, so this is the same path Courts takes.
+    await get().requestLocation(profileCity);
   },
 
   // A named city is a city, not a position: any coordinates still held are

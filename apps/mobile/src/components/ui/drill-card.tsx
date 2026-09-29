@@ -44,7 +44,11 @@ export function DrillCard({ drill, completed = false, onPress }: DrillCardProps)
         accessibilityRole="button"
         accessibilityLabel={`Open ${drill.title}`}
         onPress={onPress}
-        style={({ pressed }) => [StyleSheet.absoluteFill, { opacity: pressed ? 0.9 : 1 }]}
+        // Static absoluteFill, not a `({ pressed }) => style` callback, which
+        // NativeWind's interop on a Pressable drops: the tap target then had
+        // no size and the card could not be opened (BUG-060 family).
+        className="active:opacity-90"
+        style={StyleSheet.absoluteFill}
       />
 
       <View style={{ pointerEvents: 'none', padding: spacing.lg, gap: spacing.sm }}>

@@ -296,7 +296,7 @@ export default function ShopScreen() {
         ))}
         <View testID="shop-price-chip">
           <Chip
-            label={priceTierIndex === -1 ? 'Under INR 2,000' : `Under INR ${PRICE_TIERS[priceTierIndex].toLocaleString('en-IN')}`}
+            label={priceTierIndex === -1 ? 'Under ₹2,000' : `Under ₹${PRICE_TIERS[priceTierIndex].toLocaleString('en-IN')}`}
             variant="filter"
             selected={priceTierIndex !== -1}
             onPress={() => setPriceTierIndex((current) => (current === PRICE_TIERS.length - 1 ? -1 : current + 1))}

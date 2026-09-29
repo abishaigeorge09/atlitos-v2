@@ -801,14 +801,30 @@ function dayOfWeekOf(dateISO: string): number {
   return new Date(Number(y), Number(m ?? 1) - 1, Number(d ?? 1)).getDay();
 }
 
+/** Now as IST calendar date and minutes past midnight, the clock
+ * `book-session` judges "in the past" by (`istToday` / `istMinutes`). IST has
+ * no daylight saving, so a fixed +5:30 offset is exact. */
+function istNow(nowMs: number): { date: string; minutes: number } {
+  const ist = new Date(nowMs + 5.5 * 60 * 60 * 1000);
+  return { date: ist.toISOString().slice(0, 10), minutes: ist.getUTCHours() * 60 + ist.getUTCMinutes() };
+}
+
 export function computeAvailableSessionSlots(
   windows: AvailabilityWindow[],
   durationMinutes: number,
   dateISO: string,
   busySlots: { date: string; slotStart: string }[],
+  nowMs: number = Date.now(),
 ): TimeSlot[] {
   const weekday = dayOfWeekOf(dateISO);
   const busyStarts = new Set(busySlots.filter((slot) => slot.date === dateISO).map((slot) => slot.slotStart));
+  // BUG-059: today's slots that have already started were offered, and
+  // "Continue" enabled, only for `book-session` to refuse them at pay. The
+  // same rule is applied here: a past date offers nothing, and today offers
+  // only slots starting after now (IST).
+  const now = istNow(nowMs);
+  if (dateISO < now.date) return [];
+  const earliestStart = dateISO === now.date ? now.minutes + 1 : 0;
 
   const slots: TimeSlot[] = [];
   for (const window of windows) {
@@ -819,6 +835,7 @@ export function computeAvailableSessionSlots(
     const windowEnd = timeToMinutes(window.to);
 
     for (let start = windowStart; start + durationMinutes <= windowEnd; start += durationMinutes) {
+      if (start < earliestStart) continue;
       const from = minutesToTime(start);
       if (busyStarts.has(from)) continue;
       slots.push({ from, to: minutesToTime(start + durationMinutes) });

@@ -2,7 +2,7 @@ import { useNotifications } from '@atlitos/api';
 import { radii, spacing } from '@atlitos/theme';
 import { router, useFocusEffect } from 'expo-router';
 import { RefreshCw, WifiOff, X } from 'lucide-react-native';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -21,6 +21,7 @@ import { SearchBar } from '@/components/ui/search-bar';
 import { Text } from '@/components/ui/text';
 import { usePendingAuthAction } from '@/hooks/use-pending-auth-action';
 import { supabase } from '@/lib/supabase';
+import { useLocationStore } from '@/store/location-store';
 import { useSessionStore } from '@/store/session-store';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
@@ -72,6 +73,15 @@ export default function HomeScreen() {
   const everyRailFailed = railKeys.length >= 2 && railKeys.every((key) => railResults[key] === false);
   const [refreshing, setRefreshing] = useState(false);
   const [setupCardDismissed, setSetupCardDismissed] = useState(false);
+
+  // BUG-056: without this Home showed "Location is off, showing Hyderabad"
+  // on every launch, even with permission granted, until Courts ran the
+  // location request. Never shows the OS dialog (see the store action).
+  const resolveLocationIfAnswered = useLocationStore((state) => state.resolveIfAlreadyAnswered);
+  const profileCity = me?.city ?? null;
+  useEffect(() => {
+    void resolveLocationIfAnswered(profileCity);
+  }, [resolveLocationIfAnswered, profileCity]);
 
   const notifications = useNotifications(supabase);
 
@@ -173,7 +183,8 @@ export default function HomeScreen() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Dismiss finish setup"
-              hitSlop={8}
+              // 16pt icon + 14 each side = the 44pt minimum (BUG-064).
+              hitSlop={14}
               onPress={() => setSetupCardDismissed(true)}
             >
               <X size={16} color={colors.textTertiary} strokeWidth={1.75} />

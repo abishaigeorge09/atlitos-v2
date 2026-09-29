@@ -17,6 +17,7 @@ import { Text } from '@/components/ui/text';
 import { supabase } from '@/lib/supabase';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
+import { formatTimeRange } from '@/lib/time-display';
 
 type ScreenState = 'loading' | 'empty' | 'populated' | 'error';
 
@@ -161,7 +162,7 @@ export default function CoachRequestsScreen() {
               <SessionCard
                 variant="request"
                 date={item.date}
-                timeSlot={`${item.slot.from} to ${item.slot.to}`}
+                timeSlot={formatTimeRange(item.slot.from, item.slot.to)}
                 personName={item.playerName ?? 'Athlete'}
                 sessionType={item.sessionTypeName ?? ''}
                 focusArea={item.focusArea || 'No focus area noted'}

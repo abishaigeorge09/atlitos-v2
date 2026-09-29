@@ -22,7 +22,7 @@ import { supabase } from '@/lib/supabase';
 import { useLocationStore } from '@/store/location-store';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
-import { DONATIONS_ENABLED } from '@/lib/feature-flags';
+import { COURT_IN_APP_BOOKING_ENABLED, DONATIONS_ENABLED } from '@/lib/feature-flags';
 import { openGear } from '@/lib/gear-route';
 
 type LoadState = 'idle' | 'loading' | 'empty' | 'populated' | 'error';
@@ -145,6 +145,9 @@ export default function SearchScreen() {
           city,
           lat: coords?.lat,
           lng: coords?.lng,
+          // Same rule as the Courts list: while in-app booking is off, only
+          // venues with a booking page (BUG-057).
+          bookableOnly: !COURT_IN_APP_BOOKING_ENABLED,
         });
         if (seq !== requestSeq.current) return; // a newer query already ran
         // Athlete hits open the Empower profile, which is off where donations are.
@@ -193,19 +196,26 @@ export default function SearchScreen() {
     }
   }, [segments, activeSegment]);
 
+  // Coach and clip hits open inside another tab's stack. `withAnchor` loads
+  // that tab's root under the pushed screen; without it the pushed screen
+  // became the tab's only screen and the tab stayed stuck on it (BUG-050).
+  // Coaches open on the Trainings stack, the same route the Trainings Coaches
+  // tab uses, so Back lands on a visible tab; their booking flow continues on
+  // the tab routes, so they cannot open above this screen the way courts do.
   function openHit(hit: SearchHit) {
     switch (hit.entityType) {
       case 'gear':
         openGear(hit.entityId);
         break;
       case 'coach':
-        router.push({ pathname: '/(tabs)/coaching/coach/[id]', params: { id: hit.entityId } });
+        router.push({ pathname: '/(tabs)/trainings/coach/[id]', params: { id: hit.entityId } }, { withAnchor: true });
         break;
       case 'court':
         // A court hit carries its first free slot (migration 0134); open the
-        // court on that date with the slot chosen.
+        // court on that date with the slot chosen. Pushed above this screen
+        // (home/court/[id]) so Back returns to these results (BUG-068).
         router.push({
-          pathname: '/(tabs)/courts/court/[id]',
+          pathname: '/home/court/[id]',
           params: hit.slot ? { id: hit.entityId, date: hit.slot.date, slot: hit.slot.start } : { id: hit.entityId },
         });
         break;
@@ -213,7 +223,7 @@ export default function SearchScreen() {
         router.push({ pathname: '/home/upa/[id]', params: { id: hit.entityId } });
         break;
       case 'clip':
-        router.push({ pathname: '/(tabs)/clutch/post/[id]', params: { id: hit.entityId } });
+        router.push({ pathname: '/(tabs)/clutch/post/[id]', params: { id: hit.entityId } }, { withAnchor: true });
         break;
     }
   }
@@ -226,7 +236,11 @@ export default function SearchScreen() {
       subtitle: hit.subtitle,
       imageUrl: hit.imageUrl,
       price: typeof hit.price === 'number' ? formatINR(hit.price) : undefined,
-      rankReason: hit.rankReason,
+      // A court's rankReason is always "Free <slot>". While in-app booking is
+      // off the venue is booked on its own site, so that slot is not a
+      // promise this app can keep; show no reason rather than a false one
+      // (BUG-061).
+      rankReason: hit.entityType === 'court' && !COURT_IN_APP_BOOKING_ENABLED ? undefined : hit.rankReason,
       onPress: () => openHit(hit),
     }));
   }, [hits, segments, activeSegment]);
@@ -279,7 +293,9 @@ export default function SearchScreen() {
                 <Text style={[textStyle('label'), { color: colors.textTertiary }]}>Recent searches</Text>
                 <Pressable
                   accessibilityRole="button"
-                  hitSlop={8}
+                  accessibilityLabel="Clear recent searches"
+                  // A 16pt tall caption; 14 above and below reaches 44pt (BUG-064).
+                  hitSlop={{ top: 14, bottom: 14, left: 8, right: 8 }}
                   onPress={clearRecentSearches}
                   style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}
                 >

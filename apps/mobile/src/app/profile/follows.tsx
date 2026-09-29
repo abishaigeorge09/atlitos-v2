@@ -129,7 +129,9 @@ export default function FollowsScreen() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={item.name}
-              onPress={() => router.push({ pathname: '/(tabs)/clutch/creator/[id]', params: { id: item.id } })}
+              onPress={() =>
+                router.push({ pathname: '/(tabs)/clutch/creator/[id]', params: { id: item.id } }, { withAnchor: true })
+              }
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',

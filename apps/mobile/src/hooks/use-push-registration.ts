@@ -1,5 +1,4 @@
 import { usePush } from '@atlitos/api';
-import type { Href } from 'expo-router';
 import { router } from 'expo-router';
 import { useEffect, useRef } from 'react';
 
@@ -9,6 +8,7 @@ import {
   deletePushTokenWithAccessToken,
   registerForPushTokenAsync,
 } from '@/lib/push';
+import { resolveNotificationLink } from '@/lib/notification-link';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
 
@@ -48,7 +48,11 @@ export function usePushRegistration(): void {
 
   useEffect(() => {
     const subscription = addNotificationTapListener((deepLink) => {
-      router.push(deepLink as Href);
+      // withAnchor loads the target tab's root under the linked screen, so
+      // Back has somewhere to go and the tab is not left stuck (BUG-050). A
+      // link with no screen in this app opens the notifications list, where
+      // the message itself is readable (BUG-074).
+      router.push(resolveNotificationLink(deepLink) ?? '/notifications', { withAnchor: true });
     });
     return () => subscription.remove();
   }, []);

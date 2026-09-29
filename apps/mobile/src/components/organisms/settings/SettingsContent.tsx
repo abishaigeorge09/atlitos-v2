@@ -23,7 +23,7 @@ import {
   Volleyball,
 } from 'lucide-react-native';
 import { useState } from 'react';
-import { Pressable, ScrollView, Switch, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
@@ -47,12 +47,6 @@ const THEME_OPTIONS: Array<{ key: ThemePref; label: string; icon: typeof Sun }> 
   { key: 'system', label: 'System', icon: Monitor },
   { key: 'light', label: 'Light', icon: Sun },
   { key: 'dark', label: 'Dark', icon: Moon },
-];
-
-const NOTIFICATION_ROWS: Array<{ key: 'sessions' | 'messages' | 'promotions'; label: string; body: string }> = [
-  { key: 'sessions', label: 'Session updates', body: 'Requests, confirmations and reminders for your sessions.' },
-  { key: 'messages', label: 'Messages', body: 'New messages from your coaches and trainees.' },
-  { key: 'promotions', label: 'Offers and news', body: 'Occasional deals, drops and Atlitos updates.' },
 ];
 
 /** Legal and support pages live on the landing site (apps/landing) so the app,
@@ -167,7 +161,6 @@ export function SettingsContent() {
   const [themePref, setThemePref] = useState<ThemePref>(me?.theme ?? 'system');
   const [sports, setSports] = useState<Sport[]>(me?.sports ?? []);
   const [primarySport, setPrimarySport] = useState<Sport | null>(me?.primarySport ?? me?.sports?.[0] ?? null);
-  const [prefs, setPrefs] = useState(me?.notificationPrefs ?? { sessions: true, messages: true, promotions: false });
 
   async function persist(patch: Parameters<typeof profileApi.updateProfile>[0]) {
     if (!isSignedIn) return;
@@ -212,12 +205,6 @@ export function SettingsContent() {
     if (!sports.includes(sport) || sport === primarySport) return;
     setPrimarySport(sport);
     void persist({ sports, primarySport: sport });
-  }
-
-  function toggleNotification(key: 'sessions' | 'messages' | 'promotions', value: boolean) {
-    const next = { ...prefs, [key]: value };
-    setPrefs(next);
-    void persist({ notificationPrefs: next });
   }
 
   async function handleSaveLocation() {
@@ -371,35 +358,22 @@ export function SettingsContent() {
             </View>
           </Section>
 
-          <Section title="Notifications">
-            {NOTIFICATION_ROWS.map((row, index) => (
-              <View
-                key={row.key}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: spacing.md,
-                  paddingHorizontal: spacing.lg,
-                  paddingVertical: spacing.md,
-                  borderTopWidth: index === 0 ? 0 : 1,
-                  borderTopColor: colors.border,
-                }}
-              >
-                <Bell size={20} strokeWidth={1.75} color={colors.textSecondary} />
-                <View style={{ flex: 1, gap: spacing.xs }}>
-                  <Text style={[textStyle('body'), { color: colors.text }]}>{row.label}</Text>
-                  <Text style={[textStyle('caption'), { color: colors.textTertiary }]}>{row.body}</Text>
-                </View>
-                <Switch
-                  value={prefs[row.key]}
-                  onValueChange={(value) => toggleNotification(row.key, value)}
-                  trackColor={{ true: colors.accent, false: colors.surfaceMuted }}
-                  thumbColor={colors.card}
-                  accessibilityLabel={row.label}
-                />
-              </View>
-            ))}
-          </Section>
+          {/* BUG-071: this section had its own three switches (Session
+              updates, Messages, Offers and news, users.notification_prefs,
+              0087) that disagreed with Notifications, Preferences (per type
+              push and email, notification_prefs, 0002). Push was suppressed
+              when EITHER said no, so a switch could read on while nothing
+              arrived, and Offers and news governed no notification at all.
+              One place now: that screen reads and writes both stores. */}
+          {isSignedIn ? (
+            <Section title="Notifications">
+              <ActionRow
+                icon={Bell}
+                label="Notification preferences"
+                onPress={() => router.push('/notifications/preferences')}
+              />
+            </Section>
+          ) : null}
 
           <Section title="Account">
             <ActionRow icon={UserRoundPen} label="Edit profile" onPress={() => router.push('/profile/edit')} />

@@ -1,8 +1,9 @@
 import { useHome, type PromoBanner } from '@atlitos/api';
-import { inkOnMedia, spacing } from '@atlitos/theme';
+import { inkOnMedia, mediaBackdrop, spacing } from '@atlitos/theme';
 import { router, type Href } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Dimensions, FlatList, Image, Pressable, View, type ViewToken } from 'react-native';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
@@ -99,11 +100,27 @@ export function PromoCarousel({ reloadKey, onLoaded }: { reloadKey: number; onLo
                 across the headline and body copy, lowering the contrast it was
                 meant to protect. The card's own background is already a known
                 quantity chosen for legible inverse text, so it needs no scrim. */}
+            {/* BUG-063: the scrim was a flat band over the bottom 60% with a
+                hard top edge. A two line body plus the CTA pushes the title
+                above that band, so "Fund an athlete's journey" sat white on
+                the cream art, half unreadable, and every banner read as a grey
+                slab dropped over its art. Now a full height gradient: clear
+                at the top so the art shows, at least 75% by a quarter of the
+                way down, where the title can start, which keeps inkOnMedia at
+                4.5:1 even over the palest art. */}
             {item.imageUrl ? (
-              <View
-                className="absolute inset-x-0 bottom-0"
-                style={{ pointerEvents: 'none', height: '60%', backgroundColor: colors.overlay }}
-              />
+              <View className="absolute inset-0" style={{ pointerEvents: 'none' }}>
+                <Svg width="100%" height="100%">
+                  <Defs>
+                    <LinearGradient id={`promo-scrim-${item.id}`} x1="0" y1="0" x2="0" y2="1">
+                      <Stop offset="0" stopColor={mediaBackdrop} stopOpacity={0} />
+                      <Stop offset="0.25" stopColor={mediaBackdrop} stopOpacity={0.75} />
+                      <Stop offset="1" stopColor={mediaBackdrop} stopOpacity={0.85} />
+                    </LinearGradient>
+                  </Defs>
+                  <Rect x="0" y="0" width="100%" height="100%" fill={`url(#promo-scrim-${item.id})`} />
+                </Svg>
+              </View>
             ) : null}
             <View className="absolute inset-0 justify-end gap-sm p-lg" style={{ pointerEvents: 'none' }}>
               {/* Over an image the scrim is dark in both themes, so the ink is

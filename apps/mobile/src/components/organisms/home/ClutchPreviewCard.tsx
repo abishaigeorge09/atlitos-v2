@@ -89,7 +89,9 @@ export function ClutchPreviewCard({ reloadKey, onLoaded }: { reloadKey: number; 
 
   function openDetail() {
     if (!clip) return;
-    router.push({ pathname: '/(tabs)/clutch/post/[id]', params: { id: clip.id } });
+    // withAnchor keeps the feed under the post so the Clutch tab never gets
+    // stuck on it (BUG-050).
+    router.push({ pathname: '/(tabs)/clutch/post/[id]', params: { id: clip.id } }, { withAnchor: true });
   }
 
   if (state === 'loading') {

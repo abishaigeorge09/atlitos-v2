@@ -92,6 +92,9 @@ export function SearchResults({
       <FlatList
         data={results}
         keyExtractor={(item) => item.id}
+        // A result tapped with the keyboard up opens on the FIRST tap; without
+        // this the first tap only put the keyboard away (BUG-067).
+        keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}
         ListEmptyComponent={
           emptyLabel ? (
@@ -130,7 +133,9 @@ export function SearchResults({
               <Text style={[textStyle('caption'), { color: colors.textSecondary }]} numberOfLines={1}>
                 {item.subtitle}
               </Text>
-              {item.rankReason ? <StatusPill label={item.rankReason} tone="info" numeric /> : null}
+              {/* A phrase ("Relevant", "Closest, 2.3km"), not a numeric readout, so not
+                  set in mono (BUG-069). */}
+              {item.rankReason ? <StatusPill label={item.rankReason} tone="info" /> : null}
             </View>
             {item.price ? (
               <Text style={[textStyle('numericBase'), { color: colors.text }]}>{item.price}</Text>

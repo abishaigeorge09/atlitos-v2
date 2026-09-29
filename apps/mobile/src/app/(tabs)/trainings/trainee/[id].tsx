@@ -38,6 +38,7 @@ import { SESSION_STATUS_PILL } from '@/lib/session-display';
 import { supabase } from '@/lib/supabase';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
+import { formatSlotWhen } from '@/lib/time-display';
 
 type ScreenState = 'loading' | 'populated' | 'error';
 type ProfileTab = 'overview' | 'sessions' | 'payments' | 'notes' | 'video';
@@ -364,7 +365,7 @@ export default function CoachTraineeDetailScreen() {
                         <StatusPill status={SESSION_STATUS_PILL[item.status]} />
                       </View>
                       <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
-                        {item.date}, {item.slotStart} to {item.slotEnd}
+                        {formatSlotWhen(item.date, item.slotStart, item.slotEnd)}
                       </Text>
                       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: spacing.xs }}>
                         {item.focusArea ? (

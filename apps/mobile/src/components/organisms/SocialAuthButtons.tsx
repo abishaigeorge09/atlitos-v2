@@ -74,7 +74,11 @@ export function GoogleSignInButton({ onPress, loading, disabled }: GoogleSignInB
       accessibilityState={{ disabled: Boolean(isDisabled), busy: Boolean(loading) }}
       disabled={isDisabled}
       onPress={onPress}
-      style={({ pressed }) => ({ opacity: isDisabled ? 0.6 : pressed ? 0.85 : 1 })}
+      // No `({ pressed }) => style` callback: NativeWind's interop on a
+      // Pressable drops it, which also lost the disabled dimming. Pressed
+      // feedback is an `active:` class; disabled is a plain style.
+      className="active:opacity-80"
+      style={isDisabled ? { opacity: 0.6 } : undefined}
     >
       {/* The plate is an inner View, not the Pressable itself. Pressable's
           style is a callback here, and NativeWind's interop on a Pressable

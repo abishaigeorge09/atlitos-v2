@@ -19,6 +19,7 @@ import { AppBar } from '@/components/ui/app-bar';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
 import { COURT_IN_APP_BOOKING_ENABLED } from '@/lib/feature-flags';
+import { formatSlotWhen } from '@/lib/time-display';
 
 type ScreenState = 'loading' | 'empty' | 'populated' | 'error';
 
@@ -146,7 +147,7 @@ function CourtBookingsListScreen() {
               ) : null}
               <View className="flex-row items-center justify-between pt-xs">
                 <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
-                  {item.date}, {item.slot.from} to {item.slot.to}
+                  {formatSlotWhen(item.date, item.slot.from, item.slot.to)}
                 </Text>
                 <PriceText amount={item.total} size="sm" />
               </View>

@@ -64,7 +64,6 @@ import {
   ENTITY_TYPES,
   type EntityType,
   evaluateHonesty,
-  haversineKm,
   type IntentOverride,
   type ParsedIntent,
   parseIntent,
@@ -98,6 +97,10 @@ interface SearchRequestBody {
   /** false while the shopper is still typing: skip Claude's rerank and
    * return the deterministic order. Default true (contract unchanged). */
   rerank: boolean;
+  /** true while the app's in-app court booking is off: court results keep
+   * only venues with a booking page, the Courts list's own rule, so search
+   * never offers a venue the Courts tab hides (BUG-057). Default false. */
+  bookableOnly: boolean;
 }
 
 function parseRequestBody(raw: unknown): SearchRequestBody {
@@ -136,8 +139,9 @@ function parseRequestBody(raw: unknown): SearchRequestBody {
   if (rawLimit !== undefined) limit = Math.max(1, Math.min(50, Math.floor(rawLimit)));
 
   const rerank = body.rerank !== false;
+  const bookableOnly = body.bookableOnly === true;
 
-  return { query: body.query.trim(), entityTypes, sport, priceMax, lat, lng, city, limit, rerank };
+  return { query: body.query.trim(), entityTypes, sport, priceMax, lat, lng, city, limit, rerank, bookableOnly };
 }
 
 function numberOrUndefined(v: unknown): number | undefined {
@@ -196,7 +200,7 @@ async function fetchCoaches(supabase: any, intent: ParsedIntent, city?: string):
       title: prof?.name ?? "Coach",
       // Carry state after city (BUG-002) so two coaches with the same sport and
       // city still read differently in the results row.
-      subtitle: [capitalize(r.sport as string), cityStr, r.state as string].filter(Boolean).join(" . "),
+      subtitle: [capitalize(r.sport as string), cityStr, r.state as string].filter(Boolean).join(", "),
       imageUrl: prof?.avatar_url ?? undefined,
       sport: r.sport as Sport,
       price: minPriceById.get(uid),
@@ -251,7 +255,12 @@ async function searchCourtSlots(supabase: any, args: {
   lat?: number;
   lng?: number;
   limit: number;
+  bookableOnly?: boolean;
 }): Promise<CourtSlotRow[]> {
+  // A bookable only read over fetches, then keeps venues with a booking page,
+  // so a limit of 1 (the broaden line's "soonest") still finds the soonest
+  // BOOKABLE venue rather than an empty list.
+  const fetchLimit = args.bookableOnly ? Math.max(args.limit, 50) : args.limit;
   const { data, error } = await supabase.rpc("search_court_slots", {
     p_date_from: args.window.dateFrom,
     p_date_to: args.window.dateTo,
@@ -262,16 +271,43 @@ async function searchCourtSlots(supabase: any, args: {
     p_city: args.lat === undefined ? args.city ?? null : null,
     p_lat: args.lat ?? null,
     p_lng: args.lng ?? null,
-    p_limit: args.limit,
+    p_limit: fetchLimit,
   });
   if (error) throw new AppError("INTERNAL", `Failed to search courts: ${error.message}`, 500);
-  return (data ?? []) as CourtSlotRow[];
+  const rows = (data ?? []) as CourtSlotRow[];
+  if (!args.bookableOnly || rows.length === 0) return rows;
+
+  const venueIds = [...new Set(rows.map((r) => r.venue_id))];
+  const { data: bookable, error: venueError } = await supabase
+    .from("venues")
+    .select("id")
+    .in("id", venueIds)
+    .not("booking_url", "is", null);
+  if (venueError) throw new AppError("INTERNAL", `Failed to read venue booking pages: ${venueError.message}`, 500);
+  const bookableIds = new Set(((bookable ?? []) as Array<{ id: string }>).map((v) => v.id));
+  return rows.filter((r) => bookableIds.has(r.venue_id)).slice(0, args.limit);
 }
 
-// deno-lint-ignore no-explicit-any
-async function fetchCourts(supabase: any, intent: ParsedIntent, lat?: number, lng?: number, city?: string): Promise<Candidate[]> {
+async function fetchCourts(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  intent: ParsedIntent,
+  lat?: number,
+  lng?: number,
+  city?: string,
+  bookableOnly = false,
+): Promise<Candidate[]> {
   const window = intent.when ?? defaultWindow();
-  const rows = await searchCourtSlots(supabase, { window, sport: intent.sport, priceMax: intent.priceMax, city, lat, lng, limit: 50 });
+  const rows = await searchCourtSlots(supabase, {
+    window,
+    sport: intent.sport,
+    priceMax: intent.priceMax,
+    city,
+    lat,
+    lng,
+    limit: 50,
+    bookableOnly,
+  });
 
   // One row per VENUE. Three identical courts at one venue at the same time
   // are one choice to a shopper; listing them separately pushed every other
@@ -289,7 +325,7 @@ async function fetchCourts(supabase: any, intent: ParsedIntent, lat?: number, ln
     entityType: "court",
     entityId: r.court_id,
     title: r.venue_name,
-    subtitle: [r.court_name, r.city].filter(Boolean).join(" . "),
+    subtitle: [r.court_name, r.city].filter(Boolean).join(", "),
     sport: r.sport,
     price: Number(r.first_price),
     rating: undefined,
@@ -312,14 +348,21 @@ async function fetchCourts(supabase: any, intent: ParsedIntent, lat?: number, ln
  * words. With both a time and a budget, keep the budget and move the time
  * first ("the soonest under Rs 300 is ..."), then keep the time and move the
  * budget ("the cheapest tonight is ..."). Copy obeys house style. */
-// deno-lint-ignore no-explicit-any
-async function courtBroaden(supabase: any, intent: ParsedIntent, lat?: number, lng?: number, city?: string): Promise<string> {
+async function courtBroaden(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  intent: ParsedIntent,
+  lat?: number,
+  lng?: number,
+  city?: string,
+  bookableOnly = false,
+): Promise<string> {
   const sportWord = intent.sport === "general" ? "" : `${intent.sport} `;
   const budget = intent.priceMax !== undefined ? ` under Rs ${intent.priceMax}` : "";
   const what = intent.when
     ? `No ${sportWord}courts free ${intent.when.label}${budget}`
     : `No ${sportWord}courts${budget} have a free slot this week`;
-  const base = { sport: intent.sport, city, lat, lng, limit: 1 };
+  const base = { sport: intent.sport, city, lat, lng, limit: 1, bookableOnly };
   const describe = (s: CourtSlotRow) =>
     `${s.venue_name}, ${slotLabel(s.first_date, s.first_start)}, Rs ${Number(s.first_price)}`;
 
@@ -445,7 +488,7 @@ async function fetchAffiliateProducts(supabase: any, intent: ParsedIntent, ids?:
       entityType: "gear",
       entityId: `affiliate:${r.id as string}`,
       title: (r.title as string) ?? "Product",
-      subtitle: [brand, capitalize((r.sport as string) ?? "Gear")].filter(Boolean).join(" . "),
+      subtitle: [brand, capitalize((r.sport as string) ?? "Gear")].filter(Boolean).join(", "),
       imageUrl: typeof r.image_url === "string" ? r.image_url : undefined,
       sport: (r.sport as Sport) ?? undefined,
       price,
@@ -482,7 +525,7 @@ async function fetchAthletes(supabase: any, intent: ParsedIntent): Promise<Candi
       entityType: "athlete",
       entityId: r.id as string,
       title: (r.story_headline as string) ?? "Athlete",
-      subtitle: [capitalize((r.sport as string) ?? ""), region || state].filter(Boolean).join(" . "),
+      subtitle: [capitalize((r.sport as string) ?? ""), region || state].filter(Boolean).join(", "),
       imageUrl: typeof r.photo_url === "string" ? r.photo_url : undefined,
       sport: r.sport as Sport,
       rating: undefined,
@@ -720,7 +763,7 @@ Deno.serve((req) =>
     const [gate, coaches, courts, products, affiliateProducts, athletes, clips, cachePre] = await Promise.all([
       shortQuery ? Promise.resolve({ mode: "keyword" as const }) : evaluateAiSearchGate(svc, userId),
       want.has("coach") ? fetchCoaches(supabase, intent, body.city) : Promise.resolve([]),
-      want.has("court") ? fetchCourts(supabase, intent, body.lat, body.lng, body.city) : Promise.resolve([]),
+      want.has("court") ? fetchCourts(supabase, intent, body.lat, body.lng, body.city, body.bookableOnly) : Promise.resolve([]),
       want.has("gear") ? fetchProducts(supabase, intent) : Promise.resolve([]),
       want.has("gear") ? fetchAffiliateProducts(supabase, intent) : Promise.resolve([]),
       want.has("athlete") ? fetchAthletes(supabase, intent) : Promise.resolve([]),
@@ -773,7 +816,7 @@ Deno.serve((req) =>
       // ("the soonest is ... tomorrow at 6:00 AM") instead of the generic
       // text-based line, which would suggest deleting the time.
       const broaden = want.size === 1 && want.has("court")
-        ? await courtBroaden(supabase, intent, body.lat, body.lng, body.city)
+        ? await courtBroaden(supabase, intent, body.lat, body.lng, body.city, body.bookableOnly)
         : honesty.broaden;
       return jsonResponse(
         { query: body.query, parsedIntent: intent, results: [], broaden, mode: reportedMode, vector },
