@@ -23,15 +23,26 @@ A script in this directory is:
 
 ### `notification_push_sweep_schedule.sql`
 
-Schedules the R-7 push relay (`notify-push-sweep`) via `pg_cron` plus `pg_net`, authenticated
-from two Supabase Vault secrets that must exist first:
+Schedules the R-7 push relay (`notify-push-sweep`) via `pg_cron` plus `pg_net`. It authenticates
+with a dedicated secret, `NOTIFY_SWEEP_SECRET`, not the service-role key: the key the function
+runtime holds is not shown in the dashboard, so a dashboard key is refused (every sweep returned
+403 in production on 2026-09-29). Generate one value with `openssl rand -hex 32` and store it in
+two places, then create the Vault entries this script reads:
+
+```
+supabase secrets set --project-ref <ref> NOTIFY_SWEEP_SECRET=<value>
+```
 
 ```sql
 select vault.create_secret('https://<ref>.supabase.co', 'project_url',
   'Base URL for in-database calls to edge functions');
-select vault.create_secret('<service-role key>', 'service_role_key',
-  'Service role key used by pg_cron jobs that call edge functions');
+select vault.create_secret('<value>', 'notify_sweep_secret',
+  'Bearer the push sweep cron job sends to notify-push-sweep');
 ```
+
+The job reads `notify_sweep_secret` from Vault on every run, so the value never appears in
+`cron.job.command`, and rotating it is a `vault.update_secret` plus `supabase secrets set`, with no
+reschedule. The older `service_role_key` Vault entry is no longer used by this job.
 
 Run those two statements once per environment, against that project only, then run this script:
 

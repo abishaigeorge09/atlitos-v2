@@ -37,14 +37,18 @@
 -- SECRETS. Two rows a human must add BEFORE this script can be run.
 -- ============================================================================
 --
--- The job posts to an edge function as the service role, so the schedule needs
--- the project URL and the service-role key. Neither belongs in a file in git.
--- They go in Supabase Vault, and this script only reads them:
+-- The job posts to notify-push-sweep with a dedicated secret,
+-- NOTIFY_SWEEP_SECRET, because the service key the function runtime holds is
+-- not shown in the dashboard and a dashboard key is refused (2026-09-29).
+-- The same random value lives in two places, neither of them git: Supabase
+-- Vault (read by the job at run time) and the function's secrets.
 --
+--   openssl rand -hex 32        -- generate once, keep it out of chat and screenshots
+--   supabase secrets set --project-ref <ref> NOTIFY_SWEEP_SECRET=<value>
 --   select vault.create_secret('https://<ref>.supabase.co', 'project_url',
 --     'Base URL for in-database calls to edge functions');
---   select vault.create_secret('<service-role key>', 'service_role_key',
---     'Service role key used by pg_cron jobs that call edge functions');
+--   select vault.create_secret('<value>', 'notify_sweep_secret',
+--     'Bearer the push sweep cron job sends to notify-push-sweep');
 --
 -- Run those two statements once, as a human, against the project. They are
 -- writes, so this script does not run them, and no automated track has run
@@ -73,9 +77,9 @@ begin
       'vault secret project_url is missing; see supabase/deploy/README.md for the two vault.create_secret calls this job needs';
   end if;
 
-  if not exists (select 1 from vault.secrets where name = 'service_role_key') then
+  if not exists (select 1 from vault.secrets where name = 'notify_sweep_secret') then
     raise exception
-      'vault secret service_role_key is missing; see supabase/deploy/README.md for the two vault.create_secret calls this job needs';
+      'vault secret notify_sweep_secret is missing; see supabase/deploy/README.md for the two vault.create_secret calls this job needs';
   end if;
 end;
 $$;
@@ -107,32 +111,34 @@ $$;
 do $$
 declare
   v_url text;
-  v_key text;
 begin
   select decrypted_secret into v_url
     from vault.decrypted_secrets where name = 'project_url';
-  select decrypted_secret into v_key
-    from vault.decrypted_secrets where name = 'service_role_key';
 
   if exists (select 1 from cron.job where jobname = 'notification-push-sweep') then
     perform cron.unschedule('notification-push-sweep');
   end if;
 
+  -- The secret is read from Vault on every run, inside the job body, so it
+  -- never sits in plain text in cron.job.command, and rotating it is one
+  -- vault.update_secret with no reschedule. Only the URL is baked in.
   perform cron.schedule(
     'notification-push-sweep',
     '30 seconds',
     format(
       $job$select net.http_post(
         url := %L,
-        headers := %L::jsonb,
+        headers := jsonb_build_object(
+          'Content-Type', 'application/json',
+          'Authorization', 'Bearer ' || (
+            select decrypted_secret from vault.decrypted_secrets
+             where name = 'notify_sweep_secret'
+          )
+        ),
         body := '{}'::jsonb,
         timeout_milliseconds := 25000
       );$job$,
-      rtrim(v_url, '/') || '/functions/v1/notify-push-sweep',
-      jsonb_build_object(
-        'Content-Type', 'application/json',
-        'Authorization', 'Bearer ' || v_key
-      )::text
+      rtrim(v_url, '/') || '/functions/v1/notify-push-sweep'
     )
   );
 end;
