@@ -154,7 +154,8 @@ end $$;
 create temp table reviewed_fks (fk text primary key) on commit drop;
 insert into reviewed_fks values
   ('public.users.id'), ('public.affiliate_clicks.user_id'), ('public.account_deletions.user_id'),
-  ('public.addresses.user_id'), ('public.athlete_sports.user_id'), ('public.audit_log.actor_id'),
+  ('public.addresses.user_id'), ('public.apple_sign_in_tokens.user_id'), ('public.athlete_sports.user_id'),
+  ('public.audit_log.actor_id'),
   ('public.blocked_users.blocked_id'), ('public.blocked_users.blocker_id'), ('public.cart_items.user_id'),
   ('public.chat_messages.sender_id'), ('public.chat_thread_members.user_id'),
   ('public.chat_threads.participant_a'), ('public.chat_threads.participant_b'),
