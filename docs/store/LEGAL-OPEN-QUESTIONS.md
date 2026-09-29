@@ -10,9 +10,22 @@ the decisions a person still has to make. Until each is settled the live pages
 use the neutral, accurate wording noted against it, so nothing here blocks a
 deploy, but each one should be closed before the lawyer signs off.
 
-## Open
+## Decided by the founder, 29 Sep 2026
 
-- [ ] **Cancellation windows and penalty tiers** (`terms.html` section 6,
+- **Jurisdiction:** the courts at Hyderabad, Telangana (registered office). `terms.html`
+  section 14 now says so.
+- **Grievance Officer:** stays role based for launch ("Grievance Officer, ELSHEPH SYSTEMS
+  INDIA PRIVATE LIMITED", support@elsheph.com, subject Grievance, registered address). Add a
+  named person only if counsel says the DPDP Rules require it.
+- **Cancellation rules:** unchanged for launch; the pages describe what the code does.
+- **Chat messages and comments after deletion:** kept, attributed to "Deleted user", as the
+  privacy and delete account pages already say.
+
+Still open: lawyer sign off on liability wording, and naming the SMS and SMTP providers.
+
+## Checklist
+
+- [x] **Cancellation windows and penalty tiers** (`terms.html` section 6,
   `refund-policy.html` sections 1 and 2). Today the pages say what the code
   does: a coach decline or a cancel before the coach answers is refunded in full
   automatically; a cancel after acceptance is decided case by case by support
@@ -28,13 +41,13 @@ deploy, but each one should be closed before the lawyer signs off.
   Act need a lawyer. The current wording is a starting point, not a settled
   position.
 
-- [ ] **Registered location and jurisdiction courts** (`terms.html` section 14).
+- [x] **Registered location and jurisdiction courts** (`terms.html` section 14).
   The page currently says the laws of India govern and the courts of India have
   jurisdiction. The registered office on `contact.html` is in Hyderabad,
   Telangana. Decide whether to name the courts at Hyderabad, then update the
   clause.
 
-- [ ] **Grievance Officer, named person** (`privacy.html`, Grievance Officer
+- [x] **Grievance Officer, named person** (`privacy.html`, Grievance Officer
   section, and `contact.html`). The page now publishes a role based contact:
   "Grievance Officer, ELSHEPH SYSTEMS INDIA PRIVATE LIMITED", support@elsheph.com
   with the subject line Grievance, and the registered postal address. Confirm
@@ -82,7 +95,7 @@ deploy, but each one should be closed before the lawyer signs off.
   not add a field we cannot answer.
 - No HTML comments with notes to staff in any public page. Put them here.
 
-## Chat messages and comments after account deletion (added 29 Sep, night)
+## Chat messages and comments after account deletion (added 29 Sep, night; decided: keep)
 
 Today `delete_my_account()` keeps a deleted person's chat messages and their comments on other
 people's clips, attributed to "Deleted user" with name, photo and every personal field erased. The
