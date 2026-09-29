@@ -75,7 +75,14 @@ body {
   gap: 1.1rem;
   font-size: .875rem;
 }
-.legal-header nav a { color: var(--ink-secondary); text-decoration: none; }
+.legal-header nav a { color: var(--ink-secondary); text-decoration: none; white-space: nowrap; }
+/* Phone width (BUG-070): six links beside the wordmark wrapped "Content
+   policy" across two lines and pushed the last link off the right edge. The
+   nav drops under the wordmark and wraps between links, never inside one. */
+@media (max-width: 640px) {
+  .legal-header .inner { flex-direction: column; align-items: flex-start; gap: .5rem; }
+  .legal-header nav { flex-wrap: wrap; gap: .5rem 1rem; }
+}
 .legal-header nav a:hover,
 .legal-header nav a[aria-current="page"] { color: var(--ember); }
 

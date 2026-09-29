@@ -11,6 +11,25 @@
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
   <style>
+    /* Dark mode, the same palette legal.css uses (BUG-070): this page is
+       opened from the app's Settings, and in a dark app it was the only light
+       page. styles.css (the marketing site) has no dark palette of its own. */
+    @media (prefers-color-scheme: dark) {
+      :root {
+        color-scheme: dark;
+        --paper: #14100B;
+        --surface: #1E1810;
+        --surface-muted: #2A2117;
+        --ink: #FBF7F1;
+        --ink-secondary: #C6BAA9;
+        --ink-tertiary: #8C8072;
+        --border: #33291D;
+        --border-strong: #4A3C2B;
+        --ember: #F0805A;
+        --ember-pressed: #F0805A;
+        --ink-on-accent: #2A0E02;
+      }
+    }
     .legal-wrap { max-width: 760px; margin: 0 auto; padding: 32px 20px 96px; }
     .legal-head { display: flex; align-items: center; justify-content: space-between; padding: 18px 0 28px; }
     .legal-head .wordmark { font-family: var(--font-display); font-weight: 900; font-size: 1.5rem; color: var(--ink); text-decoration: none; }
@@ -25,7 +44,10 @@
     .legal-wrap strong { color: var(--ink); }
     .legal-wrap a { color: var(--ember-pressed); }
     .legal-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; margin: 20px 0; }
-    .legal-cta { display: inline-block; font-family: var(--font-mono); font-weight: 600; background: var(--ember); color: var(--ink-on-accent); text-decoration: none; border-radius: 999px; padding: 12px 22px; margin-top: 6px; }
+    /* `.legal-wrap a` is more specific than `.legal-cta`, so the button took the
+       link colour: orange text on the orange button, unreadable in light mode and
+       invisible in dark (BUG-070). Scoped to beat it. */
+    .legal-wrap a.legal-cta, .legal-cta { display: inline-block; font-family: var(--font-mono); font-weight: 600; background: var(--ember); color: var(--ink-on-accent); text-decoration: none; border-radius: 999px; padding: 12px 22px; margin-top: 6px; }
     .legal-foot { border-top: 1px solid var(--border); margin-top: 40px; padding-top: 20px; font-family: var(--font-mono); font-size: .78rem; color: var(--ink-tertiary); }
   </style>
 </head>
