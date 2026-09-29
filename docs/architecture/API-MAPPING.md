@@ -107,6 +107,8 @@ freeSlots, otherCourtsFree }`, one hit per VENUE (the soonest court there; the r
 relaxes ONE constraint and names a real alternative ("The cheapest tomorrow in the evening is ...").
 With no time in the query, courts are searched over the coming week and show their next free slot.
 
+Request field `bookableOnly: boolean` (default false, BUG-057): when true, court hits and the courts broaden line keep only venues with a `booking_url`, the Courts list's own `bookingUrlOnly` rule. The mobile app sends `!COURT_IN_APP_BOOKING_ENABLED` from both Home search and Courts search, so while in-app booking is off search never offers a venue the Courts tab hides. The filter runs inside `searchCourtSlots` after an over-fetch (at least 50), so a `limit: 1` "soonest" lookup still finds the soonest bookable venue.
+
 `get_court_available_slots` (`0135`) no longer offers past dates or slots that have ENDED today
 (IST); a slot in progress stays offered for walk ins. `book-court` accepts only slots this function
 lists, so booking a past slot is now refused as `SLOT_TAKEN`. `book-session` refuses a start time
@@ -578,6 +580,8 @@ Two SQL emitters were added alongside `notify-dispatch` and, like the RPCs liste
 
 - `notify_session_parties(p_session_id uuid, p_action text) returns int` — `service_role` only (`0103`). Called by `session_transition_internal` on `accept`, `decline`, `start` and `complete`. Writes one `session` type notification per athlete party (the 1:1 `player_id`, or every `session_participants` row for a group session) and never to the acting coach. Returns the number written.
 - `sweep_group_memberships() returns jsonb` — `service_role` only (`0104`), scheduled as `membership-sweep` daily. Writes `membership` type notifications for the renewal reminder, expiry and lapse. See SCHEMA.md "The membership sweep".
+
+**Deep links (BUG-074).** A `deep_link` must be an app route. `moderate_clip` wrote `/clutch/clip/<id>` until `0143`, which has no screen (the clip screen is `clutch/post/[id]`); `0143` writes `/clutch/post/<id>`. `deep_link` is immutable after insert (`notifications_lock_fields`, `0002`), so rows written before `0143` keep the old path, and the app resolves every stored link through `apps/mobile/src/lib/notification-link.ts`: the app scheme prefix is stripped, `/clutch/clip/<id>` maps to `/clutch/post/<id>`, and the Empower life portal's web only donation links (`/dashboard`, `/wishlist/<id>`) open nothing in the app (the in-app list just marks the row read; a tapped push opens the notifications list).
 
 **That relay now exists, and it is a sweeper rather than a trigger (`0110` plus the post-deploy script that used to be `0111`, SCALE-REALTIME R-7).** The premise the paragraph above rested on, that the push leg was still the P9 stub, expired: the Expo transport in `_shared/notify.ts` is fully implemented, so "the row is written and nothing pushes" stopped being a no-op and became the P0 that an athlete whose coach starts a session is told nothing and the 03:30 IST membership reminder reaches nobody.
 

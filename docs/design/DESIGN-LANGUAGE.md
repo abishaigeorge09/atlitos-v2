@@ -39,6 +39,8 @@ Orange at this saturation is darker than it looks. Measured against both candida
 
 `inkOnMedia` (`#FFFFFF`, `packages/theme/src/colors.ts`) is the text colour for copy laid over a photo or video behind the dark `overlay` scrim (promo banners, media cards). The scrim is dark in both themes, so this ink is theme independent. Never use `textInverse` over media: it flips to near black in dark mode, which rendered the Home promo banner as dark text on a grey slab (fixed 2026-09-23).
 
+Promo banner scrim (BUG-063): a full height vertical gradient of `mediaBackdrop`, opacity 0 at the top, 0.75 by 25% of the height and 0.85 at the bottom, drawn with `react-native-svg`. Not a flat band: a flat bottom 60% scrim let a title that wraps above the band sit white on pale art. The rule it satisfies: wherever banner copy can sit, the scrim is dark enough for `inkOnMedia` at 4.5:1 over the palest art.
+
 `mediaBackdrop` (`#0D0D0D`) is the letterbox behind video and clip thumbnails (Clutch feed, post view, clip cards, coach review video), dark in both themes. Never use `colors.text` / `bg-text` as a video backdrop: it turns cream in dark mode. Media surfaces therefore look the same in light and dark mode: `mediaBackdrop` underneath, `overlay` scrims, `inkOnMedia` on top.
 
 ### Light theme: "Paper"
@@ -253,6 +255,8 @@ Consequence to accept: the container can no longer carry `active:opacity-90`, be
 The one sanctioned exception is the modal backdrop idiom (`ConfirmSheet`, `LoginGateModal`, and the variant pickers): a roleless backdrop `Pressable` wrapping a roleless `Pressable` that calls `event.stopPropagation()` to swallow sheet taps. Neither carries a button role, so neither renders a `<button>`, and the nesting is what makes dismiss-on-backdrop work. Do not add `accessibilityRole="button"` to either of those.
 
 Reference implementation: `apps/mobile/src/components/molecules/ClutchPostCard.tsx` (feed variant). The invariant to check in review: no `Pressable` is an ancestor of another `Pressable` in the same card.
+
+**Never style a `Pressable` with a `({ pressed }) => style` callback (BUG-060).** NativeWind's interop on a `Pressable` drops the callback, so everything in it silently disappears on device. It took the margin, border, card and padding off every Courts search row, and the size off the drill card's `absoluteFill` overlay, which left the card untappable. Use a static `style` for layout and an `active:` class (`active:bg-surface-muted`, `active:opacity-90`) for the pressed state. A disabled look goes in the static style, applied only when disabled, so it does not override the `active:` class.
 
 ## The floating nav: nothing pinned sits under it
 

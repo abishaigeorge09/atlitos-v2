@@ -74,7 +74,7 @@ Extends `auth.users` with app profile fields. One row per Supabase Auth user, cr
 | `suspended_reason` | `text` | nullable, admin-locked (see below) |
 | `show_donor_name` | `boolean` | not null default `false`, sponsor name opt-in read by `portal-life` |
 | `theme` | `text` | not null default `system`, CHECK in (`system`,`light`,`dark`) (`users_theme_check`, `0087`); appearance preference for the Settings surface, applied client side via nativewind |
-| `notification_prefs` | `jsonb` | not null default `{"sessions":true,"messages":true,"promotions":false}` (`0087`); per-category notification opt-ins, owner-only read/write through the Settings surface |
+| `notification_prefs` | `jsonb` | not null default `{"sessions":true,"messages":true,"promotions":false}` (`0087`); per-category notification opt-ins, owner-only. Since BUG-071 (2026-09-29) there is no Settings switch for it: the Notifications, Preferences screen writes `sessions` with the `booking` push toggle and `messages` with the `chat` push toggle, and shows push on only when both this and the `notification_prefs` table allow it (`_shared/notify.ts` suppresses on either). `promotions` governs no notification type and has no UI. |
 | `created_at`, `updated_at` | `timestamptz` | |
 
 Indexes: `idx_users_phone` on `phone`; `idx_users_handle_lower` unique on `lower(handle)` (`0072`).

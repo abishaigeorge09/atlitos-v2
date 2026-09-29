@@ -113,3 +113,17 @@ The feed filters `status = 'published'` (`packages/api/src/hooks.ts:1805`). Prod
 | BUG-053 | Data, founder action: delist the 8 seed products through the admin (audited, never delete) or replace them with real pastes. Already in `DEBT.md` 2026-09-23. | n/a |
 | BUG-054 | `gear-recheck` logs `unparsed` (offer `gone`, strike counted) when a 200 page parses to neither a price nor a stock signal. Not "no price" alone: a live decathlon.in product publishes `"price": null` in its JSON-LD, so that rule would have delisted every real Decathlon offer. New `/product/soft-404` scenario in `scripts/verify-gear-health.mjs`. Needs deploying (`supabase functions deploy gear-recheck`). | Deno run of the real extractor plus the new predicate against saved live pages: 2 dead Decathlon slugs struck, 1 live Decathlon product kept, fixtures as expected; `deno check` clean. Full harness not run (no Docker here). |
 | BUG-055 | Ops, founder action. The 11 `ready` clips are not launch content: 9 are `e2e CL-10` test clips, one is captioned "hi", one is a July demo, and none has a stream uid. Do not approve them; reject them in admin and seed real clips. | read only SQL |
+
+## P2 and P3 fix status (same branch)
+
+Every row is in `BUG-LEDGER.md` with its status. In short:
+
+- Verified on the device: BUG-056 (Home location on cold start), BUG-063 (banner scrim), BUG-067 (chip puts the keyboard away), BUG-061 in part (no free slot claim on a search row), BUG-058 in part (fast typing into an open field keeps every letter).
+- Fixed, device check pending because the phone went offline mid pass: BUG-059, 060, 062, 064, 065, 068, 070 (app parts), 071, 072.
+- Fixed, needs a deploy or migration before it shows: BUG-057 and the search half of BUG-069 (`supabase functions deploy ai-search`), BUG-074 (apply `0143`; the app half already resolves old links).
+- Founder actions: BUG-053 and BUG-073 (the existing founder run prelaunch cleanup), BUG-055 (`scripts/sql/2026-09-29-reject-test-clips-in-queue.sql`).
+- Won't fix: BUG-066, the chips follow PRD-01 FR-14.
+- Corrections to the first pass: BUG-064's "tab items are not buttons" and "testIDs read as labels" were artifacts of the test helper, not app defects. The shop tile's repeated brand and contained photos follow DIRECTION-SHOP.md.
+- Still open: BUG-058's first keystrokes after the search screen opens, at 60 keys a second.
+- New finding while fixing: the Delete account page's CTA label used the link colour (ember on ember) in light mode as well as dark. Fixed with BUG-070.
+- Root cause worth knowing for future work: NativeWind's interop on a `Pressable` drops a `style={({ pressed }) => ...}` callback. Use a static style plus `active:` classes. The drill card's whole tap target depended on one.
