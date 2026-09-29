@@ -24,7 +24,8 @@
 // price_changed, out_of_stock, gone, blocked. Only gone/blocked increment
 // `product_offers.consecutive_failures`; every other outcome resets it to 0
 // (an out-of-stock page is a successful fetch, not a failure). A 200 whose
-// page no extraction strategy can parse is logged to `product_fetch_log`
+// page no extraction strategy can parse, or parses to a title with neither
+// a price nor a stock signal (a soft 404), is logged to `product_fetch_log`
 // with its OWN outcome `unparsed`, but the offer's `last_check_outcome`
 // becomes `gone` (the enum on `product_offers` has no `unparsed` value; the
 // distinction lives in the log, not the offer row).
@@ -448,7 +449,16 @@ async function processOffer(
         programme ? { key: programme.key, extractor: programme.extractor } : null,
       );
 
-      if (!draft) {
+      // A draft with neither a price nor a stock signal is a title only
+      // (the page's og:title): no evidence the product is there. Decathlon
+      // serves "Page Not Found" at HTTP 200 with exactly that, which scored
+      // every dead Decathlon link `ok` and kept products listed whose links
+      // 404 (BUG-054, DEBT 2026-09-23). Treat it as unparsed, same as no
+      // draft. Price alone is NOT the test: a live Decathlon page publishes
+      // `"price": null` in its own JSON-LD, so its availability is the only
+      // liveness signal it gives, and striking on a missing price would
+      // auto-delist every real Decathlon offer.
+      if (!draft || (draft.price === null && draft.inStock === null)) {
         // A 200 no strategy could parse. Enum on product_offers has no
         // "unparsed" value; the offer's own outcome degrades to "gone"
         // (ADR-011 D4 / this ticket's contract) while the LOG keeps the

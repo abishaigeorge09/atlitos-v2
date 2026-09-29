@@ -118,6 +118,17 @@ function startFixtureServer() {
         res.end('<html><head></head><body><p>Nothing structured here.</p></body></html>');
         return;
       }
+      if (url === '/product/soft-404') {
+        // decathlon.in's shape for a dead slug (BUG-054): HTTP 200 with only
+        // the site wide og:title, no price, no availability. extractProduct
+        // returns a title only draft here, which the sweep used to score ok.
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.end(
+          '<html><head><meta property="og:title" content="Fixture Store, sports for all" /></head>' +
+            '<body><p>This page has gone out for a run.</p></body></html>',
+        );
+        return;
+      }
       res.writeHead(404);
       res.end('not found');
     });
@@ -390,6 +401,20 @@ async function main() {
     const logRow = await latestFetchLog(svc, offerAId);
     check('the fetch log row itself records outcome unparsed', logRow?.outcome === 'unparsed', logRow?.outcome);
     check('ai_suggestion stays null with no ANTHROPIC_API_KEY (no error either)', logRow?.ai_suggestion === null, JSON.stringify(logRow?.ai_suggestion));
+
+    console.log('\nScenario: a 200 soft 404 (title only, no price) logs unparsed and strikes, never ok (BUG-054)');
+    await svc.from('product_offers').update({ canonical_url: `${FIXTURE_ORIGIN}/product/soft-404` }).eq('id', offerAId);
+    res = await callGearRecheck(SERVICE_ROLE_KEY, { productId });
+    check('recheck returns 200', res.status === 200, `status ${res.status}`);
+    const offerASoft = await getOffer(svc, offerAId);
+    check('offer A outcome is gone, not ok', offerASoft.last_check_outcome === 'gone', offerASoft.last_check_outcome);
+    check(
+      'offer A consecutive_failures incremented',
+      offerASoft.consecutive_failures === offerA6.consecutive_failures + 1,
+      `${offerA6.consecutive_failures} -> ${offerASoft.consecutive_failures}`,
+    );
+    const softLogRow = await latestFetchLog(svc, offerAId);
+    check('the fetch log row records outcome unparsed', softLogRow?.outcome === 'unparsed', softLogRow?.outcome);
 
     console.log('\nScenario: 7-strike auto-delist (AC-11-4, "test with the counter set to 6")');
     await svc
