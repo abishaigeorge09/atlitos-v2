@@ -1,7 +1,7 @@
 import { useNotifications } from '@atlitos/api';
 import type { AppNotification, ApiError } from '@atlitos/types';
 import { spacing } from '@atlitos/theme';
-import { type Href, router } from 'expo-router';
+import { router } from 'expo-router';
 import { BellOff, Settings2, TriangleAlert } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, View } from 'react-native';
@@ -13,6 +13,7 @@ import { AppBar } from '@/components/ui/app-bar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
 import { notificationDisplay } from '@/lib/notification-display';
+import { resolveNotificationLink } from '@/lib/notification-link';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
 import { useThemeColors } from '@/theme/use-theme-colors';
@@ -119,8 +120,11 @@ export default function NotificationsScreen() {
         // Non fatal; the row stays visible, re-syncs on next load.
       }
     }
-    // Same anchored push as a tapped push notification (BUG-050).
-    router.push(item.deepLink as Href, { withAnchor: true });
+    // Same anchored push as a tapped push notification (BUG-050). A link with
+    // no screen in this app (a web only donation link) just marks the row
+    // read here instead of opening an unmatched route (BUG-074).
+    const href = resolveNotificationLink(item.deepLink);
+    if (href) router.push(href, { withAnchor: true });
   }
 
   async function handleMarkAllRead() {
