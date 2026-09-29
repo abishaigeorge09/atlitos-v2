@@ -1391,6 +1391,16 @@ Where a coach or venue is paid. One row per `payout_accounts` row.
 RLS enabled with ZERO policies and no grant to `anon` or `authenticated`: every access is a
 security definer function (API-MAPPING.md, payouts). Not column-encrypted (DEBT.md).
 
+**On account deletion (`0142`)** the row is masked in place, never deleted, because the retained
+`transfers` history hangs off its payout account. Scope: the coach's own account
+(`owner_type = 'coach'`, `owner_id` = user id) and every venue account whose venue has
+`partner_user_id` = the user. `account_number` keeps only its last four digits (`XXXXXXXX9012`),
+`ifsc` is kept, `vpa` becomes `XXXX@<psp>` (the 0132 check requires a `vpa` on a `upi` row, so it
+cannot be nulled), `pan` is nulled, `account_holder_name` becomes `Deleted user` (NOT NULL, 2 to
+100 characters), `verification_status` becomes `rejected` with `verified_by`/`verified_at`
+cleared, so `_record_payout_core` refuses any manual payout to it. `payout_accounts`,
+`transfers` and `ledger_entries` are not written.
+
 ### `transfers`
 
 | Column | Type | Constraints |
@@ -1681,7 +1691,9 @@ future booking and the other party's chat thread all still read correctly.
 `donation_drafts`, `drill_completions`, `follows` (both directions),
 `notification_prefs`, `notifications`, `order_drafts`,
 `product_wishlist_items`, `push_tokens`, `user_milestones`, `user_roles`,
-`xp_events`, and `blocked_users` rows where the deleting user is the blocker.
+`xp_events`, `blocked_users` rows where the deleting user is the blocker, and
+(`0142`) `venue_photos` rows for venues the user is partner on, whose
+`venue-media` objects the edge function removes.
 
 **Anonymised** (a second party still reads the row):
 
@@ -1693,6 +1705,7 @@ future booking and the other party's chat thread all still read correctly.
 | `clip_comments` | Kept, so `clips.comment_count` stays truthful |
 | `donations` | `donor_display_name` scrubbed. No amount, status, intent link or ledger row is touched |
 | `upa_applications` | `status` moved to `deactivated` so the story stops being listed |
+| `payout_methods` | (`0142`) masked in place: last four digits of the account number and the IFSC kept, UPI ID reduced to `XXXX@<psp>`, PAN nulled, holder name `Deleted user`, status `rejected`. Rows kept because `transfers` hang off the payout account |
 | `blocked_users` | Rows where the deleting user is the blocked party are kept, they belong to the other user's list |
 ### `chat_thread_previews(uuid[])` (0113)
 
@@ -1734,7 +1747,11 @@ already discloses.
   count, the `ledger_entries` count and the ledger to intent linkage count are
   unchanged and that every entry group still balances, raising
   `FINANCIAL_INVARIANT` or `LEDGER_UNBALANCED` rather than committing.
-  EXECUTE `authenticated` only.
+  EXECUTE `authenticated` only. Body replaced in `0142` (same signature,
+  security, search_path and grants): additionally masks the caller's
+  `payout_methods` and deletes the caller's `venue_photos` rows, and the
+  `account.deleted` audit row gains a `payout_methods_masked` count (never the
+  values). Proof: `docs/qa/account-deletion/07-payout-method-scrub.sql`.
 - `account_deletion_mark_auth_released(p_user_id uuid)` (`0098`, body replaced
   in `0131`). Deletes the user's non email, non phone `auth.identities` rows
   (Apple, Google) so the same provider account can register again, then stamps
@@ -1755,10 +1772,23 @@ already discloses.
 3. The `delete-account` edge function, under the service role, releases the
    email and phone on `auth.users` and bans the GoTrue user, so sign in is
    impossible and the same email can register a fresh account.
-4. Storage objects under `avatars/<uid>`, `clips/<uid>` and
-   `coach-certificates/<uid>` are removed, recursively (avatars nests cover
-   photos under `<uid>/cover/`), along with the
-   `clips/coach-videos/<coach>/<player>/` paths collected before the RPC runs.
+4. Storage objects are removed, recursively (avatars nests cover photos under
+   `<uid>/cover/`). Every prefix is a key the user owns, planned BEFORE the RPC
+   runs because the RPC deletes some of the rows that name the objects:
+   - `avatars/<uid>`, `clips/<uid>`, `coach-certificates/<uid>`, plus the
+     `clips/coach-videos/<coach>/<player>/` trainee videos and
+     `coach_certificates.storage_path`;
+   - `upa-photos/<uid>` and `upa-photos/<application_id>` (both schemes exist,
+     see 0116), plus `upa_applications.photo_url`;
+   - `upa-evidence/<application_id>`, plus `upa_evidence.storage_path`;
+   - `gratitude-photos/<uid>`, plus `gratitude_posts.photo_url` on the user's
+     applications;
+   - `venue-media/<venue_id>` for venues with `partner_user_id` = the user,
+     plus `venue_photos.storage_path` (`0142`).
+   A path read from a row is removed only when its first folder is one of
+   those owned keys, because `upa_evidence`, `venue_photos` and
+   `coach_certificates` carry a client written path. A missing bucket is a
+   no-op; the function logs per bucket counts, never object names.
 
 ## iOS launch compliance (0138, 0139)
 

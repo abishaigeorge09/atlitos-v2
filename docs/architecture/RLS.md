@@ -112,6 +112,10 @@ admins through the `admin_` payout functions (`has_role('admin')`, every full re
 `scripts/verify-manual-payouts.mjs` checks 1a to 1d prove the refusals, and were watched fail
 with a permissive policy planted.
 
+`delete_my_account()` (security definer, `0142`) is the one other writer: it masks the caller's
+rows in place, scoped to the caller's own coach payout account and the payout accounts of venues
+whose `partner_user_id` is the caller. No policy or grant changed.
+
 ### `affiliate_clicks`: no policies at all (`0133`)
 
 Same posture as `payout_methods`: RLS on, zero policies, no grant to `anon` or `authenticated`, so

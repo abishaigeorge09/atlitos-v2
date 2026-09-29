@@ -116,3 +116,7 @@ run 05-edge-cases.sql
 
 reset_db
 run 06-edge-groups-and-controls.sql
+
+# 0142: payout details masked, venue photo rows removed, other partners untouched.
+reset_db
+run 07-payout-method-scrub.sql

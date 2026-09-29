@@ -81,3 +81,12 @@ deploy, but each one should be closed before the lawyer signs off.
 - `contact.html` fields are statutory values from the entity's own records. Do
   not add a field we cannot answer.
 - No HTML comments with notes to staff in any public page. Put them here.
+
+## Chat messages and comments after account deletion (added 29 Sep, night)
+
+Today `delete_my_account()` keeps a deleted person's chat messages and their comments on other
+people's clips, attributed to "Deleted user" with name, photo and every personal field erased. The
+privacy page and the delete account page now say exactly that. Decide whether to keep this
+(common practice, keeps the other person's thread readable) or to delete the text as well. If
+deletion is wanted, it is a small change to `delete_my_account()` plus a chat UI check for threads
+that lose messages, and both pages change back.

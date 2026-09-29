@@ -42,8 +42,64 @@ import { AppleRequestError, appleConfigured, revokeAppleRefreshToken } from "../
 const DELETED_BAN_DURATION = "87600h";
 
 // Buckets keyed `<bucket>/<user_id>/...` by the upload paths in 0006/0042 and
-// the storage RLS policies. A prefix sweep is enough for these two.
+// the storage RLS policies. A prefix sweep covers these.
 const USER_PREFIX_BUCKETS = ["avatars", "clips", "coach-certificates"] as const;
+
+// Supabase's remove() takes a list; chunked so one huge account cannot build a
+// request the storage API refuses.
+const REMOVE_CHUNK = 100;
+
+/**
+ * What to remove, per bucket, planned BEFORE delete_my_account() runs because
+ * that RPC deletes some of the rows that name the objects (clips, coach
+ * certificates, trainee videos, venue photos).
+ *
+ * `prefixes` are folders listed recursively; `paths` are exact object names.
+ * Every prefix is a key the caller owns: their user id, an application id
+ * whose applicant_user_id is the caller, or a venue id whose partner_user_id
+ * is the caller. Never an unscoped list.
+ */
+type StoragePlan = Map<string, { prefixes: Set<string>; paths: Set<string> }>;
+
+function planFor(plan: StoragePlan, bucket: string) {
+  let entry = plan.get(bucket);
+  if (!entry) {
+    entry = { prefixes: new Set(), paths: new Set() };
+    plan.set(bucket, entry);
+  }
+  return entry;
+}
+
+/**
+ * A path read from a row is only trusted when its first folder is a key the
+ * caller owns. upa_evidence, venue_photos and coach_certificates carry a
+ * client written storage_path, so without this a user could point a row at
+ * someone else's object and have deletion remove it.
+ */
+function isOwnedPath(path: string, ownedKeys: Set<string>): boolean {
+  const first = path.split("/")[0];
+  return first !== "" && ownedKeys.has(first) && !path.includes("..");
+}
+
+/**
+ * upa_applications.photo_url and gratitude_posts.photo_url hold either a bare
+ * object path or the full public URL portal-life stores verbatim
+ * (`.../storage/v1/object/public/<bucket>/<path>`). Returns the object path in
+ * `bucket`, or null for anything else (fixture URLs on other hosts included).
+ */
+function objectPathFromPhotoValue(value: string | null, bucket: string): string | null {
+  if (!value) return null;
+  if (!/^https?:\/\//.test(value)) return value.replace(/^\/+/, "");
+  const marker = `/public/${bucket}/`;
+  const at = value.indexOf(marker);
+  if (at === -1 || !value.includes("/storage/v1/")) return null;
+  const rest = value.slice(at + marker.length).split("?")[0];
+  try {
+    return decodeURIComponent(rest);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Lists a prefix RECURSIVELY. A flat `list()` returns a nested directory as a
@@ -51,6 +107,9 @@ const USER_PREFIX_BUCKETS = ["avatars", "clips", "coach-certificates"] as const;
  * does nest: uploadAvatar writes `<uid>/avatar.jpg` but uploadCover writes
  * `<uid>/cover/cover.jpg` (apps/mobile/src/lib/storage.ts). A non recursive
  * sweep would silently leave every cover photo behind.
+ *
+ * Returns null when the bucket does not exist, so a project without one of
+ * these buckets is a no-op rather than a failure.
  */
 async function listRecursive(
   admin: ReturnType<typeof serviceRoleClient>,
@@ -58,12 +117,14 @@ async function listRecursive(
   prefix: string,
   failures: string[],
   depth = 0,
-): Promise<string[]> {
+): Promise<string[] | null> {
   if (depth > 4) return [];
 
   const { data, error } = await admin.storage.from(bucket).list(prefix, { limit: 1000 });
   if (error) {
-    failures.push(`${bucket}/${prefix}: ${error.message}`);
+    if (/bucket not found/i.test(error.message)) return null;
+    // Bucket and message only. The prefix is an id of the deleting user.
+    failures.push(`${bucket}: list ${error.message}`);
     return [];
   }
   if (!data) return [];
@@ -75,25 +136,47 @@ async function listRecursive(
     if (entry.id) {
       paths.push(full);
     } else {
-      paths.push(...(await listRecursive(admin, bucket, full, failures, depth + 1)));
+      paths.push(...((await listRecursive(admin, bucket, full, failures, depth + 1)) ?? []));
     }
   }
   return paths;
 }
 
 /**
- * Paths that do NOT sit under `<bucket>/<user_id>/`. Coach uploaded trainee
- * video lives at `clips/coach-videos/<coach_id>/<player_id>/<id>.mp4`
- * (coach-trainee-video-upload-url), so for a PLAYER deleting their account the
- * bytes are filed under somebody else's id. Collected BEFORE the RPC runs,
- * because the RPC deletes the rows that name them.
+ * Builds the storage plan while every row that names an object still exists.
+ * Nothing is deleted here, so a refused deletion leaves no residue.
+ *
+ *   avatars, clips, coach-certificates   `<user_id>/...`
+ *   clips (off prefix)                   coach_trainee_videos.storage_path for
+ *                                        the user as PLAYER
+ *                                        (`coach-videos/<coach>/<player>/...`,
+ *                                        server written, 0125), and the user's
+ *                                        own clips rows
+ *   coach-certificates                   coach_certificates.storage_path
+ *   upa-photos                           `<user_id>/...` (insert policy, 0049)
+ *                                        and `<application_id>/...` (the
+ *                                        legacy privileged scheme, 0116), plus
+ *                                        upa_applications.photo_url
+ *   upa-evidence                         `<application_id>/...` (0049), plus
+ *                                        upa_evidence.storage_path
+ *   gratitude-photos                     `<user_id>/...` (0049), plus
+ *                                        gratitude_posts.photo_url on the
+ *                                        user's applications
+ *   venue-media                          `<venue_id>/...` for venues the user
+ *                                        is partner on (0014), plus
+ *                                        venue_photos.storage_path
  */
-async function collectOffPrefixPaths(
+async function planUserStorage(
   admin: ReturnType<typeof serviceRoleClient>,
   userId: string,
-): Promise<string[]> {
-  const paths: string[] = [];
+): Promise<StoragePlan> {
+  const plan: StoragePlan = new Map();
 
+  for (const bucket of USER_PREFIX_BUCKETS) {
+    planFor(plan, bucket).prefixes.add(userId);
+  }
+
+  // Off prefix clips paths, exactly as before 0142.
   const { data: traineeVideos } = await admin
     .from("coach_trainee_videos")
     .select("storage_path")
@@ -101,7 +184,7 @@ async function collectOffPrefixPaths(
 
   for (const row of traineeVideos ?? []) {
     const path = (row as { storage_path: string | null }).storage_path;
-    if (path) paths.push(path);
+    if (path) planFor(plan, "clips").paths.add(path);
   }
 
   const { data: clips } = await admin
@@ -111,38 +194,137 @@ async function collectOffPrefixPaths(
 
   for (const row of clips ?? []) {
     const clip = row as { storage_path: string | null; thumb_path: string | null };
-    if (clip.storage_path) paths.push(clip.storage_path);
-    if (clip.thumb_path) paths.push(clip.thumb_path);
+    if (clip.storage_path) planFor(plan, "clips").paths.add(clip.storage_path);
+    if (clip.thumb_path) planFor(plan, "clips").paths.add(clip.thumb_path);
   }
 
-  return paths;
+  // Coach certificates, the verification documents. Rows are deleted by the RPC.
+  const userKeys = new Set([userId]);
+  const { data: certificates } = await admin
+    .from("coach_certificates")
+    .select("storage_path")
+    .eq("coach_id", userId);
+
+  for (const row of certificates ?? []) {
+    const path = (row as { storage_path: string | null }).storage_path;
+    if (path && isOwnedPath(path, userKeys)) planFor(plan, "coach-certificates").paths.add(path);
+  }
+
+  // Atlitos Life. Applications are scoped by applicant_user_id, and every
+  // derived path must sit under the user id or one of these application ids.
+  const { data: applications } = await admin
+    .from("upa_applications")
+    .select("id, photo_url")
+    .eq("applicant_user_id", userId);
+
+  const appRows = (applications ?? []) as { id: string; photo_url: string | null }[];
+  const appIds = appRows.map((row) => row.id);
+  const upaKeys = new Set([userId, ...appIds]);
+
+  planFor(plan, "upa-photos").prefixes.add(userId);
+  planFor(plan, "gratitude-photos").prefixes.add(userId);
+  for (const appId of appIds) {
+    planFor(plan, "upa-photos").prefixes.add(appId);
+    planFor(plan, "upa-evidence").prefixes.add(appId);
+  }
+  for (const row of appRows) {
+    const path = objectPathFromPhotoValue(row.photo_url, "upa-photos");
+    if (path && isOwnedPath(path, upaKeys)) planFor(plan, "upa-photos").paths.add(path);
+  }
+
+  if (appIds.length > 0) {
+    const { data: evidence } = await admin
+      .from("upa_evidence")
+      .select("storage_path")
+      .in("application_id", appIds);
+
+    for (const row of evidence ?? []) {
+      const path = (row as { storage_path: string | null }).storage_path;
+      if (path && isOwnedPath(path, upaKeys)) planFor(plan, "upa-evidence").paths.add(path);
+    }
+
+    const { data: gratitude } = await admin
+      .from("gratitude_posts")
+      .select("photo_url")
+      .in("upa_id", appIds);
+
+    for (const row of gratitude ?? []) {
+      const path = objectPathFromPhotoValue((row as { photo_url: string | null }).photo_url, "gratitude-photos");
+      if (path && isOwnedPath(path, upaKeys)) planFor(plan, "gratitude-photos").paths.add(path);
+    }
+  }
+
+  // Venue media, scoped by partner_user_id. venue_photos rows are deleted by
+  // the RPC (0142), so their paths are read now.
+  const { data: venues } = await admin
+    .from("venues")
+    .select("id")
+    .eq("partner_user_id", userId);
+
+  const venueIds = ((venues ?? []) as { id: string }[]).map((row) => row.id);
+  if (venueIds.length > 0) {
+    const venueKeys = new Set(venueIds);
+    for (const venueId of venueIds) planFor(plan, "venue-media").prefixes.add(venueId);
+
+    const { data: photos } = await admin
+      .from("venue_photos")
+      .select("storage_path")
+      .in("venue_id", venueIds);
+
+    for (const row of photos ?? []) {
+      const path = (row as { storage_path: string | null }).storage_path;
+      if (path && isOwnedPath(path, venueKeys)) planFor(plan, "venue-media").paths.add(path);
+    }
+  }
+
+  return plan;
 }
 
 async function removeUserStorage(
   admin: ReturnType<typeof serviceRoleClient>,
   userId: string,
-  offPrefixClipPaths: string[],
+  plan: StoragePlan,
 ): Promise<{ removed: number; failures: string[] }> {
   let removed = 0;
   const failures: string[] = [];
+  const counts: Record<string, number> = {};
 
-  for (const bucket of USER_PREFIX_BUCKETS) {
-    const paths = await listRecursive(admin, bucket, userId, failures);
-    if (bucket === "clips") {
-      for (const path of offPrefixClipPaths) {
-        if (!paths.includes(path)) paths.push(path);
+  for (const [bucket, { prefixes, paths: exact }] of plan) {
+    const paths = new Set(exact);
+    let bucketMissing = false;
+    for (const prefix of prefixes) {
+      const listed = await listRecursive(admin, bucket, prefix, failures);
+      if (listed === null) {
+        bucketMissing = true;
+        break;
       }
+      for (const path of listed) paths.add(path);
     }
-    if (paths.length === 0) continue;
-
-    const { error: removeError } = await admin.storage.from(bucket).remove(paths);
-    if (removeError) {
-      failures.push(`${bucket}: ${removeError.message}`);
+    if (bucketMissing || paths.size === 0) {
+      counts[bucket] = 0;
       continue;
     }
-    removed += paths.length;
+
+    const all = [...paths];
+    let bucketRemoved = 0;
+    for (let i = 0; i < all.length; i += REMOVE_CHUNK) {
+      const chunk = all.slice(i, i + REMOVE_CHUNK);
+      const { data, error: removeError } = await admin.storage.from(bucket).remove(chunk);
+      if (removeError) {
+        if (/bucket not found/i.test(removeError.message)) break;
+        failures.push(`${bucket}: remove ${removeError.message}`);
+        continue;
+      }
+      // remove() reports the objects it actually deleted; an exact path that
+      // no longer exists is simply absent from the result.
+      bucketRemoved += Array.isArray(data) ? data.length : chunk.length;
+    }
+    counts[bucket] = bucketRemoved;
+    removed += bucketRemoved;
   }
 
+  // Counts only, never object names.
+  console.log(`delete-account: storage removed for ${userId}: ${JSON.stringify(counts)}`);
   return { removed, failures };
 }
 
@@ -165,9 +347,9 @@ Deno.serve((req) =>
 
     const admin = serviceRoleClient();
 
-    // Read the off prefix storage paths while the rows that name them still
+    // Plan the storage sweep while the rows that name the objects still
     // exist. Nothing is deleted yet, so a refusal below leaves no residue.
-    const offPrefixClipPaths = await collectOffPrefixPaths(admin, userId);
+    const storagePlan = await planUserStorage(admin, userId);
 
     // The stored Sign in with Apple refresh token (0139), read now and revoked
     // only after the RPC succeeds, so a refused deletion leaves the Apple
@@ -222,7 +404,7 @@ Deno.serve((req) =>
 
     // Leg (b): the stored bytes. Runs before the GoTrue release so a storage
     // failure is still reported against a live, findable account id.
-    const storage = await removeUserStorage(admin, userId, offPrefixClipPaths);
+    const storage = await removeUserStorage(admin, userId, storagePlan);
 
     // Leg (a): release the identifiers and ban the GoTrue user. Releasing the
     // email and phone is what lets the same person register a fresh account
