@@ -37,8 +37,15 @@ supabase secrets set --project-ref <ref> NOTIFY_SWEEP_SECRET=<value>
 select vault.create_secret('https://<ref>.supabase.co', 'project_url',
   'Base URL for in-database calls to edge functions');
 select vault.create_secret('<value>', 'notify_sweep_secret',
-  'Bearer the push sweep cron job sends to notify-push-sweep');
+  'Secret the push sweep cron job sends in x-notify-sweep-secret');
+select vault.create_secret('<legacy anon key, eyJ...>', 'anon_key',
+  'Public anon JWT the push sweep sends in Authorization to pass the gateway');
 ```
+
+The gateway (`verify_jwt = true`) only forwards requests whose `Authorization` is a signed JWT, so
+the job sends the public anon key there (a plain random secret is refused with
+`UNAUTHORIZED_INVALID_JWT_FORMAT`) and the secret in the `x-notify-sweep-secret` header. The anon
+key alone is refused by the function.
 
 The job reads `notify_sweep_secret` from Vault on every run, so the value never appears in
 `cron.job.command`, and rotating it is a `vault.update_secret` plus `supabase secrets set`, with no

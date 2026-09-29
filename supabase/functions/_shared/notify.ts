@@ -798,10 +798,14 @@ export function assertServiceRoleRequest(
   // runtime injects is not shown in the dashboard, so the pg_cron job cannot
   // hold it, and production refused every sweep with a genuine dashboard key
   // (2026-09-29). A dedicated random secret, stored only in Vault and in this
-  // function's env, keeps the boundary an exact match.
+  // function's env, keeps the boundary an exact match. It travels in its own
+  // header, x-notify-sweep-secret, because the gateway (verify_jwt = true)
+  // rejects any Authorization value that is not a signed JWT; the job sends
+  // the public anon key there, which on its own grants nothing here.
   const sharedSecret = options.sharedSecretEnv ? Deno.env.get(options.sharedSecretEnv) ?? "" : "";
+  const presentedSecret = (req.headers.get("x-notify-sweep-secret") ?? "").trim();
   const serviceKeyMatches = serviceKey.length > 0 && constantTimeEqual(bearer, serviceKey);
-  const sharedSecretMatches = sharedSecret.length >= 32 && constantTimeEqual(bearer, sharedSecret);
+  const sharedSecretMatches = sharedSecret.length >= 32 && constantTimeEqual(presentedSecret, sharedSecret);
   if (!serviceKeyMatches && !sharedSecretMatches) {
     throw new AppError(
       "FORBIDDEN",

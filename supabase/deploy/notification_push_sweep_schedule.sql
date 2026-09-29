@@ -48,7 +48,13 @@
 --   select vault.create_secret('https://<ref>.supabase.co', 'project_url',
 --     'Base URL for in-database calls to edge functions');
 --   select vault.create_secret('<value>', 'notify_sweep_secret',
---     'Bearer the push sweep cron job sends to notify-push-sweep');
+--     'Secret the push sweep cron job sends in x-notify-sweep-secret');
+--   select vault.create_secret('<legacy anon key, eyJ...>', 'anon_key',
+--     'Public anon JWT the push sweep sends in Authorization to pass the gateway');
+--
+-- The gateway (verify_jwt = true) only forwards a request whose Authorization
+-- is a signed JWT, so the job sends the public anon key there and the secret
+-- in its own header. The anon key alone is refused by the function.
 --
 -- Run those two statements once, as a human, against the project. They are
 -- writes, so this script does not run them, and no automated track has run
@@ -75,6 +81,11 @@ begin
   if not exists (select 1 from vault.secrets where name = 'project_url') then
     raise exception
       'vault secret project_url is missing; see supabase/deploy/README.md for the two vault.create_secret calls this job needs';
+  end if;
+
+  if not exists (select 1 from vault.secrets where name = 'anon_key') then
+    raise exception
+      'vault secret anon_key is missing; see supabase/deploy/README.md. The gateway needs a signed JWT in Authorization, and the public anon key is one';
   end if;
 
   if not exists (select 1 from vault.secrets where name = 'notify_sweep_secret') then
@@ -131,6 +142,10 @@ begin
         headers := jsonb_build_object(
           'Content-Type', 'application/json',
           'Authorization', 'Bearer ' || (
+            select decrypted_secret from vault.decrypted_secrets
+             where name = 'anon_key'
+          ),
+          'x-notify-sweep-secret', (
             select decrypted_secret from vault.decrypted_secrets
              where name = 'notify_sweep_secret'
           )
