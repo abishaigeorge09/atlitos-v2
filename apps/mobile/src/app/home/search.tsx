@@ -193,27 +193,35 @@ export default function SearchScreen() {
     }
   }, [segments, activeSegment]);
 
+  // Coach, court and clip hits open inside another tab's stack. `withAnchor`
+  // loads that tab's root under the pushed screen; without it the pushed
+  // screen became the tab's only screen and the tab stayed stuck on it
+  // (BUG-050). Coaches open on the Trainings stack, the same route the
+  // Trainings Coaches tab uses, so Back lands on a visible tab.
   function openHit(hit: SearchHit) {
     switch (hit.entityType) {
       case 'gear':
         openGear(hit.entityId);
         break;
       case 'coach':
-        router.push({ pathname: '/(tabs)/coaching/coach/[id]', params: { id: hit.entityId } });
+        router.push({ pathname: '/(tabs)/trainings/coach/[id]', params: { id: hit.entityId } }, { withAnchor: true });
         break;
       case 'court':
         // A court hit carries its first free slot (migration 0134); open the
         // court on that date with the slot chosen.
-        router.push({
-          pathname: '/(tabs)/courts/court/[id]',
-          params: hit.slot ? { id: hit.entityId, date: hit.slot.date, slot: hit.slot.start } : { id: hit.entityId },
-        });
+        router.push(
+          {
+            pathname: '/(tabs)/courts/court/[id]',
+            params: hit.slot ? { id: hit.entityId, date: hit.slot.date, slot: hit.slot.start } : { id: hit.entityId },
+          },
+          { withAnchor: true },
+        );
         break;
       case 'athlete':
         router.push({ pathname: '/home/upa/[id]', params: { id: hit.entityId } });
         break;
       case 'clip':
-        router.push({ pathname: '/(tabs)/clutch/post/[id]', params: { id: hit.entityId } });
+        router.push({ pathname: '/(tabs)/clutch/post/[id]', params: { id: hit.entityId } }, { withAnchor: true });
         break;
     }
   }

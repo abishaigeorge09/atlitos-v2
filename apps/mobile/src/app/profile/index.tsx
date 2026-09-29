@@ -189,10 +189,15 @@ export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {
         setClips((prev) =>
           prev.map((c) => (c.id === clip.id ? { ...c, status: 'uploading', failureReason: null } : c)),
         );
-        router.push({
-          pathname: '/(tabs)/clutch/upload',
-          params: { retryClipId: clip.id, retryCaption: clip.caption, retrySport: clip.sport },
-        });
+        // withAnchor keeps the feed under upload so the Clutch tab never gets
+        // stuck on it (BUG-050).
+        router.push(
+          {
+            pathname: '/(tabs)/clutch/upload',
+            params: { retryClipId: clip.id, retryCaption: clip.caption, retrySport: clip.sport },
+          },
+          { withAnchor: true },
+        );
       } catch (err) {
         setRetryErrors((prev) => ({ ...prev, [clip.id]: toApiError(err).message }));
       } finally {
@@ -437,7 +442,8 @@ export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {
                 onOpen={
                   isFailed
                     ? undefined
-                    : () => router.push({ pathname: '/(tabs)/clutch/post/[id]', params: { id: item.id } })
+                    : () =>
+                        router.push({ pathname: '/(tabs)/clutch/post/[id]', params: { id: item.id } }, { withAnchor: true })
                 }
               />
               {pill ? (

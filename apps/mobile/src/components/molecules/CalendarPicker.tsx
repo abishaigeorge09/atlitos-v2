@@ -14,6 +14,14 @@ export interface CalendarPickerProps {
 }
 
 const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+/**
+ * One seventh of the row, for the weekday header and every day cell alike.
+ * Fixed 44pt cells let `flex-wrap` fit 8 per row on a 402pt wide phone, so
+ * dates drifted out from under their weekday (BUG-052); a fraction of the
+ * row always gives exactly 7 columns. Rounded down (14.28%) so float error
+ * can never push the seventh cell over 100% and wrap it.
+ */
+const DAY_COLUMN_WIDTH = `${Math.floor(10000 / 7) / 100}%` as const;
 const MONTH_LABELS = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
@@ -81,7 +89,7 @@ export function CalendarPicker({ value, onChange, minDate }: CalendarPickerProps
 
       <View className="flex-row">
         {WEEKDAY_LABELS.map((w, i) => (
-          <Text key={`${w}-${i}`} className="text-center text-xs text-text-tertiary" style={{ width: 44 }}>
+          <Text key={`${w}-${i}`} className="text-center text-xs text-text-tertiary" style={{ width: DAY_COLUMN_WIDTH }}>
             {w}
           </Text>
         ))}
@@ -89,7 +97,7 @@ export function CalendarPicker({ value, onChange, minDate }: CalendarPickerProps
 
       <View className="flex-row flex-wrap">
         {cells.map((day, index) => {
-          if (day === null) return <View key={`empty-${index}`} style={{ width: 44, height: 44 }} />;
+          if (day === null) return <View key={`empty-${index}`} style={{ width: DAY_COLUMN_WIDTH, height: 44 }} />;
           const iso = toISODate(viewYear, viewMonth, day);
           const isPast = iso < minISO;
           const isSelected = value === iso;
@@ -103,7 +111,7 @@ export function CalendarPicker({ value, onChange, minDate }: CalendarPickerProps
               aria-disabled={isPast}
               aria-selected={isSelected}
               className="items-center justify-center"
-              style={{ width: 44, height: 44 }}
+              style={{ width: DAY_COLUMN_WIDTH, height: 44 }}
             >
               <View
                 className={cn('items-center justify-center rounded-pill', isSelected ? 'bg-accent' : '')}

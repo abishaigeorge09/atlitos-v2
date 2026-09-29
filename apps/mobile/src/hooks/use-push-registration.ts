@@ -48,7 +48,9 @@ export function usePushRegistration(): void {
 
   useEffect(() => {
     const subscription = addNotificationTapListener((deepLink) => {
-      router.push(deepLink as Href);
+      // withAnchor loads the target tab's root under the linked screen, so
+      // Back has somewhere to go and the tab is not left stuck (BUG-050).
+      router.push(deepLink as Href, { withAnchor: true });
     });
     return () => subscription.remove();
   }, []);

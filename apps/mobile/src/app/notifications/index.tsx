@@ -119,7 +119,8 @@ export default function NotificationsScreen() {
         // Non fatal; the row stays visible, re-syncs on next load.
       }
     }
-    router.push(item.deepLink as Href);
+    // Same anchored push as a tapped push notification (BUG-050).
+    router.push(item.deepLink as Href, { withAnchor: true });
   }
 
   async function handleMarkAllRead() {

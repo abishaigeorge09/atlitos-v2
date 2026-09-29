@@ -1,5 +1,6 @@
 import { useClutch } from '@atlitos/api';
 import { spacing } from '@atlitos/theme';
+import { router } from 'expo-router';
 import { UserRoundX } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, View } from 'react-native';
@@ -76,7 +77,7 @@ export default function BlockedAccountsScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-      <AppBar variant="backTitle" title="Blocked accounts" />
+      <AppBar variant="backTitle" title="Blocked accounts" onPressBack={() => router.back()} />
 
       {state === 'loading' ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
