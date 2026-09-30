@@ -70,15 +70,40 @@ export function ClutchPreviewCard({ reloadKey, onLoaded }: { reloadKey: number; 
 
   async function handleLike() {
     if (!clip) return;
+    // The tap's intent is fixed here. A guest's queued like replays after
+    // sign in, when the account may already like this clip, so the action
+    // SETS the intended value and reconciles the server toggle toward it
+    // rather than flipping whatever state it finds.
+    const wantLiked = !clip.likedByMe;
     requireAuth(async () => {
       setClip((prev) =>
-        prev ? { ...prev, likedByMe: !prev.likedByMe, likes: prev.likes + (prev.likedByMe ? -1 : 1) } : prev,
+        prev && prev.likedByMe !== wantLiked
+          ? { ...prev, likedByMe: wantLiked, likes: prev.likes + (wantLiked ? 1 : -1) }
+          : prev,
       );
       try {
-        const result = await clutch.toggleLike(clip.id);
+        let result = await clutch.toggleLike(clip.id);
+        if (result.liked !== wantLiked) result = await clutch.toggleLike(clip.id);
         setClip((prev) => (prev ? { ...prev, likedByMe: result.liked, likes: result.likesCount } : prev));
       } catch {
         setClip((prev) => (prev ? { ...prev, likedByMe: clip.likedByMe, likes: clip.likes } : prev));
+      }
+    }, () => setGateVisible(true));
+  }
+
+  async function handleSave() {
+    if (!clip) return;
+    const wantSaved = !clip.savedByMe;
+    requireAuth(async () => {
+      // Same intent-setting optimistic update and rollback as the Clutch
+      // feed's Save.
+      setClip((prev) => (prev ? { ...prev, savedByMe: wantSaved } : prev));
+      try {
+        let saved = await clutch.toggleSaveClip(clip.id);
+        if (saved !== wantSaved) saved = await clutch.toggleSaveClip(clip.id);
+        setClip((prev) => (prev ? { ...prev, savedByMe: saved } : prev));
+      } catch {
+        setClip((prev) => (prev ? { ...prev, savedByMe: clip.savedByMe } : prev));
       }
     }, () => setGateVisible(true));
   }
@@ -121,6 +146,7 @@ export function ClutchPreviewCard({ reloadKey, onLoaded }: { reloadKey: number; 
           onOpen={openDetail}
           onComment={openDetail}
           onLike={() => void handleLike()}
+          onSave={() => void handleSave()}
           onShare={() => requireAuth(openDetail, () => setGateVisible(true))}
         />
       </View>

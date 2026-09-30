@@ -50,15 +50,19 @@ export function useClipPosters(clips: Clip[]): {
   // does not re-mint every pass (an unresolved mint is not retried in a loop,
   // which would be a slow flood rather than a fast one).
   const attempted = useRef<Set<string>>(new Set());
+  // Bumped by resetPosters so a batch minted before a reset cannot settle or
+  // write into the fresh state. Ordinary effect re-runs do NOT bump it.
+  const generation = useRef(0);
 
   const resetPosters = useCallback(() => {
+    generation.current += 1;
     attempted.current.clear();
     setPosterUrls({});
     setPendingPosterIds(new Set());
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
+    const runGeneration = generation.current;
     // A `failed` clip has no storage object to sign, so asking for one is a
     // guaranteed wasted request.
     const pending = clips.filter((clip) => clip.status !== 'failed' && !attempted.current.has(clip.id));
@@ -75,8 +79,13 @@ export function useClipPosters(clips: Clip[]): {
     // Clears the shimmer for this batch whether it succeeded, partially
     // succeeded or threw. A skeleton that outlives its request is the same
     // never-resolving state this hook is being fixed for, one level down.
+    //
+    // Deliberately NOT cancelled by an effect re-run (a tab switch or loadMore
+    // during the mint): these ids are already in `attempted` and will never be
+    // re-requested, so skipping this left them shimmering forever. Only a
+    // resetPosters, which re-requests everything, supersedes it.
     const settle = () => {
-      if (cancelled) return;
+      if (generation.current !== runGeneration) return;
       setPendingPosterIds((prev) => {
         const next = new Set(prev);
         for (const id of pendingIds) next.delete(id);
@@ -87,7 +96,9 @@ export function useClipPosters(clips: Clip[]): {
     clutch
       .getPlaybackUrls(pendingIds, 'thumb')
       .then((batch) => {
-        if (cancelled || batch.urls.length === 0) return;
+        // Applied even when this run was superseded: the URLs are keyed by
+        // clip id and still correct, and these ids will not be re-requested.
+        if (generation.current !== runGeneration || batch.urls.length === 0) return;
         setPosterUrls((prev) => {
           const next = { ...prev };
           for (const entry of batch.urls) next[entry.clipId] = entry.url;
@@ -102,10 +113,6 @@ export function useClipPosters(clips: Clip[]): {
         // solid surface and still opens the clip.
       })
       .finally(settle);
-
-    return () => {
-      cancelled = true;
-    };
   }, [clips, clutch]);
 
   return { posterUrls, pendingPosterIds, resetPosters };

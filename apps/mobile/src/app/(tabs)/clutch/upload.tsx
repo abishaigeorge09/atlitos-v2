@@ -5,7 +5,7 @@ import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as VideoThumbnails from 'expo-video-thumbnails';
 import { CheckCircle2, Film, TriangleAlert, Upload } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -59,6 +59,10 @@ export default function ClutchUploadScreen() {
   const retrySport: Sport | null = SPORTS.includes(params.retrySport as Sport) ? (params.retrySport as Sport) : null;
 
   const [asset, setAsset] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  // A still frame of the picked video for the preview tile. React Native's
+  // Image cannot decode a .mov/.mp4, so `asset.uri` itself renders nothing.
+  const [previewUri, setPreviewUri] = useState<string | null>(null);
+  const latestPickedUri = useRef<string | null>(null);
   const [caption, setCaption] = useState(params.retryCaption ?? '');
   const [sport, setSport] = useState<Sport | null>(retrySport);
   const [state, setState] = useState<UploadState>('idle');
@@ -106,8 +110,24 @@ export default function ClutchUploadScreen() {
     const picked = result.assets[0];
     if (picked) {
       setAsset(picked);
+      setPreviewUri(null);
+      latestPickedUri.current = picked.uri;
       setState('idle');
       setError(null);
+      void loadPreview(picked.uri);
+    }
+  }
+
+  async function loadPreview(videoUri: string) {
+    // expo-video-thumbnails is native only; web keeps the Film placeholder.
+    if (Platform.OS === 'web') return;
+    try {
+      // Same 0.5s frame the poster upload uses, so the preview matches it.
+      const { uri } = await VideoThumbnails.getThumbnailAsync(videoUri, { time: 500, quality: 0.7 });
+      // Drop a frame from an earlier pick that resolved after a newer one.
+      if (latestPickedUri.current === videoUri) setPreviewUri(uri);
+    } catch {
+      // Non blocking: the tile falls back to the Film placeholder.
     }
   }
 
@@ -261,7 +281,11 @@ export default function ClutchUploadScreen() {
         >
           {asset ? (
             <>
-              <Image source={{ uri: asset.uri }} className="absolute inset-0 h-full w-full" resizeMode="cover" />
+              {previewUri ? (
+                <Image source={{ uri: previewUri }} className="absolute inset-0 h-full w-full" resizeMode="cover" />
+              ) : (
+                <Film size={48} color={colors.textTertiary} strokeWidth={1.75} />
+              )}
               <View className="absolute bottom-md rounded-pill bg-surface px-md py-xs">
                 <Text className="font-sans-semibold text-sm text-text">Change clip</Text>
               </View>

@@ -125,13 +125,19 @@ export default function ProductDetailScreen() {
       await guestWishlist.toggle(params.id);
       return;
     }
+    // The tap's intent is fixed here, from the heart the viewer saw. A
+    // queued tap replays after sign in, when this product may already be on
+    // the account's wishlist, so the action SETS the intended value and
+    // reconciles the server toggle toward it instead of flipping it off.
+    const wantSaved = !saved;
     requireAuth(async () => {
-      const wasSaved = saved;
-      setSaved(!wasSaved);
+      setSaved(wantSaved);
       try {
-        setSaved(await wishlist.toggle(params.id));
+        let now = await wishlist.toggle(params.id);
+        if (now !== wantSaved) now = await wishlist.toggle(params.id);
+        setSaved(now);
       } catch {
-        setSaved(wasSaved);
+        setSaved(!wantSaved);
       }
     }, () => setGateVisible(true));
   }

@@ -16,6 +16,7 @@ import {
   TriangleAlert,
   Volume2,
   VolumeX,
+  WifiOff,
 } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -54,6 +55,11 @@ import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
 
 const PLAYBACK_REFRESH_LEAD_S = 15;
+// SCALE-MEDIA M-1, same bounded retry as the feed (clutch/index.tsx).
+const MINT_MAX_ATTEMPTS = 4;
+const MINT_RETRY_BASE_MS = 2000;
+const MINT_RETRY_MAX_MS = 30000;
+const MINT_RETRY_JITTER = 0.5;
 
 /** Deep link into this exact clip (app scheme in app.json). Carried by the
  * share sheet so a tap reopens the same clip in the viewer. */
@@ -113,6 +119,9 @@ export default function ClutchPostViewerScreen() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [playbackUrls, setPlaybackUrls] = useState<Record<string, string>>({});
   const [posterUrls, setPosterUrls] = useState<Record<string, string>>({});
+  // M-1: clips whose playback mint failed, so the page shows a state and a
+  // Retry instead of sitting black in silence.
+  const [mintFailed, setMintFailed] = useState<Record<string, boolean>>({});
   // Autoplay policy means muted first; the viewer taps to unmute. Shared across
   // pages so the choice persists as you swipe (IG Reels behaviour).
   const [muted, setMuted] = useState(true);
@@ -148,6 +157,12 @@ export default function ClutchPostViewerScreen() {
 
   const activeIdRef = useRef<string | null>(null);
   const refreshTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const mintAttempts = useRef<Record<string, number>>({});
+  // In-flight guard for the comments pager (FlatList can re-fire
+  // onEndReached before the page resolves) and the clip the open thread
+  // belongs to, so a late page never lands in another clip's thread.
+  const loadingMoreCommentsRef = useRef(false);
+  const commentsClipIdRef = useRef<string | null>(null);
 
   const clearTimer = useCallback((clipId: string) => {
     const timer = refreshTimers.current[clipId];
@@ -165,18 +180,58 @@ export default function ClutchPostViewerScreen() {
         if (playback.thumbUrl) {
           setPosterUrls((prev) => ({ ...prev, [clipId]: playback.thumbUrl as string }));
         }
+        mintAttempts.current[clipId] = 0;
+        setMintFailed((prev) => {
+          if (!prev[clipId]) return prev;
+          const next = { ...prev };
+          delete next[clipId];
+          return next;
+        });
         clearTimer(clipId);
         const refreshMs = Math.max(PLAYBACK_REFRESH_LEAD_S, playback.expiresIn - PLAYBACK_REFRESH_LEAD_S) * 1000;
         refreshTimers.current[clipId] = setTimeout(() => {
           if (activeIdRef.current === clipId) void mintPlayback(clipId);
           else clearTimer(clipId);
         }, refreshMs);
-      } catch {
-        // A removed/rejected clip a non-owner cannot see (403), or placeholder
-        // bytes, leaves the poster. The owner's own clip always mints (FB-004).
+      } catch (err) {
+        // SCALE-MEDIA M-1. This catch used to be empty: the same call mints
+        // the poster, so a failure left no video AND no poster, and nothing
+        // retried while the page sat on screen. Now a bounded backoff with
+        // jitter (honouring RATE_LIMITED's retryAfterSeconds), and a visible
+        // state with a Retry on the page, same as the feed.
+        const apiError = err as ApiError;
+        const attempt = (mintAttempts.current[clipId] ?? 0) + 1;
+        mintAttempts.current[clipId] = attempt;
+        setMintFailed((prev) => ({ ...prev, [clipId]: true }));
+        clearTimer(clipId);
+        if (attempt > MINT_MAX_ATTEMPTS) return;
+        const baseMs =
+          apiError?.code === 'RATE_LIMITED'
+            ? Math.max(MINT_RETRY_BASE_MS, (apiError.retryAfterSeconds ?? 60) * 1000)
+            : MINT_RETRY_BASE_MS;
+        const backoffMs = Math.min(MINT_RETRY_MAX_MS, baseMs * 2 ** (attempt - 1));
+        const jitterMs = Math.random() * backoffMs * MINT_RETRY_JITTER;
+        refreshTimers.current[clipId] = setTimeout(() => {
+          if (activeIdRef.current === clipId) void mintPlayback(clipId);
+          else clearTimer(clipId);
+        }, backoffMs + jitterMs);
       }
     },
     [clutch, clearTimer],
+  );
+
+  /** Manual retry from the page: resets the attempt budget. */
+  const retryMint = useCallback(
+    (clipId: string) => {
+      mintAttempts.current[clipId] = 0;
+      setMintFailed((prev) => {
+        const next = { ...prev };
+        delete next[clipId];
+        return next;
+      });
+      void mintPlayback(clipId);
+    },
+    [mintPlayback],
   );
 
   const load = useCallback(async () => {
@@ -278,6 +333,20 @@ export default function ClutchPostViewerScreen() {
       }
       return changed ? nextUrls : prev;
     });
+    // M-1: a swiped-away page drops its failure state and attempt count, so
+    // returning to it starts clean (same rule as the feed).
+    setMintFailed((prev) => {
+      let changed = false;
+      const next: Record<string, boolean> = {};
+      for (const cid of Object.keys(prev)) {
+        if (keep.has(cid)) next[cid] = true;
+        else {
+          changed = true;
+          mintAttempts.current[cid] = 0;
+        }
+      }
+      return changed ? next : prev;
+    });
   }, [activeId, clips, playbackUrls, mintPlayback, clearTimer]);
 
   // F8 (P5 fix pass, PRD-01 FR-4): same class of bug as the main Clutch feed
@@ -288,15 +357,22 @@ export default function ClutchPostViewerScreen() {
   const { requireAuth, clearPendingAction } = usePendingAuthAction(requiresAuthGate);
 
   function handleLike(clip: Clip) {
+    // The tap's intent is fixed here. A guest's queued like replays after
+    // sign in, when the account may already like this clip, so the action
+    // SETS the intended value and reconciles the server toggle toward it.
+    const wantLiked = !clip.likedByMe;
     requireAuth(() => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
       setClips((prev) =>
         prev.map((c) =>
-          c.id === clip.id ? { ...c, likedByMe: !c.likedByMe, likes: c.likes + (c.likedByMe ? -1 : 1) } : c,
+          c.id === clip.id && c.likedByMe !== wantLiked
+            ? { ...c, likedByMe: wantLiked, likes: c.likes + (wantLiked ? 1 : -1) }
+            : c,
         ),
       );
       clutch
         .toggleLike(clip.id)
+        .then((result) => (result.liked === wantLiked ? result : clutch.toggleLike(clip.id)))
         .then((result) =>
           setClips((prev) =>
             prev.map((c) => (c.id === clip.id ? { ...c, likedByMe: result.liked, likes: result.likesCount } : c)),
@@ -311,11 +387,14 @@ export default function ClutchPostViewerScreen() {
   }
 
   function handleSave(clip: Clip) {
+    // Intent fixed at tap time, same reason as handleLike.
+    const wantSaved = !clip.savedByMe;
     requireAuth(() => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-      setClips((prev) => prev.map((c) => (c.id === clip.id ? { ...c, savedByMe: !c.savedByMe } : c)));
+      setClips((prev) => prev.map((c) => (c.id === clip.id ? { ...c, savedByMe: wantSaved } : c)));
       clutch
         .toggleSaveClip(clip.id)
+        .then((saved) => (saved === wantSaved ? saved : clutch.toggleSaveClip(clip.id)))
         .then((saved) =>
           setClips((prev) => prev.map((c) => (c.id === clip.id ? { ...c, savedByMe: saved } : c))),
         )
@@ -410,30 +489,42 @@ export default function ClutchPostViewerScreen() {
   }
 
   async function openComments(clip: Clip) {
+    commentsClipIdRef.current = clip.id;
     setCommentsClip(clip);
     setComments([]);
     setCommentCursor(null);
     setCommentsError(null);
     try {
       const page = await clutch.getComments(clip.id);
+      if (commentsClipIdRef.current !== clip.id) return;
       setComments(page.comments);
       setCommentCursor(page.nextCursor);
     } catch (err) {
       // Do NOT swallow this. An empty catch here renders a clip with a full
       // thread as "No comments yet", which is a false statement to the user
       // and hides the real failure from anyone debugging it.
+      if (commentsClipIdRef.current !== clip.id) return;
       setCommentsError((err as ApiError).message || 'Comments could not load. Pull to retry.');
     }
   }
 
   async function loadMoreComments() {
-    if (!commentsClip || !commentCursor) return;
+    if (!commentsClip || !commentCursor || loadingMoreCommentsRef.current) return;
+    const clipId = commentsClip.id;
+    loadingMoreCommentsRef.current = true;
     try {
-      const page = await clutch.getComments(commentsClip.id, commentCursor);
-      setComments((prev) => [...prev, ...page.comments]);
+      const page = await clutch.getComments(clipId, commentCursor);
+      // The sheet was closed or moved to another clip while this was in flight.
+      if (commentsClipIdRef.current !== clipId) return;
+      setComments((prev) => {
+        const seen = new Set(prev.map((c) => c.id));
+        return [...prev, ...page.comments.filter((c) => !seen.has(c.id))];
+      });
       setCommentCursor(page.nextCursor);
     } catch {
       // Leave the thread as-is; the next scroll retries.
+    } finally {
+      loadingMoreCommentsRef.current = false;
     }
   }
 
@@ -588,6 +679,8 @@ export default function ClutchPostViewerScreen() {
                 }
                 playbackUrl={playbackUrls[item.id]}
                 posterUrl={posterUrls[item.id]}
+                playbackFailed={mintFailed[item.id] === true && playbackUrls[item.id] === undefined}
+                onRetryPlayback={() => retryMint(item.id)}
                 muted={muted}
                 onToggleMute={() => setMuted((m) => !m)}
                 onBack={() => router.back()}
@@ -633,7 +726,10 @@ export default function ClutchPostViewerScreen() {
         onReportComment={openCommentModeration}
         onEndReached={() => void loadMoreComments()}
         onRequestSignIn={() => setGateVisible(true)}
-        onClose={() => setCommentsClip(null)}
+        onClose={() => {
+          commentsClipIdRef.current = null;
+          setCommentsClip(null);
+        }}
       />
 
       <ConfirmSheet
@@ -715,6 +811,10 @@ interface ClipPageProps {
   mountPlayer: boolean;
   playbackUrl?: string;
   posterUrl?: string;
+  /** M-1: the playback mint failed and no URL is held. The page keeps its
+   * poster (if any) and shows a status line with a Retry. */
+  playbackFailed: boolean;
+  onRetryPlayback: () => void;
   muted: boolean;
   onToggleMute: () => void;
   onBack: () => void;
@@ -744,6 +844,8 @@ function ClipPage({
   mountPlayer,
   playbackUrl,
   posterUrl,
+  playbackFailed,
+  onRetryPlayback,
   muted,
   onToggleMute,
   onBack,
@@ -776,6 +878,40 @@ function ClipPage({
       <View style={[StyleSheet.absoluteFill, { pointerEvents: 'none', bottom: '78%', backgroundColor: colors.overlay }]} />
       {/* Bottom scrim for caption legibility. */}
       <View style={[StyleSheet.absoluteFill, { pointerEvents: 'none', top: '55%', backgroundColor: colors.overlay }]} />
+
+      {/* M-1: playback could not be minted. The poster stays behind this; a
+          clip still uploading or processing (an owner's own pending clip,
+          FB-004) says so rather than reading as an error. */}
+      {playbackFailed ? (
+        <View
+          style={StyleSheet.absoluteFill}
+          className="items-center justify-center gap-sm px-lg"
+          pointerEvents="box-none"
+        >
+          {clip.status === 'uploading' || clip.status === 'processing' ? (
+            <Text className="text-center text-sm opacity-90" style={{ color: inkOnMedia }}>
+              Still processing. Check back soon.
+            </Text>
+          ) : (
+            <>
+              <WifiOff size={28} strokeWidth={1.75} color={inkOnMedia} />
+              <Text className="text-center text-sm opacity-90" style={{ color: inkOnMedia }}>
+                This clip could not load right now.
+              </Text>
+            </>
+          )}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading this clip"
+            hitSlop={8}
+            onPress={onRetryPlayback}
+            className="min-h-11 items-center justify-center rounded-pill px-lg"
+            style={{ backgroundColor: colors.overlay }}
+          >
+            <Text className="font-sans-semibold text-sm" style={{ color: inkOnMedia }}>Retry</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       <SafeAreaView style={StyleSheet.absoluteFill} edges={['top']} pointerEvents="box-none">
         <View

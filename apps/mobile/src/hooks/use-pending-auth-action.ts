@@ -47,11 +47,20 @@ export function usePendingAuthAction(requiresAuthGate: boolean) {
     [requiresAuthGate],
   );
 
-  // Fires once per guest-to-signed-in transition. Guarded by the ref itself,
-  // so it is a no-op on every other render, including initial mount and any
-  // render where `requiresAuthGate` is already false.
+  // Latest gate state and focus state, read from the focus effect below
+  // without re-subscribing it on every auth change.
+  const gatedRef = useRef(requiresAuthGate);
+  gatedRef.current = requiresAuthGate;
+  const focusedRef = useRef(false);
+
+  // Fires once per guest-to-signed-in transition while this screen is
+  // focused. Guarded by the ref itself, so it is a no-op on every other
+  // render, including initial mount and any render where `requiresAuthGate`
+  // is already false. When the transition happens while the login screen is
+  // stacked on top (the normal gate path), the focus effect below replays
+  // instead, once `router.back()` reveals this screen again.
   useEffect(() => {
-    if (requiresAuthGate) return;
+    if (requiresAuthGate || !focusedRef.current) return;
     const pending = pendingRef.current;
     if (!pending) return;
     pendingRef.current = null;
@@ -66,13 +75,20 @@ export function usePendingAuthAction(requiresAuthGate: boolean) {
     pendingRef.current = null;
   }, []);
 
-  // Leaving this screen (a different bottom tab, backgrounding, or
-  // navigating away) clears any queued action so it cannot fire later
-  // against screen state the guest is no longer looking at.
+  // The queued action must survive the blur caused by the gate pushing
+  // `/(auth)/login` on top of this screen (clearing it on blur is what made
+  // the replay never fire). On refocus it resolves: signed in means replay,
+  // still a guest means the sign in failed or was abandoned, so drop it.
   useFocusEffect(
     useCallback(() => {
-      return () => {
+      focusedRef.current = true;
+      const pending = pendingRef.current;
+      if (pending) {
         pendingRef.current = null;
+        if (!gatedRef.current) pending();
+      }
+      return () => {
+        focusedRef.current = false;
       };
     }, []),
   );

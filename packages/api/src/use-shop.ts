@@ -1,7 +1,7 @@
 import type { ApiError, ApiErrorCode, OrderStatus, Sport } from "@atlitos/types";
 
 import type { AtlitosClient } from "./client";
-import { mapEdgeFunctionError, mapPostgrestError } from "./errors";
+import { mapEdgeFunctionError, mapPostgrestError, type OrderUnfulfillableError } from "./errors";
 import { IMAGE_SIZE, sizedImageUrl } from "./image-url";
 import { readRefundSummary, type RefundSummary } from "./refunds";
 
@@ -1103,17 +1103,47 @@ export function useShop(client: AtlitosClient) {
       if (error) throw await mapEdgeFunctionError(error);
 
       const body = data as {
-        order_id?: string;
-        entity_id?: string;
+        order_id?: string | null;
+        entity_id?: string | null;
         order_number?: string;
-        status?: OrderStatus;
+        status?: string;
         outcome: "captured" | "already_processed";
       };
 
+      // A late capture the finalize handler refunded (the stock hold lapsed and
+      // the last unit went elsewhere) comes back as a 200 with no order id and
+      // `status: "unfulfillable_<refund outcome>"`. It must never pass as a
+      // success: the shopper was charged and there is no order to show.
+      const orderId = body.order_id || body.entity_id || "";
+      const unfulfillablePrefix = "unfulfillable_";
+      if (body.status?.startsWith(unfulfillablePrefix)) {
+        const unfulfillable: OrderUnfulfillableError = {
+          code: "ORDER_UNFULFILLABLE",
+          message: "This item sold out before your payment went through. Your payment is being refunded in full.",
+          status: 409,
+          refundOutcome: body.status.slice(unfulfillablePrefix.length),
+        };
+        throw unfulfillable;
+      }
+      // No order id WITHOUT the unfulfillable status is NOT a sold out refund.
+      // It is the ordinary race where razorpay-webhook won the finalize claim
+      // and is still inside place_order_from_draft: the gate answers
+      // `already_processed` with the intent's entity_id still null and status
+      // "n/a". The order is being created, so this is a retryable "not yet",
+      // never a refund message and never Order Success with an empty id.
+      if (!orderId) {
+        const notYet: ApiError = {
+          code: "INTERNAL",
+          message: "Your payment is received. Your order is still being confirmed.",
+          status: 503,
+        };
+        throw notYet;
+      }
+
       return {
-        orderId: body.order_id ?? body.entity_id ?? "",
+        orderId,
         orderNumber: body.order_number ?? null,
-        status: body.status ?? "placed",
+        status: (body.status as OrderStatus | undefined) ?? "placed",
         outcome: body.outcome,
       };
     },

@@ -1,16 +1,19 @@
 import {
   useShop,
   toApiError,
+  isOrderUnfulfillableError,
   type AddressRecord,
   type CartLine,
   type CommerceFeeConfig,
+  type OrderUnfulfillableError,
+  type VerifyOrderPaymentInput,
 } from '@atlitos/api';
 import type { ApiError } from '@atlitos/types';
 import { formatINR, radii, spacing } from '@atlitos/theme';
-import { router, useFocusEffect } from 'expo-router';
-import { MapPin, RefreshCw, TriangleAlert } from 'lucide-react-native';
-import { useCallback, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { Stack, router, useFocusEffect } from 'expo-router';
+import { MapPin, PackageX, RefreshCw, ShieldCheck, TriangleAlert } from 'lucide-react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { BackHandler, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BillSummary } from '@/components/molecules/BillSummary';
@@ -32,6 +35,27 @@ import { useThemeColors } from '@/theme/use-theme-colors';
 import { DONATIONS_ENABLED } from '@/lib/feature-flags';
 
 type LoadState = 'loading' | 'ready' | 'error';
+// `form` is the bill and pay button. `confirming` and `unfulfillable` are only
+// reached after Razorpay captured a payment, and neither offers a way back to
+// `form`, because paying again from there would be a second charge.
+type CheckoutPhase = 'form' | 'confirming' | 'unfulfillable';
+
+// Verify attempts (the first plus retries) before telling the shopper to look
+// in My Orders instead.
+const MAX_CONFIRM_ATTEMPTS = 3;
+
+// Codes whose server message is authored copy fit for a shopper. Everything
+// else, INTERNAL above all, can carry raw Postgres or storage text, so it gets
+// a fixed line instead of being echoed.
+const SHOPPER_SAFE_CODES: ReadonlyArray<ApiError['code']> = ['NO_ADDRESS', 'PINCODE_INVALID', 'RATE_LIMITED'];
+const GENERIC_ERROR_COPY = 'Something went wrong. Please try again.';
+
+function checkoutErrorCopy(error: ApiError): string {
+  if (error.code === 'INVALID_SIGNATURE') return 'Payment could not be verified. Please try again.';
+  if (error.code === 'PAYMENT_FAILED') return 'Payment was not completed.';
+  if (SHOPPER_SAFE_CODES.includes(error.code) && error.message) return error.message;
+  return GENERIC_ERROR_COPY;
+}
 
 const RAZORPAY_KEY_ID = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID ?? '';
 
@@ -83,6 +107,25 @@ export default function CheckoutScreen() {
   const [error, setError] = useState<ApiError | null>(null);
   const [paying, setPaying] = useState(false);
   const [needsReconfirm, setNeedsReconfirm] = useState(false);
+  // Set once Razorpay hands back a captured payment. In memory only: a restart
+  // loses it, and the webhook still finalizes the order in that case.
+  const paymentTripleRef = useRef<VerifyOrderPaymentInput | null>(null);
+  const [phase, setPhase] = useState<CheckoutPhase>('form');
+  const [confirming, setConfirming] = useState(false);
+  const [confirmAttempts, setConfirmAttempts] = useState(0);
+  const [unfulfillable, setUnfulfillable] = useState<OrderUnfulfillableError | null>(null);
+
+  // Once a payment is captured, a system back (Android hardware back, iOS edge
+  // swipe) must not pop to the cart, where Proceed to buy opens a fresh
+  // checkout that can charge again. Route it the same way the app bar does.
+  useEffect(() => {
+    if (phase === 'form') return;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      router.replace(phase === 'unfulfillable' ? '/shop/cart' : '/shop/orders');
+      return true;
+    });
+    return () => subscription.remove();
+  }, [phase]);
 
   const load = useCallback(async () => {
     if (!isSignedIn) return;
@@ -105,7 +148,9 @@ export default function CheckoutScreen() {
 
       // PRD-07 section 3 item 4: an empty cart routes back to cart rather than
       // rendering an empty checkout.
-      if (cart.length === 0) router.replace('/shop/cart');
+      // Not once a payment is captured: the finalized order empties the cart,
+      // and the confirming state must stay on screen.
+      if (cart.length === 0 && !paymentTripleRef.current) router.replace('/shop/cart');
     } catch (err) {
       setError(toApiError(err));
       setState('error');
@@ -159,18 +204,15 @@ export default function CheckoutScreen() {
         prefill: { name: me?.name ?? undefined, email: undefined, contact: me?.phone ?? undefined },
       });
 
-      const verified = await shop.verifyOrderPayment({
+      // From here the money is captured. Keep the triple so a failed verify
+      // retries confirmation with it and never calls `shop.checkout()` again,
+      // which would mint a new Razorpay order and charge the shopper twice.
+      paymentTripleRef.current = {
         razorpayOrderId: razorpayResult.razorpayOrderId,
         razorpayPaymentId: razorpayResult.razorpayPaymentId,
         razorpaySignature: razorpayResult.razorpaySignature,
-      });
-
-      // FR-23: Order Success is reached only with a real order id, which only
-      // exists because the finalize handler created the row.
-      router.replace({
-        pathname: '/shop/order-success',
-        params: { orderId: verified.orderId, orderNumber: verified.orderNumber ?? '' },
-      });
+      };
+      await confirmPayment();
     } catch (err) {
       // Two shapes land here: a mapped ApiError from the edge functions, or a
       // plain Error from a dismissed Razorpay sheet that never reached the
@@ -196,6 +238,43 @@ export default function CheckoutScreen() {
     }
   }
 
+  // FR-21 / FR-23. Runs only with a captured payment's triple. A failure here
+  // never falls back into `handleContinue`: the payment is taken, so the only
+  // safe moves are to retry this same verify or send the shopper to My Orders,
+  // where `razorpay-webhook` finalizes the order independently.
+  async function confirmPayment() {
+    const triple = paymentTripleRef.current;
+    if (!triple) return;
+    setConfirming(true);
+    try {
+      const verified = await shop.verifyOrderPayment(triple);
+      // FR-23: Order Success is reached only with a real order id, which only
+      // exists because the finalize handler created the row.
+      router.replace({
+        pathname: '/shop/order-success',
+        params: { orderId: verified.orderId, orderNumber: verified.orderNumber ?? '' },
+      });
+    } catch (err) {
+      if (isOrderUnfulfillableError(err)) {
+        // The capture landed after the stock hold lapsed and the server
+        // refunded it. No order exists, so this is neither success nor a
+        // retryable failure.
+        setUnfulfillable(err);
+        setPhase('unfulfillable');
+        return;
+      }
+      const apiError = toApiError(err, 'PAYMENT_FAILED');
+      // A bad signature will not verify on a retry either; go straight to the
+      // My Orders fallback rather than offering a button that cannot work.
+      setConfirmAttempts((count) =>
+        apiError.code === 'INVALID_SIGNATURE' ? MAX_CONFIRM_ATTEMPTS : count + 1,
+      );
+      setPhase('confirming');
+    } finally {
+      setConfirming(false);
+    }
+  }
+
   if (!isSignedIn) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
@@ -205,6 +284,59 @@ export default function CheckoutScreen() {
           <Button variant="secondary" onPress={() => router.push('/(auth)/login')}>
             <Text style={{ color: colors.text }}>Sign in</Text>
           </Button>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (phase === 'unfulfillable') {
+    const refunded = unfulfillable?.refundOutcome === 'refunded';
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
+        <Stack.Screen options={{ gestureEnabled: false }} />
+        <AppBar variant="backTitle" title="Checkout" onPressBack={() => router.replace('/shop/cart')} />
+        <View style={{ flex: 1, padding: spacing.lg, justifyContent: 'center', alignItems: 'center', gap: spacing.md }}>
+          <PackageX size={40} color={colors.warning} strokeWidth={1.75} />
+          <Text style={[textStyle('h3'), { color: colors.text, textAlign: 'center' }]}>This item sold out</Text>
+          <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
+            {refunded
+              ? 'It sold out before your payment went through, so no order was placed. Your payment has been refunded in full.'
+              : 'It sold out before your payment went through, so no order was placed. Your payment is being refunded in full.'}
+          </Text>
+          <Button variant="secondary" onPress={() => router.replace('/shop/cart')}>
+            <Text style={{ color: colors.text }}>Back to cart</Text>
+          </Button>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (phase === 'confirming') {
+    const exhausted = confirmAttempts >= MAX_CONFIRM_ATTEMPTS;
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
+        <Stack.Screen options={{ gestureEnabled: false }} />
+        <AppBar variant="backTitle" title="Checkout" onPressBack={() => router.replace('/shop/orders')} />
+        <View style={{ flex: 1, padding: spacing.lg, justifyContent: 'center', alignItems: 'center', gap: spacing.md }}>
+          <ShieldCheck size={40} color={colors.success} strokeWidth={1.75} />
+          <Text style={[textStyle('h3'), { color: colors.text, textAlign: 'center' }]}>
+            Payment received, confirming your order
+          </Text>
+          <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
+            {exhausted
+              ? 'Your payment is safe. Your order will appear in My Orders shortly. Do not pay again.'
+              : 'We could not confirm your order yet. Your payment is safe, so do not pay again.'}
+          </Text>
+          {exhausted ? (
+            <Button onPress={() => router.replace('/shop/orders')}>
+              <Text style={{ color: colors.inkOnAccent }}>Go to My Orders</Text>
+            </Button>
+          ) : (
+            <Button loading={confirming} onPress={() => void confirmPayment()}>
+              <RefreshCw size={16} strokeWidth={1.75} color={colors.inkOnAccent} />
+              <Text style={{ color: colors.inkOnAccent }}>Retry confirmation</Text>
+            </Button>
+          )}
         </View>
       </SafeAreaView>
     );
@@ -231,7 +363,7 @@ export default function CheckoutScreen() {
           <TriangleAlert size={40} color={colors.danger} strokeWidth={1.75} />
           <Text style={[textStyle('h3'), { color: colors.text, textAlign: 'center' }]}>Couldn't load checkout</Text>
           <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
-            {error?.message ?? 'Something went wrong. Please try again.'}
+            {error ? checkoutErrorCopy(error) : GENERIC_ERROR_COPY}
           </Text>
           <Button variant="secondary" onPress={() => void load()}>
             <RefreshCw size={16} strokeWidth={1.75} color={colors.text} />
@@ -379,9 +511,7 @@ export default function CheckoutScreen() {
           <View className="flex-row items-center gap-xs">
             <TriangleAlert size={16} strokeWidth={1.75} color={colors.danger} />
             <Text className="flex-1 font-sans text-sm text-danger">
-              {error.code === 'INVALID_SIGNATURE'
-                ? 'Payment could not be verified. Please try again.'
-                : error.message || 'Payment was not completed.'}
+              {checkoutErrorCopy(error)}
             </Text>
           </View>
         ) : null}

@@ -91,16 +91,24 @@ export default function ClutchCreatorScreen() {
 
   function toggleFollow() {
     if (!profile) return;
+    // The tap's intent is fixed here, from what the viewer saw. A guest's
+    // queued Follow replays after sign in, when the account may already
+    // follow this creator (a guest always reads as not following), so the
+    // action SETS the intended value and reconciles the server toggle toward
+    // it instead of flipping whatever state it finds.
+    const wantFollowing = !profile.followedByMe;
+    const creatorId = profile.id;
     requireAuth(async () => {
       setFollowBusy(true);
       const prev = profile;
-      setProfile({
-        ...profile,
-        followedByMe: !profile.followedByMe,
-        followerCount: profile.followerCount + (profile.followedByMe ? -1 : 1),
-      });
+      setProfile((p) =>
+        p && p.followedByMe !== wantFollowing
+          ? { ...p, followedByMe: wantFollowing, followerCount: p.followerCount + (wantFollowing ? 1 : -1) }
+          : p,
+      );
       try {
-        const result = await clutch.toggleFollow(profile.id);
+        let result = await clutch.toggleFollow(creatorId);
+        if (result.following !== wantFollowing) result = await clutch.toggleFollow(creatorId);
         setProfile((p) =>
           p ? { ...p, followedByMe: result.following, followerCount: result.followerCount } : p,
         );

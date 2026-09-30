@@ -4,6 +4,7 @@ import type { Session } from "@supabase/supabase-js";
 import { create } from "zustand";
 
 import { supabase } from "@/lib/supabase";
+import { useOnboardingDraft } from "@/store/onboarding-draft";
 
 /**
  * `session-store`: the single source of truth for who is using the app right
@@ -156,6 +157,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   signOut: async () => {
     await auth.signOut();
+    resetOnboardingDraft();
     set({ me: null });
   },
 
@@ -374,8 +376,23 @@ export function startSessionListener(): void {
   supabase.auth.getSession().then(({ data }) => applySession(data.session));
 }
 
+function resetOnboardingDraft(): void {
+  const draft = useOnboardingDraft.getState();
+  draft.resetPlayer();
+  draft.resetCoach();
+}
+
 function applySession(session: Session | null): void {
   const isGuest = session?.user.is_anonymous === true;
+  // The onboarding wizard draft (sports, city, an avatar URL uploaded under
+  // the previous user's id) is module level and outlives the session. Wipe it
+  // whenever the session user changes (sign out, or a different account signs
+  // in) so the next account never inherits, and submits, the prior draft.
+  // A token refresh for the same user keeps it.
+  const prevUserId = useSessionStore.getState().session?.user.id ?? null;
+  const nextUserId = session?.user.id ?? null;
+  if (prevUserId !== nextUserId) resetOnboardingDraft();
+
   const status: SessionStatus = !session ? "signed_out" : isGuest ? "guest" : "signed_in";
 
   useSessionStore.setState({ status, session, hydrated: true });

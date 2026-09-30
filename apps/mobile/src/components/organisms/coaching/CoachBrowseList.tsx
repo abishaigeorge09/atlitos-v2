@@ -144,16 +144,25 @@ export function CoachBrowseList({ onOpenCoach, header, onRefresh }: CoachBrowseL
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
 
+  // Only the latest page 1 load may apply its results. Two quick chip taps
+  // can resolve out of order, and without this the slower earlier response
+  // would overwrite the grid and `nextCursor` under the newer chip. `loadMore`
+  // checks the same sequence so a tail page from a previous filter is dropped.
+  const requestSeq = useRef(0);
+
   const load = useCallback(
     async (options?: { silent?: boolean }) => {
+      const seq = ++requestSeq.current;
       if (!options?.silent) setState('loading');
       setError(null);
       try {
         const result = await coaching.listCoaches({ sport: sport ?? undefined, city });
+        if (seq !== requestSeq.current) return;
         setItems(result.items);
         setNextCursor(result.nextCursor);
         setState(result.items.length === 0 ? 'empty' : 'populated');
       } catch (err) {
+        if (seq !== requestSeq.current) return;
         setError(err as ApiError);
         setState('error');
       }
@@ -170,9 +179,11 @@ export function CoachBrowseList({ onOpenCoach, header, onRefresh }: CoachBrowseL
   // same bounded `.limit()` CT-5 requires.
   const loadMore = useCallback(async () => {
     if (loadingMore || !nextCursor) return;
+    const seq = requestSeq.current;
     setLoadingMore(true);
     try {
       const result = await coaching.listCoaches({ sport: sport ?? undefined, city, cursor: nextCursor });
+      if (seq !== requestSeq.current) return;
       setItems((previous) => [...previous, ...result.items]);
       setNextCursor(result.nextCursor);
     } catch {
