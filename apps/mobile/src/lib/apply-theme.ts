@@ -95,5 +95,17 @@ export function applyTheme(pref: ThemePref): void {
     return;
   }
 
-  colorScheme.set(pref);
+  // Native, 'system': resolve the OS appearance ONCE and pin it (founder,
+  // 2026-09-30: "only dark mode and light mode", and the app was flipping
+  // between them on its own). Handing 'system' through let iOS drive the
+  // theme live, and iOS briefly reports the opposite appearance while it
+  // snapshots a backgrounded app for the switcher, so the UI flipped at
+  // random. Pinning a concrete value sets the app window's override, which
+  // those snapshots cannot change. The user switches in Settings.
+  colorScheme.set(pref === 'system' ? resolveSystemScheme() : pref);
+}
+
+/** The OS appearance right now, as a concrete light or dark. */
+export function resolveSystemScheme(): 'light' | 'dark' {
+  return Appearance.getColorScheme() === 'dark' ? 'dark' : 'light';
 }

@@ -9,7 +9,6 @@ import {
   LifeBuoy,
   LogIn,
   LogOut,
-  Monitor,
   Moon,
   Palette,
   ScrollText,
@@ -29,7 +28,7 @@ import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
-import { applyTheme, type ThemePref } from '@/lib/apply-theme';
+import { applyTheme, resolveSystemScheme, type ThemePref } from '@/lib/apply-theme';
 import { openSitePage, type SitePath } from '@/lib/site';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
@@ -46,7 +45,6 @@ const SPORT_LABEL: Record<Sport, string> = {
 type ErrorSection = 'appearance' | 'sports' | 'location';
 
 const THEME_OPTIONS: Array<{ key: ThemePref; label: string; icon: typeof Sun }> = [
-  { key: 'system', label: 'System', icon: Monitor },
   { key: 'light', label: 'Light', icon: Sun },
   { key: 'dark', label: 'Dark', icon: Moon },
 ];
@@ -165,7 +163,10 @@ export function SettingsContent() {
 
   // Optimistic mirrors so a toggle/chip reflects instantly while the write
   // lands; refreshMe reconciles from the row afterwards.
+  // Light and dark only (founder, 2026-09-30). A saved 'system' shows as the
+  // mode it resolved to at launch; picking either pins it.
   const [themePref, setThemePref] = useState<ThemePref>(me?.theme ?? 'system');
+  const shownTheme: ThemePref = themePref === 'system' ? resolveSystemScheme() : themePref;
   const [sports, setSports] = useState<Sport[]>(me?.sports ?? []);
   const [primarySport, setPrimarySport] = useState<Sport | null>(me?.primarySport ?? me?.sports?.[0] ?? null);
 
@@ -317,7 +318,7 @@ export function SettingsContent() {
           </View>
           <View style={{ flexDirection: 'row', gap: spacing.sm }}>
             {THEME_OPTIONS.map(({ key, label, icon: Icon }) => {
-              const active = themePref === key;
+              const active = shownTheme === key;
               return (
                 <Pressable
                   key={key}
@@ -438,8 +439,6 @@ export function SettingsContent() {
             </Section>
           ) : null}
 
-      {isSignedIn ? (
-        <>
           <Section title="Account">
             <ActionRow icon={UserRoundPen} label="Edit profile" onPress={() => router.push('/profile/edit')} />
             {/* RECONCILIATION 2026-09-14, from origin/main eca5992. A block with no

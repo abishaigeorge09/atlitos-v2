@@ -14,6 +14,9 @@
     --color-surface-muted: 0 0% 93%;
     --color-card: 0 0% 100%;
     --color-overlay: rgba(0,0,0,0.45);
+    --color-canvas: 240 8% 95%;
+    --color-spotlight: 0 0% 10%;
+    --color-ink-on-spotlight: 0 0% 100%;
     --color-text: 0 0% 5%;
     --color-text-secondary: 0 0% 36%;
     --color-text-tertiary: 0 0% 42%;
@@ -71,6 +74,9 @@
     --color-surface-muted: 0 0% 15%;
     --color-card: 0 0% 11%;
     --color-overlay: rgba(0,0,0,0.6);
+    --color-canvas: 0 0% 4%;
+    --color-spotlight: 0 0% 15%;
+    --color-ink-on-spotlight: 0 0% 100%;
     --color-text: 0 0% 100%;
     --color-text-secondary: 0 0% 66%;
     --color-text-tertiary: 0 0% 58%;

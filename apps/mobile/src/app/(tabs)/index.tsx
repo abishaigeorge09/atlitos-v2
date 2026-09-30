@@ -11,10 +11,11 @@ import { BrandFooter } from '@/components/organisms/home/BrandFooter';
 import { CategoriesRow } from '@/components/organisms/home/CategoriesRow';
 import { ClutchPreviewCard } from '@/components/organisms/home/ClutchPreviewCard';
 import { EmpowerRail } from '@/components/organisms/home/EmpowerRail';
-import { LocationRow } from '@/components/organisms/home/LocationRow';
+import { FeaturedSportCard } from '@/components/organisms/home/FeaturedSportCard';
+import { HomeHeader } from '@/components/organisms/home/HomeHeader';
+import { LocationSheet } from '@/components/organisms/home/LocationSheet';
 import { PromoCarousel } from '@/components/organisms/home/PromoCarousel';
 import { RecentlyViewedRail } from '@/components/organisms/home/RecentlyViewedRail';
-import { AppBar } from '@/components/ui/app-bar';
 import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { SearchBar } from '@/components/ui/search-bar';
@@ -28,10 +29,11 @@ import { useThemeColors } from '@/theme/use-theme-colors';
 import { DONATIONS_ENABLED } from '@/lib/feature-flags';
 
 /**
- * Home tab, rebuilt to PRD-01 3.2's approved mockup layout. Order:
- * AppBar + SearchBar + LocationRow, categories row, promo carousel,
- * recently viewed (falling back to Shop), Clutch preview, Donate to
- * Empower rail, brand footer. Each section is its own small component under
+ * Home tab. PRD-01 3.2 content on the Playo layout (founder, 2026-09-30):
+ * greeting header with the city picker, then white cards on a grey canvas.
+ * Order: SearchBar, promo carousel, Play by sport, featured sport card
+ * with coach faces, recently viewed (falling back to Shop), Clutch in the
+ * dark spotlight card, Donate to Empower rail, brand footer. Each section is its own small component under
  * `components/organisms/home/`, reading its own domain hook and hiding
  * itself quietly on an empty result or a read error, so a slow or missing
  * domain (Clutch, Empower, promo banners) never blocks the sections that
@@ -73,6 +75,7 @@ export default function HomeScreen() {
   const everyRailFailed = railKeys.length >= 2 && railKeys.every((key) => railResults[key] === false);
   const [refreshing, setRefreshing] = useState(false);
   const [setupCardDismissed, setSetupCardDismissed] = useState(false);
+  const [locationSheetVisible, setLocationSheetVisible] = useState(false);
 
   // BUG-056: without this Home showed "Location is off, showing Hyderabad"
   // on every launch, even with permission granted, until Courts ran the
@@ -130,32 +133,34 @@ export default function HomeScreen() {
   const showFinishSetup = status === 'signed_in' && me != null && !me.city && !setupCardDismissed;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-      <AppBar
-        variant="brand"
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.canvas }} edges={['top']}>
+      {/* Playo layout (founder, 2026-09-30): greeting header with the city
+          picker, then white cards on the grey canvas. */}
+      <HomeHeader
         hasUnreadNotifications={hasUnread}
-        avatarUri={me?.avatarUrl ?? undefined}
-        onPressNotifications={() => requireAuth(() => router.push('/notifications'), openGate)}
         onPressProfile={() =>
-          // The profile now lives on the You tab (FB-001), so the header
-          // avatar switches to that tab instead of pushing a duplicate
-          // /profile screen onto the Home stack.
+          // The profile lives on the You tab (FB-001), so the avatar switches
+          // to that tab instead of pushing a duplicate /profile screen.
           requireAuth(() => router.push('/(tabs)/you'), openGate)
         }
+        onPressLocation={() => setLocationSheetVisible(true)}
+        onPressChat={() => requireAuth(() => router.push('/(tabs)/chat'), openGate)}
+        onPressNotifications={() => requireAuth(() => router.push('/notifications'), openGate)}
+        onPressBookings={() => requireAuth(() => router.push('/(tabs)/coaching/bookings'), openGate)}
       />
 
       <ScrollView
-        contentContainerStyle={{ padding: spacing.lg, gap: spacing.xl, paddingBottom: navInset + spacing.xl }}
+        contentContainerStyle={{
+          paddingHorizontal: spacing.lg,
+          paddingTop: spacing.sm,
+          gap: spacing.lg,
+          paddingBottom: navInset + spacing.xl,
+        }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
         }
       >
-        <View style={{ gap: spacing.sm }}>
-          <SearchBar variant="ai" onPress={() => router.push('/home/search')} />
-          <LocationRow />
-        </View>
-
-        <CategoriesRow />
+        <SearchBar variant="ai" className="h-12 rounded-lg border-0 bg-card" onPress={() => router.push('/home/search')} />
 
         {showFinishSetup ? (
           <View
@@ -219,9 +224,13 @@ export default function HomeScreen() {
 
         <PromoCarousel reloadKey={reloadKey} onLoaded={onPromoLoaded} />
 
-        <RecentlyViewedRail reloadKey={reloadKey} />
+        <CategoriesRow />
 
-        <ClutchPreviewCard reloadKey={reloadKey} onLoaded={onClutchLoaded} />
+        <FeaturedSportCard reloadKey={reloadKey} />
+
+        <RecentlyViewedRail reloadKey={reloadKey} framed />
+
+        <ClutchPreviewCard reloadKey={reloadKey} onLoaded={onClutchLoaded} framed />
 
         {DONATIONS_ENABLED ? <EmpowerRail reloadKey={reloadKey} /> : null}
 
@@ -231,6 +240,8 @@ export default function HomeScreen() {
             Sign out lives in Settings, Account, which returns to guest
             browsing the same way. */}
       </ScrollView>
+
+      <LocationSheet visible={locationSheetVisible} onClose={() => setLocationSheetVisible(false)} />
 
       <LoginGateModal
         visible={gateVisible}

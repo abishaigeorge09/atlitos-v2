@@ -229,8 +229,12 @@ function BottomNav({ activeTab, onTabPress, badgedTabs, avatarUri, className }: 
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
-            paddingHorizontal: spacing.sm,
-            paddingVertical: spacing.xs,
+            // One inset on all four sides, so the active capsule's curve is
+            // concentric with the pill's and its ends meet the pill's ends
+            // at the same distance as its top and bottom (founder,
+            // 2026-09-30: the orange capsule did not line up with the
+            // corners of the bar).
+            padding: spacing.xs,
             borderRadius: radii.pill,
             overflow: 'hidden',
             borderWidth: StyleSheet.hairlineWidth,

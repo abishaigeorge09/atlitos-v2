@@ -1,8 +1,8 @@
 import { useAppConfig, useShop, type ShopProduct } from '@atlitos/api';
-import { spacing } from '@atlitos/theme';
+import { radii, spacing } from '@atlitos/theme';
 import { router } from 'expo-router';
 import { ChevronRight } from 'lucide-react-native';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactElement } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
 import { ProductCard } from '@/components/ui/product-card';
@@ -32,8 +32,12 @@ import { openGear } from '@/lib/gear-route';
  * is nothing here it may honestly render; it renders nothing at all rather
  * than an empty owned read dressed up as a shop rail.
  */
-export function RecentlyViewedRail({ reloadKey }: { reloadKey: number }) {
+export function RecentlyViewedRail({ reloadKey, framed = false }: { reloadKey: number; framed?: boolean }) {
   const colors = useThemeColors();
+  // Home, 2026-09-30: a white card on the canvas. The frame lives here, not in
+  // the parent, so an empty rail (it returns null) never leaves an empty card.
+  const frame = (node: ReactElement) =>
+    framed ? <View style={{ padding: spacing.lg, borderRadius: radii['2xl'], backgroundColor: colors.card }}>{node}</View> : node;
   const shop = useShop(supabase);
   const appConfig = useAppConfig(supabase);
 
@@ -78,7 +82,7 @@ export function RecentlyViewedRail({ reloadKey }: { reloadKey: number }) {
   if (ownedEnabled === false) return null;
 
   if (ownedEnabled === undefined || state === 'loading') {
-    return (
+    return frame(
       <View style={{ gap: spacing.sm }}>
         <Skeleton shape="line" width="40%" />
         <View style={{ flexDirection: 'row', gap: spacing.md }}>
@@ -94,7 +98,7 @@ export function RecentlyViewedRail({ reloadKey }: { reloadKey: number }) {
 
   if (products.length === 0) return null;
 
-  return (
+  return frame(
     <View style={{ gap: spacing.sm }}>
       <View className="flex-row items-center justify-between">
         <Text style={[textStyle('h3'), { color: colors.text }]}>

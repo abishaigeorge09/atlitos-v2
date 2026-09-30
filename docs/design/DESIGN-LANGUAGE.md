@@ -296,3 +296,19 @@ also dropped its arbitrary `px-[3px]` / `text-[10px]` for `px-1` / `text-xs`.
 The same direct mapping now covers `background` (`hsl(var(--color-bg))`), `input` (`hsl(var(--color-border))`),
 `ring` (`hsl(var(--color-accent))`) and `card-foreground` (`hsl(var(--color-text))`). Each is the palette var that
 its `global.css` slot already held in both the light and dark blocks, so light values are identical.
+
+## 2026-09-30: Home on the Playo layout, the display face, one fixed theme
+
+Founder direction with annotated screenshots, a Playo Home reference and a sport card reference ("JOIN THE STREET GAME").
+
+**Display face.** `fontFamily.display` is Anton (SIL OFL, one weight, `assets/fonts/Anton_400Regular.ttf`, licence beside it). It is for uppercase hero headlines on feature cards only, never body copy. Variants: `displayHero` (44/46, uppercase), `displaySection` (20/26, uppercase, the "PLAY BY SPORT" card title), and `eyebrow` (Urbanist semibold 11, 0.3em tracking, uppercase, the sport label above a hero headline). `fontSize["6xl"]` (44) exists for `displayHero`. Tailwind gets `font-display`.
+
+**Canvas and spotlight.** `canvas` (light `#F1F1F3`, dark `#0B0B0B`) is the page behind grouped white `card`s, Home only for now. `spotlight` (light `#1A1A1A`, dark `#262626`) with `inkOnSpotlight` is the high contrast feature panel (Clutch moments on Home).
+
+**Home order.** Greeting header (avatar, "Hey name!", city with a chevron that opens `LocationSheet`, then chat, notifications and bookings), search, promo carousel, Play by sport card, `FeaturedSportCard` (eyebrow, three line display headline, a picture overlapping the headline's lower right, an outlined full width CTA, then a coach face strip), Recently viewed in a card, Clutch in the spotlight card, Empower, brand footer. Cards that can render nothing (`RecentlyViewedRail`, `ClutchPreviewCard`) draw their own frame via a `framed` prop, so an empty section never leaves an empty card. Until sport photography exists, `FeaturedSportCard` draws the sport's lucide glyph large where the photo goes; pass `imageUrl` once there is one.
+
+**Theme.** Light and dark only. Settings offers Light and Dark; a saved or default `system` resolves the OS appearance once at launch and pins it (`applyTheme`), because following iOS live let the app switcher's snapshots flip the UI at random.
+
+**Sign in buttons.** Google and Apple share one plate: 48pt (the Login button's height), pill, the same system font label at 16 semibold. Apple is a custom button per the HIG (Apple logo, pure black on light, pure white on dark, `vendorBrand.appleBlack` / `appleWhite`); the native `AppleAuthenticationButton` sized its own label and could never match Google's.
+
+**Floating nav.** The pill's inner inset is one value on all four sides, so the active capsule is concentric with the pill.
