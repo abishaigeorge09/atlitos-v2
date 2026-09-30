@@ -11,6 +11,9 @@
   --color-surface-muted: hsl(0 0% 93%);
   --color-card: hsl(0 0% 100%);
   --color-overlay: rgba(0,0,0,0.45);
+  --color-canvas: hsl(240 8% 95%);
+  --color-spotlight: hsl(0 0% 10%);
+  --color-ink-on-spotlight: hsl(0 0% 100%);
   --color-text: hsl(0 0% 5%);
   --color-text-secondary: hsl(0 0% 36%);
   --color-text-tertiary: hsl(0 0% 42%);
@@ -69,6 +72,7 @@
   --text-3xl: 28px;
   --text-4xl: 32px;
   --text-5xl: 40px;
+  --text-6xl: 44px;
   --weight-regular: 400;
   --weight-medium: 500;
   --weight-semibold: 600;
@@ -104,6 +108,15 @@
   --type-caption-size: 12px;
   --type-caption-line: 16px;
   --type-caption-tracking: 0px;
+  --type-displayHero-size: 44px;
+  --type-displayHero-line: 46px;
+  --type-displayHero-tracking: 0px;
+  --type-displaySection-size: 20px;
+  --type-displaySection-line: 26px;
+  --type-displaySection-tracking: 0.4px;
+  --type-eyebrow-size: 11px;
+  --type-eyebrow-line: 14px;
+  --type-eyebrow-tracking: 0.3em;
   --type-overline-size: 11px;
   --type-overline-line: 14px;
   --type-overline-tracking: 0.22em;
@@ -147,6 +160,9 @@
   --color-surface-muted: hsl(0 0% 15%);
   --color-card: hsl(0 0% 11%);
   --color-overlay: rgba(0,0,0,0.6);
+  --color-canvas: hsl(0 0% 4%);
+  --color-spotlight: hsl(0 0% 15%);
+  --color-ink-on-spotlight: hsl(0 0% 100%);
   --color-text: hsl(0 0% 100%);
   --color-text-secondary: hsl(0 0% 66%);
   --color-text-tertiary: hsl(0 0% 58%);
