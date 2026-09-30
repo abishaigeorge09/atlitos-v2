@@ -95,12 +95,6 @@ export interface ColorPalette {
   surfaceMuted: string;
   card: string;
   overlay: string;
-  /** Page canvas behind grouped white cards (Home, Playo layout, 2026-09-30). */
-  canvas: string;
-  /** High contrast feature card (the reference's dark "BEST PLAYERS" panel). */
-  spotlight: string;
-  /** Ink on `spotlight`, both modes. */
-  inkOnSpotlight: string;
 
   // Text
   text: string;
@@ -154,9 +148,6 @@ export const lightColors: ColorPalette = {
   surfaceMuted: "#ECECEC",
   card: "#FFFFFF",
   overlay: "rgba(0,0,0,0.45)",
-  canvas: "#F1F1F3",
-  spotlight: "#1A1A1A",
-  inkOnSpotlight: "#FFFFFF",
 
   text: "#0D0D0D",
   textSecondary: "#5D5D5D",
@@ -201,9 +192,6 @@ export const darkColors: ColorPalette = {
   surfaceMuted: "#262626",
   card: "#1C1C1C",
   overlay: "rgba(0,0,0,0.6)",
-  canvas: "#0B0B0B",
-  spotlight: "#262626",
-  inkOnSpotlight: "#FFFFFF",
 
   text: "#FFFFFF",
   textSecondary: "#A8A8A8",

@@ -1,5 +1,5 @@
 import { useClutch } from '@atlitos/api';
-import { mediaBackdrop, radii, spacing } from '@atlitos/theme';
+import { mediaBackdrop, spacing } from '@atlitos/theme';
 import type { Clip } from '@atlitos/types';
 import { router } from 'expo-router';
 import { ChevronRight } from 'lucide-react-native';
@@ -25,19 +25,7 @@ import { useThemeColors } from '@/theme/use-theme-colors';
  * bare storage path. Hides entirely on an empty feed or a failed read, this
  * is a teaser, never a Home level error state.
  */
-export function ClutchPreviewCard({
-  reloadKey,
-  onLoaded,
-  framed = false,
-}: {
-  reloadKey: number;
-  onLoaded?: (ok: boolean) => void;
-  /** Home, 2026-09-30: draw the teaser inside the dark spotlight card with a
-   * display face title, the reference's "BEST PLAYERS" panel. The frame lives
-   * here, not in the parent, because this card renders nothing when there is
-   * no clip, and an empty dark panel must never show. */
-  framed?: boolean;
-}) {
+export function ClutchPreviewCard({ reloadKey, onLoaded }: { reloadKey: number; onLoaded?: (ok: boolean) => void }) {
   const colors = useThemeColors();
   const clutch = useClutch(supabase);
   const requiresAuthGate = useSessionStore((state) => state.status !== 'signed_in');
@@ -137,21 +125,8 @@ export function ClutchPreviewCard({
 
   if (!clip) return null;
 
-  const rowInk = framed ? colors.inkOnSpotlight : colors.text;
-
   return (
-    <View
-      style={
-        framed
-          ? { gap: spacing.md, padding: spacing.md, borderRadius: radii['2xl'], backgroundColor: colors.spotlight }
-          : { gap: spacing.sm }
-      }
-    >
-      {framed ? (
-        <Text style={[textStyle('displayHero'), { color: colors.inkOnSpotlight, textAlign: 'center' }]}>
-          Clutch moments
-        </Text>
-      ) : null}
+    <View style={{ gap: spacing.sm }}>
       <View
         className="overflow-hidden rounded-xl"
         style={{ aspectRatio: 4 / 5, width: '100%', backgroundColor: mediaBackdrop }}
@@ -180,10 +155,9 @@ export function ClutchPreviewCard({
         accessibilityRole="button"
         accessibilityLabel="Open Clutch"
         onPress={openClutch}
-        className="min-h-11 flex-row items-center justify-between"
-        style={framed ? { paddingHorizontal: spacing.xs } : undefined}
+        className="flex-row items-center justify-between"
       >
-        <Text style={[textStyle('label'), { color: rowInk }]}>Open Clutch</Text>
+        <Text style={[textStyle('label'), { color: colors.text }]}>Open Clutch</Text>
         <ChevronRight size={16} color={colors.accent} strokeWidth={1.75} />
       </Pressable>
 

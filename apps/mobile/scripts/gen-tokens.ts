@@ -40,7 +40,7 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
  * exactly the drift the generator exists to prevent.
  */
 function fontFamilyBlock(): string {
-  const { sans, mono, display } = rnFontFamily;
+  const { sans, mono } = rnFontFamily;
   const entries: Array<[string, string]> = [
     ["sans", sans.regular],
     ["sans-medium", sans.medium],
@@ -48,7 +48,6 @@ function fontFamilyBlock(): string {
     ["sans-bold", sans.bold],
     ["mono", mono.medium],
     ["mono-semibold", mono.semibold],
-    ["display", display.regular],
   ];
   return entries
     .map(([key, family]) => `        ${JSON.stringify(key)}: ["${family}"],`)

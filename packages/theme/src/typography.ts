@@ -17,12 +17,6 @@
 export const fontFamily = {
   sans: "Urbanist",
   mono: "JetBrainsMono",
-  /**
-   * Heavy condensed display face for hero headlines on sport cards (the
-   * "JOIN THE STREET GAME" reference, founder 2026-09-30). Anton, SIL OFL,
-   * one weight. Uppercase headlines only, never body copy.
-   */
-  display: "Anton",
 } as const;
 
 export type FontFamilyToken = keyof typeof fontFamily;
@@ -57,9 +51,6 @@ export const rnFontFamily = {
     semibold: "JetBrainsMono_600SemiBold",
     bold: "JetBrainsMono_700Bold",
   },
-  display: {
-    regular: "Anton_400Regular",
-  },
 } as const;
 
 export const fontSize = {
@@ -87,8 +78,6 @@ export const fontSize = {
   "3xl": 28,
   "4xl": 32,
   "5xl": 40,
-  /** Display face hero headline (Anton runs narrow, so it reads larger than it measures). */
-  "6xl": 44,
 } as const;
 
 export type FontSizeToken = keyof typeof fontSize;
@@ -124,12 +113,6 @@ export const textVariants = {
   button: { fontFamily: "sans", fontWeight: "semibold", fontSize: fontSize.button, lineHeight: 22 },
   label: { fontFamily: "sans", fontWeight: "semibold", fontSize: fontSize.base, lineHeight: 18, letterSpacing: 0.1 },
   caption: { fontFamily: "sans", fontWeight: "regular", fontSize: fontSize.sm, lineHeight: 16 },
-  /** Sport card hero headline in the display face, uppercase, tight leading. */
-  displayHero: { fontFamily: "display", fontWeight: "regular", fontSize: fontSize["6xl"], lineHeight: 46, uppercase: true },
-  /** Section header in the display face ("PLAY BY SPORT"). */
-  displaySection: { fontFamily: "display", fontWeight: "regular", fontSize: fontSize.xl, lineHeight: 26, letterSpacing: 0.4, uppercase: true },
-  /** Widely tracked uppercase eyebrow above a display headline ("BADMINTON"). */
-  eyebrow: { fontFamily: "sans", fontWeight: "semibold", fontSize: fontSize.xs, lineHeight: 14, letterSpacingEm: 0.3, uppercase: true },
   overline: {
     fontFamily: "mono",
     fontWeight: "semibold",

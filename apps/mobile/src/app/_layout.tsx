@@ -85,7 +85,6 @@ function RootLayout() {
     Urbanist_700Bold: require('../../assets/fonts/Urbanist_700Bold.ttf'),
     JetBrainsMono_500Medium: require('../../assets/fonts/JetBrainsMono_500Medium.ttf'),
     JetBrainsMono_600SemiBold: require('../../assets/fonts/JetBrainsMono_600SemiBold.ttf'),
-    Anton_400Regular: require('../../assets/fonts/Anton_400Regular.ttf'),
   });
   /* eslint-enable @typescript-eslint/no-require-imports */
 

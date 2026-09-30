@@ -1,15 +1,11 @@
-import { radii, spacing } from '@atlitos/theme';
 import { SPORTS, type Sport } from '@atlitos/types';
 import { router } from 'expo-router';
 import { Pressable, ScrollView, View } from 'react-native';
 
 import { Text } from '@/components/ui/text';
 import { SPORT_ICON, SPORT_LABEL } from '@/lib/sport-display';
-import { textStyle } from '@/theme/text-style';
+import { cn } from '@/lib/utils';
 import { useThemeColors } from '@/theme/use-theme-colors';
-
-/** Sport tile edge. */
-const TILE = 76;
 
 /**
  * Home's categories row (PRD-01 3.2): one circular tappable icon per
@@ -30,49 +26,34 @@ const TILE = 76;
 export function CategoriesRow() {
   const colors = useThemeColors();
 
-  // Home, 2026-09-30: a titled white card on the canvas, Playo's "GAMES BY
-  // SPORTS" block, with large tinted tiles instead of small outlined circles.
   return (
-    <View style={{ gap: spacing.md, paddingVertical: spacing.lg, borderRadius: radii['2xl'], backgroundColor: colors.card }}>
-      <Text style={[textStyle('displaySection'), { color: colors.text, paddingHorizontal: spacing.lg }]}>
-        Play by sport
-      </Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: spacing.lg, paddingHorizontal: spacing.lg }}
-      >
-        {SPORTS.map((sport: Sport) => {
-          const Icon = SPORT_ICON[sport];
-          return (
-            <Pressable
-              key={sport}
-              accessibilityRole="button"
-              accessibilityLabel={SPORT_LABEL[sport]}
-              onPress={() => router.push({ pathname: '/shop', params: { sport } })}
-              className="items-center gap-sm"
-            >
-              {({ pressed }) => (
-                <>
-                  <View
-                    style={{
-                      width: TILE,
-                      height: TILE,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      borderRadius: radii.xl,
-                      backgroundColor: pressed ? colors.surfaceMuted : colors.accentTint,
-                    }}
-                  >
-                    <Icon size={34} color={colors.accent} strokeWidth={1.75} />
-                  </View>
-                  <Text style={[textStyle('label'), { color: colors.text }]}>{SPORT_LABEL[sport]}</Text>
-                </>
-              )}
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-    </View>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-lg px-xs">
+      {SPORTS.map((sport: Sport) => {
+        const Icon = SPORT_ICON[sport];
+        return (
+          <Pressable
+            key={sport}
+            accessibilityRole="button"
+            accessibilityLabel={SPORT_LABEL[sport]}
+            onPress={() => router.push({ pathname: '/shop', params: { sport } })}
+            className="items-center gap-xs"
+          >
+            {({ pressed }) => (
+              <>
+                <View
+                  className={cn(
+                    'h-14 w-14 items-center justify-center rounded-pill border border-border',
+                    pressed ? 'bg-surface-muted' : 'bg-card',
+                  )}
+                >
+                  <Icon size={24} color={colors.accent} strokeWidth={1.75} />
+                </View>
+                <Text className="font-sans-medium text-xs text-text-secondary">{SPORT_LABEL[sport]}</Text>
+              </>
+            )}
+          </Pressable>
+        );
+      })}
+    </ScrollView>
   );
 }
