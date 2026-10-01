@@ -247,8 +247,8 @@ profile (`(tabs)/coaching/coach/[id]`, also reached from Trainings > Coaches).
 - **Tab bar:** one active capsule that springs between tabs (`INDICATOR_SPRING`), each tab icon
   presses to 0.9 under the thumb, light haptic on a tab change. The bar's resting scale is unchanged.
 - **Tab change:** `shift` with an eased 240 ms timing so the page settles as the capsule lands.
-- **Header:** the brand wordmark image (`assets/brand/wordmark.png`, cropped from the splash
-  logo) replaces the typed ATLITOS on brand app bars.
+- **Header:** stays the typed ATLITOS wordmark, founder decision 2026-10-01 after trying logo
+  images (a crop of the arched splash lettering, the app icon, and the lockup on a dark badge).
 
 ## Home discovery rails (2026-10-01)
 

@@ -11,6 +11,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import splashMark from '../../../assets/images/splash-icon.png';
+
 /**
  * A pixel match of the native splash (app.json, `expo-splash-screen`: the
  * dark background and splash-icon.png at 220 points wide, centred), drawn in
@@ -74,7 +76,7 @@ export function SplashOverlay({ ready }: { ready: boolean }) {
     >
       <Animated.View style={logoStyle}>
         <Image
-          source={require('../../../assets/images/splash-icon.png')}
+          source={splashMark}
           style={{ width: LOGO_WIDTH, height: LOGO_HEIGHT }}
           resizeMode="contain"
           accessibilityIgnoresInvertColors
