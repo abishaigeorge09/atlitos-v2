@@ -40,7 +40,7 @@ export function HomeGearRail({ reloadKey, onLoaded }: { reloadKey: number; onLoa
     setState('loading');
     try {
       let list: AffiliateProduct[] = primarySport ? await shop.listAffiliateProducts({ sport: primarySport }) : [];
-      let sportMatch = list.some((product) => product.cheapest !== null);
+      const sportMatch = list.some((product) => product.cheapest !== null);
       if (!sportMatch) list = await shop.listAffiliateProducts({});
       setForSport(sportMatch);
       setProducts(list.filter((product) => product.cheapest !== null).slice(0, MAX_PRODUCTS));
