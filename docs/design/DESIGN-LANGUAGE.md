@@ -236,6 +236,17 @@ profile (`(tabs)/coaching/coach/[id]`, also reached from Trainings > Coaches).
   follow unchanged. Nothing is shown that the data does not hold: no academy badge, no map,
   no interest counts.
 
+## Home discovery rails (2026-10-01)
+
+Home was mostly empty at launch (owned shop off, donations off on iOS, no published clips), so it
+gains three rails of real content under the promo banner: Courts near you (one tile per venue,
+nearest first, 16:10 photo, mono price per hour), Train with a coach (CoachGridCard at 176 points),
+and Gear for your sport (the shop's GearResultTile at 156 points, falling back to all gear titled
+Training gear). All three use `HomeSection`: an h3 title, a one line caption, a See all link in the
+accent, and a horizontal scroller that bleeds to the screen edges while its content keeps the
+`spacing.lg` gutter. Each rail shows a skeleton of its own shape while loading and renders nothing
+when empty or on a read error, and reports to Home's all rails failed retry card.
+
 ## Shop tiles and compare rows (direction C)
 
 Amazon's card, on Atlitos ground (`docs/design/DIRECTION-SHOP.md`, direction C, approved). Applies
