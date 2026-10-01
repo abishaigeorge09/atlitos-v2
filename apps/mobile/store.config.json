@@ -1,0 +1,77 @@
+{
+  "configVersion": 0,
+  "apple": {
+    "version": "1.0.0",
+    "copyright": "2026 ELSHEPH SYSTEMS INDIA PRIVATE LIMITED",
+    "release": {
+      "automaticRelease": false
+    },
+    "info": {
+      "en-US": {
+        "description": "Atlitos is one app for your whole game. Find a court, book a coach, watch and post clips, and find your gear at the best price.\n\nFIND A COURT\nBrowse courts near you for football, cricket, badminton and tennis, then open the venue's own booking page in one tap.\n\nTRAIN WITH A COACH\nFind a verified coach by sport, price and schedule. Request an appointment in the app, pay your coach directly at the session, message your coach, and keep every session in one place.\n\nCLUTCH\nPost the point you want people to see. Watch clips from athletes in your sport, follow the ones worth following, save the ones you want to come back to.\n\nCOMPARE GEAR PRICES\nSee what the same racket, bat or pair of boots costs across retailers, then open the store with the best price and buy there.\n\nDRILLS AND XP\nWork through drills built for your sport, follow a roadmap, and earn XP as you go. Progress you can actually see.\n\nSEARCH IN PLAIN LANGUAGE\nType what you actually want. A badminton racket under 1500. A tennis coach near me. Atlitos searches gear, coaches and courts together.\n\nBROWSE BEFORE YOU SIGN UP\nOpen the app and look around. Create an account when you want to book a coach or post.\n\nSAFETY\nReport any clip, comment or account, and block anyone. Blocked accounts disappear from your feed and your comments.\n\nBUILT FOR INDIA\nRupee pricing, local courts and local coaches.\n\nAtlitos is operated by ELSHEPH SYSTEMS INDIA PRIVATE LIMITED.\nPrivacy policy: https://www.atlitos.com/privacy",
+        "keywords": [
+          "turf",
+          "badminton",
+          "cricket",
+          "football",
+          "tennis",
+          "sports",
+          "training",
+          "drills",
+          "clips",
+          "booking",
+          "academy",
+          "racket",
+          "gear"
+        ],
+        "marketingUrl": "https://www.atlitos.com",
+        "promoText": "Find a court near you, train with a verified coach, post your best clips, and compare gear prices across stores. Everything your game needs, in one app.",
+        "supportUrl": "https://www.atlitos.com/support",
+        "title": "Atlitos",
+        "subtitle": "Courts, coaches, clips, gear",
+        "privacyPolicyUrl": "https://www.atlitos.com/privacy"
+      }
+    },
+    "categories": [
+      "SPORTS",
+      "SHOPPING"
+    ],
+    "advisory": {
+      "ageRatingOverride": "NONE",
+      "alcoholTobaccoOrDrugUseOrReferences": "NONE",
+      "contests": "INFREQUENT_OR_MILD",
+      "gambling": false,
+      "gamblingSimulated": "NONE",
+      "horrorOrFearThemes": "NONE",
+      "kidsAgeBand": null,
+      "koreaAgeRatingOverride": "NONE",
+      "lootBox": false,
+      "matureOrSuggestiveThemes": "NONE",
+      "medicalOrTreatmentInformation": "NONE",
+      "profanityOrCrudeHumor": "NONE",
+      "sexualContentGraphicAndNudity": "NONE",
+      "sexualContentOrNudity": "NONE",
+      "unrestrictedWebAccess": false,
+      "violenceCartoonOrFantasy": "NONE",
+      "violenceRealistic": "NONE",
+      "violenceRealisticProlongedGraphicOrSadistic": "NONE",
+      "advertising": false,
+      "ageAssurance": false,
+      "ageRatingOverrideV2": "NONE",
+      "developerAgeRatingInfoUrl": null,
+      "gunsOrOtherWeapons": "NONE",
+      "healthOrWellnessTopics": true,
+      "messagingAndChat": true,
+      "parentalControls": false,
+      "userGeneratedContent": true
+    },
+    "review": {
+      "firstName": "Prashanth",
+      "lastName": "Reddy",
+      "email": "p24studios@gmail.com",
+      "phone": "+91 9347655315",
+      "demoRequired": false,
+      "notes": "Atlitos is a sports app for athletes in India: find courts, book\nappointments with verified coaches, post and watch sports clips, and\ncompare gear prices across retailers.\n\nDEMO ACCOUNT\nThe sign in details are in the Sign-In Information fields of this\nsubmission.\nIt has an upcoming coaching appointment, a chat with the coach, approved\nclips and a completed profile. You can also browse as a guest with no\naccount.\n\nHOW THINGS WORK\n- Courts: tap a venue, then Book. This opens the venue's own booking\n  website. Atlitos does not take payment for courts.\n- Coaching: the athlete requests an appointment with a coach in the app\n  and the coach accepts or declines it. The session is paid directly to\n  the coach in person; there is no payment in the app. In-app payment for\n  these in person services may come in a later version under guideline\n  3.1.3(e).\n- Gear: Atlitos compares prices across retailers. Buy opens the retailer's\n  website. No gear is sold in the app.\n- There are no payments of any kind in this version of the iOS app. No\n  digital goods or content are sold. Drills and training content are\n  free. Donations are turned off on iOS.\n\nUSER GENERATED CONTENT (guideline 1.2)\n- Before a first clip, comment or chat message, the user agrees to our\n  content rules: no tolerance for objectionable content or abusive users.\n  A server side word filter refuses listed words in comments and messages.\n- REPORT A CLIP: tap the vertical dots on the right of the video, then\n  \"Report this clip\", type a reason, \"Submit report\".\n- REPORT A COMMENT: open comments, press and hold the comment (or tap its\n  flag), \"Report this comment\", type a reason, \"Submit report\".\n- REPORT A CHAT MESSAGE: press and hold the message, \"Report this message\",\n  type a reason, \"Submit report\".\n- REPORT AN ACCOUNT: from the member's profile, the same menu.\n- BLOCK: the same menus, \"Block\" and confirm. The member's posts, comments\n  and messages disappear everywhere. Undo in Settings, Account, Blocked\n  accounts.\n- Clips are reviewed before they appear publicly. We act on every report\n  within 24 hours. Content policy: https://www.atlitos.com/content-policy\n\nACCOUNT DELETION (guideline 5.1.1(v))\nSettings, Account, Delete account, type DELETE. The account is deleted\nimmediately. For Sign in with Apple accounts we also revoke the Apple token,\nso Atlitos disappears from the Apple ID's Sign in with Apple list.\n\nPERMISSIONS\n- Location, while using the app only: to show courts and coaches near you.\n  Everything works if you deny it.\n- Photos: The app uses the system photo picker, so only the photo or\n  video you pick is shared. It does not ask for access to your whole\n  library.\n- Notifications: asked only after your first appointment request, behind\n  a short explanation.\n- Camera, microphone and motion: the binary contains purpose strings for\n  these because linked libraries (expo-image-picker, expo-location)\n  reference the APIs, but the app never requests them.\nNo background location and no tracking.\n\nPrivacy policy: https://www.atlitos.com/privacy\nTerms: https://www.atlitos.com/terms\nSupport: https://www.atlitos.com/support"
+    }
+  }
+}
