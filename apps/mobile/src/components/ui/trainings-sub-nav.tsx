@@ -3,6 +3,7 @@ import * as Haptics from 'expo-haptics';
 import { Pressable, ScrollView, View } from 'react-native';
 
 import { Text } from '@/components/ui/text';
+import { COACH_IN_APP_PAYMENT_ENABLED } from '@/lib/feature-flags';
 
 /**
  * Molecule 15: TrainingsSubNav. Role-aware horizontal scroller.
@@ -29,7 +30,9 @@ const TABS_BY_ROLE: Record<TrainingsSubNavRole, Array<{ key: TrainingsSubNavTab;
     { key: 'stats', label: 'Stats' },
     { key: 'learn', label: 'Learn' },
     { key: 'coaches', label: 'Coaches' },
-    { key: 'payments', label: 'Payments' },
+    // Hidden while in-app coach payments are off: the tab lists sessions as
+    // payments, and appointments are paid to the coach directly.
+    ...(COACH_IN_APP_PAYMENT_ENABLED ? [{ key: 'payments' as const, label: 'Payments' }] : []),
     { key: 'chat', label: 'Chat' },
     { key: 'analytics', label: 'Analytics' },
   ],

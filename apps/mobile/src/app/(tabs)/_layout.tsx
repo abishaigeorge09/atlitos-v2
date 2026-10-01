@@ -1,7 +1,7 @@
 import { useNotifications } from '@atlitos/api';
 import { Tabs, router, useSegments } from 'expo-router';
 import { type ComponentProps, useEffect, useMemo, useRef, useState } from 'react';
-import { BackHandler, PanResponder, View } from 'react-native';
+import { BackHandler, Easing, PanResponder, View } from 'react-native';
 
 import { SessionDegradedBanner } from '@/components/organisms/SessionDegradedBanner';
 import { BottomNav, type BottomNavTab, NavBarInsetProvider } from '@/components/ui/bottom-nav';
@@ -202,6 +202,9 @@ export default function TabsLayout() {
         // tab change is an instant cut, which makes a swipe feel broken even
         // when it worked.
         animation: 'shift',
+        // NAV-07: an eased 240ms shift rather than the library default, so
+        // the page settles as the tab capsule (bottom-nav.tsx) lands.
+        transitionSpec: { animation: 'timing', config: { duration: 240, easing: Easing.out(Easing.cubic) } },
         sceneStyle: { backgroundColor: colors.bg },
       }}
     >

@@ -28,6 +28,9 @@
 //   4. Create `payment_intents` (domain `session`), then the Razorpay order
 //      with notes {domain, entity_id, payment_intent_id}, then backfill the
 //      real order id, then link the intent onto the session row.
+//   (Appointment mode, `_shared/coach-payments.ts`: when in-app coach
+//   payments are off, steps 4 and 5 are skipped and the response carries
+//   `payment: "offline"` instead of an order.)
 //   5. Return the order for the client to open the checkout sheet. Nothing
 //      here confirms payment: capture is finalized only by
 //      `_shared/finalize-payment.ts`, reached from razorpay-webhook or
@@ -59,6 +62,7 @@ import {
 } from "../_shared/supabase.ts";
 import { createOrder, razorpayKeyId, razorpayMode } from "../_shared/razorpay.ts";
 import { getActiveFeeConfig, round2 } from "../_shared/fee-config.ts";
+import { coachInAppPaymentsEnabled } from "../_shared/coach-payments.ts";
 
 interface BookSessionRequestBody {
   session_type_id: string;
@@ -396,6 +400,25 @@ Deno.serve((req) =>
         "INTERNAL",
         `Failed to create session: ${insertError.message}`,
         500,
+      );
+    }
+
+    // ------------------------------------------------------------------
+    // 4b. Appointment mode (_shared/coach-payments.ts). The request is the
+    //     whole booking: no payment_intent, no Razorpay order. The coach
+    //     accepts or declines it as usual and the athlete pays the coach
+    //     directly. The unpaid sweep (0108) only acts on sessions with a
+    //     `created` intent, so this row is never auto cancelled.
+    // ------------------------------------------------------------------
+    if (!coachInAppPaymentsEnabled()) {
+      return jsonResponse(
+        {
+          session_id: session.id,
+          status: session.status,
+          payment: "offline",
+          bill: { price, platform_fee: platformFee, total },
+        },
+        200,
       );
     }
 

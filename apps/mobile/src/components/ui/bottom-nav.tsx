@@ -4,9 +4,9 @@ import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { CircleUser, Dumbbell, Home, LandPlot, Play, type LucideIcon } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
-import { createContext, type ReactNode, useCallback, useContext, useEffect, useRef } from 'react';
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/ui/text';
@@ -95,6 +95,16 @@ const COLLAPSE_DELAY_MS = 2200;
  * bouncy tab bar reads as a toy; this should feel like the bar has weight.
  */
 const SPRING = { damping: 18, stiffness: 220, mass: 0.7 } as const;
+
+/**
+ * NAV-07, the active capsule glides to the tapped tab instead of jumping.
+ * A touch stiffer than the bar's own spring so it lands as the new page
+ * starts its transition, with only a whisper of settle at the end.
+ */
+const INDICATOR_SPRING = { damping: 20, stiffness: 260, mass: 0.8 } as const;
+
+/** How far an icon presses in under the thumb. */
+const PRESSED_SCALE = 0.9;
 
 /**
  * Height of the pill plus its top gutter, EXCLUDING the bottom safe area.
@@ -189,6 +199,27 @@ function BottomNav({ activeTab, onTabPress, badgedTabs, avatarUri, className }: 
 
   const barStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
+  // NAV-07: the sliding capsule. Tabs are equal width (flex: 1), so its
+  // position is just index times one tab's width. The first placement is
+  // instant, so the capsule never flies in from the left on launch.
+  const reduceMotion = useReducedMotion();
+  const [rowWidth, setRowWidth] = useState(0);
+  const tabWidth = rowWidth / TABS.length;
+  const activeIndex = Math.max(0, TABS.findIndex((tab) => tab.key === activeTab));
+  const indicatorX = useSharedValue(0);
+  const placed = useRef(false);
+  useEffect(() => {
+    if (tabWidth <= 0) return;
+    const target = activeIndex * tabWidth;
+    if (!placed.current || reduceMotion) {
+      indicatorX.value = target;
+      placed.current = true;
+    } else {
+      indicatorX.value = withSpring(target, INDICATOR_SPRING);
+    }
+  }, [activeIndex, tabWidth, reduceMotion, indicatorX]);
+  const indicatorStyle = useAnimatedStyle(() => ({ transform: [{ translateX: indicatorX.value }] }));
+
   return (
     <View
       className={cn('absolute inset-x-0 bottom-0 flex-row justify-center px-xl pt-sm', className)}
@@ -242,95 +273,159 @@ function BottomNav({ activeTab, onTabPress, badgedTabs, avatarUri, className }: 
             backgroundColor: chrome.surface,
           }}
         >
-        {TABS.map((tab) => {
-          const active = tab.key === activeTab;
-          const badged = badgedTabs?.includes(tab.key) ?? false;
-          const Icon = tab.icon;
-          const showAvatar = tab.key === 'you' && Boolean(avatarUri);
-
-          return (
-            <Pressable
-              key={tab.key}
-              onPressIn={wake}
-              onPress={() => {
-                wake();
-                if (!active)
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {
-                    // Haptics unavailable, not fatal.
-                  });
-                onTabPress(tab.key);
-              }}
-              accessibilityRole="tab"
-              accessibilityLabel={tab.label}
-              accessibilityState={{ selected: active }}
-              // No labels render, so the icon alone has to be reachable. The
-              // 44pt minimum is the iOS touch target, not a visual size.
-              className="min-h-11 flex-1 items-center justify-center active:opacity-70"
-            >
-              <View
-                style={{
-                  alignSelf: 'stretch',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  paddingVertical: spacing.sm,
+        <View
+          style={{ flex: 1, flexDirection: 'row' }}
+          onLayout={(event) => setRowWidth(event.nativeEvent.layout.width)}
+        >
+          {/* NAV-07: one capsule for the whole bar, sliding under the active
+              tab, rather than a fill that blinks from tab to tab. Drawn first
+              so the tabs sit on top of it. */}
+          {tabWidth > 0 ? (
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                indicatorStyle,
+                {
+                  position: 'absolute',
+                  top: 0,
+                  bottom: 0,
+                  left: 0,
+                  width: tabWidth,
                   borderRadius: radii.pill,
-                  backgroundColor: active ? chrome.surfaceActive : 'transparent',
-                }}
-              >
-                {showAvatar ? (
-                  <Image
-                    source={{ uri: avatarUri }}
-                    style={{
-                      width: AVATAR_SIZE,
-                      height: AVATAR_SIZE,
-                      borderRadius: AVATAR_SIZE / 2,
-                    }}
-                  />
-                ) : (
-                  <Icon
-                    size={ICON_SIZE}
-                    strokeWidth={active ? 2.2 : 1.75}
-                    color={active ? chrome.inkActive : chrome.ink}
-                  />
-                )}
-
-                <Text
-                  numberOfLines={1}
-                  style={{
-                    marginTop: LABEL_GAP,
-                    fontSize: LABEL_SIZE,
-                    lineHeight: LABEL_SIZE + 3,
-                    color: active ? chrome.inkActive : chrome.ink,
-                  }}
-                  className={active ? 'font-sans-semibold' : 'font-sans-medium'}
-                >
-                  {tab.label}
-                </Text>
-
-                {badged ? (
-                  <View
-                    // Sits on the glyph's top right corner, the same place the
-                    // reference puts it. `pointerEvents none` so the dot can
-                    // never eat the tab's own press.
-                    pointerEvents="none"
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      right: spacing.md,
-                      width: DOT_SIZE,
-                      height: DOT_SIZE,
-                      borderRadius: DOT_SIZE / 2,
-                      backgroundColor: chrome.badge,
-                    }}
-                  />
-                ) : null}
-              </View>
-            </Pressable>
-          );
-        })}
+                  backgroundColor: chrome.surfaceActive,
+                },
+              ]}
+            />
+          ) : null}
+          {TABS.map((tab) => (
+            <TabItem
+              key={tab.key}
+              tab={tab}
+              active={tab.key === activeTab}
+              badged={badgedTabs?.includes(tab.key) ?? false}
+              avatarUri={tab.key === 'you' ? avatarUri : undefined}
+              chrome={chrome}
+              reduceMotion={reduceMotion}
+              onWake={wake}
+              onPress={() => onTabPress(tab.key)}
+            />
+          ))}
+        </View>
         </BlurView>
       </Animated.View>
     </View>
+  );
+}
+
+type NavChrome = (typeof navChrome)['light'] | (typeof navChrome)['dark'];
+
+/**
+ * One tab. Its own component so each tab owns a press scale: the glyph and
+ * label sink a little under the thumb and spring back on release, which is
+ * what makes the bar feel like it responds before the page changes.
+ */
+function TabItem({
+  tab,
+  active,
+  badged,
+  avatarUri,
+  chrome,
+  reduceMotion,
+  onWake,
+  onPress,
+}: {
+  tab: (typeof TABS)[number];
+  active: boolean;
+  badged: boolean;
+  avatarUri?: string;
+  chrome: NavChrome;
+  reduceMotion: boolean;
+  onWake: () => void;
+  onPress: () => void;
+}) {
+  const press = useSharedValue(1);
+  const pressStyle = useAnimatedStyle(() => ({ transform: [{ scale: press.value }] }));
+  const Icon = tab.icon;
+  const showAvatar = Boolean(avatarUri);
+
+  return (
+    <Pressable
+      onPressIn={() => {
+        onWake();
+        if (!reduceMotion) press.value = withSpring(PRESSED_SCALE, SPRING);
+      }}
+      onPressOut={() => {
+        press.value = withSpring(1, SPRING);
+      }}
+      onPress={() => {
+        onWake();
+        if (!active)
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {
+            // Haptics unavailable, not fatal.
+          });
+        onPress();
+      }}
+      accessibilityRole="tab"
+      accessibilityLabel={tab.label}
+      accessibilityState={{ selected: active }}
+      // The 44pt minimum is the iOS touch target, not a visual size.
+      className="min-h-11 flex-1 items-center justify-center"
+    >
+      <Animated.View
+        style={[
+          pressStyle,
+          {
+            alignSelf: 'stretch',
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingVertical: spacing.sm,
+          },
+        ]}
+      >
+        {showAvatar ? (
+          <Image
+            source={{ uri: avatarUri }}
+            style={{
+              width: AVATAR_SIZE,
+              height: AVATAR_SIZE,
+              borderRadius: AVATAR_SIZE / 2,
+            }}
+          />
+        ) : (
+          <Icon size={ICON_SIZE} strokeWidth={active ? 2.2 : 1.75} color={active ? chrome.inkActive : chrome.ink} />
+        )}
+
+        <Text
+          numberOfLines={1}
+          style={{
+            marginTop: LABEL_GAP,
+            fontSize: LABEL_SIZE,
+            lineHeight: LABEL_SIZE + 3,
+            color: active ? chrome.inkActive : chrome.ink,
+          }}
+          className={active ? 'font-sans-semibold' : 'font-sans-medium'}
+        >
+          {tab.label}
+        </Text>
+
+        {badged ? (
+          <View
+            // Sits on the glyph's top right corner. `pointerEvents none` so the
+            // dot can never eat the tab's own press.
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              top: 0,
+              right: spacing.md,
+              width: DOT_SIZE,
+              height: DOT_SIZE,
+              borderRadius: DOT_SIZE / 2,
+              backgroundColor: chrome.badge,
+            }}
+          />
+        ) : null}
+      </Animated.View>
+    </Pressable>
   );
 }
 

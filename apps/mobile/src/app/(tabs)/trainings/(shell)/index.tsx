@@ -23,7 +23,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { StatTile } from '@/components/ui/stat-tile';
 import { Text } from '@/components/ui/text';
 import { formatINR } from '@atlitos/theme';
-import { COACH_TRAINEE_VIDEO_REVIEW_ENABLED } from '@/lib/feature-flags';
+import { COACH_IN_APP_PAYMENT_ENABLED, COACH_TRAINEE_VIDEO_REVIEW_ENABLED } from '@/lib/feature-flags';
 import { fetchMyGroupSessions, type MyGroupSessionEntry } from '@/lib/group-sessions';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
@@ -292,6 +292,7 @@ export default function TrainingsScreen() {
   );
   const hoursTrained = Math.round((heldMinutes / 60) * 10) / 10;
   const paymentsDone = heldSessions.reduce((sum, session) => sum + session.total, 0);
+  const coachesTrainedWith = new Set(liveSessions.map((session) => session.coachId)).size;
   // `in_progress` counts here too (0077): this is the athlete's own Upcoming
   // list and feeds `totalUpcomingCount` below, and a session the coach has
   // already started is a session the athlete is receiving right now, not one
@@ -525,10 +526,13 @@ export default function TrainingsScreen() {
               totalSessions={liveSessions.length}
               sessionsThisMonth={liveThisMonth.length}
               hoursTrained={hoursTrained}
-              paymentsDone={paymentsDone}
+              paymentsDone={COACH_IN_APP_PAYMENT_ENABLED ? paymentsDone : undefined}
+              coachesTrainedWith={coachesTrainedWith}
             />
             {me?.sports?.length ? <MySportsCard sports={me.sports} /> : null}
-            <MyGroupsCard memberships={myMemberships} onRenew={handleRenewMembership} />
+            {COACH_IN_APP_PAYMENT_ENABLED ? (
+              <MyGroupsCard memberships={myMemberships} onRenew={handleRenewMembership} />
+            ) : null}
             {!hasAnySession ? <FindCoachCard /> : null}
             <View style={{ gap: spacing.sm }}>
               {totalUpcomingCount > UPCOMING_PREVIEW_COUNT ? (

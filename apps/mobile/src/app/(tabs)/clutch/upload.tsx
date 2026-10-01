@@ -30,6 +30,8 @@ import {
 
 const SPORTS: Sport[] = ['football', 'cricket', 'badminton', 'tennis'];
 const MAX_CAPTION = 140;
+/** The clip picker and preview, 9:16 at this height in points. */
+const PREVIEW_HEIGHT = 320;
 
 type UploadState = 'idle' | 'uploading' | 'done' | 'error';
 
@@ -275,8 +277,11 @@ export default function ClutchUploadScreen() {
           onPress={() => void pickVideo()}
           disabled={state === 'uploading'}
           // Centred: a 9:16 preview capped at 320pt is narrower than the form,
-          // and left aligned it left half the screen empty (BUG-070).
-          style={{ aspectRatio: 9 / 16, maxHeight: 320, alignSelf: 'center' }}
+          // and left aligned it left half the screen empty (BUG-070). It needs
+          // an explicit size: with only aspectRatio + maxHeight and centred,
+          // nothing gave it a width, so it shrank to its content (the label
+          // clipped, and once a clip was picked the preview was a dot).
+          style={{ width: PREVIEW_HEIGHT * (9 / 16), height: PREVIEW_HEIGHT, alignSelf: 'center' }}
           className="items-center justify-center overflow-hidden rounded-lg border border-border-strong bg-surface-muted"
         >
           {asset ? (

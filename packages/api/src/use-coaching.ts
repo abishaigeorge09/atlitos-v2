@@ -459,7 +459,8 @@ export function useCoaching(client: AtlitosClient) {
     /** v1's booking flow's book -> `book-session` edge function. Creates
      * `sessions` (`requested`) + `payment_intents` server side, re-prices
      * server side (`PRICE_MISMATCH`), returns a Razorpay order for the
-     * client to open; never writes a money row or status itself
+     * client to open, or `paymentMode: "offline"` with no order while
+     * in-app coach payments are off; never writes a money row or status itself
      * (CLAUDE.md). `slot_end` is intentionally not sent, it is derived
      * server side from `session_types.duration_minutes` (API-MAPPING.md). */
     async bookSession(input: BookSessionInput): Promise<BookSessionResult> {
@@ -479,21 +480,30 @@ export function useCoaching(client: AtlitosClient) {
       const body = data as {
         session_id: string;
         status: SessionStatus;
-        razorpay_order_id: string;
-        key_id: string;
-        amount: number;
-        currency: string;
+        payment?: "offline";
+        razorpay_order_id?: string;
+        key_id?: string;
+        amount?: number;
+        currency?: string;
         bill: { price: number; platform_fee: number; total: number };
       };
+      const bill = { price: body.bill.price, platformFee: body.bill.platform_fee, total: body.bill.total };
+
+      // Appointment mode (supabase/functions/_shared/coach-payments.ts): the
+      // request is the booking, no order to open.
+      if (body.payment === "offline" || !body.razorpay_order_id) {
+        return { paymentMode: "offline", sessionId: body.session_id, status: body.status, bill };
+      }
 
       return {
+        paymentMode: "online",
         sessionId: body.session_id,
         status: body.status,
         razorpayOrderId: body.razorpay_order_id,
-        keyId: body.key_id,
-        amountPaise: body.amount,
-        currency: body.currency,
-        bill: { price: body.bill.price, platformFee: body.bill.platform_fee, total: body.bill.total },
+        keyId: body.key_id ?? "",
+        amountPaise: body.amount ?? 0,
+        currency: body.currency ?? "INR",
+        bill,
       };
     },
 
@@ -666,13 +676,23 @@ export interface BookSessionInput {
   expectedTotal: number;
 }
 
-export interface BookSessionResult {
+/** `book-session`'s answer. `online`: a Razorpay order to open. `offline`:
+ * an appointment request with nothing to pay in the app, returned while
+ * in-app coach payments are off (`_shared/coach-payments.ts`); the athlete
+ * pays the coach directly. */
+export type BookSessionResult =
+  | ({
+      paymentMode: "online";
+      razorpayOrderId: string;
+      keyId: string;
+      amountPaise: number;
+      currency: string;
+    } & BookSessionBase)
+  | ({ paymentMode: "offline" } & BookSessionBase);
+
+interface BookSessionBase {
   sessionId: string;
   status: SessionStatus;
-  razorpayOrderId: string;
-  keyId: string;
-  amountPaise: number;
-  currency: string;
   /** Sessions carve the platform fee OUT of the price (SCHEMA.md): `total`
    * always equals `price`, `platformFee` is the coach's cut of that same
    * amount, never a separate athlete-facing addition. */

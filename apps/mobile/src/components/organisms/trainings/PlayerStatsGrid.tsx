@@ -1,5 +1,5 @@
 import { formatINR, spacing } from '@atlitos/theme';
-import { CalendarCheck2, CalendarClock, Clock, Wallet } from 'lucide-react-native';
+import { CalendarCheck2, CalendarClock, Clock, Users, Wallet } from 'lucide-react-native';
 import { View } from 'react-native';
 
 import { StatTile } from '@/components/ui/stat-tile';
@@ -16,10 +16,14 @@ export interface PlayerStatsGridProps {
   totalSessions: number;
   sessionsThisMonth: number;
   hoursTrained: number;
-  paymentsDone: number;
+  /** Omitted while in-app coach payments are off (COACH_IN_APP_PAYMENT_ENABLED):
+   * no coaching money passes through the app, so a payments total would be
+   * wrong. The fourth tile then counts the coaches trained with instead. */
+  paymentsDone?: number;
+  coachesTrainedWith: number;
 }
 
-export function PlayerStatsGrid({ totalSessions, sessionsThisMonth, hoursTrained, paymentsDone }: PlayerStatsGridProps) {
+export function PlayerStatsGrid({ totalSessions, sessionsThisMonth, hoursTrained, paymentsDone, coachesTrainedWith }: PlayerStatsGridProps) {
   return (
     <View style={{ gap: spacing.sm }}>
       <View style={{ flexDirection: 'row', gap: spacing.sm }}>
@@ -28,7 +32,11 @@ export function PlayerStatsGrid({ totalSessions, sessionsThisMonth, hoursTrained
       </View>
       <View style={{ flexDirection: 'row', gap: spacing.sm }}>
         <StatTile label="Hours trained" value={hoursTrained} icon={Clock} />
-        <StatTile label="Payments done" value={formatINR(paymentsDone)} icon={Wallet} />
+        {paymentsDone !== undefined ? (
+          <StatTile label="Payments done" value={formatINR(paymentsDone)} icon={Wallet} />
+        ) : (
+          <StatTile label="Coaches" value={coachesTrainedWith} icon={Users} />
+        )}
       </View>
     </View>
   );

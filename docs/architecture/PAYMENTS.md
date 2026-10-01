@@ -114,6 +114,37 @@ Re-validates the target UPA is still `status='verified'` and, if item-specific, 
 
 **Ledger-derived read layer (AT-114, migration `0056`, no denormalized balance column).** `upa_fund_balance(account_ref)` = `sum(credit) - sum(debit)` for `account_type='upa_fund'`; `general_fund_balance()` = that at the anchor; `get_empower_stats()` (hub aggregate, anon-callable); `get_my_impact_summary()` (`auth.uid()`-scoped: total given, athletes supported, items funded, the donation list with UPA name or `General Fund`); `public_upa_profile(upa_id)` (verified-only, returns NULL otherwise). `funded_amount` stays per-item progress and the race guard, never a displayed fund total.
 
+## Coach appointments: in-app coach payments off (2026-10-01)
+
+Founder decision for launch: coaching is booked as an appointment and the athlete pays the coach
+directly. Payments come back in a later release; nothing in the paid path is deleted. Two switches,
+flipped together:
+
+- **Server:** `COACH_IN_APP_PAYMENTS` function secret (`supabase/functions/_shared/coach-payments.ts`).
+  Paid booking is ON only when the secret is exactly `on`, so a deploy with it unset is appointment
+  mode.
+- **App:** `COACH_IN_APP_PAYMENT_ENABLED` in `apps/mobile/src/lib/feature-flags.ts`.
+
+With both off:
+
+1. `book-session` still validates the slot, re-prices (`PRICE_MISMATCH`) and inserts the session as
+   `requested`, then returns `{ session_id, status, payment: "offline", bill }`. No `payment_intents`
+   row, no Razorpay order. The unpaid sweep (`0108`) only acts on a `created` intent, so an
+   appointment is never auto cancelled.
+2. Accept, decline and cancel are unchanged. Decline and requested cancel already return
+   `refund_status: not_applicable` when nothing was captured.
+3. `complete-session` treats a session with no intent at all (no `payment_intent_id` and no
+   `payment_intents` row for it) as an appointment: the RPC transition runs as usual, no ledger group
+   is written, and the outcome is `completed_offline`. This is decided from the session's own data,
+   not the switch, so appointments booked now still complete after payments return. Coach earnings
+   and payouts stay ledger based, so appointments never credit a coach wallet for money the platform
+   did not receive.
+4. Group join and renew (paid memberships, no unpaid path) are hidden in the app.
+
+To turn coach payments back on: `supabase secrets set COACH_IN_APP_PAYMENTS=on`, redeploy
+`book-session` and `complete-session`, set the app flag to true and ship a build. Local e2e money
+specs (CO-01 to CO-10) need the secret set to `on` in the local functions env.
+
 ## After the sheet returns a payment, only verify is retried (client rule, 2026-09-29)
 
 Binding on every client pay screen. Once `openRazorpayCheckout` resolves with the payment triple (`razorpay_order_id`, `razorpay_payment_id`, `razorpay_signature`), Razorpay has captured the money. From that point the screen may only re-call `verify-payment` with that same triple; it must never call the create endpoint again (`checkout`, `book-session`, `book-court`, `join-group`, `renew-group-membership`), because each of those mints a fresh intent and a fresh Razorpay order, and Razorpay's per order paid protection does not span two orders. A verify failure is therefore "payment received, still confirming", never "payment failed" with a live Pay button. Retrying verify is safe: the shared gate is idempotent and answers `already_processed` once the webhook has finalized, and the webhook finalizes the capture on its own regardless of what the client does.

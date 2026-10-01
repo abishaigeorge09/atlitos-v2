@@ -11,6 +11,9 @@ import { BrandFooter } from '@/components/organisms/home/BrandFooter';
 import { CategoriesRow } from '@/components/organisms/home/CategoriesRow';
 import { ClutchPreviewCard } from '@/components/organisms/home/ClutchPreviewCard';
 import { EmpowerRail } from '@/components/organisms/home/EmpowerRail';
+import { HomeCoachesRail } from '@/components/organisms/home/HomeCoachesRail';
+import { HomeCourtsRail } from '@/components/organisms/home/HomeCourtsRail';
+import { HomeGearRail } from '@/components/organisms/home/HomeGearRail';
 import { LocationRow } from '@/components/organisms/home/LocationRow';
 import { PromoCarousel } from '@/components/organisms/home/PromoCarousel';
 import { RecentlyViewedRail } from '@/components/organisms/home/RecentlyViewedRail';
@@ -29,8 +32,9 @@ import { DONATIONS_ENABLED } from '@/lib/feature-flags';
 
 /**
  * Home tab, rebuilt to PRD-01 3.2's approved mockup layout. Order:
- * AppBar + SearchBar + LocationRow, categories row, promo carousel,
- * recently viewed (falling back to Shop), Clutch preview, Donate to
+ * AppBar + SearchBar + LocationRow, categories row, promo carousel, Courts
+ * near you, Train with a coach, Gear for your game (edge to edge rails,
+ * HomeSection), recently viewed (falling back to Shop), Clutch preview, Donate to
  * Empower rail, brand footer. Each section is its own small component under
  * `components/organisms/home/`, reading its own domain hook and hiding
  * itself quietly on an empty result or a read error, so a slow or missing
@@ -69,6 +73,9 @@ export default function HomeScreen() {
   }, []);
   const onPromoLoaded = useCallback((ok: boolean) => reportRail('promo', ok), [reportRail]);
   const onClutchLoaded = useCallback((ok: boolean) => reportRail('clutch', ok), [reportRail]);
+  const onCourtsLoaded = useCallback((ok: boolean) => reportRail('courts', ok), [reportRail]);
+  const onCoachesLoaded = useCallback((ok: boolean) => reportRail('coaches', ok), [reportRail]);
+  const onGearLoaded = useCallback((ok: boolean) => reportRail('gear', ok), [reportRail]);
   const railKeys = Object.keys(railResults);
   const everyRailFailed = railKeys.length >= 2 && railKeys.every((key) => railResults[key] === false);
   const [refreshing, setRefreshing] = useState(false);
@@ -218,6 +225,14 @@ export default function HomeScreen() {
         ) : null}
 
         <PromoCarousel reloadKey={reloadKey} onLoaded={onPromoLoaded} />
+
+        {/* Discovery rails (2026-10-01): real venues, coaches and gear, each
+            hiding itself when empty, so Home is never a page of placeholders. */}
+        <HomeCourtsRail reloadKey={reloadKey} onLoaded={onCourtsLoaded} />
+
+        <HomeCoachesRail reloadKey={reloadKey} onLoaded={onCoachesLoaded} />
+
+        <HomeGearRail reloadKey={reloadKey} onLoaded={onGearLoaded} />
 
         <RecentlyViewedRail reloadKey={reloadKey} />
 

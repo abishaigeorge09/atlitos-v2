@@ -145,11 +145,17 @@ export default function SessionDetailScreen() {
       .finally(() => setReschedSlotsLoading(false));
   }, [reschedOpen, reschedDate, session?.coachId, session?.sessionTypeId]);
 
+  // An appointment (booked while in-app coach payments were off) has no
+  // payment attached: nothing was charged, so no copy may mention a refund.
+  const isAppointment = !!session && !session.paymentIntentId;
+
   function confirmCancel() {
     if (!session) return;
     Alert.alert(
       'Cancel this session',
-      'The coach has accepted this session. If you cancel now, the time will be released but your payment is not automatically refunded.',
+      isAppointment
+        ? 'The coach has accepted this session. Cancelling releases the time for the coach.'
+        : 'The coach has accepted this session. If you cancel now, the time will be released but your payment is not automatically refunded.',
       [
         { text: 'Keep session', style: 'cancel' },
         { text: 'Cancel session', style: 'destructive', onPress: () => void handleCancel() },
@@ -179,7 +185,9 @@ export default function SessionDetailScreen() {
     if (!session) return;
     Alert.alert(
       'Cancel this request',
-      'The coach has not responded yet. Cancelling now refunds your payment in full, automatically.',
+      isAppointment
+        ? 'The coach has not responded yet. You can cancel this request now.'
+        : 'The coach has not responded yet. Cancelling now refunds your payment in full, automatically.',
       [
         { text: 'Keep request', style: 'cancel' },
         { text: 'Cancel request', style: 'destructive', onPress: () => void handleCancelRequest() },
@@ -353,6 +361,11 @@ export default function SessionDetailScreen() {
           }}
         >
           <BillSummary rows={[{ label: 'Session fee', amount: session.price }]} total={session.total} />
+          {isAppointment ? (
+            <Text style={[textStyle('caption'), { color: colors.textSecondary, paddingTop: spacing.md }]}>
+              Pay your coach directly at the session. Nothing is charged in the app.
+            </Text>
+          ) : null}
         </View>
 
         {/* AT-148 (AT-88, PRD-02 FR-35). When a cancelled session was refunded,
@@ -386,8 +399,9 @@ export default function SessionDetailScreen() {
         {session.status === 'requested' ? (
           <View style={{ gap: spacing.sm }}>
             <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
-              Waiting for the coach to accept. You can cancel now and get a full refund, since the coach has not
-              responded yet.
+              {isAppointment
+                ? 'Waiting for the coach to accept. You can cancel this request any time before they respond.'
+                : 'Waiting for the coach to accept. You can cancel now and get a full refund, since the coach has not responded yet.'}
             </Text>
             <Button variant="ghost" tone="danger" loading={cancellingRequest} onPress={confirmCancelRequest}>
               <XCircle size={16} strokeWidth={1.75} color={colors.danger} />

@@ -72,30 +72,35 @@ change the other, because Apple compares them.
 
 ## Review notes
 
-Rewritten 2026-09-29 (launch runbook 7.3) for the iOS 1.0.0 build. COPY:
+Rewritten 2026-10-01 for appointment mode (no payments in the iOS app; see
+PAYMENTS.md "Coach appointments"). Source of truth: `apps/mobile/store.config.json`,
+pushed with `eas metadata:push`. COPY:
 
 ```
-Atlitos is a sports app for athletes in India: find courts, train with
-verified coaches, join coached groups, post and watch sports clips, and
+Atlitos is a sports app for athletes in India: find courts, book
+appointments with verified coaches, post and watch sports clips, and
 compare gear prices across retailers.
 
 DEMO ACCOUNT
 The sign in details are in the Sign-In Information fields of this
 submission.
-It has an upcoming coaching session, a chat with a coach, an approved clip
-and a completed profile. You can also browse as a guest with no account.
+It has an upcoming coaching appointment, a chat with the coach, approved
+clips and a completed profile. You can also browse as a guest with no
+account.
 
 HOW THINGS WORK
 - Courts: tap a venue, then Book. This opens the venue's own booking
   website. Atlitos does not take payment for courts.
-- Coaching sessions and group memberships are real world services
-  delivered in person by a human coach, paid through Razorpay under
-  guideline 3.1.3(e). Group memberships are paid month by month and never
-  renew automatically. These are the only payments in the iOS app.
+- Coaching: the athlete requests an appointment with a coach in the app
+  and the coach accepts or declines it. The session is paid directly to
+  the coach in person; there is no payment in the app. In-app payment for
+  these in person services may come in a later version under guideline
+  3.1.3(e).
 - Gear: Atlitos compares prices across retailers. Buy opens the retailer's
   website. No gear is sold in the app.
-- No digital goods or content are sold anywhere in the app. Drills and
-  training content are free. Donations are turned off on iOS.
+- There are no payments of any kind in this version of the iOS app. No
+  digital goods or content are sold. Drills and training content are
+  free. Donations are turned off on iOS.
 
 USER GENERATED CONTENT (guideline 1.2)
 - Before a first clip, comment or chat message, the user agrees to our
@@ -117,8 +122,7 @@ USER GENERATED CONTENT (guideline 1.2)
 ACCOUNT DELETION (guideline 5.1.1(v))
 Settings, Account, Delete account, type DELETE. The account is deleted
 immediately. For Sign in with Apple accounts we also revoke the Apple token,
-so Atlitos disappears from the Apple ID's Sign in with Apple list. Payment
-records are kept in anonymised form because Indian tax law requires it.
+so Atlitos disappears from the Apple ID's Sign in with Apple list.
 
 PERMISSIONS
 - Location, while using the app only: to show courts and coaches near you.
@@ -126,7 +130,7 @@ PERMISSIONS
 - Photos: The app uses the system photo picker, so only the photo or
   video you pick is shared. It does not ask for access to your whole
   library.
-- Notifications: asked only after your first booking or group join, behind
+- Notifications: asked only after your first appointment request, behind
   a short explanation.
 - Camera, microphone and motion: the binary contains purpose strings for
   these because linked libraries (expo-image-picker, expo-location)
