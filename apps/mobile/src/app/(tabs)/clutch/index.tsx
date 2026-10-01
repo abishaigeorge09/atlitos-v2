@@ -1,10 +1,10 @@
 import { useClutch } from '@atlitos/api';
 import { inkOnMedia, mediaBackdrop, spacing } from '@atlitos/theme';
 import type { ApiError, Clip } from '@atlitos/types';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Play, Plus, TriangleAlert } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, Share, View, type ViewToken } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, Share, StatusBar, View, type ViewToken } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ClutchPostCard } from '@/components/molecules/ClutchPostCard';
@@ -19,6 +19,7 @@ import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
+import { useColorScheme } from 'nativewind';
 
 type LoadState = 'loading' | 'empty' | 'populated' | 'error';
 
@@ -55,6 +56,16 @@ function clipDeepLink(clipId: string): string {
  * dropped so nothing hangs onto a stale one.
  */
 export default function ClutchFeedScreen() {
+  // The feed is full bleed video on a near black ground in both themes, so
+  // the status bar text is light while Clutch is focused and goes back to the
+  // theme's own style when you leave (2026-10-01: dark clock on dark video).
+  const { colorScheme } = useColorScheme();
+  useFocusEffect(
+    useCallback(() => {
+      StatusBar.setBarStyle('light-content', true);
+      return () => StatusBar.setBarStyle(colorScheme === 'dark' ? 'light-content' : 'dark-content', true);
+    }, [colorScheme]),
+  );
   const colors = useThemeColors();
   const navInset = useNavBarInset();
   const insets = useSafeAreaInsets();
