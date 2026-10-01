@@ -7,11 +7,11 @@ import {
   type GroupMembership,
   type TrainingGroup,
 } from '@atlitos/api';
-import type { ApiError, CoachProfile, SessionFrequency, SessionTypeOption, TimeSlot } from '@atlitos/types';
+import type { ApiError, AvailabilityWindow, CoachProfile, SessionFrequency, SessionTypeOption, TimeSlot } from '@atlitos/types';
 import { formatINR, radii, spacing } from '@atlitos/theme';
 import { router, useLocalSearchParams } from 'expo-router';
-import { TriangleAlert, Users } from 'lucide-react-native';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { CalendarDays, Clock, MapPin, Sparkles, TriangleAlert, Users, type LucideIcon } from 'lucide-react-native';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -29,7 +29,7 @@ import { StarRating } from '@/components/ui/star-rating';
 import { Text } from '@/components/ui/text';
 import { usePendingAuthAction } from '@/hooks/use-pending-auth-action';
 import { SESSION_FREQUENCY_LABEL } from '@/lib/session-display';
-import { SPORT_LABEL } from '@/lib/sport-display';
+import { SPORT_ICON, SPORT_LABEL, SPORT_TINT } from '@/lib/sport-display';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
 import { textStyle } from '@/theme/text-style';
@@ -40,6 +40,69 @@ type SlotsState = 'loading' | 'empty' | 'populated' | 'error';
 type GroupsState = 'loading' | 'populated' | 'error';
 
 const FREQUENCIES: SessionFrequency[] = ['one_time', 'weekly', 'monthly'];
+
+/** Profile hero band height, and how far the identity card rides up over it. */
+const HERO_HEIGHT = 140;
+const HERO_OVERLAP = 72;
+
+/** `coach_availability_windows.day_of_week` is 0 for Sunday. Listed Monday
+ * first, the way a training week is read. */
+const WEEKDAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
+const WEEKDAY_LABEL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+/** The coach's training days from their weekly windows, or a plain line when
+ * they have not set any yet (the slot picker below will then be empty too). */
+function trainingDaysLabel(windows: AvailabilityWindow[]): string {
+  const days = new Set(windows.map((window) => window.dayOfWeek));
+  if (days.size === 0) return 'Training days not set yet';
+  if (days.size === 7) return 'Every day';
+  return WEEKDAY_ORDER.filter((day) => days.has(day))
+    .map((day) => WEEKDAY_LABEL[day])
+    .join(', ');
+}
+
+/** `coaching_style` is stored as a lowercase slug such as `technical` or
+ * `match_play`; shown as "Technical", "Match play". */
+function sentenceCase(value: string): string {
+  const words = value.replace(/_/g, ' ').trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+function firstName(name: string | undefined): string {
+  return name?.trim().split(/\s+/)[0] || 'the coach';
+}
+
+/** One titled card in the profile's read section. */
+function ProfileSection({ title, children }: { title: string; children: ReactNode }) {
+  const colors = useThemeColors();
+  return (
+    <View
+      style={{
+        marginHorizontal: spacing.lg,
+        borderRadius: radii.xl,
+        borderWidth: 1,
+        borderColor: colors.border,
+        backgroundColor: colors.card,
+        padding: spacing.lg,
+        gap: spacing.md,
+      }}
+    >
+      <Text style={[textStyle('overline'), { color: colors.textSecondary }]}>{title}</Text>
+      {children}
+    </View>
+  );
+}
+
+/** An icon and a line (or lines) of detail inside a ProfileSection. */
+function DetailRow({ icon: Icon, text }: { icon: LucideIcon; text: string }) {
+  const colors = useThemeColors();
+  return (
+    <View className="flex-row gap-md">
+      <Icon size={20} strokeWidth={1.75} color={colors.textSecondary} />
+      <Text style={[textStyle('callout'), { flex: 1, color: colors.text }]}>{text}</Text>
+    </View>
+  );
+}
 
 function todayISO(): string {
   const now = new Date();
@@ -248,28 +311,85 @@ export default function CoachProfileScreen() {
       <AppBar variant="back" onPressBack={() => router.back()} />
 
       <ScrollView automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: spacing['4xl'], gap: spacing.lg }}>
-        <View style={{ paddingHorizontal: spacing.lg, gap: spacing.sm }}>
-          <View className="flex-row items-center gap-md">
-            <Avatar uri={coach.user?.avatarUrl} name={coach.user?.name} size={80} verifiedBadge />
-            <View style={{ flex: 1, gap: spacing.xs }}>
-              <Text style={[textStyle('h1'), { color: colors.text }]}>{coach.user?.name ?? 'Coach'}</Text>
-              <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
-                {SPORT_LABEL[coach.sport]}, {coach.experienceYears} yrs experience
-              </Text>
-              <StarRating mode="display" value={coach.rating} count={coach.ratingCount} />
-            </View>
+        {/* Hero band in the coach's sport tint, with the identity card
+            overlapping its lower edge (reference layout, 2026-10-01). */}
+        <View>
+          <View
+            style={{
+              height: HERO_HEIGHT,
+              marginHorizontal: spacing.lg,
+              borderRadius: radii.xl,
+              backgroundColor: colors[SPORT_TINT[coach.sport].bg],
+              alignItems: 'flex-end',
+              justifyContent: 'flex-start',
+              padding: spacing.lg,
+            }}
+          >
+            {(() => {
+              const HeroIcon = SPORT_ICON[coach.sport];
+              return <HeroIcon size={40} strokeWidth={1.5} color={colors[SPORT_TINT[coach.sport].ink]} />;
+            })()}
           </View>
 
-          {coach.bio ? <Text style={[textStyle('body'), { color: colors.text }]}>{coach.bio}</Text> : null}
+          <View
+            style={{
+              marginTop: -HERO_OVERLAP,
+              marginHorizontal: spacing['2xl'],
+              borderRadius: radii.xl,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.card,
+              padding: spacing.lg,
+              alignItems: 'center',
+              gap: spacing.xs,
+            }}
+          >
+            <Avatar uri={coach.user?.avatarUrl} name={coach.user?.name} size={80} verifiedBadge />
+            <Text style={[textStyle('h2'), { color: colors.text, textAlign: 'center', paddingTop: spacing.xs }]}>
+              {coach.user?.name ?? 'Coach'}
+            </Text>
+            <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
+              {SPORT_LABEL[coach.sport]} coach, {coach.experienceYears} yrs experience
+            </Text>
+            <StarRating mode="display" value={coach.rating} count={coach.ratingCount} />
 
-          {coach.specialization.length > 0 ? (
-            <View className="flex-row flex-wrap gap-xs pt-xs">
-              {coach.specialization.map((tag) => (
-                <Chip key={tag} label={tag} variant="category" />
-              ))}
-            </View>
-          ) : null}
+            {coach.specialization.length > 0 ? (
+              <View
+                style={{
+                  alignSelf: 'stretch',
+                  borderTopWidth: 1,
+                  borderTopColor: colors.border,
+                  marginTop: spacing.sm,
+                  paddingTop: spacing.md,
+                }}
+              >
+                <View className="flex-row flex-wrap justify-center gap-xs">
+                  {coach.specialization.map((tag) => (
+                    <Chip key={tag} label={tag} variant="category" />
+                  ))}
+                </View>
+              </View>
+            ) : null}
+          </View>
         </View>
+
+        <ProfileSection title="About the sessions">
+          <DetailRow icon={CalendarDays} text={trainingDaysLabel(coach.availability)} />
+          {coach.sessionTypes.length > 0 ? (
+            <DetailRow
+              icon={Clock}
+              text={coach.sessionTypes.map((type) => `${type.name}, ${type.durationMinutes} min`).join('\n')}
+            />
+          ) : null}
+          {coach.user?.city ? <DetailRow icon={MapPin} text={coach.user.city} /> : null}
+          {coach.coachingStyle ? <DetailRow icon={Sparkles} text={`Style: ${sentenceCase(coach.coachingStyle)}`} /> : null}
+        </ProfileSection>
+
+        {coach.bio ? (
+          <ProfileSection title={`About ${firstName(coach.user?.name)}`}>
+            <Text style={[textStyle('body'), { color: colors.text }]}>{coach.bio}</Text>
+          </ProfileSection>
+        ) : null}
 
         {groupsState === 'populated' && coachGroups.length > 0 ? (
           <View style={{ paddingHorizontal: spacing.lg, gap: spacing.md }}>
@@ -350,7 +470,10 @@ export default function CoachProfileScreen() {
         ) : null}
 
         <View style={{ paddingHorizontal: spacing.lg, gap: spacing.md }}>
-          <Text style={[textStyle('h3'), { color: colors.text }]}>Session type</Text>
+          <View style={{ gap: spacing.xs }}>
+            <Text style={[textStyle('h3'), { color: colors.text }]}>Fees and sessions</Text>
+            <Text style={[textStyle('caption'), { color: colors.textSecondary }]}>Pick one to book.</Text>
+          </View>
           {coach.sessionTypes.length === 0 ? (
             <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
               This coach has not published session types yet.

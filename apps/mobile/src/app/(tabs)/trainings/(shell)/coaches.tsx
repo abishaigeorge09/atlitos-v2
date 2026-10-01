@@ -126,7 +126,6 @@ export default function PlayerCoachesScreen() {
         ))
       )}
 
-      <Text style={[textStyle('h3'), { color: colors.text }]}>Browse coaches</Text>
     </View>
   );
 

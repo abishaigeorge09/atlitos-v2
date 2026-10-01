@@ -7,10 +7,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, RefreshControl, ScrollView, View } from 'react-native';
 
 import { LocationStatusRow } from '@/components/molecules/LocationStatusRow';
+import { SportTileGrid } from '@/components/molecules/SportTileGrid';
 import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
-import { Chip } from '@/components/ui/chip';
-import { CoachCard } from '@/components/ui/coach-card';
+import { CoachGridCard } from '@/components/ui/coach-grid-card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
 import { SPORT_LABEL } from '@/lib/sport-display';
@@ -38,7 +38,7 @@ export interface CoachBrowseListProps {
    * profile above the Trainings module so back returns to the tab with the
    * shell intact. */
   onOpenCoach: (coachId: string) => void;
-  /** Optional content rendered above the location line and sport chips, in
+  /** Optional content rendered above the location line and sport tiles, in
    * every state (loading, error, empty, populated). The standalone
    * /coaching surface passes none; the Trainings Coaches tab passes its
    * "My coaches" section here so the whole tab renders as one scroll
@@ -71,7 +71,7 @@ export interface CoachBrowseListProps {
 // immediately. Nothing stopped it except running out of table.
 //
 // At 10,000 users with 300 verified coaches that is 15 pages, 45 serial round
-// trips (~6.8 s of loading with zero user input) and 300 CoachCards mounted at
+// trips (~6.8 s of loading with zero user input) and 300 coach cards mounted at
 // once, each with an avatar image. It is visible at 40 coaches.
 //
 // The escape hatch is deleted rather than fixed, because a prop that quietly
@@ -83,8 +83,8 @@ export interface CoachBrowseListProps {
  * Coach discovery list, extracted from the /coaching route (AT-52,
  * PRD-01 FR-20/FR-21) so the Trainings module's Coaches tab can embed it
  * inline instead of redirecting to the separate coaching tab, same
- * reasoning as ChatThreadList's extraction for the Chat tab. Sport chips
- * over a CoachCard list, real `coach_profiles_public` data (already
+ * reasoning as ChatThreadList's extraction for the Chat tab. Sport tiles
+ * over a two column CoachGridCard grid, real `coach_profiles_public` data (already
  * filtered to `status = 'verified'` by the view itself, see
  * `useCoaching.listCoaches`), same-city-first sort. Guest-open per FR-2,
  * nothing here mutates; the Book action gates on the coach detail screen
@@ -216,32 +216,17 @@ export function CoachBrowseList({ onOpenCoach, header, onRefresh }: CoachBrowseL
     <View style={{ gap: spacing.sm, paddingBottom: spacing.md }}>
       {header}
 
+      <Text style={[textStyle('h3'), { color: colors.text, paddingTop: spacing.sm }]}>Want to level up your game?</Text>
+      <SportTileGrid sports={SPORT_FILTERS} selected={sport} onSelect={pickSport} />
+
+      <Text style={[textStyle('overline'), { color: colors.textSecondary, paddingTop: spacing.md }]}>
+        {sport ? `${SPORT_LABEL[sport]} coaches` : 'All coaches'}
+      </Text>
       <LocationStatusRow
         resolvedLabel={
           hasCoachInCity ? `Showing coaches near ${city}` : `No coaches in ${city} yet. Showing all.`
         }
         profileCity={profileCity}
-      />
-
-      <FlatList
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        data={SPORT_FILTERS}
-        keyExtractor={(item) => item}
-        style={{ flexGrow: 0 }}
-        contentContainerStyle={{ gap: spacing.sm, paddingVertical: spacing.xs }}
-        ListHeaderComponent={
-          <Chip label="All sports" variant="filter" selected={sport === null} onPress={() => pickSport(null)} />
-        }
-        ItemSeparatorComponent={() => <View style={{ width: spacing.sm }} />}
-        renderItem={({ item }) => (
-          <Chip
-            label={SPORT_LABEL[item]}
-            variant="filter"
-            selected={sport === item}
-            onPress={() => pickSport(item)}
-          />
-        )}
       />
     </View>
   );
@@ -255,10 +240,17 @@ export function CoachBrowseList({ onOpenCoach, header, onRefresh }: CoachBrowseL
     return (
       <ScrollView style={{ flex: 1 }} contentContainerStyle={STATE_CONTENT_STYLE} refreshControl={refreshControl}>
         {listHeader}
-        <View style={{ gap: spacing.lg }}>
-          <Skeleton shape="card" height={110} />
-          <Skeleton shape="card" height={110} />
-          <Skeleton shape="card" height={110} />
+        <View style={{ gap: spacing.md }}>
+          {[0, 1].map((row) => (
+            <View key={row} style={{ flexDirection: 'row', gap: spacing.md }}>
+              <View style={{ flex: 1 }}>
+                <Skeleton shape="card" height={240} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Skeleton shape="card" height={240} />
+              </View>
+            </View>
+          ))}
         </View>
       </ScrollView>
     );
@@ -330,6 +322,10 @@ export function CoachBrowseList({ onOpenCoach, header, onRefresh }: CoachBrowseL
       initialNumToRender={8}
       maxToRenderPerBatch={8}
       windowSize={7}
+      // Two column grid, the reference layout for coach discovery. Rows are
+      // still virtualized by FlatList; `columnWrapperStyle` spaces the pair.
+      numColumns={2}
+      columnWrapperStyle={{ gap: spacing.md }}
       ItemSeparatorComponent={() => <View style={{ height: spacing.md }} />}
       // CT-5 (P1-3): the only way this screen ever sees a coach past the
       // first bounded page. `onEndReachedThreshold` fires the next keyset
@@ -341,21 +337,27 @@ export function CoachBrowseList({ onOpenCoach, header, onRefresh }: CoachBrowseL
       ListFooterComponent={
         loadingMore ? (
           <View style={{ paddingVertical: spacing.lg, alignItems: 'center' }}>
-            <Skeleton shape="card" height={110} />
+            <Skeleton shape="card" height={240} />
           </View>
         ) : null
       }
-      renderItem={({ item }) => (
-        <CoachCard
-          avatarUri={item.avatarUrl}
-          name={item.name}
-          rating={item.rating}
-          sport={SPORT_LABEL[item.sport]}
-          experienceYears={item.experienceYears}
-          priceFrom={item.priceFrom}
-          city={item.city}
-          onPress={() => onOpenCoach(item.userId)}
-        />
+      renderItem={({ item, index }) => (
+        <>
+          <CoachGridCard
+            avatarUri={item.avatarUrl}
+            name={item.name}
+            sport={item.sport}
+            experienceYears={item.experienceYears}
+            rating={item.rating}
+            ratingCount={item.ratingCount}
+            city={item.city}
+            priceFrom={item.priceFrom}
+            onPress={() => onOpenCoach(item.userId)}
+          />
+          {/* An odd last coach gets an empty partner so it keeps half width
+              instead of stretching across the row. */}
+          {index === items.length - 1 && items.length % 2 === 1 ? <View style={{ flex: 1 }} /> : null}
+        </>
       )}
     />
   );

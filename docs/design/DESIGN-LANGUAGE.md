@@ -215,6 +215,27 @@ Lucide only, everywhere, always. No emoji, ever, as an icon substitute (this is 
 - **Money surfaces**: every screen touching money renders a `BillSummary` component (line items in `body`/`callout`, totals in `numericLg` mono), never a bare number. This mirrors the biased-approver's hard rule and is a design requirement, not just a build one. On mobile this is `apps/mobile/src/components/molecules/BillSummary.tsx`; on the web portals it is `@atlitos/ui-web`'s `BillSummary` (added in the Courts vertical slice pass), same rows-plus-total shape, expressed as vanilla CSS reading the same token set instead of nativewind classNames.
 - **Portals (court, life, admin)**: shadcn/ui component bones, same token values expressed as HSL CSS variables (see `packages/theme/src/index.ts` `hslVar`/`toCssVars` helpers), warm-light default with a dark toggle. GMV's sidebar-dashboard structure, not GMV's pink/cyan palette. **ADR-012 drift, admin only:** `apps/admin` has no Tailwind/shadcn pipeline, so it does not use shadcn primitives; its component bones live at `apps/admin/src/components/kit/` instead, same token values, plain CSS classes prefixed `ak-`. Revisit when `packages/ui-web` grows a shared shadcn set.
 
+## Coach discovery tiles and cards (2026-10-01)
+
+From the founder's reference screenshots of a sports booking app (sport tile grid, two column
+coach grid, tinted profile hero). Applies to `SportTileGrid`, `CoachGridCard` and the coach
+profile (`(tabs)/coaching/coach/[id]`, also reached from Trainings > Coaches).
+
+- **Sport tiles**: one square tile per sport in a single row, `radius.xl`, filled with that
+  sport's tint and its glyph in the matching ink (`SPORT_TINT` in `lib/sport-display.ts`:
+  football success, cricket info, badminton accent, tennis warning). No new colour tokens. A
+  tile toggles its sport; the picked tile gets a 2 point `color.accent` border.
+- **Coach card**: half width, `radius.xl`, hairline border. A 4:3 photo band on top (the
+  coach photo, or their sport tint with a large initial), a `Verified` overline pill top
+  right and the sport glyph bottom left, both on `color.overlay` with `inkOnMedia`. Below:
+  name, city, sport and experience, then rating (or `New`) left and the from price right in
+  mono accent, the one accent on the card.
+- **Profile**: a sport tinted hero band with the identity card (avatar, name, rating,
+  specialization chips) overlapping it, then titled read cards (overline title): About the
+  sessions (training days, session types, city, style) and About (bio). The booking steps
+  follow unchanged. Nothing is shown that the data does not hold: no academy badge, no map,
+  no interest counts.
+
 ## Shop tiles and compare rows (direction C)
 
 Amazon's card, on Atlitos ground (`docs/design/DIRECTION-SHOP.md`, direction C, approved). Applies
