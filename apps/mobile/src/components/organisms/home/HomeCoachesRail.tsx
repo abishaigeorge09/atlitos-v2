@@ -65,7 +65,7 @@ export function HomeCoachesRail({ reloadKey, onLoaded }: { reloadKey: number; on
             ratingCount={coach.ratingCount}
             city={coach.city}
             priceFrom={coach.priceFrom}
-            onPress={() => router.push({ pathname: '/(tabs)/coaching/coach/[id]', params: { id: coach.userId } })}
+            onPress={() => router.push({ pathname: '/home/coach/[id]', params: { id: coach.userId } })}
           />
         </View>
       ))}

@@ -76,7 +76,7 @@ export function HomeCourtsRail({ reloadKey, onLoaded }: { reloadKey: number; onL
           key={court.venueId}
           accessibilityRole="button"
           accessibilityLabel={`${court.venueName ?? court.name}, from ${formatINR(court.basePricePerHour)} an hour`}
-          onPress={() => router.push({ pathname: '/(tabs)/courts/court/[id]', params: { id: court.id } })}
+          onPress={() => router.push({ pathname: '/home/court/[id]', params: { id: court.id } })}
           className="active:opacity-90"
           style={{
             width: TILE_WIDTH,
