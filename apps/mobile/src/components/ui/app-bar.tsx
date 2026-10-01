@@ -9,10 +9,10 @@ import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/theme/use-theme-colors';
 
 /**
- * Molecule 13: AppBar. "ATLITOS" wordmark in the display type family with
- * brand letterspacing (font-sans-bold + tracking-tighter, matching the
- * negative letter spacing DESIGN-LANGUAGE.md locks for heading variants),
- * plus a notifications bell and profile avatar. `back`/`backTitle` variants
+ * Molecule 13: AppBar. The brand wordmark image (assets/brand/wordmark.png,
+ * the lettering cropped from the splash logo, 2026-10-01; it replaced a typed
+ * "ATLITOS" in the heading face), plus a notifications bell and profile
+ * avatar. `back`/`backTitle` variants
  * swap the wordmark for a back chevron. Every touch target is 44pt (h-11).
  *
  * Icon color is read from useThemeColors() and passed as a `color` prop
@@ -20,6 +20,10 @@ import { useThemeColors } from '@/theme/use-theme-colors';
  * primitives, which are not registered with nativewind's cssInterop in this
  * app; className would silently no-op on stroke color.
  */
+/** Header wordmark size in points (the asset is 254 x 84 pixels at 3x). */
+const WORDMARK_HEIGHT = 28;
+const WORDMARK_WIDTH = Math.round((WORDMARK_HEIGHT * 254) / 84);
+
 export type AppBarVariant = 'brand' | 'brandLife' | 'back' | 'backTitle';
 
 export interface AppBarProps {
@@ -108,7 +112,16 @@ function AppBar({
 
         {showWordmark ? (
           <View className="flex-row items-baseline gap-xs">
-            <Text className="font-sans-bold text-2xl tracking-tighter text-text">ATLITOS</Text>
+            {/* The brand lettering cropped from the splash logo (assets/brand/
+                wordmark.png, 254 x 84 at 3x), in place of a typed "ATLITOS".
+                Orange letters with a white keyline read on both themes. */}
+            <Image
+              source={require('../../../assets/brand/wordmark.png')}
+              style={{ width: WORDMARK_WIDTH, height: WORDMARK_HEIGHT }}
+              resizeMode="contain"
+              accessibilityRole="image"
+              accessibilityLabel="Atlitos"
+            />
             {variant === 'brandLife' ? (
               <View className="rounded-pill bg-accent-tint px-sm">
                 <Text className="font-mono-semibold text-xs uppercase tracking-widest text-accent">

@@ -1,23 +1,14 @@
-import { duration, easing, spacing, spring } from '@atlitos/theme';
+import { darkColors, spacing } from '@atlitos/theme';
 import type { ApiError } from '@atlitos/types';
 import { router } from 'expo-router';
 import { useEffect, useRef } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import Animated, {
-  Easing,
-  useAnimatedStyle,
-  useSharedValue,
-  withSequence,
-  withSpring,
-  withTiming,
-} from 'react-native-reanimated';
+import { ActivityIndicator, Image, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import splashMark from '../../../assets/images/splash-icon.png';
 
 import { useSessionStore } from '@/store/session-store';
 import { textStyle } from '@/theme/text-style';
-import { useThemeColors } from '@/theme/use-theme-colors';
 
 /**
  * Splash. PRD-01 3.1: "loading only (auto-route)... Routes by session:
@@ -76,12 +67,16 @@ import { useThemeColors } from '@/theme/use-theme-colors';
  *     by the tabs layout) carries the non-blocking notice and the manual
  *     retry. Nothing is silently swallowed; it is just no longer a door.
  *
- * Visual: `SplashMark` renders the same asset the native splash draws, at
- * the same width, so the native to JS handoff has no visible jump. All
- * routing logic below is unchanged.
+ * Visual (2026-10-01): this route is normally hidden under SplashOverlay
+ * (root _layout.tsx), which holds the native splash frame until the app has
+ * left this route and then fades into the first real screen. It only shows
+ * if routing outlasts that hold, so it paints the SAME frame: the dark
+ * theme background in both themes, the splash logo at the native splash's
+ * size, the tagline and a spinner beneath. It used to paint the light
+ * theme background (a white flash between two dark frames) and its logo
+ * rendered at the image's full pixel size. All routing logic is unchanged.
  */
 export default function SplashScreen() {
-  const colors = useThemeColors();
   const status = useSessionStore((state) => state.status);
   const hydrated = useSessionStore((state) => state.hydrated);
   const meLoading = useSessionStore((state) => state.meLoading);
@@ -139,65 +134,35 @@ export default function SplashScreen() {
   const showSpinner = !hydrated || (status === 'signed_in' && meLoading) || status === 'signed_out';
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: darkColors.bg }]}>
       <View style={styles.content}>
         <SplashMark />
-        <Text style={[textStyle('body'), styles.tagline, { color: colors.textSecondary }]}>
+        <Text style={[textStyle('body'), styles.tagline, { color: darkColors.textSecondary }]}>
           Train, play and follow the game, all in one place.
         </Text>
 
-        {showSpinner ? <ActivityIndicator color={colors.accent} style={styles.spinner} /> : null}
+        {showSpinner ? <ActivityIndicator color={darkColors.accent} style={styles.spinner} /> : null}
       </View>
     </SafeAreaView>
   );
 }
 
 /**
- * The mark that carries the launch.
- *
- * The native splash (expo-splash-screen, app.json) draws
- * `assets/images/splash-icon.png` at `imageWidth: 120` centred on the same
- * `#141414` this screen paints. This renders the SAME asset at the SAME
- * width in the SAME place, so when the native layer hides there is no jump
- * to cut through: the mark is already sitting exactly where it was. It then
- * settles into place with a spring, which is the only motion the user sees.
- *
- * Previously this spot held a text wordmark, so launch went logo -> text,
- * a visible swap of two different things.
+ * The splash logo at the native splash's size and place (app.json,
+ * expo-splash-screen `imageWidth: 220`; splash-icon.png is 1024 x 606), with
+ * an explicit height. Width plus aspectRatio alone did not size this image,
+ * which then drew at its full pixel size.
  */
+const SPLASH_MARK_WIDTH = 220;
+const SPLASH_MARK_HEIGHT = Math.round((SPLASH_MARK_WIDTH * 606) / 1024);
+
 function SplashMark() {
-  // Matches app.json's expo-splash-screen `imageWidth`. If that changes,
-  // change this with it or the handoff visibly jumps.
-  const NATIVE_SPLASH_IMAGE_WIDTH = 220;
-  // splash-icon.png is the cropped lockup, 1024x606.
-  const SPLASH_MARK_ASPECT = 1024 / 606;
-  const scale = useSharedValue(1);
-  const opacity = useSharedValue(1);
-
-  useEffect(() => {
-    // Overshoot then settle. Starts at 1 (the native splash's size) so the
-    // first frame is identical to what was already on screen.
-    scale.value = withSequence(
-      withTiming(1.08, { duration: duration.base, easing: Easing.bezier(...easing.decelerate) }),
-      withSpring(1, spring.standard),
-    );
-    opacity.value = withTiming(1, { duration: duration.fast });
-  }, [opacity, scale]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-    opacity: opacity.value,
-  }));
-
   return (
-    <Animated.Image
+    <Image
       source={splashMark}
       accessibilityLabel="Atlitos"
       resizeMode="contain"
-      style={[
-        { width: NATIVE_SPLASH_IMAGE_WIDTH, aspectRatio: SPLASH_MARK_ASPECT },
-        animatedStyle,
-      ]}
+      style={{ width: SPLASH_MARK_WIDTH, height: SPLASH_MARK_HEIGHT }}
     />
   );
 }

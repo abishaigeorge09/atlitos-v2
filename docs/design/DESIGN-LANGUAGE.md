@@ -236,6 +236,20 @@ profile (`(tabs)/coaching/coach/[id]`, also reached from Trainings > Coaches).
   follow unchanged. Nothing is shown that the data does not hold: no academy badge, no map,
   no interest counts.
 
+## Launch and navigation motion (2026-10-01)
+
+- **Launch:** `SplashOverlay` (root `_layout.tsx`) draws the native splash frame in JS (dark `bg`,
+  splash-icon.png at 220 points), hides the native splash on its first layout, and holds until
+  fonts are in AND the app has left the `(auth)/splash` route (capped at 6 s). It then fades over
+  420 ms with the logo drifting to 1.08 scale, straight into the first real screen. Reduce Motion
+  skips the scale and shortens the fade. The `(auth)/splash` route paints the same dark frame
+  in both themes for the rare case it is seen.
+- **Tab bar:** one active capsule that springs between tabs (`INDICATOR_SPRING`), each tab icon
+  presses to 0.9 under the thumb, light haptic on a tab change. The bar's resting scale is unchanged.
+- **Tab change:** `shift` with an eased 240 ms timing so the page settles as the capsule lands.
+- **Header:** the brand wordmark image (`assets/brand/wordmark.png`, cropped from the splash
+  logo) replaces the typed ATLITOS on brand app bars.
+
 ## Home discovery rails (2026-10-01)
 
 Home was mostly empty at launch (owned shop off, donations off on iOS, no published clips), so it

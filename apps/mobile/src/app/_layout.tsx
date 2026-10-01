@@ -2,13 +2,14 @@ import '../../global.css';
 import { AppErrorBoundary } from '@/components/organisms/AppErrorBoundary';
 import { ContentTermsGate } from '@/components/organisms/moderation/ContentTermsGate';
 import { PushPrimerGate } from '@/components/organisms/PushPrimerGate';
+import { SplashOverlay } from '@/components/organisms/SplashOverlay';
 
 import { PortalHost } from '@rn-primitives/portal';
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
+import { Stack, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useColorScheme } from 'nativewind';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Platform, StatusBar, Text, View } from 'react-native';
 
 import { usePushRegistration } from '@/hooks/use-push-registration';
@@ -23,6 +24,9 @@ import { useThemeColors } from '@/theme/use-theme-colors';
  * that a stalled one does not look broken.
  */
 const FONT_WAIT_MS = 5000;
+
+/** The longest the splash frame may cover the launch route once fonts are in. */
+const LAUNCH_HOLD_MAX_MS = 6000;
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   // Not fatal, the splash screen just hides on its own default timing.
@@ -103,21 +107,32 @@ function RootLayout() {
   // unreachable never runs any JavaScript at all, so no JS-side guard can help
   // there. That case is developer-only, since a release build embeds its
   // bundle. This guard covers the case a real user can hit.
+  // The native splash is hidden by SplashOverlay's first layout (it draws an
+  // identical frame), and the overlay fades out once `appReady`. The deadline
+  // still applies: after FONT_WAIT_MS the app shows regardless.
+  const [fontDeadlinePassed, setFontDeadlinePassed] = useState(false);
   useEffect(() => {
-    if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync().catch(() => {
-        // Not fatal.
-      });
-      return;
-    }
-
-    const deadline = setTimeout(() => {
-      SplashScreen.hideAsync().catch(() => {
-        // Not fatal.
-      });
-    }, FONT_WAIT_MS);
+    if (fontsLoaded || fontError) return;
+    const deadline = setTimeout(() => setFontDeadlinePassed(true), FONT_WAIT_MS);
     return () => clearTimeout(deadline);
   }, [fontsLoaded, fontError]);
+  const appReady = fontsLoaded || !!fontError || fontDeadlinePassed;
+
+  // The launch route, (auth)/splash, decides where the session goes and can
+  // take a moment (it waits for the first profile read). Hold the splash frame
+  // over it until the app has actually left that route, so launch reads as
+  // dark splash, then a fade straight into the first real screen, with no
+  // in between screen. LAUNCH_HOLD_MAX_MS caps the hold so a stuck route can
+  // never trap anyone behind the splash.
+  const segments = useSegments() as string[];
+  const onLaunchRoute = segments.length === 0 || (segments[0] === '(auth)' && segments[1] === 'splash');
+  const [launchHoldExpired, setLaunchHoldExpired] = useState(false);
+  useEffect(() => {
+    if (!appReady) return;
+    const cap = setTimeout(() => setLaunchHoldExpired(true), LAUNCH_HOLD_MAX_MS);
+    return () => clearTimeout(cap);
+  }, [appReady]);
+  const splashDone = appReady && (!onLaunchRoute || launchHoldExpired);
 
   // Starts the one supabase.auth.onAuthStateChange subscription for the
   // whole app (src/store/session-store.ts). Inside an effect, not at module
@@ -152,8 +167,11 @@ function RootLayout() {
   // src/hooks/use-push-registration.ts for the full lifecycle.
   usePushRegistration();
 
-  if (!fontsLoaded && !fontError) {
-    return null;
+  if (!appReady) {
+    // Holds the splash frame while fonts load. The ready tree below mounts a
+    // fresh SplashOverlay in the same commit, so the swap is never visible:
+    // both draw the identical frame until the ready one fades out.
+    return <SplashOverlay ready={false} />;
   }
 
   return (
@@ -173,6 +191,7 @@ function RootLayout() {
       <ContentTermsGate />
       <PushPrimerGate />
       <PortalHost />
+      <SplashOverlay ready={splashDone} />
     </>
   );
 }
