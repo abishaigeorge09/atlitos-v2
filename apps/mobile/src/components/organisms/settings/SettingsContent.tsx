@@ -9,7 +9,6 @@ import {
   LifeBuoy,
   LogIn,
   LogOut,
-  Monitor,
   Moon,
   Palette,
   ScrollText,
@@ -22,14 +21,14 @@ import {
   UserRoundX,
   Volleyball,
 } from 'lucide-react-native';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
-import { applyTheme, type ThemePref } from '@/lib/apply-theme';
+import { applyTheme, resolveSystemScheme, type ThemePref } from '@/lib/apply-theme';
 import { openSitePage, type SitePath } from '@/lib/site';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
@@ -43,8 +42,9 @@ const SPORT_LABEL: Record<Sport, string> = {
   tennis: 'Tennis',
 };
 
+type ErrorSection = 'appearance' | 'sports' | 'location';
+
 const THEME_OPTIONS: Array<{ key: ThemePref; label: string; icon: typeof Sun }> = [
-  { key: 'system', label: 'System', icon: Monitor },
   { key: 'light', label: 'Light', icon: Sun },
   { key: 'dark', label: 'Dark', icon: Moon },
 ];
@@ -138,6 +138,7 @@ export function SettingsContent() {
   const session = useSessionStore((s) => s.session);
   const me = useSessionStore((s) => s.me);
   const meLoading = useSessionStore((s) => s.meLoading);
+  const meGaveUp = useSessionStore((s) => s.meGaveUp);
   const refreshMe = useSessionStore((s) => s.refreshMe);
   const signOut = useSessionStore((s) => s.signOut);
   const continueAsGuest = useSessionStore((s) => s.continueAsGuest);
@@ -148,44 +149,87 @@ export function SettingsContent() {
   // based on a stale/previous user's profile while a new login resolves.
   const meReady = !meLoading && !!me && me.id === session?.user.id;
   const isCoach = meReady && (me.coachStatus === 'verified' || me.coachStatus === 'pending_review');
+  // The editable personalization controls need the signed in user's own
+  // profile. Unlike meReady this ignores meLoading, so the post save
+  // refreshMe (which keeps `me` in place) does not unmount the controls.
+  const profileLoaded = isSignedIn && !!me && me.id === session?.user.id;
 
   const [city, setCity] = useState(me?.city ?? '');
   const [state, setState] = useState(me?.state ?? '');
   const [savingLocation, setSavingLocation] = useState(false);
   const [locationSaved, setLocationSaved] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ section: ErrorSection; message: string } | null>(null);
 
   // Optimistic mirrors so a toggle/chip reflects instantly while the write
   // lands; refreshMe reconciles from the row afterwards.
+  // Light and dark only (founder, 2026-09-30). A saved 'system' shows as the
+  // mode it resolved to at launch; picking either pins it.
   const [themePref, setThemePref] = useState<ThemePref>(me?.theme ?? 'system');
+  const shownTheme: ThemePref = themePref === 'system' ? resolveSystemScheme() : themePref;
   const [sports, setSports] = useState<Sport[]>(me?.sports ?? []);
   const [primarySport, setPrimarySport] = useState<Sport | null>(me?.primarySport ?? me?.sports?.[0] ?? null);
 
-  async function persist(patch: Parameters<typeof profileApi.updateProfile>[0]) {
-    if (!isSignedIn) return;
+  // Seed the editable state once per loaded profile. `me` is often still null
+  // at mount (a fresh sign in, or a slow getMe), and the useState initialisers
+  // above only run once, so without this a later tap would persist the empty
+  // defaults over the user's saved sports and city. Keyed on the profile id so
+  // the refreshMe after each save does not clobber in progress edits.
+  const seededFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!profileLoaded || !me || seededFor.current === me.id) return;
+    seededFor.current = me.id;
+    setCity(me.city ?? '');
+    setState(me.state ?? '');
+    setThemePref(me.theme ?? 'system');
+    // Keep the applied theme in step with the seeded selection, in case a
+    // local pick was made before the profile loaded.
+    applyTheme(me.theme ?? 'system');
+    setSports(me.sports ?? []);
+    setPrimarySport(me.primarySport ?? me.sports?.[0] ?? null);
+  }, [profileLoaded, me]);
+
+  /** Writes the patch and reports whether it landed, so callers can revert
+   * optimistic state and only confirm success after the write resolves. */
+  async function persist(patch: Parameters<typeof profileApi.updateProfile>[0], section: ErrorSection): Promise<boolean> {
+    if (!profileLoaded) return false;
     setBusy(true);
     setError(null);
     try {
       await profileApi.updateProfile(patch);
       await refreshMe();
+      return true;
     } catch {
-      setError('Could not save that change. Please try again.');
+      setError({ section, message: 'Could not save that change. Please try again.' });
+      return false;
     } finally {
       setBusy(false);
     }
   }
 
-  function handleTheme(pref: ThemePref) {
+  function sectionError(section: ErrorSection) {
+    return error?.section === section ? (
+      <Text style={[textStyle('caption'), { color: colors.danger }]}>{error.message}</Text>
+    ) : null;
+  }
+
+  async function handleTheme(pref: ThemePref) {
+    const previous = themePref;
     setThemePref(pref);
     applyTheme(pref);
-    void persist({ theme: pref });
+    // Guests keep appearance locally; only a loaded profile persists it.
+    if (!profileLoaded) return;
+    const ok = await persist({ theme: pref }, 'appearance');
+    if (!ok) {
+      setThemePref(previous);
+      applyTheme(previous);
+    }
   }
 
   // Sports edits write users.sports AND athlete_sports/is_primary together
   // through the RPC (0088), so Learn and the coach-search default follow the
   // edit. Every write carries the primary so the two models never drift.
-  function toggleSport(sport: Sport) {
+  async function toggleSport(sport: Sport) {
     const isSelected = sports.includes(sport);
     // Keep at least one sport, matching onboarding. Deselecting the last one
     // does nothing rather than clearing Learn's primary sport.
@@ -196,23 +240,32 @@ export function SettingsContent() {
     // adding the first ever sport makes it primary.
     const nextPrimary =
       primarySport && next.includes(primarySport) ? primarySport : (next[0] ?? null);
+    if (!nextPrimary) return;
+    const previousSports = sports;
+    const previousPrimary = primarySport;
     setSports(next);
     setPrimarySport(nextPrimary);
-    if (nextPrimary) void persist({ sports: next, primarySport: nextPrimary });
+    const ok = await persist({ sports: next, primarySport: nextPrimary }, 'sports');
+    if (!ok) {
+      setSports(previousSports);
+      setPrimarySport(previousPrimary);
+    }
   }
 
-  function handleSetPrimary(sport: Sport) {
+  async function handleSetPrimary(sport: Sport) {
     if (!sports.includes(sport) || sport === primarySport) return;
+    const previousPrimary = primarySport;
     setPrimarySport(sport);
-    void persist({ sports, primarySport: sport });
+    const ok = await persist({ sports, primarySport: sport }, 'sports');
+    if (!ok) setPrimarySport(previousPrimary);
   }
 
   async function handleSaveLocation() {
     setSavingLocation(true);
     setLocationSaved(false);
-    await persist({ city: city.trim() || null, state: state.trim() || null });
+    const ok = await persist({ city: city.trim() || null, state: state.trim() || null }, 'location');
     setSavingLocation(false);
-    setLocationSaved(true);
+    setLocationSaved(ok);
   }
 
   async function handleSignOut() {
@@ -265,14 +318,14 @@ export function SettingsContent() {
           </View>
           <View style={{ flexDirection: 'row', gap: spacing.sm }}>
             {THEME_OPTIONS.map(({ key, label, icon: Icon }) => {
-              const active = themePref === key;
+              const active = shownTheme === key;
               return (
                 <Pressable
                   key={key}
                   accessibilityRole="button"
                   accessibilityState={{ selected: active }}
                   accessibilityLabel={`${label} theme`}
-                  onPress={() => handleTheme(key)}
+                  onPress={() => void handleTheme(key)}
                   style={{
                     flex: 1,
                     alignItems: 'center',
@@ -292,10 +345,19 @@ export function SettingsContent() {
               );
             })}
           </View>
+          {sectionError('appearance')}
         </View>
       </Section>
 
-      {isSignedIn ? (
+      {isSignedIn && !profileLoaded ? (
+        <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
+          {meLoading || !meGaveUp
+            ? 'Loading your sports, location and notification preferences.'
+            : 'Could not load your preferences right now. Please try again later.'}
+        </Text>
+      ) : null}
+
+      {profileLoaded ? (
         <>
           <Section title="Preferred sports">
             <View style={{ padding: spacing.lg, gap: spacing.md }}>
@@ -310,7 +372,7 @@ export function SettingsContent() {
                     label={SPORT_LABEL[sport]}
                     variant="select"
                     selected={sports.includes(sport)}
-                    onPress={() => toggleSport(sport)}
+                    onPress={() => void toggleSport(sport)}
                   />
                 ))}
               </View>
@@ -331,12 +393,13 @@ export function SettingsContent() {
                         label={SPORT_LABEL[sport]}
                         variant="filter"
                         selected={sport === primarySport}
-                        onPress={() => handleSetPrimary(sport)}
+                        onPress={() => void handleSetPrimary(sport)}
                       />
                     ))}
                   </View>
                 </View>
               ) : null}
+              {sectionError('sports')}
             </View>
           </Section>
 
@@ -355,6 +418,7 @@ export function SettingsContent() {
               {locationSaved ? (
                 <Text style={[textStyle('caption'), { color: colors.success }]}>Location saved.</Text>
               ) : null}
+              {sectionError('location')}
             </View>
           </Section>
 
@@ -422,7 +486,6 @@ export function SettingsContent() {
         ))}
       </Section>
 
-      {error ? <Text style={[textStyle('caption'), { color: colors.danger }]}>{error}</Text> : null}
       {busy ? <Text style={[textStyle('caption'), { color: colors.textTertiary }]}>Saving...</Text> : null}
     </ScrollView>
   );

@@ -359,6 +359,18 @@ Client wiring lives in `apps/portal-court/src/lib/onboarding.ts`, one typed modu
 | RPC | `release_expired_stock_reservations()` | `service_role` | Abandonment sweep, the commerce arm AT-26 calls. Not scheduled by `0033` |
 | RPC | `order_transition(p_order_id, p_to_status, p_actor_id, p_note, p_location)` | `service_role` | The whole order machine. Raises `INVALID_TRANSITION` on any skip or illegal edge, writes one `order_timeline` row in the same transaction. `service_role` only per AT-61's rule, so `admin-order-advance` is the sole path and the shopper app never writes a transition (FR-24) |
 
+### `verifyOrderPayment`, client contract change (2026-09-29, release/ios-2026-09-23, uncommitted)
+
+`packages/api/src/use-shop.ts`'s `verifyOrderPayment` calls the shared `verify-payment` function exactly as before; the server response is unchanged. What changed is how the client reads a 200, because two success shaped bodies carry no order (audit AUD-02, see `docs/qa/BUG-LEDGER.md`):
+
+| Response | Before | Now |
+|---|---|---|
+| `status` starts with `unfulfillable_` (the AT-73 late capture: stock hold lapsed, `place_order_from_draft` raised `OUT_OF_STOCK`, the finalize handler refunded in full) | returned `{ orderId: "" }`; checkout went to Order Success with an empty id | throws `OrderUnfulfillableError`: `code: "ORDER_UNFULFILLABLE"`, `status: 409`, `refundOutcome` = the suffix after `unfulfillable_` (for example `refunded`, `refund_pending`) |
+| no `order_id`/`entity_id` with any other status (the finalize race: `razorpay-webhook` holds the claim and is still inside `place_order_from_draft`, so verify gets `already_processed` with `entity_id` null and status `n/a`) | same empty id success | throws a plain `ApiError`, `code: "INTERNAL"`, `status: 503`. Retryable: the order is being created, so the caller re-verifies the same payment triple |
+| an order id is present | success | success, unchanged. `status` is now read as a string and cast to `OrderStatus` only on this path |
+
+`ORDER_UNFULFILLABLE` is a **client derived** code. No server response carries it, so it is deliberately not a member of `@atlitos/types`' `ApiErrorCode`; the type and its guard `isOrderUnfulfillableError` live in `packages/api/src/errors.ts`. A caller must render it as "charged and refunded, no order", never as a generic payment failure. Only the `unfulfillable_` status means a refund; an empty id alone must never be shown as sold out. The checkout screen's handling of both is in `PAYMENTS.md`, "After the sheet returns a payment, only verify is retried".
+
 ### affiliate marketplace, client reads (0086 WS4, extended Phase S3 Track F)
 
 `packages/api/src/use-shop.ts`'s `listAffiliateProducts`/`getAffiliateProduct`, the client

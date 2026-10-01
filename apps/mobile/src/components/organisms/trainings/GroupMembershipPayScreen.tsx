@@ -3,7 +3,7 @@ import { useGroups } from '@atlitos/api';
 import type { ApiError } from '@atlitos/types';
 import { formatINR, radii, spacing } from '@atlitos/theme';
 import { router } from 'expo-router';
-import { CheckCircle2, TriangleAlert } from 'lucide-react-native';
+import { CheckCircle2, Clock, TriangleAlert } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,15 +15,21 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
 import { openRazorpayCheckout } from '@/lib/razorpay-checkout';
+import type { RazorpayCheckoutResult } from '@/lib/razorpay-checkout.types';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
 import { offerPushPrimer } from '@/store/push-primer-store';
 
-type ScreenState = 'reserving' | 'ready' | 'paying' | 'confirmed' | 'error';
+type ScreenState = 'reserving' | 'ready' | 'paying' | 'verifying' | 'confirmed' | 'error';
 
 const RAZORPAY_KEY_ID = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID ?? '';
+
+// Backoff between automatic verify attempts once the sheet has returned a
+// payment. verify-payment is idempotent (a no-op once the webhook finalized
+// the same payment), so retrying it can never charge twice.
+const VERIFY_RETRY_DELAYS_MS = [1000, 3000];
 
 /**
  * Shared join/renew group membership payment screen, the group fares
@@ -72,6 +78,9 @@ export function GroupMembershipPayScreen({
   const [reserved, setReserved] = useState<JoinGroupResult | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [payLoading, setPayLoading] = useState(false);
+  // The triple the checkout sheet returned. Once set, the money is captured:
+  // the Pay button is gone for this order and only verify is ever retried.
+  const [captured, setCaptured] = useState<RazorpayCheckoutResult | null>(null);
 
   useEffect(() => {
     if (requiresAuthGate) {
@@ -95,11 +104,12 @@ export function GroupMembershipPayScreen({
   }
 
   async function handlePay() {
-    if (!reserved) return;
+    if (!reserved || captured) return;
     setPayLoading(true);
     setState('paying');
+    let checkoutResult: RazorpayCheckoutResult;
     try {
-      const checkoutResult = await openRazorpayCheckout({
+      checkoutResult = await openRazorpayCheckout({
         keyId: reserved.keyId || RAZORPAY_KEY_ID,
         amountPaise: reserved.amountPaise,
         currency: reserved.currency,
@@ -108,29 +118,50 @@ export function GroupMembershipPayScreen({
         description: payingDescription,
         prefill: { name: me?.name ?? undefined, email: undefined, contact: me?.phone ?? undefined },
       });
-
-      await groups.verifyMembershipPayment({
-        razorpayOrderId: checkoutResult.razorpayOrderId,
-        razorpayPaymentId: checkoutResult.razorpayPaymentId,
-        razorpaySignature: checkoutResult.razorpaySignature,
-      });
-
-      setState('confirmed');
-      // 3.6: the first real reason to want notifications.
-      void offerPushPrimer();
     } catch (err) {
-      // Same two error shapes book/pay.tsx handles: a real ApiError from
-      // verifyMembershipPayment, or a plain Error (checkout dismissed or
-      // failed before it ever reached the edge function).
-      const isApiError = typeof err === 'object' && err !== null && 'code' in err && 'status' in err;
-      setError(
-        isApiError
-          ? (err as ApiError)
-          : { code: 'PAYMENT_FAILED', message: (err as Error).message || 'Payment was not completed.', status: 400 },
-      );
+      // Only the checkout sheet can land here (dismissed or failed before a
+      // payment existed), so nothing was charged and Pay stays available.
+      setError({ code: 'PAYMENT_FAILED', message: (err as Error).message || 'Payment was not completed.', status: 400 });
       setState('ready');
-    } finally {
       setPayLoading(false);
+      return;
+    }
+
+    setCaptured(checkoutResult);
+    setPayLoading(false);
+    await confirmPayment(checkoutResult);
+  }
+
+  // Verify only, never a new order or charge. A failure here means the
+  // payment is received but not yet confirmed; the webhook finalizes the
+  // same membership server side, so the screen offers another check
+  // instead of Pay.
+  async function confirmPayment(triple: RazorpayCheckoutResult) {
+    setState('verifying');
+    setError(null);
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        await groups.verifyMembershipPayment({
+          razorpayOrderId: triple.razorpayOrderId,
+          razorpayPaymentId: triple.razorpayPaymentId,
+          razorpaySignature: triple.razorpaySignature,
+        });
+        setState('confirmed');
+        // 3.6: the first real reason to want notifications.
+        void offerPushPrimer();
+        return;
+      } catch (err) {
+        // INVALID_SIGNATURE is definitive: the same triple can never pass, so
+        // stop retrying and point the member at their groups instead.
+        const apiError = err as ApiError;
+        const delay = apiError?.code === 'INVALID_SIGNATURE' ? undefined : VERIFY_RETRY_DELAYS_MS[attempt];
+        if (delay === undefined) {
+          setError(apiError);
+          setState('ready');
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
     }
   }
 
@@ -222,6 +253,62 @@ export function GroupMembershipPayScreen({
               <Text style={{ color: colors.text }}>Find more coaches</Text>
             </Button>
           </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  if (captured && reserved) {
+    const checking = state === 'verifying';
+    const unverifiable = !checking && error?.code === 'INVALID_SIGNATURE';
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
+        <AppBar variant="back" onPressBack={() => router.back()} />
+        <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.xl, flexGrow: 1, justifyContent: 'center', paddingBottom: navInset + spacing.lg }}>
+          <View style={{ alignItems: 'center', gap: spacing.md }}>
+            <View
+              style={{
+                height: 72,
+                width: 72,
+                borderRadius: radii.pill,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: colors.infoTint,
+              }}
+            >
+              <Clock size={40} color={colors.info} strokeWidth={1.75} />
+            </View>
+            <Text style={[textStyle('h1'), { color: colors.text, textAlign: 'center' }]}>Payment received</Text>
+            <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
+              {checking
+                ? 'Confirming your membership. This takes a moment.'
+                : unverifiable
+                  ? 'Your payment is safe and you will not be charged again. Your membership will appear in My groups once it is confirmed.'
+                  : 'Your payment is safe. We are still confirming your membership, so you will not be charged again. Check again in a minute.'}
+            </Text>
+          </View>
+
+          <View
+            style={{
+              borderRadius: radii.xl,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.card,
+              padding: spacing.lg,
+            }}
+          >
+            <BillSummary rows={[{ label: 'Monthly fee', amount: reserved.bill.price }]} total={reserved.bill.total} />
+          </View>
+
+          {unverifiable ? (
+            <Button onPress={() => router.replace('/(tabs)/trainings/(shell)')}>
+              <Text style={{ color: colors.inkOnAccent }}>Go to My groups</Text>
+            </Button>
+          ) : (
+            <Button loading={checking} disabled={checking} onPress={() => void confirmPayment(captured)}>
+              <Text style={{ color: colors.inkOnAccent }}>Check again</Text>
+            </Button>
+          )}
         </ScrollView>
       </SafeAreaView>
     );

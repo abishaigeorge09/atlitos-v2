@@ -2,7 +2,7 @@ import { useChat } from '@atlitos/api';
 import type { ApiError, ChatMessage, ChatThread, ChatThreadMember } from '@atlitos/types';
 import { spacing } from '@atlitos/theme';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ChevronRight, CloudOff, MessageCircle, Send, TriangleAlert, Users } from 'lucide-react-native';
+import { ChevronRight, CloudOff, MessageCircle, Send, TriangleAlert, Users, X } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, KeyboardAvoidingView, Platform, Pressable, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -28,6 +28,13 @@ import { useThemeColors } from '@/theme/use-theme-colors';
 
 type ScreenState = 'loading' | 'populated' | 'error';
 type RealtimeStatus = 'connected' | 'reconnecting' | 'disconnected';
+
+/** A manual reload that failed after Realtime closed. Rendered inline above
+ * the composer, never through `error`, which only the full screen error
+ * state reads. Send failures use `sendError` under the composer. */
+interface InlineError {
+  error: ApiError;
+}
 
 /** A message row before the server has confirmed it, so the sender sees
  * their own text land immediately (AT-32/AT-59: instant Realtime push is
@@ -55,6 +62,13 @@ interface DisplayMessage extends ChatMessage {
  * its sender's name. A 1:1 thread renders exactly as before: no sender
  * names, no members row.
  */
+
+// Server text is shown only for errors the member can act on; INTERNAL and
+// empty messages can carry raw backend text, so they get a generic line.
+function chatErrorDetail(error: { code?: string; message?: string }): string {
+  if (!error.message || error.code === 'INTERNAL') return 'Please try again.';
+  return error.message;
+}
 export default function ChatThreadScreen() {
   const colors = useThemeColors();
   const navInset = useNavBarInset();
@@ -77,6 +91,11 @@ export default function ChatThreadScreen() {
   const [membersLoading, setMembersLoading] = useState(false);
   const [membersSheetVisible, setMembersSheetVisible] = useState(false);
   const [moderationTarget, setModerationTarget] = useState<ModerationTarget | null>(null);
+  const [inlineError, setInlineError] = useState<InlineError | null>(null);
+  const [reloading, setReloading] = useState(false);
+  // Bumped by a manual reload so the Realtime subscription effect tears down
+  // and subscribes again instead of staying on a CLOSED channel.
+  const [subscriptionEpoch, setSubscriptionEpoch] = useState(0);
   const listRef = useRef<FlatList<DisplayMessage>>(null);
 
   const load = useCallback(async () => {
@@ -171,7 +190,36 @@ export default function ChatThreadScreen() {
     );
 
     return unsubscribe;
-  }, [id, me?.id]);
+  }, [id, me?.id, subscriptionEpoch]);
+
+  // Manual resync for a Realtime channel that has CLOSED: refetch the
+  // thread's messages and resubscribe. Unsent optimistic rows are kept so an
+  // in flight send is not wiped by the refetch.
+  async function reloadMessages() {
+    if (reloading) return;
+    setReloading(true);
+    setInlineError(null);
+    setSubscriptionEpoch((previous) => previous + 1);
+    try {
+      const fresh = await chat.listMessages(id);
+      // Rows that landed while the fetch was in flight (a send that resolved,
+      // or a Realtime push) may postdate the snapshot, so keep anything newer
+      // than the last fetched row as well as every unsent optimistic row.
+      const newestFetched = fresh.length > 0 ? fresh[fresh.length - 1].createdAt : '';
+      setMessages((previous) => [
+        ...fresh,
+        ...previous.filter(
+          (existing) =>
+            !fresh.some((row) => row.id === existing.id) &&
+            (existing.pending || existing.createdAt > newestFetched),
+        ),
+      ]);
+    } catch (err) {
+      setInlineError({ error: err as ApiError });
+    } finally {
+      setReloading(false);
+    }
+  }
 
   async function handleSend(afterReconfirm = false) {
     const text = draft.trim();
@@ -268,9 +316,20 @@ export default function ChatThreadScreen() {
       {realtimeStatus !== 'connected' && state === 'populated' ? (
         <View className="flex-row items-center gap-xs bg-warning-tint px-lg py-xs">
           <CloudOff size={14} strokeWidth={1.75} color={colors.warning} />
-          <Text className="font-sans-semibold text-xs text-warning">
-            {realtimeStatus === 'reconnecting' ? 'Reconnecting, messages may be delayed' : 'Disconnected, pull down to reload'}
+          <Text className="flex-1 font-sans-semibold text-xs text-warning">
+            {realtimeStatus === 'reconnecting' ? 'Reconnecting, messages may be delayed' : 'Disconnected. Reload to see new messages.'}
           </Text>
+          {realtimeStatus === 'disconnected' ? (
+            <Pressable
+              onPress={() => void reloadMessages()}
+              disabled={reloading}
+              accessibilityRole="button"
+              accessibilityLabel="Reload messages"
+              className="min-h-11 justify-center px-sm active:opacity-70 disabled:opacity-40"
+            >
+              <Text className="font-sans-semibold text-xs text-warning">{reloading ? 'Reloading' : 'Reload'}</Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
 
@@ -322,6 +381,32 @@ export default function ChatThreadScreen() {
               )}
             />
           )}
+
+          {inlineError ? (
+            <View className="flex-row items-center gap-sm bg-danger-tint px-lg py-xs">
+              <TriangleAlert size={14} strokeWidth={1.75} color={colors.danger} />
+              <Text className="flex-1 font-sans-semibold text-xs text-danger">
+                {`Could not reload messages. ${chatErrorDetail(inlineError.error)}`}
+              </Text>
+              <Pressable
+                onPress={() => void reloadMessages()}
+                disabled={reloading}
+                accessibilityRole="button"
+                accessibilityLabel="Retry reloading messages"
+                className="min-h-11 justify-center px-sm active:opacity-70 disabled:opacity-40"
+              >
+                <Text className="font-sans-semibold text-xs text-danger">Retry</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setInlineError(null)}
+                accessibilityRole="button"
+                accessibilityLabel="Dismiss error"
+                className="min-h-11 min-w-11 items-center justify-center active:opacity-70"
+              >
+                <X size={16} strokeWidth={1.75} color={colors.danger} />
+              </Pressable>
+            </View>
+          ) : null}
 
           {/* Pinned composer. It cannot scroll out from under the floating nav,
               so it pads for the bar while the keyboard is down; with the

@@ -115,6 +115,47 @@ async function hasAccrual(
   return (data ?? []).length > 0;
 }
 
+/**
+ * The session's payment_intent, or PAYMENT_NOT_CAPTURED. A completed session
+ * with no captured payment is an anomaly worth failing loudly on rather than
+ * silently crediting against funds that never arrived, or silently skipping
+ * and losing the coach's earnings with no trace.
+ */
+async function requireCapturedIntent(
+  supabase: ReturnType<typeof serviceRoleClient>,
+  session: Pick<SessionRow, "id" | "payment_intent_id">,
+): Promise<{ id: string; status: string }> {
+  if (!session.payment_intent_id) {
+    throw new AppError(
+      "PAYMENT_NOT_CAPTURED",
+      "This session has no payment attached, so earnings cannot be accrued.",
+      409,
+    );
+  }
+
+  const { data: intent, error: intentError } = await supabase
+    .from("payment_intents")
+    .select("id, status")
+    .eq("id", session.payment_intent_id)
+    .maybeSingle<{ id: string; status: string }>();
+
+  if (intentError) {
+    throw new AppError(
+      "INTERNAL",
+      `Failed to read payment_intent for session ${session.id}: ${intentError.message}`,
+      500,
+    );
+  }
+  if (!intent || intent.status !== "captured") {
+    throw new AppError(
+      "PAYMENT_NOT_CAPTURED",
+      "This session's payment has not been captured, so earnings cannot be accrued.",
+      409,
+    );
+  }
+  return intent;
+}
+
 Deno.serve((req) =>
   withErrorHandling(req, async (request) => {
     const preflight = handleCorsPreflight(request);
@@ -127,6 +168,27 @@ Deno.serve((req) =>
     const body = parseRequestBody(await request.json().catch(() => null));
     const user = await getAuthenticatedUser(request);
     const supabase = serviceRoleClient();
+
+    // Check the payment BEFORE the transition. The RPC below commits the
+    // status change on its own round trip, so a payment failure discovered
+    // after it would leave the session `completed` with no accrual, and every
+    // retry would land on the repair path and fail the same way. Only runs for
+    // the assigned coach on a session the RPC could actually complete; every
+    // other caller or state falls through to the RPC's own error (FORBIDDEN,
+    // NOT_FOUND, INVALID_TRANSITION) so nothing about the payment leaks.
+    const { data: pending } = await supabase
+      .from("sessions")
+      .select("id, coach_id, status, payment_intent_id")
+      .eq("id", body.session_id)
+      .maybeSingle<Pick<SessionRow, "id" | "coach_id" | "status" | "payment_intent_id">>();
+
+    if (
+      pending &&
+      pending.coach_id === user.id &&
+      (pending.status === "accepted" || pending.status === "in_progress")
+    ) {
+      await requireCapturedIntent(supabase, pending);
+    }
 
     // Run the state machine under the SERVICE ROLE, via the internal entry
     // point (AT-61, 0027). `session_transition('complete')` now refuses every
@@ -184,38 +246,10 @@ Deno.serve((req) =>
     }
 
     // The money must actually have been collected before the platform owes
-    // the coach anything. A completed session with no captured payment is an
-    // anomaly worth failing loudly on rather than silently crediting against
-    // funds that never arrived, or silently skipping and losing the coach's
-    // earnings with no trace.
-    if (!session.payment_intent_id) {
-      throw new AppError(
-        "PAYMENT_NOT_CAPTURED",
-        "This session has no payment attached, so earnings cannot be accrued.",
-        409,
-      );
-    }
-
-    const { data: intent, error: intentError } = await supabase
-      .from("payment_intents")
-      .select("id, status")
-      .eq("id", session.payment_intent_id)
-      .maybeSingle<{ id: string; status: string }>();
-
-    if (intentError) {
-      throw new AppError(
-        "INTERNAL",
-        `Failed to read payment_intent for session ${session.id}: ${intentError.message}`,
-        500,
-      );
-    }
-    if (!intent || intent.status !== "captured") {
-      throw new AppError(
-        "PAYMENT_NOT_CAPTURED",
-        "This session's payment has not been captured, so earnings cannot be accrued.",
-        409,
-      );
-    }
+    // the coach anything. The pre-check above already refused an uncaptured
+    // session before transitioning it; this re-check covers the repair path
+    // and a payment state that changed between the two reads.
+    const intent = await requireCapturedIntent(supabase, session);
 
     // Amounts. The snapshot on the session row is authoritative (it was
     // derived from fee_config at booking time and is what the athlete was

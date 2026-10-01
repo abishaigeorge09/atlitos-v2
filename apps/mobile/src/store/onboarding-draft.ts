@@ -7,8 +7,10 @@ import { create } from 'zustand';
  * per this task's routing spec), so each step's answers cannot live in a
  * single screen component's local state, they would reset on every
  * step-to-step navigation. This store is the shared draft both wizards
- * write to and read from as the user moves between steps; it is cleared on
- * successful submit (or when the user backs all the way out to role select).
+ * write to and read from as the user moves between steps. It is cleared on
+ * successful submit, and by session-store whenever the session user changes
+ * (sign out, or a different account signing in), so one account's answers and
+ * uploaded avatar URL never carry over to the next.
  */
 
 export interface PlayerDraft {

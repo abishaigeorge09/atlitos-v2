@@ -1,6 +1,7 @@
 import { Text } from '@/components/ui/text';
 import { cn } from '@/lib/utils';
 import { useThemeColors } from '@/theme/use-theme-colors';
+import { fontSize } from '@atlitos/theme';
 import { Eye, EyeOff } from 'lucide-react-native';
 import { forwardRef, useState } from 'react';
 import type { ComponentProps } from 'react';
@@ -60,7 +61,17 @@ const Input = forwardRef<TextInput, InputProps>(function Input(
           // ("<label> input") makes it addressable for VoiceOver and UI
           // automation. Callers can still override via props.
           accessibilityLabel={label ? `${label} input` : undefined}
-          className={cn('flex-1 font-sans text-base text-text', isMultiline && 'min-h-16', className)}
+          // Single line: no line height and no vertical padding, so iOS
+          // centres the glyphs in the 48pt box. A `text-*` class also sets a
+          // lineHeight, which on a single line TextInput pushes typed text
+          // below the centre line (founder, 2026-09-30). Medium weight keeps
+          // typed text visibly stronger than the placeholder.
+          className={cn(
+            'flex-1 text-text',
+            isMultiline ? 'min-h-16 font-sans text-base' : 'h-full font-sans-medium',
+            className,
+          )}
+          style={isMultiline ? undefined : { fontSize: fontSize.lg, paddingVertical: 0 }}
           placeholderTextColor={colors.textTertiary}
           secureTextEntry={secure}
           multiline={isMultiline}

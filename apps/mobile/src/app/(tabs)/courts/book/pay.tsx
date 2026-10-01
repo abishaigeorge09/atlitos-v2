@@ -2,7 +2,7 @@ import { useCourts, type BookCourtResult } from '@atlitos/api';
 import type { ApiError } from '@atlitos/types';
 import { formatINR, radii, spacing } from '@atlitos/theme';
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
-import { CheckCircle2, TriangleAlert } from 'lucide-react-native';
+import { CheckCircle2, Clock, TriangleAlert } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,13 +14,14 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
 import { openRazorpayCheckout } from '@/lib/razorpay-checkout';
+import type { RazorpayCheckoutResult } from '@/lib/razorpay-checkout.types';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
 import { COURT_IN_APP_BOOKING_ENABLED } from '@/lib/feature-flags';
 
-type ScreenState = 'reserving' | 'ready' | 'paying' | 'confirmed' | 'error';
+type ScreenState = 'reserving' | 'ready' | 'paying' | 'verifying' | 'confirmed' | 'error';
 
 // A plain `type` object literal, not an `interface`: expo-router's
 // `useLocalSearchParams<TParams>()` overload picks between "TParams extends
@@ -41,6 +42,11 @@ type PayParams = {
 };
 
 const RAZORPAY_KEY_ID = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID ?? '';
+
+// Backoff between automatic verify attempts once the sheet has returned a
+// payment. verify-payment is idempotent (a no-op once the webhook finalized
+// the same payment), so retrying it can never charge twice.
+const VERIFY_RETRY_DELAYS_MS = [1000, 3000];
 
 /**
  * Book: pay. PRD-01 3.5 / SPEC.md 6.6: reserves the slot via `book-court`
@@ -74,6 +80,9 @@ function BookCourtPayScreen() {
   const [booking, setBooking] = useState<BookCourtResult | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [payLoading, setPayLoading] = useState(false);
+  // The triple the checkout sheet returned. Once set, the money is captured:
+  // the Pay button is gone for this order and only verify is ever retried.
+  const [captured, setCaptured] = useState<RazorpayCheckoutResult | null>(null);
 
   useEffect(() => {
     if (requiresAuthGate) {
@@ -101,11 +110,12 @@ function BookCourtPayScreen() {
   }
 
   async function handlePay() {
-    if (!booking) return;
+    if (!booking || captured) return;
     setPayLoading(true);
     setState('paying');
+    let checkoutResult: RazorpayCheckoutResult;
     try {
-      const checkoutResult = await openRazorpayCheckout({
+      checkoutResult = await openRazorpayCheckout({
         keyId: booking.keyId || RAZORPAY_KEY_ID,
         amountPaise: booking.amountPaise,
         currency: booking.currency,
@@ -114,31 +124,47 @@ function BookCourtPayScreen() {
         description: `${params.courtName} booking`,
         prefill: { name: me?.name ?? undefined, email: undefined, contact: me?.phone ?? undefined },
       });
-
-      await courts.verifyPayment({
-        razorpayOrderId: checkoutResult.razorpayOrderId,
-        razorpayPaymentId: checkoutResult.razorpayPaymentId,
-        razorpaySignature: checkoutResult.razorpaySignature,
-      });
-
-      setState('confirmed');
     } catch (err) {
-      // Two distinct error shapes can land here: a real `ApiError` from
-      // `courts.verifyPayment` (mapped by `packages/api`'s edge function
-      // error mapper), or a plain `Error` (`RazorpayCheckoutCancelledError`)
-      // from a dismissed/failed checkout sheet, which never reaches the
-      // edge function at all. Normalize both to `ApiError` here rather than
-      // casting the second shape into a lie the render below would read
-      // `.code` off of incorrectly.
-      const isApiError = typeof err === 'object' && err !== null && 'code' in err && 'status' in err;
-      setError(
-        isApiError
-          ? (err as ApiError)
-          : { code: 'PAYMENT_FAILED', message: (err as Error).message || 'Payment was not completed.', status: 400 },
-      );
+      // Only the checkout sheet can land here (dismissed or failed before a
+      // payment existed), so nothing was charged and Pay stays available.
+      setError({ code: 'PAYMENT_FAILED', message: (err as Error).message || 'Payment was not completed.', status: 400 });
       setState('ready');
-    } finally {
       setPayLoading(false);
+      return;
+    }
+
+    setCaptured(checkoutResult);
+    setPayLoading(false);
+    await confirmPayment(checkoutResult);
+  }
+
+  // Verify only, never a new order or charge. A failure here means the
+  // payment is received but not yet confirmed; the webhook finalizes the
+  // same booking server side, so the screen offers another check instead of
+  // Pay. INVALID_SIGNATURE is definitive (retrying the same triple cannot
+  // pass), so it stops the retries and the screen points at My bookings.
+  async function confirmPayment(triple: RazorpayCheckoutResult) {
+    setState('verifying');
+    setError(null);
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        await courts.verifyPayment({
+          razorpayOrderId: triple.razorpayOrderId,
+          razorpayPaymentId: triple.razorpayPaymentId,
+          razorpaySignature: triple.razorpaySignature,
+        });
+        setState('confirmed');
+        return;
+      } catch (err) {
+        const apiError = err as ApiError;
+        const delay = apiError?.code === 'INVALID_SIGNATURE' ? undefined : VERIFY_RETRY_DELAYS_MS[attempt];
+        if (delay === undefined) {
+          setError(apiError);
+          setState('ready');
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
     }
   }
 
@@ -232,6 +258,69 @@ function BookCourtPayScreen() {
               <Text style={{ color: colors.text }}>Explore more courts</Text>
             </Button>
           </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  if (captured && booking) {
+    const checking = state === 'verifying';
+    const unverifiable = !checking && error?.code === 'INVALID_SIGNATURE';
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
+        <AppBar variant="back" onPressBack={() => router.back()} />
+        <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.xl, flexGrow: 1, justifyContent: 'center', paddingBottom: navInset + spacing.lg }}>
+          <View style={{ alignItems: 'center', gap: spacing.md }}>
+            <View
+              style={{
+                height: 72,
+                width: 72,
+                borderRadius: radii.pill,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: colors.infoTint,
+              }}
+            >
+              <Clock size={40} color={colors.info} strokeWidth={1.75} />
+            </View>
+            <Text style={[textStyle('h1'), { color: colors.text, textAlign: 'center' }]}>Payment received</Text>
+            <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
+              {checking
+                ? 'Confirming your booking. This takes a moment.'
+                : unverifiable
+                  ? 'Your payment is safe and you will not be charged again. We are confirming it on our side, and your booking will appear in My bookings shortly.'
+                  : 'Your payment is safe. We are still confirming your booking, so you will not be charged again. Check again in a minute.'}
+            </Text>
+          </View>
+
+          <View
+            style={{
+              borderRadius: radii.xl,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.card,
+              padding: spacing.lg,
+            }}
+          >
+            <BillSummary
+              rows={[
+                { label: 'Subtotal', amount: booking.bill.subtotal },
+                { label: 'GST', amount: booking.bill.gst },
+                { label: 'Platform fee', amount: booking.bill.platformFee },
+              ]}
+              total={booking.bill.total}
+            />
+          </View>
+
+          {unverifiable ? (
+            <Button onPress={() => router.replace('/(tabs)/courts/bookings')}>
+              <Text style={{ color: colors.inkOnAccent }}>Go to My bookings</Text>
+            </Button>
+          ) : (
+            <Button loading={checking} disabled={checking} onPress={() => void confirmPayment(captured)}>
+              <Text style={{ color: colors.inkOnAccent }}>Check again</Text>
+            </Button>
+          )}
         </ScrollView>
       </SafeAreaView>
     );

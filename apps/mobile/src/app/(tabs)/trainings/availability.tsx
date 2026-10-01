@@ -54,6 +54,7 @@ export default function CoachAvailabilityScreen() {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<{ id: string; message: string } | null>(null);
 
   const load = useCallback(async () => {
     setState('loading');
@@ -107,11 +108,15 @@ export default function CoachAvailabilityScreen() {
 
   async function handleDelete(windowId: string) {
     setDeletingId(windowId);
+    setDeleteError(null);
     try {
       await availability.deleteWindow(windowId);
       setWindows((prev) => prev.filter((window) => window.id !== windowId));
     } catch (err) {
-      setError(err as ApiError);
+      setDeleteError({
+        id: windowId,
+        message: (err as ApiError).message ?? 'Could not remove this window. Please try again.',
+      });
     } finally {
       setDeletingId(null);
     }
@@ -171,34 +176,38 @@ export default function CoachAvailabilityScreen() {
                   <Text style={[textStyle('caption'), { color: colors.textTertiary }]}>No windows set</Text>
                 ) : (
                   dayWindows.map((window) => (
-                    <View
-                      key={window.id}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        borderRadius: radii.md,
-                        borderWidth: 1,
-                        borderColor: colors.border,
-                        backgroundColor: colors.card,
-                        paddingHorizontal: spacing.md,
-                        paddingVertical: spacing.sm,
-                      }}
-                    >
-                      <View className="flex-row items-center gap-xs">
-                        <CalendarClock size={16} strokeWidth={1.75} color={colors.textTertiary} />
-                        <Text style={[textStyle('numericBase'), { color: colors.text }]}>
-                          {formatTimeRange(window.from, window.to)}
-                        </Text>
-                      </View>
-                      <Button
-                        variant="text"
-                        size="sm"
-                        loading={deletingId === window.id}
-                        onPress={() => void handleDelete(window.id)}
+                    <View key={window.id} style={{ gap: spacing.xs }}>
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          borderRadius: radii.md,
+                          borderWidth: 1,
+                          borderColor: colors.border,
+                          backgroundColor: colors.card,
+                          paddingHorizontal: spacing.md,
+                          paddingVertical: spacing.sm,
+                        }}
                       >
-                        <Trash2 size={16} strokeWidth={1.75} color={colors.danger} />
-                      </Button>
+                        <View className="flex-row items-center gap-xs">
+                          <CalendarClock size={16} strokeWidth={1.75} color={colors.textTertiary} />
+                          <Text style={[textStyle('numericBase'), { color: colors.text }]}>
+                            {formatTimeRange(window.from, window.to)}
+                          </Text>
+                        </View>
+                        <Button
+                          variant="text"
+                          size="sm"
+                          loading={deletingId === window.id}
+                          onPress={() => void handleDelete(window.id)}
+                        >
+                          <Trash2 size={16} strokeWidth={1.75} color={colors.danger} />
+                        </Button>
+                      </View>
+                      {deleteError?.id === window.id ? (
+                        <Text style={[textStyle('caption'), { color: colors.danger }]}>{deleteError.message}</Text>
+                      ) : null}
                     </View>
                   ))
                 )}

@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { create } from 'zustand';
 
@@ -38,6 +39,10 @@ export type LocationStatus =
    * from `granted` because there are no coordinates behind it, and distinct
    * from `denied` because there is nothing left for the user to fix. */
   | 'manual';
+
+/** A city the athlete picked themselves, kept across launches (Home location
+ * picker, 2026-09-30). Cleared when they ask for their real location again. */
+const MANUAL_CITY_KEY = 'atlitos.location.manualCity';
 
 export interface Coordinates {
   lat: number;
@@ -211,6 +216,8 @@ export const useLocationStore = create<LocationState>((set, get) => ({
       }
 
       set({ status: 'granted', coords, city, requested: true, canAskAgain: true, timedOut: false });
+      // A real fix replaces any city picked earlier.
+      AsyncStorage.removeItem(MANUAL_CITY_KEY).catch(() => undefined);
     } catch {
       fallBack('unavailable');
     }
@@ -218,6 +225,16 @@ export const useLocationStore = create<LocationState>((set, get) => ({
 
   resolveIfAlreadyAnswered: async (profileCity) => {
     if (get().requested || get().status === 'loading') return;
+    // A city the athlete picked beats both GPS and the fallback.
+    try {
+      const saved = await AsyncStorage.getItem(MANUAL_CITY_KEY);
+      if (saved && !get().requested) {
+        set({ status: 'manual', city: saved, coords: null, requested: true, timedOut: false });
+        return;
+      }
+    } catch {
+      // Storage unreadable: fall through to the permission path.
+    }
     try {
       const current = await Location.getForegroundPermissionsAsync();
       // Undetermined: asking now would show the OS dialog with no rationale.
@@ -233,6 +250,10 @@ export const useLocationStore = create<LocationState>((set, get) => ({
   // A named city is a city, not a position: any coordinates still held are
   // from somewhere else, and keeping them would sort distances from a place
   // the athlete just told us they are not in.
-  setManualCity: (city: string) =>
-    set({ status: 'manual', city, coords: null, requested: true, timedOut: false }),
+  setManualCity: (city: string) => {
+    set({ status: 'manual', city, coords: null, requested: true, timedOut: false });
+    AsyncStorage.setItem(MANUAL_CITY_KEY, city).catch(() => {
+      // Not persisted this time; the choice still holds for this session.
+    });
+  },
 }));

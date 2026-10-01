@@ -296,3 +296,15 @@ also dropped its arbitrary `px-[3px]` / `text-[10px]` for `px-1` / `text-xs`.
 The same direct mapping now covers `background` (`hsl(var(--color-bg))`), `input` (`hsl(var(--color-border))`),
 `ring` (`hsl(var(--color-accent))`) and `card-foreground` (`hsl(var(--color-text))`). Each is the palette var that
 its `global.css` slot already held in both the light and dark blocks, so light values are identical.
+
+## 2026-09-30: one fixed theme, sign in buttons, nav inset, Home location
+
+Founder direction with annotated screenshots. A Playo layout for Home (display face, canvas and spotlight tokens) was built and then reverted the same day at the founder's request; Home keeps its previous layout.
+
+**Home location.** The location row under the search bar opens `LocationSheet`: use the current location, pick a popular city, or type any city. A picked city persists across launches (`location-store`, AsyncStorage) and a real GPS fix clears it.
+
+**Theme.** Light and dark only. Settings offers Light and Dark; a saved or default `system` resolves the OS appearance once at launch and pins it (`applyTheme`), because following iOS live let the app switcher's snapshots flip the UI at random.
+
+**Sign in buttons.** Google and Apple share one plate: 48pt (the Login button's height), pill, the same system font label at 16 semibold. Apple is a custom button per the HIG (Apple logo, pure black on light, pure white on dark, `vendorBrand.appleBlack` / `appleWhite`); the native `AppleAuthenticationButton` sized its own label and could never match Google's.
+
+**Floating nav.** The pill's inner inset is one value on all four sides, so the active capsule is concentric with the pill.

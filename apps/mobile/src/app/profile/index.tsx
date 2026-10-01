@@ -69,6 +69,9 @@ export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {
   const clutch = useClutch(supabase);
   const status = useSessionStore((state) => state.status);
   const myId = useSessionStore((state) => state.me?.id ?? null);
+  const meLoading = useSessionStore((state) => state.meLoading);
+  const meError = useSessionStore((state) => state.meError);
+  const refreshMe = useSessionStore((state) => state.refreshMe);
   const isGuest = status === 'guest';
 
   // When rendered as the "You" bottom tab (asTab), there is no back stack, so
@@ -206,6 +209,34 @@ export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {
     },
     [clutch, retryingId],
   );
+
+  // A signed in user whose own profile row failed to load (getMe threw, the
+  // store's background retry may have given up) is NOT a guest: show the
+  // load failure with a Retry that re-runs the store's refreshMe, never the
+  // guest login gate.
+  if (status === 'signed_in' && !myId) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
+        {topBar}
+        {meLoading ? (
+          <View className="flex-1 items-center justify-center">
+            <ActivityIndicator color={colors.accent} />
+          </View>
+        ) : (
+          <View className="flex-1 items-center justify-center gap-md p-lg">
+            <TriangleAlert size={40} color={colors.danger} strokeWidth={1.75} />
+            <Text style={[textStyle('h3'), { color: colors.text, textAlign: 'center' }]}>Couldn't load profile</Text>
+            <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
+              {meError?.message ?? 'Something went wrong. Please try again.'}
+            </Text>
+            <Button variant="secondary" onPress={() => void refreshMe()}>
+              <Text style={{ color: colors.text }}>Retry</Text>
+            </Button>
+          </View>
+        )}
+      </SafeAreaView>
+    );
+  }
 
   if (isGuest || !myId) {
     return (

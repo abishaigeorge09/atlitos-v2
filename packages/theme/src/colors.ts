@@ -252,6 +252,9 @@ export const vendorBrand = {
   /** Google's light sign in button: white plate, near-black label. */
   googleButtonSurface: "#FFFFFF",
   googleButtonInk: "#1F1F1F",
+  /** Sign in with Apple plates, Apple HIG: pure black or pure white only. */
+  appleBlack: "#000000",
+  appleWhite: "#FFFFFF",
 } as const;
 
 /**

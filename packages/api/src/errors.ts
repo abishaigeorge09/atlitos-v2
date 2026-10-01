@@ -173,3 +173,27 @@ export async function mapEdgeFunctionError(error: unknown): Promise<ApiError> {
     status: 500,
   };
 }
+
+/**
+ * `verify-payment` answered 200 but no order exists: the capture landed after
+ * the 15 minute stock hold lapsed, `place_order_from_draft` raised
+ * OUT_OF_STOCK, and the finalize handler refunded the capture in full
+ * (`_shared/finalize-order-payment.ts`, `entityStatus: unfulfillable_*`). The
+ * shopper HAS been charged and HAS no order, so this must never read as a
+ * success and never as a generic failure. The code lives here rather than in
+ * `@atlitos/types`' `ApiErrorCode` because no server response carries it; the
+ * client derives it from a success shaped body.
+ */
+export type OrderUnfulfillableError = Omit<ApiError, "code"> & {
+  code: "ORDER_UNFULFILLABLE";
+  /** The finalize handler's refund result, e.g. "refunded" or "refund_pending". */
+  refundOutcome: string;
+};
+
+export function isOrderUnfulfillableError(error: unknown): error is OrderUnfulfillableError {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { code?: unknown }).code === "ORDER_UNFULFILLABLE"
+  );
+}

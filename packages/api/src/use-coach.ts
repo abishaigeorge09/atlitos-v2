@@ -94,11 +94,14 @@ const COACH_TRAINEE_VIDEO_PAGE_SIZE = 50;
 const SESSION_TYPE_PAGE_SIZE = 100;
 const AVAILABILITY_WINDOW_PAGE_SIZE = 100;
 
+// Player identity embeds go through the `public_profiles` definer view, never
+// the base `users` table: `users` RLS is own-row only, so a coach reading an
+// athlete's row got null and every session rendered the "Athlete" fallback.
 const SESSION_SELECT =
   "id, coach_id, player_id, session_type_id, frequency, date, slot_start, slot_end, " +
   "focus_area, location, status, price, platform_fee, total, payment_intent_id, rating, remarks, " +
   "decline_reason, cancellation_reason, " +
-  "players:users!sessions_player_id_fkey ( name ), session_types ( name )";
+  "players:public_profiles!player_id ( name ), session_types ( name )";
 
 function mapSessionRow(row: SessionQueryRow): Session {
   return {
@@ -610,7 +613,7 @@ export function useCoachTrainees(client: AtlitosClient) {
       // phantom trainee.
       const { data, error } = await client
         .from("sessions")
-        .select("player_id, date, status, users!sessions_player_id_fkey ( name, avatar_url ), session_types ( name )")
+        .select("player_id, date, status, users:public_profiles!player_id ( name, avatar_url ), session_types ( name )")
         .eq("coach_id", userId)
         .not("player_id", "is", null)
         .order("date", { ascending: false })

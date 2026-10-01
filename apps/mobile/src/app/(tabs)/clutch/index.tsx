@@ -304,15 +304,25 @@ export default function ClutchFeedScreen() {
   }
 
   async function handleLike(clip: Clip) {
+    // The tap's intent is fixed here, from what the viewer saw. A guest's
+    // queued like replays after sign in, when the account may already like
+    // this clip; flipping at replay time would unlike it. So the action SETS
+    // the intended value and reconciles the server toggle toward it.
+    const wantLiked = !clip.likedByMe;
     requireAuth(async () => {
-      // Optimistic flip; reconcile with the RPC's authoritative count.
+      // Optimistic set; reconcile with the RPC's authoritative count.
       setClips((prev) =>
         prev.map((c) =>
-          c.id === clip.id ? { ...c, likedByMe: !c.likedByMe, likes: c.likes + (c.likedByMe ? -1 : 1) } : c,
+          c.id === clip.id && c.likedByMe !== wantLiked
+            ? { ...c, likedByMe: wantLiked, likes: c.likes + (wantLiked ? 1 : -1) }
+            : c,
         ),
       );
       try {
-        const result = await clutch.toggleLike(clip.id);
+        let result = await clutch.toggleLike(clip.id);
+        // `toggle_clip_like` flips server state; if that landed opposite the
+        // intent (already liked on the account), flip once more.
+        if (result.liked !== wantLiked) result = await clutch.toggleLike(clip.id);
         setClips((prev) =>
           prev.map((c) => (c.id === clip.id ? { ...c, likedByMe: result.liked, likes: result.likesCount } : c)),
         );
@@ -328,11 +338,14 @@ export default function ClutchFeedScreen() {
   }
 
   async function handleSave(clip: Clip) {
+    // Intent fixed at tap time, same reason as handleLike.
+    const wantSaved = !clip.savedByMe;
     requireAuth(async () => {
-      // Optimistic flip of the bookmark; reconcile with the toggle's result.
-      setClips((prev) => prev.map((c) => (c.id === clip.id ? { ...c, savedByMe: !c.savedByMe } : c)));
+      // Optimistic set of the bookmark; reconcile with the toggle's result.
+      setClips((prev) => prev.map((c) => (c.id === clip.id ? { ...c, savedByMe: wantSaved } : c)));
       try {
-        const saved = await clutch.toggleSaveClip(clip.id);
+        let saved = await clutch.toggleSaveClip(clip.id);
+        if (saved !== wantSaved) saved = await clutch.toggleSaveClip(clip.id);
         setClips((prev) => prev.map((c) => (c.id === clip.id ? { ...c, savedByMe: saved } : c)));
       } catch {
         // Roll back on failure.

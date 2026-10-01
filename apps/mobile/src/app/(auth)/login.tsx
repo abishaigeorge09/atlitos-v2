@@ -1,7 +1,8 @@
 import { useAuth } from '@atlitos/api';
 import type { ApiError } from '@atlitos/types';
-import { spacing } from '@atlitos/theme';
+import { radii, spacing } from '@atlitos/theme';
 import { Link, router } from 'expo-router';
+import { Compass, KeyRound, LockKeyhole } from 'lucide-react-native';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -216,13 +217,12 @@ export default function LoginScreen() {
               <Text style={[textStyle('button'), { color: colors.inkOnAccent }]}>{primaryLabel}</Text>
             </Button>
 
-            <ConsentLine />
             <GoogleSignInButton
               loading={pending === 'google'}
               disabled={busy}
               onPress={() => void run('google', signInWithGoogle)}
             />
-            <AppleSignInButton disabled={busy} onPress={() => void run('apple', signInWithApple)} />
+            <AppleSignInButton loading={pending === 'apple'} disabled={busy} onPress={() => void run('apple', signInWithApple)} />
           </View>
 
           <View style={{ marginTop: spacing.lg, gap: spacing.md, alignItems: 'center' }}>
@@ -235,39 +235,74 @@ export default function LoginScreen() {
               </Link>
             </View>
 
-            {/* Required behaviour that the reference does not draw. Caption
-                weight keeps them out of the CTA hierarchy. */}
-            <View style={{ flexDirection: 'row', gap: spacing.lg, marginTop: spacing.sm }}>
-              <Pressable
+            {/* Required behaviour that the reference does not draw (PRD-01
+                FR-9 one time code, FR-4 guest entry). Two equal outlined
+                buttons, so they read as a matched pair of alternatives
+                rather than stray captions, each a full 44pt target. */}
+            <View style={{ flexDirection: 'row', gap: spacing.sm, alignSelf: 'stretch' }}>
+              <SecondaryAction
+                icon={mode === 'password' ? KeyRound : LockKeyhole}
+                label={mode === 'password' ? 'One time code' : 'Use password'}
                 disabled={busy}
-                hitSlop={8}
                 onPress={() => {
                   setMode(mode === 'password' ? 'otp' : 'password');
                   setError(null);
                   setOtpSent(false);
                   setOtp('');
                 }}
-              >
-                <Text style={[textStyle('caption'), { color: colors.textTertiary }]}>
-                  {mode === 'password' ? 'Use a one time code' : 'Use your password'}
-                </Text>
-              </Pressable>
-              {/* Launch runbook 5.6: a plain name and a 44pt target. */}
-              <Pressable
-                accessibilityRole="button"
+              />
+              <SecondaryAction
+                icon={Compass}
+                label="Browse as guest"
                 disabled={busy}
-                hitSlop={8}
-                className="min-h-11 justify-center"
                 onPress={() => void run('guest', () => continueAsGuest().then(() => undefined))}
-              >
-                <Text style={[textStyle('caption'), { color: colors.textTertiary }]}>
-                  Browse as guest
-                </Text>
-              </Pressable>
+              />
             </View>
+          </View>
+
+          {/* Consent sits at the foot of the screen (founder, 2026-09-30),
+              still above the fold on every phone and still shown before any
+              account creating action (Apple 5.1.1, DPDP). */}
+          <View style={{ marginTop: 'auto', paddingTop: spacing.xl }}>
+            <ConsentLine />
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
+  );
+}
+
+interface SecondaryActionProps {
+  icon: typeof Compass;
+  label: string;
+  disabled?: boolean;
+  onPress: () => void;
+}
+
+function SecondaryAction({ icon: Icon, label, disabled, onPress }: SecondaryActionProps) {
+  const colors = useThemeColors();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      disabled={disabled}
+      onPress={onPress}
+      className="active:opacity-70"
+      style={{
+        flex: 1,
+        minHeight: 44,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: spacing.xs,
+        borderRadius: radii.pill,
+        borderWidth: 1,
+        borderColor: colors.border,
+        opacity: disabled ? 0.6 : 1,
+      }}
+    >
+      <Icon size={16} strokeWidth={1.75} color={colors.textSecondary} />
+      <Text style={[textStyle('label'), { color: colors.textSecondary }]}>{label}</Text>
+    </Pressable>
   );
 }

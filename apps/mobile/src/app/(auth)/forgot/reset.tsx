@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AppBar } from '@/components/ui/app-bar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { friendlyAuthMessage } from '@/lib/auth-copy';
@@ -51,9 +52,10 @@ export default function ResetPasswordScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
+      <AppBar variant="back" onPressBack={() => (router.canGoBack() ? router.back() : router.replace('/(auth)/login'))} />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView
-        contentContainerStyle={{ flexGrow: 1, padding: spacing.lg, gap: spacing.lg, justifyContent: 'center' }}
+        contentContainerStyle={{ flexGrow: 1, padding: spacing.lg, paddingTop: spacing.xl, gap: spacing.lg }}
         keyboardShouldPersistTaps="handled"
       >
         <View style={{ gap: spacing.xs }}>
