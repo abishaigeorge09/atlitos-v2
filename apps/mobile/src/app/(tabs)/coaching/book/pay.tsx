@@ -21,8 +21,11 @@ import { useSessionStore } from '@/store/session-store';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
 import { offerPushPrimer } from '@/store/push-primer-store';
+import { COACH_IN_APP_PAYMENT_ENABLED } from '@/lib/feature-flags';
 
-type ScreenState = 'reserving' | 'ready' | 'paying' | 'verifying' | 'confirmed' | 'error';
+// `review` only exists in appointment mode (COACH_IN_APP_PAYMENT_ENABLED off):
+// the details are shown and nothing is booked until Request appointment.
+type ScreenState = 'review' | 'requesting' | 'reserving' | 'ready' | 'paying' | 'verifying' | 'confirmed' | 'error';
 
 // A plain `type` literal, not an `interface`, matching
 // `(tabs)/courts/book/pay.tsx`'s own comment: expo-router's
@@ -63,6 +66,12 @@ const VERIFY_RETRY_DELAYS_MS = [1000, 3000];
  * service-role edge functions, this screen only calls them and displays
  * their response.
  *
+ * Appointment mode (COACH_IN_APP_PAYMENT_ENABLED off, 2026-10-01): the
+ * screen opens on the details instead of reserving, `book-session` is called
+ * only when the athlete taps Request appointment, and it answers
+ * `paymentMode: "offline"`, so the screen goes straight to the requested
+ * state with no Razorpay sheet. The athlete pays the coach directly.
+ *
  * Sessions carve the platform fee OUT of the price (SCHEMA.md): `total`
  * always equals `price`, so unlike Courts' BillSummary (subtotal/GST/
  * platform fee/total), this renders a single "Session fee" line plus Total,
@@ -77,7 +86,7 @@ export default function BookSessionPayScreen() {
   const requiresAuthGate = useSessionStore((state) => state.status !== 'signed_in');
   const params = useLocalSearchParams<PayParams>();
 
-  const [state, setState] = useState<ScreenState>('reserving');
+  const [state, setState] = useState<ScreenState>(COACH_IN_APP_PAYMENT_ENABLED ? 'reserving' : 'review');
   const [booking, setBooking] = useState<BookSessionResult | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [payLoading, setPayLoading] = useState(false);
@@ -90,8 +99,37 @@ export default function BookSessionPayScreen() {
       router.back();
       return;
     }
-    void reserveSession();
+    if (COACH_IN_APP_PAYMENT_ENABLED) void reserveSession();
   }, []);
+
+  // Appointment mode: the request IS the booking. If the server still has
+  // payments on (a switch mismatch), fall back to the pay flow rather than
+  // leave a session the athlete thinks is free.
+  async function requestAppointment() {
+    setState('requesting');
+    setError(null);
+    try {
+      const result = await coaching.bookSession({
+        sessionTypeId: params.sessionTypeId,
+        frequency: params.frequency,
+        date: params.date,
+        slotStart: params.slotFrom,
+        focusArea: params.focusArea || undefined,
+        location: params.location || undefined,
+        expectedTotal: Number(params.expectedTotal),
+      });
+      setBooking(result);
+      if (result.paymentMode === 'offline') {
+        setState('confirmed');
+        void offerPushPrimer();
+      } else {
+        setState('ready');
+      }
+    } catch (err) {
+      setError(err as ApiError);
+      setState('error');
+    }
+  }
 
   async function reserveSession() {
     setState('reserving');
@@ -107,7 +145,9 @@ export default function BookSessionPayScreen() {
         expectedTotal: Number(params.expectedTotal),
       });
       setBooking(result);
-      setState('ready');
+      // A server in appointment mode answers offline even here; there is
+      // nothing to pay, so the request is already the booking.
+      setState(result.paymentMode === 'offline' ? 'confirmed' : 'ready');
     } catch (err) {
       setError(err as ApiError);
       setState('error');
@@ -115,7 +155,7 @@ export default function BookSessionPayScreen() {
   }
 
   async function handlePay() {
-    if (!booking || captured) return;
+    if (!booking || booking.paymentMode !== 'online' || captured) return;
     setPayLoading(true);
     setState('paying');
     let checkoutResult: RazorpayCheckoutResult;
@@ -175,6 +215,57 @@ export default function BookSessionPayScreen() {
     }
   }
 
+  if (state === 'review' || state === 'requesting') {
+    const requesting = state === 'requesting';
+    const price = Number(params.expectedTotal);
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
+        <AppBar variant="backTitle" title="Request appointment" onPressBack={() => router.back()} />
+
+        <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }}>
+          <View
+            style={{
+              borderRadius: radii.xl,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.card,
+              padding: spacing.lg,
+              gap: spacing.xs,
+            }}
+          >
+            <Text style={[textStyle('h3'), { color: colors.text }]}>{params.sessionTypeName}</Text>
+            <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>with {params.coachName}</Text>
+            <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
+              {params.date}, {params.slotFrom} to {params.slotTo}
+            </Text>
+            <Text style={[textStyle('caption'), { color: colors.textTertiary }]}>
+              {SESSION_FREQUENCY_LABEL[params.frequency]}
+            </Text>
+          </View>
+
+          <View
+            style={{
+              borderRadius: radii.xl,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.card,
+              padding: spacing.lg,
+            }}
+          >
+            <BillSummary rows={[{ label: 'Session fee', amount: price }]} total={price} />
+            <PayCoachDirectlyNote coachName={params.coachName} />
+          </View>
+        </ScrollView>
+
+        <View style={{ padding: spacing.lg, paddingBottom: navInset + spacing.lg, borderTopWidth: 1, borderTopColor: colors.border }}>
+          <Button loading={requesting} disabled={requesting} onPress={() => void requestAppointment()}>
+            <Text style={{ color: colors.inkOnAccent }}>Request appointment</Text>
+          </Button>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (state === 'reserving') {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
@@ -195,7 +286,11 @@ export default function BookSessionPayScreen() {
         <View style={{ flex: 1, padding: spacing.lg, justifyContent: 'center', alignItems: 'center', gap: spacing.md }}>
           <TriangleAlert size={40} color={colors.danger} strokeWidth={1.75} />
           <Text style={[textStyle('h3'), { color: colors.text, textAlign: 'center' }]}>
-            {error?.code === 'SLOT_TAKEN' ? 'This slot was just taken' : "Couldn't reserve this session"}
+            {error?.code === 'SLOT_TAKEN'
+              ? 'This slot was just taken'
+              : COACH_IN_APP_PAYMENT_ENABLED
+                ? "Couldn't reserve this session"
+                : "Couldn't request this appointment"}
           </Text>
           <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
             {error?.code === 'SLOT_TAKEN'
@@ -229,7 +324,9 @@ export default function BookSessionPayScreen() {
             >
               <CheckCircle2 size={40} color={colors.success} strokeWidth={1.75} />
             </View>
-            <Text style={[textStyle('h1'), { color: colors.text, textAlign: 'center' }]}>Session requested</Text>
+            <Text style={[textStyle('h1'), { color: colors.text, textAlign: 'center' }]}>
+              {booking.paymentMode === 'offline' ? 'Appointment requested' : 'Session requested'}
+            </Text>
             <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
               {params.sessionTypeName} with {params.coachName} on {params.date}, {params.slotFrom} to {params.slotTo}.
               {'\n'}Waiting for the coach to accept.
@@ -247,6 +344,7 @@ export default function BookSessionPayScreen() {
             }}
           >
             <BillSummary rows={[{ label: 'Session fee', amount: booking.bill.price }]} total={booking.bill.total} />
+            {booking.paymentMode === 'offline' ? <PayCoachDirectlyNote coachName={params.coachName} /> : null}
           </View>
 
           <View style={{ gap: spacing.sm }}>
@@ -384,5 +482,15 @@ export default function BookSessionPayScreen() {
         </Button>
       </View>
     </SafeAreaView>
+  );
+}
+
+/** Appointment mode: the price above is paid to the coach, not to Atlitos. */
+function PayCoachDirectlyNote({ coachName }: { coachName: string }) {
+  const colors = useThemeColors();
+  return (
+    <Text style={[textStyle('caption'), { color: colors.textSecondary, paddingTop: spacing.md }]}>
+      Pay {coachName} directly at the session. Nothing is charged in the app.
+    </Text>
   );
 }

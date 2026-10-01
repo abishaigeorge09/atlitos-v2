@@ -282,8 +282,12 @@ export default function CoachSessionDetailScreen() {
             justifyContent: 'space-between',
           }}
         >
-          <Text style={[textStyle('label'), { color: colors.textSecondary }]}>You earn</Text>
-          <PriceText amount={session.total - session.platformFee} size="lg" />
+          {/* An appointment (no payment attached) is paid to the coach
+              directly, in full: no platform fee is taken in the app. */}
+          <Text style={[textStyle('label'), { color: colors.textSecondary }]}>
+            {session.paymentIntentId ? 'You earn' : 'Athlete pays you directly'}
+          </Text>
+          <PriceText amount={session.paymentIntentId ? session.total - session.platformFee : session.total} size="lg" />
         </View>
 
         {actionError ? <Text style={[textStyle('caption'), { color: colors.danger }]}>{actionError}</Text> : null}

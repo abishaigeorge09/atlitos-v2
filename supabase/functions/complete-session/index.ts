@@ -55,6 +55,11 @@
 // change what this session accrues. `fee_config` is re-read only as a
 // fallback for rows predating that snapshot.
 //
+// **Appointments** (2026-10-01, `_shared/coach-payments.ts`): a session booked
+// while in-app coach payments are off has no payment_intent. It completes
+// through the same RPC, but no ledger group is written and the outcome is
+// `completed_offline`, since the athlete paid the coach directly.
+//
 // This does NOT call Razorpay. Money leaves the platform's account only when
 // the coach explicitly taps Transfer (AT-43), per PAYMENTS.md's on-demand
 // transfer model.
@@ -156,6 +161,37 @@ async function requireCapturedIntent(
   return intent;
 }
 
+/**
+ * True for an appointment booked with in-app coach payments off
+ * (`_shared/coach-payments.ts`): no payment_intent linked and none ever
+ * created for it. Such a session completes with no ledger group, because no
+ * money passed through Atlitos; the athlete paid the coach directly. Decided
+ * from the session's own data, not the switch, so appointments booked while
+ * payments were off still complete after payments are turned back on. A paid
+ * booking always has an intent row (book-session creates it before the order),
+ * so it can never be mistaken for one.
+ */
+async function isAppointment(
+  supabase: ReturnType<typeof serviceRoleClient>,
+  session: Pick<SessionRow, "id" | "payment_intent_id">,
+): Promise<boolean> {
+  if (session.payment_intent_id) return false;
+  const { data, error } = await supabase
+    .from("payment_intents")
+    .select("id")
+    .eq("domain", "session")
+    .eq("entity_id", session.id)
+    .limit(1);
+  if (error) {
+    throw new AppError(
+      "INTERNAL",
+      `Failed to read payment_intents for session ${session.id}: ${error.message}`,
+      500,
+    );
+  }
+  return (data ?? []).length === 0;
+}
+
 Deno.serve((req) =>
   withErrorHandling(req, async (request) => {
     const preflight = handleCorsPreflight(request);
@@ -185,7 +221,8 @@ Deno.serve((req) =>
     if (
       pending &&
       pending.coach_id === user.id &&
-      (pending.status === "accepted" || pending.status === "in_progress")
+      (pending.status === "accepted" || pending.status === "in_progress") &&
+      !(await isAppointment(supabase, pending))
     ) {
       await requireCapturedIntent(supabase, pending);
     }
@@ -234,6 +271,16 @@ Deno.serve((req) =>
       session = existing as SessionRow;
     } else {
       session = transitioned;
+    }
+
+    // An appointment (no payment ever attached) is done once the transition
+    // has committed: there is no money to accrue and no ledger group to write.
+    if (await isAppointment(supabase, session)) {
+      return jsonResponse({
+        session_id: session.id,
+        status: session.status,
+        outcome: "completed_offline",
+      });
     }
 
     // Idempotency gate (b): never write a second group for one session.

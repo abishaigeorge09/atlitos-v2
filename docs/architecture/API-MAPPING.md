@@ -188,12 +188,12 @@ The `requested` to `cancelled` edge was added 2026-07-19 by founder-approved PRD
 
 | v1 fn | v1 route | v2 lane | Function / RPC | Note |
 |---|---|---|---|---|
-| `book` | POST `/sessions/book` | Edge Function | `book-session` | creates `payment_intents` + `sessions` (`requested`), re-prices server side (`PRICE_MISMATCH`), returns a Razorpay order for the client to open |
+| `book` | POST `/sessions/book` | Edge Function | `book-session` | creates `payment_intents` + `sessions` (`requested`), re-prices server side (`PRICE_MISMATCH`), returns a Razorpay order for the client to open. While in-app coach payments are off (`COACH_IN_APP_PAYMENTS`, PAYMENTS.md "Coach appointments"), creates the `requested` session only and returns `payment: "offline"` with no order |
 | `list` | GET `/sessions` | PostgREST | `sessions` select, joined to `users`/`coach_profiles` for hydrated names | RLS `coach_id = auth.uid() OR player_id = auth.uid()` |
 | `get` | GET `/sessions/:id` | PostgREST | `sessions` select single | same RLS as `list` |
 | `accept` | POST `/sessions/:id/accept` | RPC | `session_transition(id, 'accept')` | caller must be `coach_id`; `requested` to `accepted` only |
 | `decline` | POST `/sessions/:id/decline` | Edge Function | `decline-session-refund` | coach only; `requested` to `declined`; refunds any captured payment in full automatically (CO-04); clients MUST call this, the bare RPC now raises `USE_EDGE_FUNCTION` (0085) |
-| `complete` | POST `/sessions/:id/complete` | Edge Function | `complete-session` | wraps `session_transition_internal(coach, id, 'complete')` and writes the earnings accrual; clients MUST call this, the bare RPC now raises `USE_EDGE_FUNCTION` (AT-61) |
+| `complete` | POST `/sessions/:id/complete` | Edge Function | `complete-session` | wraps `session_transition_internal(coach, id, 'complete')` and writes the earnings accrual; clients MUST call this, the bare RPC now raises `USE_EDGE_FUNCTION` (AT-61). An appointment (no payment intent ever attached) completes with no accrual, outcome `completed_offline` (PAYMENTS.md "Coach appointments") |
 | `cancel` (from `accepted`) | POST `/sessions/:id/cancel` | RPC | `session_transition(id, 'cancel', reason)` | caller must be `coach_id` or `player_id`; reason required (`REASON_REQUIRED`); rejected once the session has started (`SESSION_STARTED`); NO automatic refund |
 | `cancel` (from `requested`) | POST `/sessions/:id/cancel` | Edge Function | `cancel-session-refund` | athlete only (a coach gets `FORBIDDEN` and declines instead); no reason required; refunds in full automatically; clients MUST call this, the bare RPC now raises `USE_EDGE_FUNCTION` (AT-61) |
 | `reschedule` | POST `/sessions/:id/reschedule` | RPC | `session_transition(id, 'reschedule', null, date, slot)` | re-checks the unique index, raises `SLOT_TAKEN` on conflict |

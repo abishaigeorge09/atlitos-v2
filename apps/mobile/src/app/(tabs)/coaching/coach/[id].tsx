@@ -29,6 +29,7 @@ import { StarRating } from '@/components/ui/star-rating';
 import { Text } from '@/components/ui/text';
 import { usePendingAuthAction } from '@/hooks/use-pending-auth-action';
 import { SESSION_FREQUENCY_LABEL } from '@/lib/session-display';
+import { COACH_IN_APP_PAYMENT_ENABLED } from '@/lib/feature-flags';
 import { SPORT_ICON, SPORT_LABEL, SPORT_TINT } from '@/lib/sport-display';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
@@ -391,7 +392,9 @@ export default function CoachProfileScreen() {
           </ProfileSection>
         ) : null}
 
-        {groupsState === 'populated' && coachGroups.length > 0 ? (
+        {/* Groups are paid monthly memberships with no unpaid path yet, so they
+            are hidden while in-app coach payments are off. */}
+        {COACH_IN_APP_PAYMENT_ENABLED && groupsState === 'populated' && coachGroups.length > 0 ? (
           <View style={{ paddingHorizontal: spacing.lg, gap: spacing.md }}>
             <Text style={[textStyle('h3'), { color: colors.text }]}>Groups</Text>
             <View style={{ gap: spacing.sm }}>
@@ -579,7 +582,11 @@ export default function CoachProfileScreen() {
       <View style={{ padding: spacing.lg, paddingBottom: navInset + spacing.lg, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.bg }}>
         <Button disabled={!canBook} onPress={handleContinue}>
           <Text style={{ color: colors.inkOnAccent }}>
-            {canBook ? `Continue, ${formatINR(sessionType!.price)}` : 'Choose a type, date, and time'}
+            {!canBook
+              ? 'Choose a type, date, and time'
+              : COACH_IN_APP_PAYMENT_ENABLED
+                ? `Continue, ${formatINR(sessionType!.price)}`
+                : 'Request appointment'}
           </Text>
         </Button>
       </View>

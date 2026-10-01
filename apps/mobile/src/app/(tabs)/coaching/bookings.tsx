@@ -2,7 +2,8 @@ import { useCoaching, useGroups } from '@atlitos/api';
 import type { ApiError, Session } from '@atlitos/types';
 import { formatINR, radii, spacing } from '@atlitos/theme';
 import { router } from 'expo-router';
-import { CalendarClock, CalendarX2, Clock, TriangleAlert, Wallet } from 'lucide-react-native';
+import { CalendarClock, CalendarX2, Clock, TriangleAlert, Users, Wallet } from 'lucide-react-native';
+import { COACH_IN_APP_PAYMENT_ENABLED } from '@/lib/feature-flags';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -130,12 +131,14 @@ export default function CoachingBookingsListScreen() {
       0,
     );
     const totalPayments = held.reduce((sum, session) => sum + session.total, 0);
+    const coaches = new Set(live.map((session) => session.coachId)).size;
 
     return {
       totalSessions: live.length,
       thisMonth: liveThisMonth.length,
       totalHours: Math.round((totalMinutes / 60) * 10) / 10,
       totalPayments,
+      coaches,
     };
   }, [items]);
 
@@ -214,7 +217,13 @@ export default function CoachingBookingsListScreen() {
               </View>
               <View className="flex-row gap-md">
                 <StatTile label="Hours trained" value={stats.totalHours} icon={Clock} />
-                <StatTile label="Payments" value={formatINR(stats.totalPayments)} icon={Wallet} />
+                {/* No coaching money passes through the app while in-app coach
+                    payments are off, so the fourth tile counts coaches instead. */}
+                {COACH_IN_APP_PAYMENT_ENABLED ? (
+                  <StatTile label="Payments" value={formatINR(stats.totalPayments)} icon={Wallet} />
+                ) : (
+                  <StatTile label="Coaches" value={stats.coaches} icon={Users} />
+                )}
               </View>
             </View>
           }

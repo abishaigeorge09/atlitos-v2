@@ -73,6 +73,33 @@ export const COACH_TRAINEE_VIDEO_REVIEW_ENABLED = false;
 export const COURT_IN_APP_BOOKING_ENABLED = false;
 
 /**
+ * In-app payment for coaching (1:1 sessions and group memberships).
+ *
+ * OFF for launch, founder decision 2026-10-01: a coach session is booked as
+ * an appointment request and the athlete pays the coach directly at the
+ * session. Payments come back in a later release. The server has the
+ * matching switch, `COACH_IN_APP_PAYMENTS` (supabase/functions/_shared/
+ * coach-payments.ts); turn both on together.
+ *
+ * What the flag being OFF changes:
+ *
+ *   1. The coach profile's Continue button reads "Request appointment" and
+ *      the confirm screen books the request only when the athlete taps it,
+ *      with no Razorpay sheet. `book-session` answers `payment: "offline"`.
+ *   2. Copy that promises a payment or a refund is reworded for an
+ *      appointment (no charge, so nothing to refund).
+ *   3. The Payments tab and the "Payments done" stat in Trainings are hidden,
+ *      since no coaching money passes through the app.
+ *   4. Group join and renew are hidden on the coach profile and Trainings
+ *      (those are paid memberships with no unpaid path yet).
+ *
+ * Nothing is deleted: the pay screen, verify-payment, refunds and the ledger
+ * accrual in complete-session are intact behind this constant and the
+ * server switch.
+ */
+export const COACH_IN_APP_PAYMENT_ENABLED = false;
+
+/**
  * Empower donations (Home rail, hub, athlete profile, donate flow, checkout
  * roundup).
  *
