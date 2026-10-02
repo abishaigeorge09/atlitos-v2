@@ -61,7 +61,7 @@ actions are opened and cancelled.
 
 ## Summary
 
-45 pass, 0 fail, 5 not run (C13 has no screen, C16 and C17 would change the live listing, C43 was
+46 pass, 0 fail, 4 not run (C13 has no screen, C16 and C17 would change the live listing, C43 was
 interrupted by the install). Re-verified on a Release build of `d9b184e`.
 
 ## Defects found
