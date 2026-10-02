@@ -88,11 +88,6 @@ interface AvailabilityWindowRow {
   end_time: string;
 }
 
-interface BusySlotRow {
-  date: string;
-  slot_start: string;
-}
-
 interface SessionRow {
   id: string;
   status: string;
@@ -303,14 +298,17 @@ Deno.serve((req) =>
       );
     }
 
-    const { data: busySlots, error: busyError } = await supabase.rpc(
-      "get_coach_busy_slots",
-      {
-        p_coach_id: sessionType.coach_id,
-        p_from: body.date,
-        p_to: body.date,
-      },
-    );
+    // Overlap, not just an identical start: with types of different lengths
+    // a 90 minute request at 07:30 used to slip past a 60 minute session at
+    // 07:00 because only slot_start was compared. Service role read, same
+    // live statuses the slot index treats as occupying (0018), plus
+    // 'rescheduled' rows excluded because they are the old half of a move.
+    const { data: dayRows, error: busyError } = await supabase
+      .from("sessions")
+      .select("slot_start, slot_end")
+      .eq("coach_id", sessionType.coach_id)
+      .eq("date", body.date)
+      .not("status", "in", "(declined,cancelled,rescheduled)");
 
     if (busyError) {
       throw new AppError(
@@ -320,8 +318,12 @@ Deno.serve((req) =>
       );
     }
 
-    const isBusy = ((busySlots ?? []) as BusySlotRow[]).some(
-      (slot) => normalizeTime(slot.slot_start) === slotStart,
+    const requestStart = timeToMinutes(slotStart);
+    const requestEnd = timeToMinutes(slotEnd);
+    const isBusy = ((dayRows ?? []) as { slot_start: string; slot_end: string }[]).some(
+      (row) =>
+        timeToMinutes(normalizeTime(row.slot_start)) < requestEnd &&
+        requestStart < timeToMinutes(normalizeTime(row.slot_end)),
     );
     if (isBusy) {
       throw new AppError(
@@ -345,7 +347,9 @@ Deno.serve((req) =>
     const platformFee = round2(feeConfig.value);
     const total = price; // fee is carved out of price, see the header note.
 
-    if (platformFee >= price) {
+    // Only a paid booking credits the coach's ledger; an appointment moves no
+    // money, so a low priced type must not fail here with an internal error.
+    if (coachInAppPaymentsEnabled() && platformFee >= price) {
       // The coach's ledger credit would be zero or negative, which
       // ledger_entries' `check (amount > 0)` rejects. This is a fee_config
       // misconfiguration, not something the athlete can act on.

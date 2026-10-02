@@ -1,7 +1,7 @@
 import { useClutch } from '@atlitos/api';
 import { inkOnMedia, mediaBackdrop, radii, spacing } from '@atlitos/theme';
 import type { ApiError, Clip, Comment } from '@atlitos/types';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import {
   Bookmark,
@@ -173,10 +173,25 @@ export default function ClutchPostViewerScreen() {
     }
   }, []);
 
+  // Tabs stay mounted, so the active clip kept playing (with sound, if
+  // unmuted) under other tabs and pushed screens. Play only while focused.
+  const [screenFocused, setScreenFocused] = useState(true);
+  useFocusEffect(
+    useCallback(() => {
+      setScreenFocused(true);
+      return () => setScreenFocused(false);
+    }, []),
+  );
+
+  const unmountedRef = useRef(false);
+
   const mintPlayback = useCallback(
     async (clipId: string) => {
       try {
         const playback = await clutch.getPlaybackUrl(clipId);
+        // A mint that lands after the screen unmounted must not arm a new
+        // refresh timer, or it re-mints in the background for the app's life.
+        if (unmountedRef.current) return;
         setPlaybackUrls((prev) => ({ ...prev, [clipId]: playback.url }));
         if (playback.thumbUrl) {
           setPosterUrls((prev) => ({ ...prev, [clipId]: playback.thumbUrl as string }));
@@ -195,6 +210,7 @@ export default function ClutchPostViewerScreen() {
           else clearTimer(clipId);
         }, refreshMs);
       } catch (err) {
+        if (unmountedRef.current) return;
         // SCALE-MEDIA M-1. This catch used to be empty: the same call mints
         // the poster, so a failure left no video AND no poster, and nothing
         // retried while the page sat on screen. Now a bounded backoff with
@@ -267,9 +283,11 @@ export default function ClutchPostViewerScreen() {
   }, [clutch, id]);
 
   useEffect(() => {
+    unmountedRef.current = false;
     void load();
     const timers = refreshTimers.current;
     return () => {
+      unmountedRef.current = true;
       Object.values(timers).forEach(clearTimeout);
     };
   }, [load]);
@@ -670,7 +688,7 @@ export default function ClutchPostViewerScreen() {
             <View style={{ height: containerH }}>
               <ClipPage
                 clip={item}
-                active={item.id === activeId}
+                active={screenFocused && item.id === activeId}
                 // F1: only the active card and its minted neighbors hold a
                 // real ClipVideo player; see ClutchPostCard's mountPlayer.
                 mountPlayer={

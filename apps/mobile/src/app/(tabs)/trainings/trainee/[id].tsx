@@ -20,7 +20,7 @@ import {
   X,
 } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FlatList, Pressable, ScrollView, View } from 'react-native';
+import { FlatList, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/ui/avatar';
@@ -159,7 +159,8 @@ export default function CoachTraineeDetailScreen() {
   // (the coach turned the request down) so they are excluded entirely.
   const attendanceRate = useMemo(() => {
     const completed = sessions.past.filter((s) => s.status === 'completed' || s.status === 'rated').length;
-    const missed = sessions.past.filter((s) => s.status === 'cancelled' || s.status === 'rescheduled').length;
+    // A reschedule moved the session to a new row, it was not missed.
+    const missed = sessions.past.filter((s) => s.status === 'cancelled').length;
     const denominator = completed + missed;
     return denominator > 0 ? Math.round((completed / denominator) * 100) : undefined;
   }, [sessions.past]);
@@ -525,6 +526,9 @@ export default function CoachTraineeDetailScreen() {
 
             {/* Save note is pinned, so it clears the floating bar (the inset
                 carries the bottom safe area the SafeAreaView no longer adds). */}
+            {/* The note autofocuses, so without this the keyboard opened over
+                Save note straight away. */}
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
             <View style={{ flex: 1, padding: spacing.lg, gap: spacing.lg, paddingBottom: navInset + spacing.lg }}>
               <Input
                 type="multiline"
@@ -540,6 +544,7 @@ export default function CoachTraineeDetailScreen() {
                 <Text style={{ color: colors.inkOnAccent }}>Save note</Text>
               </Button>
             </View>
+            </KeyboardAvoidingView>
           </SafeAreaView>
         </View>
       ) : null}

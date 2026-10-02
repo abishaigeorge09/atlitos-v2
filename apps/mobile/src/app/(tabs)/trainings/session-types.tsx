@@ -42,7 +42,8 @@ function draftIssue(draft: FormDraft): string | null {
   const duration = Number(draft.durationMinutes);
   if (!Number.isInteger(duration) || duration <= 0) return 'Duration must be a whole number of minutes above zero.';
   const price = Number(draft.price);
-  if (!Number.isFinite(price) || price <= 0) return 'Price must be above zero.';
+  // book-session refuses a price at or under the flat 10.00 platform fee.
+  if (!Number.isFinite(price) || price <= 10) return 'Price must be above 10 rupees.';
   return null;
 }
 

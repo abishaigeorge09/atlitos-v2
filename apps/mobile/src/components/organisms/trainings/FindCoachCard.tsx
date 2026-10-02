@@ -20,7 +20,7 @@ export function FindCoachCard() {
     <Pressable
       accessibilityRole="button"
       accessibilityLabel="Find a coach"
-      onPress={() => router.push('/(tabs)/coaching')}
+      onPress={() => router.push('/trainings/coaches')}
       style={{
         flexDirection: 'row',
         alignItems: 'center',

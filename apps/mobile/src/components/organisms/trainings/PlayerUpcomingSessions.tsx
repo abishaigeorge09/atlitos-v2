@@ -75,7 +75,7 @@ export function PlayerUpcomingSessions({
           title="No upcoming sessions"
           body="Book a coach and your confirmed sessions will show up here."
           ctaLabel="Find a coach"
-          onCtaPress={() => router.push('/(tabs)/coaching')}
+          onCtaPress={() => router.push('/trainings/coaches')}
         />
       ) : (
         rows.map((row) =>

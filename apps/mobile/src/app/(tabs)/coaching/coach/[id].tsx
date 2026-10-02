@@ -225,13 +225,21 @@ export default function CoachProfileScreen() {
     // slot generation needs; get_coach_busy_slots is cheap and hides the
     // underlying session rows, this is a read-only preview regardless
     // (book-session re-checks authoritatively, see use-coaching.ts).
+    // Ignore a late reply for a date the athlete has already moved off.
+    let cancelled = false;
     coaching
       .getCoachBusySlots(id, date, addDaysISO(date, 14))
       .then((slots) => {
+        if (cancelled) return;
         setBusySlots(slots);
         setSlotsState('populated');
       })
-      .catch(() => setSlotsState('error'));
+      .catch(() => {
+        if (!cancelled) setSlotsState('error');
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [id, date, sessionType?.id]);
 
   const availableSlots = useMemo(() => {

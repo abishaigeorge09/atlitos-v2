@@ -7,6 +7,7 @@ import { HomeSection, HomeSectionSkeleton } from '@/components/organisms/home/Ho
 import { CoachGridCard } from '@/components/ui/coach-grid-card';
 import { supabase } from '@/lib/supabase';
 import { useLocationStore } from '@/store/location-store';
+import { useSessionStore } from '@/store/session-store';
 
 const CARD_WIDTH = 176;
 const MAX_COACHES = 10;
@@ -21,6 +22,7 @@ const MAX_COACHES = 10;
 export function HomeCoachesRail({ reloadKey, onLoaded }: { reloadKey: number; onLoaded?: (ok: boolean) => void }) {
   const coaching = useCoaching(supabase);
   const city = useLocationStore((state) => state.city);
+  const isCoach = useSessionStore((state) => state.me?.roles.includes('coach') ?? false);
 
   const [state, setState] = useState<'loading' | 'ready'>('loading');
   const [coaches, setCoaches] = useState<CoachListItem[]>([]);
@@ -69,7 +71,9 @@ export function HomeCoachesRail({ reloadKey, onLoaded }: { reloadKey: number; on
       title="Train with a coach"
       subtitle="Verified coaches, book an appointment"
       seeAllLabel="See all coaches"
-      onSeeAll={() => router.push('/trainings/coaches')}
+      // A coach's Trainings module has no Coaches tab (it opens their own
+      // dashboard), so the full list is for athletes only.
+      onSeeAll={isCoach ? undefined : () => router.push('/trainings/coaches')}
     >
       {coaches.map((coach) => (
         <View key={coach.userId} style={{ width: CARD_WIDTH }}>

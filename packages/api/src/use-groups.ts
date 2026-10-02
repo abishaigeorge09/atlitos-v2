@@ -2,6 +2,7 @@ import type { ApiError, PaymentDomain, SessionStatus, Sport } from "@atlitos/typ
 
 import type { AtlitosClient } from "./client";
 import { mapEdgeFunctionError, mapPostgrestError } from "./errors";
+import { istNow } from "./use-coaching";
 /** Page sizes for the coaching group surfaces.
  *
  * Bounded because PostgREST silently caps every select on this project, so an
@@ -950,7 +951,9 @@ export function useGroups(client: AtlitosClient) {
         .returns<TraineeSessionRow[]>();
       if (error) throw mapPostgrestError(error);
 
-      const today = new Date().toISOString().slice(0, 10);
+      // IST calendar date, the clock sessions are booked on; the UTC date
+      // kept yesterday's sessions under Upcoming until 05:30 IST.
+      const today = istNow(Date.now()).date;
       const entries = (data ?? []).map((r): TraineeSessionEntry => ({
         id: r.id,
         date: r.date,

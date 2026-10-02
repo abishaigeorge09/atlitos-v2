@@ -336,7 +336,7 @@ export default function EditProfileScreen() {
         <Input
           type="pincode"
           label="Date of birth"
-          placeholder="YYYY-MM-DD"
+          placeholder="Year, month, day"
           maxLength={10}
           value={dob}
           onChangeText={(value) => {

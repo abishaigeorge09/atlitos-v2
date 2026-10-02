@@ -49,6 +49,16 @@ function todayISO(): string {
  * inserts a new row and tombstones this one. States: loading, the lifecycle
  * terminal displays, error.
  */
+/** Transition RPCs return the bare row, without the joined athlete and type
+ * names, so a plain replace blanked the header after Start or Cancel. */
+function keepNames(prev: Session | null, next: Session): Session {
+  return {
+    ...next,
+    playerName: next.playerName ?? prev?.playerName,
+    sessionTypeName: next.sessionTypeName ?? prev?.sessionTypeName,
+  };
+}
+
 export default function CoachSessionDetailScreen() {
   const colors = useThemeColors();
   const navInset = useNavBarInset();
@@ -115,11 +125,22 @@ export default function CoachSessionDetailScreen() {
     if (!reschedOpen || !session) return;
     setReschedSlotsLoading(true);
     setReschedSelected(undefined);
+    // Drop a late reply for a date the coach has already moved off.
+    let cancelled = false;
     coachSessions
       .getRescheduleSlotOptions(session.coachId, session.sessionTypeId, reschedDate)
-      .then(setReschedSlots)
-      .catch(() => setReschedSlots([]))
-      .finally(() => setReschedSlotsLoading(false));
+      .then((slots) => {
+        if (!cancelled) setReschedSlots(slots);
+      })
+      .catch(() => {
+        if (!cancelled) setReschedSlots([]);
+      })
+      .finally(() => {
+        if (!cancelled) setReschedSlotsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [reschedOpen, reschedDate, session?.coachId, session?.sessionTypeId]);
 
   async function handleStart() {
@@ -128,7 +149,7 @@ export default function CoachSessionDetailScreen() {
     setActionError(null);
     try {
       const updated = await coachSessions.startSession(session.id);
-      setSession(updated);
+      setSession((prev) => keepNames(prev, updated));
     } catch (err) {
       setActionError((err as ApiError).message);
     } finally {
@@ -142,7 +163,7 @@ export default function CoachSessionDetailScreen() {
     setActionError(null);
     try {
       const updated = await coachSessions.completeSession(session.id);
-      setSession(updated);
+      setSession((prev) => keepNames(prev, updated));
     } catch (err) {
       setActionError((err as ApiError).message);
     } finally {
@@ -164,7 +185,7 @@ export default function CoachSessionDetailScreen() {
     setActionError(null);
     try {
       const updated = await coachSessions.cancelSession(session.id, cancelReason.trim());
-      setSession(updated);
+      setSession((prev) => keepNames(prev, updated));
       setCancelOpen(false);
     } catch (err) {
       setActionError((err as ApiError).message);
@@ -251,7 +272,7 @@ export default function CoachSessionDetailScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       <AppBar variant="backTitle" title="Session" onPressBack={() => router.back()} />
 
-      <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: navInset + spacing.xl }}>
+      <ScrollView automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: navInset + spacing.xl }}>
         <View
           style={{
             borderRadius: radii.xl,

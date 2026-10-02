@@ -827,7 +827,7 @@ function dayOfWeekOf(dateISO: string): number {
 /** Now as IST calendar date and minutes past midnight, the clock
  * `book-session` judges "in the past" by (`istToday` / `istMinutes`). IST has
  * no daylight saving, so a fixed +5:30 offset is exact. */
-function istNow(nowMs: number): { date: string; minutes: number } {
+export function istNow(nowMs: number): { date: string; minutes: number } {
   const ist = new Date(nowMs + 5.5 * 60 * 60 * 1000);
   return { date: ist.toISOString().slice(0, 10), minutes: ist.getUTCHours() * 60 + ist.getUTCMinutes() };
 }

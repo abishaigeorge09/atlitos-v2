@@ -2,7 +2,7 @@ import { computeAvailableSessionSlots, useChat, useCoaching, type RefundSummary 
 import { canTransition, SESSION_TRANSITIONS } from '@atlitos/types';
 import type { ApiError, Session } from '@atlitos/types';
 import { radii, spacing } from '@atlitos/theme';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useSegments } from 'expo-router';
 import { CalendarClock, MessageCircle, TriangleAlert, XCircle } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, ScrollView, View } from 'react-native';
@@ -64,6 +64,10 @@ function addDaysISO(iso: string, days: number): string {
  * made, with no automatic refund in v1.
  */
 export default function SessionDetailScreen() {
+  // Rendered on the coaching stack and, re-exported, on the trainings stack.
+  // Follow-on screens open on whichever stack this one is on, so Back keeps
+  // returning to the tab the athlete started from.
+  const inTrainings = (useSegments() as string[]).includes('trainings');
   const colors = useThemeColors();
   const navInset = useNavBarInset();
   const coaching = useCoaching(supabase);
@@ -131,18 +135,32 @@ export default function SessionDetailScreen() {
     // engine uses"), so this re-fetches the coach's availability windows
     // and the specific session type's duration rather than assuming a
     // fixed hour, then narrows by the same get_coach_busy_slots preview.
+    // The duration comes from the booked slot itself: getCoach lists active
+    // types only, so a type the coach later hid used to leave every date
+    // empty. `cancelled` drops a response for a date the athlete has since
+    // moved off, so a slow reply cannot overwrite the current date's slots.
+    let cancelled = false;
+    const [fromH = 0, fromM = 0] = session.slot.from.split(':').map(Number);
+    const [toH = 0, toM = 0] = session.slot.to.split(':').map(Number);
+    const durationMinutes = toH * 60 + toM - (fromH * 60 + fromM);
     (async () => {
       const coach = await coaching.getCoach(session.coachId);
-      const type = coach?.sessionTypes.find((t) => t.id === session.sessionTypeId);
-      if (!coach || !type) {
-        setReschedSlots([]);
+      if (!coach || durationMinutes <= 0) {
+        if (!cancelled) setReschedSlots([]);
         return;
       }
       const busy = await coaching.getCoachBusySlots(session.coachId, reschedDate, addDaysISO(reschedDate, 14));
-      setReschedSlots(computeAvailableSessionSlots(coach.availability, type.durationMinutes, reschedDate, busy));
+      if (!cancelled) setReschedSlots(computeAvailableSessionSlots(coach.availability, durationMinutes, reschedDate, busy));
     })()
-      .catch(() => setReschedSlots([]))
-      .finally(() => setReschedSlotsLoading(false));
+      .catch(() => {
+        if (!cancelled) setReschedSlots([]);
+      })
+      .finally(() => {
+        if (!cancelled) setReschedSlotsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [reschedOpen, reschedDate, session?.coachId, session?.sessionTypeId]);
 
   // An appointment (booked while in-app coach payments were off) has no
@@ -231,7 +249,8 @@ export default function SessionDetailScreen() {
     setOpeningThread(true);
     try {
       const threadId = await chat.openCoachingThread(session.coachId, session.id);
-      router.push({ pathname: '/(tabs)/coaching/chat-thread/[id]', params: { id: threadId } });
+      if (inTrainings) router.push({ pathname: '/(tabs)/trainings/chat-thread/[id]', params: { id: threadId } });
+      else router.push({ pathname: '/(tabs)/coaching/chat-thread/[id]', params: { id: threadId } });
     } catch (err) {
       Alert.alert('Could not open chat', (err as ApiError).message ?? 'Please try again.');
     } finally {
@@ -251,7 +270,8 @@ export default function SessionDetailScreen() {
         newSlotStart: reschedSelected.from,
       });
       setReschedOpen(false);
-      router.replace({ pathname: '/(tabs)/coaching/booking/[id]', params: { id: updated.id } });
+      if (inTrainings) router.replace({ pathname: '/(tabs)/trainings/booking/[id]', params: { id: updated.id } });
+      else router.replace({ pathname: '/(tabs)/coaching/booking/[id]', params: { id: updated.id } });
     } catch (err) {
       setActionError((err as ApiError).message);
     } finally {
@@ -312,7 +332,7 @@ export default function SessionDetailScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       <AppBar variant="backTitle" title="Session" onPressBack={() => router.back()} />
 
-      <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: navInset + spacing.xl }}>
+      <ScrollView automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: navInset + spacing.xl }}>
         <View
           style={{
             borderRadius: radii.xl,

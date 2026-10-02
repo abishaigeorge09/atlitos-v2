@@ -148,7 +148,7 @@ export default function CoachAvailabilityScreen() {
           </Button>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: navInset + spacing.xl }}>
+        <ScrollView automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: navInset + spacing.xl }}>
           <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
             Athletes can only book within these windows. Changes apply to future bookings only.
           </Text>

@@ -16,6 +16,7 @@ import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session-store';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
+import { COACH_IN_APP_PAYMENT_ENABLED } from '@/lib/feature-flags';
 
 type ScreenState = 'loading' | 'populated' | 'error';
 
@@ -181,13 +182,15 @@ function CoachAnalyticsScreen() {
                 max={maxHours}
                 color={colors.info}
               />
-              <BarRow
-                label="Earnings"
-                value={month.earnings}
-                displayValue={formatINR(month.earnings)}
-                max={maxEarnings}
-                color={colors.success}
-              />
+              {COACH_IN_APP_PAYMENT_ENABLED ? (
+                <BarRow
+                  label="Earnings"
+                  value={month.earnings}
+                  displayValue={formatINR(month.earnings)}
+                  max={maxEarnings}
+                  color={colors.success}
+                />
+              ) : null}
               {month.avgRating != null ? (
                 <BarRow
                   label="Avg rating"
@@ -308,7 +311,7 @@ function PlayerAnalyticsScreen() {
             title="Not enough sessions yet"
             body={`Complete at least ${PLAYER_INSUFFICIENT_THRESHOLD} sessions to see your trends here.`}
             ctaLabel="Find a coach"
-            onCtaPress={() => router.push('/(tabs)/coaching')}
+            onCtaPress={() => router.push('/trainings/coaches')}
           />
         </View>
       ) : (

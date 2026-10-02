@@ -124,9 +124,13 @@ async function refreshTokenIfRolesChanged(roles: string[], session: Session | nu
   }
   const missing = roles.filter((role) => !tokenRoles.includes(role));
   if (missing.length === 0) return;
-  // Once per token: if the hook still does not stamp the role, do not loop.
-  if (lastRoleRefreshFor === session.access_token) return;
-  lastRoleRefreshFor = session.access_token;
+  // Once per user and missing role set, never per token: a refresh mints a new
+  // token every time, so a token keyed guard would loop forever (and trip the
+  // auth refresh rate limit, which signs the user out) on any project whose
+  // access token hook does not stamp roles.
+  const key = `${session.user.id}:${[...missing].sort().join(',')}`;
+  if (lastRoleRefreshFor === key) return;
+  lastRoleRefreshFor = key;
   await supabase.auth.refreshSession().catch(() => {
     // The scheduled hourly refresh still picks the role up; not fatal.
   });
@@ -156,7 +160,11 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     // the current session.
     const token = ++meRefreshToken;
     const startedForUserId = get().session?.user.id ?? null;
-    set({ meLoading: true, meError: null });
+    // A background refresh for the same user keeps `me` on screen: flipping
+    // meLoading made every screen that gates on it (the Trainings shell)
+    // reload and flash its skeleton on each hourly token refresh.
+    const sameUser = get().me?.id != null && get().me?.id === startedForUserId;
+    set(sameUser ? { meError: null } : { meLoading: true, meError: null });
     try {
       const me = await profile.getMe();
       if (token !== meRefreshToken) return; // a newer refresh superseded this one

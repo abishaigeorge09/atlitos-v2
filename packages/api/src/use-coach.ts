@@ -11,6 +11,7 @@ import type {
 
 import type { AtlitosClient } from "./client";
 import { mapEdgeFunctionError, mapPostgrestError } from "./errors";
+import { istNow } from "./use-coaching";
 
 /**
  * Coach-only hooks (Track C, AT-45 through AT-51). Deliberately a separate
@@ -272,6 +273,9 @@ export function useCoachSessions(client: AtlitosClient) {
         .select(SESSION_SELECT)
         .eq("coach_id", userId)
         .eq("status", "requested")
+        // An appointment request has no payment intent, so the unpaid sweep
+        // never expires it. One whose day has passed can no longer happen.
+        .gte("date", istNow(Date.now()).date)
         .order("date", { ascending: true })
         .order("slot_start", { ascending: true })
         .limit(COACH_SESSION_PAGE_SIZE)
@@ -299,7 +303,8 @@ export function useCoachSessions(client: AtlitosClient) {
         .select(SESSION_SELECT)
         .eq("coach_id", userId)
         .not("player_id", "is", null)
-        .in("status", ["accepted", "in_progress", "rescheduled"])
+        // "rescheduled" is the old row of a moved session (0077), not a live one.
+        .in("status", ["accepted", "in_progress"])
         .order("date", { ascending: true })
         .order("slot_start", { ascending: true })
         .limit(COACH_SESSION_PAGE_SIZE)
@@ -518,6 +523,12 @@ export function useCoachSessions(client: AtlitosClient) {
         ((busyRows ?? []) as { date: string; slot_start: string }[]).map((row) => row.slot_start.slice(0, 5)),
       );
 
+      // Same clock book-session uses: a past date offers nothing, and today
+      // offers only starts still ahead in IST.
+      const now = istNow(Date.now());
+      if (date < now.date) return [];
+      const earliestStart = date === now.date ? now.minutes + 1 : 0;
+
       const slots: { from: string; to: string }[] = [];
       for (const window of (windowRows ?? []) as { start_time: string; end_time: string }[]) {
         // Defaults satisfy noUncheckedIndexedAccess; a malformed time string
@@ -531,7 +542,7 @@ export function useCoachSessions(client: AtlitosClient) {
           const from = `${String(Math.floor(cursor / 60)).padStart(2, "0")}:${String(cursor % 60).padStart(2, "0")}`;
           const toMinutes = cursor + durationMinutes;
           const to = `${String(Math.floor(toMinutes / 60)).padStart(2, "0")}:${String(toMinutes % 60).padStart(2, "0")}`;
-          if (!busyStarts.has(from)) slots.push({ from, to });
+          if (cursor >= earliestStart && !busyStarts.has(from)) slots.push({ from, to });
           cursor += durationMinutes;
         }
       }
@@ -634,8 +645,7 @@ export function useCoachTrainees(client: AtlitosClient) {
         // Same list as listUpcoming, `in_progress` included: a trainee whose
         // session is running right now is the most active trainee there is,
         // and must not read as "No upcoming" on the Trainees tab.
-        const hasUpcoming =
-          row.status === "accepted" || row.status === "in_progress" || row.status === "rescheduled";
+        const hasUpcoming = row.status === "accepted" || row.status === "in_progress";
         const online = isOnlineSessionTypeName(row.session_types?.name);
         if (!existing) {
           byPlayer.set(row.player_id, {

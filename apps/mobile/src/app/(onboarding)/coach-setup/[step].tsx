@@ -37,25 +37,40 @@ const SPORT_LABEL: Record<Sport, string> = {
   tennis: 'Tennis',
 };
 
+const MIN_SESSION_PRICE = 10;
 const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 /** Track D defect 9: the wizard validates rows where they are edited, not by
  * silently filtering them out at submit. A row that would be dropped shows
  * why, inline, and blocks Next. */
 function sessionTypeIssue(sessionType: SessionTypeDraft): string | null {
-  if (!sessionType.name.trim() || !(Number(sessionType.price) > 0)) {
-    return 'Give this session a name and a price above zero.';
+  // book-session refuses a price at or under the flat platform fee (10.00,
+  // 0010), so a cheaper type could never be booked.
+  if (!sessionType.name.trim() || !(Number(sessionType.price) > MIN_SESSION_PRICE)) {
+    return 'Give this session a name and a price above 10 rupees.';
   }
   return null;
 }
 
-function availabilityIssue(window: AvailabilityWindowDraft): string | null {
+function availabilityIssue(
+  window: AvailabilityWindowDraft,
+  index: number,
+  all: AvailabilityWindowDraft[],
+): string | null {
   if (!HHMM_RE.test(window.from) || !HHMM_RE.test(window.to)) {
     return 'Use 24 hour times like 06:30 for From and To.';
   }
   if (window.from >= window.to) {
     return 'From must be earlier than To.';
   }
+  // The live table refuses overlapping windows on a day (exclusion
+  // constraint), and approval copies these rows in, so an overlap here made
+  // the coach impossible to approve. Flag the later row of the pair.
+  const clash = all.some(
+    (other, i) =>
+      i < index && other.dayOfWeek === window.dayOfWeek && window.from < other.to && other.from < window.to,
+  );
+  if (clash) return 'This overlaps another window on the same day.';
   return null;
 }
 
@@ -99,7 +114,7 @@ export default function CoachSetupStepScreen() {
           ? draft.sessionTypes.length > 0 && draft.sessionTypes.every((s) => sessionTypeIssue(s) === null)
           : stepIndex === 5
             ? draft.availabilityWindows.length > 0 &&
-              draft.availabilityWindows.every((w) => availabilityIssue(w) === null)
+              draft.availabilityWindows.every((w, i, all) => availabilityIssue(w, i, all) === null)
             : stepIndex === 6
               ? draft.city.trim().length > 0
               : true;
@@ -193,9 +208,13 @@ export default function CoachSetupStepScreen() {
   }
 
   function addAvailabilityWindow() {
+    // Start each new row on the day after the last one, so tapping Add twice
+    // never creates two identical Monday windows.
+    const last = draft.availabilityWindows[draft.availabilityWindows.length - 1];
+    const dayOfWeek = last ? (last.dayOfWeek + 1) % 7 : 1;
     const next: AvailabilityWindowDraft[] = [
       ...draft.availabilityWindows,
-      { dayOfWeek: 1, from: '06:00', to: '08:00' },
+      { dayOfWeek, from: '06:00', to: '08:00' },
     ];
     setDraft({ availabilityWindows: next });
   }
@@ -229,7 +248,7 @@ export default function CoachSetupStepScreen() {
     }
     if (
       draft.availabilityWindows.length === 0 ||
-      draft.availabilityWindows.some((w) => availabilityIssue(w) !== null)
+      draft.availabilityWindows.some((w, i, all) => availabilityIssue(w, i, all) !== null)
     ) {
       setError('Check your availability times before you submit.');
       return;
@@ -490,7 +509,7 @@ export default function CoachSetupStepScreen() {
             <View style={{ gap: spacing.md }}>
               <Text style={[textStyle('h2'), { color: colors.text }]}>Weekly availability.</Text>
               {draft.availabilityWindows.map((window, index) => {
-                const issue = availabilityIssue(window);
+                const issue = availabilityIssue(window, index, draft.availabilityWindows);
                 return (
                 <View
                   key={index}

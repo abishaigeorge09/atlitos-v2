@@ -11,6 +11,7 @@ import { DrillCard } from '@/components/ui/drill-card';
 import { EmptyState } from '@/components/organisms/EmptyState';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatTile } from '@/components/ui/stat-tile';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Text } from '@/components/ui/text';
 import { stageProgress } from '@/lib/learn-display';
 import { SPORT_LABEL } from '@/lib/sport-display';
@@ -35,6 +36,8 @@ const DRILL_PREVIEW_COUNT = 4;
  * parent (flex 1) so the caller's wrapper controls the surrounding chrome.
  */
 export function LearnHomeContent() {
+  // Rendered inside the Trainings shell, under the floating tab bar.
+  const navInset = useNavBarInset();
   const colors = useThemeColors();
   const learn = useLearn(supabase);
 
@@ -132,7 +135,7 @@ export function LearnHomeContent() {
   const previewDrills = drills.slice(0, DRILL_PREVIEW_COUNT);
 
   return (
-    <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing['3xl'] }}>
+    <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: navInset + spacing.xl }}>
       {/* XP total and earned milestones, both server derived. */}
       <View style={{ flexDirection: 'row', gap: spacing.md }}>
         <StatTile label="Total XP" value={home.xpTotal} icon={Zap} />

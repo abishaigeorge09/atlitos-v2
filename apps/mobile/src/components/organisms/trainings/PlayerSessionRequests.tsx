@@ -47,7 +47,7 @@ export function PlayerSessionRequests({ sessions }: PlayerSessionRequestsProps) 
               focusArea={session.focusArea || 'No focus area noted'}
               location={session.location || 'Location to be confirmed'}
               onPress={() =>
-                router.push({ pathname: '/(tabs)/coaching/booking/[id]', params: { id: session.id } })
+                router.push({ pathname: '/(tabs)/trainings/booking/[id]', params: { id: session.id } })
               }
             />
             <Text style={[textStyle('caption'), { color: colors.textTertiary }]}>

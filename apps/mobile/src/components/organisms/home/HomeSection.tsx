@@ -26,7 +26,8 @@ export function HomeSection({
   subtitle?: string;
   /** Accessibility label for the See all link, e.g. "See all courts". */
   seeAllLabel: string;
-  onSeeAll: () => void;
+  /** Omit to hide See all (a rail whose full list this user cannot use). */
+  onSeeAll?: () => void;
   children: ReactNode;
 }) {
   const colors = useThemeColors();
@@ -41,18 +42,20 @@ export function HomeSection({
             </Text>
           ) : null}
         </View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={seeAllLabel}
-          onPress={onSeeAll}
-          hitSlop={12}
-          className="flex-row items-center gap-xs"
-        >
-          <Text className="font-sans-semibold text-sm" style={{ color: colors.accent }}>
-            See all
-          </Text>
-          <ChevronRight size={16} color={colors.accent} strokeWidth={1.75} />
-        </Pressable>
+        {onSeeAll ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={seeAllLabel}
+            onPress={onSeeAll}
+            hitSlop={12}
+            className="flex-row items-center gap-xs"
+          >
+            <Text className="font-sans-semibold text-sm" style={{ color: colors.accent }}>
+              See all
+            </Text>
+            <ChevronRight size={16} color={colors.accent} strokeWidth={1.75} />
+          </Pressable>
+        ) : null}
       </View>
       <ScrollView
         horizontal

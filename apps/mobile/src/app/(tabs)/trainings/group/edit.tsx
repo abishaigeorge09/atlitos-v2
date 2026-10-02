@@ -264,7 +264,7 @@ export default function GroupEditScreen() {
         onPressBack={() => router.back()}
       />
 
-      <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: navInset + spacing['4xl'] }}>
+      <ScrollView automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: navInset + spacing['4xl'] }}>
         <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
           A group trains together on a monthly fee. Athletes join from your coach profile.
         </Text>
