@@ -101,6 +101,37 @@ interface SessionState {
   meGaveUp: boolean;
 }
 
+/**
+ * Row level security reads roles from the access token
+ * (`has_role` -> `auth.jwt() -> app_metadata -> roles`, stamped by
+ * `custom_access_token_hook` when the token is minted). A role granted after
+ * sign in (submitting the coach setup grants `coach`) is therefore invisible to
+ * the server until the token next refreshes, up to an hour later, and every
+ * coach write in between fails RLS (device pass 2026-10-03: availability and
+ * session type saves refused right after approval). When the profile shows a
+ * role the token lacks, refresh the token once, straight away.
+ */
+let lastRoleRefreshFor: string | null = null;
+async function refreshTokenIfRolesChanged(roles: string[], session: Session | null): Promise<void> {
+  if (!session?.access_token || roles.length === 0) return;
+  let tokenRoles: string[] = [];
+  try {
+    const part = session.access_token.split('.')[1] ?? '';
+    const json = JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(part.length / 4) * 4, '=')));
+    tokenRoles = Array.isArray(json?.app_metadata?.roles) ? json.app_metadata.roles : [];
+  } catch {
+    return;
+  }
+  const missing = roles.filter((role) => !tokenRoles.includes(role));
+  if (missing.length === 0) return;
+  // Once per token: if the hook still does not stamp the role, do not loop.
+  if (lastRoleRefreshFor === session.access_token) return;
+  lastRoleRefreshFor = session.access_token;
+  await supabase.auth.refreshSession().catch(() => {
+    // The scheduled hourly refresh still picks the role up; not fatal.
+  });
+}
+
 export const useSessionStore = create<SessionState>((set, get) => ({
   status: "loading",
   session: null,
@@ -134,6 +165,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       if (me && me.id !== currentUserId) return; // fetched row is not this session's user
       set({ me, meLoading: false, meGaveUp: false });
       resetProfileRetry();
+      void refreshTokenIfRolesChanged(me?.roles ?? [], get().session);
     } catch (error) {
       if (token !== meRefreshToken) return;
       const currentUserId = get().session?.user.id ?? null;

@@ -231,7 +231,7 @@ export default function SessionDetailScreen() {
     setOpeningThread(true);
     try {
       const threadId = await chat.openCoachingThread(session.coachId, session.id);
-      router.push({ pathname: '/(tabs)/chat/[id]', params: { id: threadId } });
+      router.push({ pathname: '/(tabs)/coaching/chat-thread/[id]', params: { id: threadId } });
     } catch (err) {
       Alert.alert('Could not open chat', (err as ApiError).message ?? 'Please try again.');
     } finally {
