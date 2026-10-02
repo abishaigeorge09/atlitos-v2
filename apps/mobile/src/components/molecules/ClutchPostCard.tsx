@@ -5,6 +5,7 @@ import { Bookmark, BookmarkCheck, EllipsisVertical, Film, Heart, MessageCircle, 
 import { useState } from 'react';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 
+import { ClipScrim } from '@/components/molecules/ClipScrim';
 import { ClipVideo } from '@/components/molecules/clip-video';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
@@ -230,10 +231,11 @@ export function ClutchPostCard({
         </View>
       ) : null}
 
-      {/* 2. Bottom scrim for caption legibility, never a touch target. */}
-      <View
-        style={[StyleSheet.absoluteFill, { pointerEvents: 'none', top: '55%', backgroundColor: colors.overlay }]}
-      />
+      {/* 2. Scrims for header and caption legibility, never touch targets.
+          Gradients, not flat blocks: a hard edged block made the clip read as
+          a box inside the page (2026-10-01). */}
+      <ClipScrim edge="top" id={clip.id} />
+      <ClipScrim edge="bottom" id={clip.id} />
 
       {/* 3. Whole-card open tap: a sibling overlay BEHIND the controls, never a
           wrapper around them. */}

@@ -29,9 +29,9 @@ import {
   View,
   type ViewToken,
 } from 'react-native';
-import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ClipScrim } from '@/components/molecules/ClipScrim';
 import { ClipVideo } from '@/components/molecules/clip-video';
 import { ClipActionsSheet } from '@/components/organisms/clutch/ClipActionsSheet';
 import { ClutchCommentsSheet } from '@/components/organisms/clutch/ClutchCommentsSheet';
@@ -878,8 +878,8 @@ function ClipPage({
       {/* Scrims for header and caption legibility. Gradients that fade into
           the video (2026-10-01): the flat overlay blocks they replace had hard
           edges, so the clear middle read as a separate box inside the page. */}
-      <ClipScrim edge="top" clipId={clip.id} />
-      <ClipScrim edge="bottom" clipId={clip.id} />
+      <ClipScrim edge="top" id={clip.id} />
+      <ClipScrim edge="bottom" id={clip.id} />
 
       {/* M-1: playback could not be minted. The poster stays behind this; a
           clip still uploading or processing (an owner's own pending clip,
@@ -1089,29 +1089,3 @@ function ClipPage({
   );
 }
 
-/**
- * A soft vertical scrim over the clip: darkest at the screen edge, fading to
- * clear. Top covers 26 percent (header), bottom 42 percent (caption and
- * actions). Uses `mediaBackdrop`, the same near black the promo banner scrim
- * uses, so it reads the same in both themes.
- */
-function ClipScrim({ edge, clipId }: { edge: 'top' | 'bottom'; clipId: string }) {
-  const id = `clip-scrim-${edge}-${clipId}`;
-  const top = edge === 'top';
-  return (
-    <Svg
-      pointerEvents="none"
-      width="100%"
-      height={top ? '26%' : '42%'}
-      style={{ position: 'absolute', left: 0, right: 0, [top ? 'top' : 'bottom']: 0 }}
-    >
-      <Defs>
-        <SvgLinearGradient id={id} x1="0" y1={top ? '0' : '1'} x2="0" y2={top ? '1' : '0'}>
-          <Stop offset="0" stopColor={mediaBackdrop} stopOpacity={top ? 0.55 : 0.7} />
-          <Stop offset="1" stopColor={mediaBackdrop} stopOpacity={0} />
-        </SvgLinearGradient>
-      </Defs>
-      <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${id})`} />
-    </Svg>
-  );
-}
