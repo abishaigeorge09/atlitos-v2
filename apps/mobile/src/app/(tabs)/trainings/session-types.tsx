@@ -218,7 +218,7 @@ export default function CoachSessionTypesScreen() {
           </Button>
         </View>
       ) : (
-        <ScrollView automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: navInset + spacing['4xl'] }}>
+        <ScrollView automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: navInset + spacing['4xl'] }}>
           <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
             Athletes book one of these. You need at least one active type before anyone can send you a request.
           </Text>
