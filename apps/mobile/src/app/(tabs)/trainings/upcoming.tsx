@@ -15,6 +15,7 @@ import { SessionCard } from '@/components/ui/session-card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
 import { supabase } from '@/lib/supabase';
+import { formatTimeRange } from '@/lib/time-display';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
 
@@ -200,7 +201,7 @@ export default function CoachUpcomingSessionsScreen() {
               <SessionCard
                 variant="upcoming"
                 date={item.date}
-                timeSlot={`${item.from} to ${item.to}`}
+                timeSlot={formatTimeRange(item.from, item.to)}
                 personName={item.personName}
                 sessionType={item.sessionType}
                 focusArea={item.focusArea}
