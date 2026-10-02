@@ -1,6 +1,6 @@
 import { useCoaching, type CoachListItem } from '@atlitos/api';
-import { router } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 
 import { HomeSection, HomeSectionSkeleton } from '@/components/organisms/home/HomeSection';
@@ -25,15 +25,18 @@ export function HomeCoachesRail({ reloadKey, onLoaded }: { reloadKey: number; on
   const [state, setState] = useState<'loading' | 'ready'>('loading');
   const [coaches, setCoaches] = useState<CoachListItem[]>([]);
 
-  const load = useCallback(async () => {
-    setState('loading');
+  const load = useCallback(async (options?: { silent?: boolean }) => {
+    if (!options?.silent) setState('loading');
     try {
       const page = await coaching.listCoaches({ city });
       setCoaches(page.items.slice(0, MAX_COACHES));
-      onLoaded?.(true);
+      if (!options?.silent) onLoaded?.(true);
     } catch {
-      setCoaches([]);
-      onLoaded?.(false);
+      // A failed background refresh keeps what is already on screen.
+      if (!options?.silent) {
+        setCoaches([]);
+        onLoaded?.(false);
+      }
     } finally {
       setState('ready');
     }
@@ -43,6 +46,20 @@ export function HomeCoachesRail({ reloadKey, onLoaded }: { reloadKey: number; on
   useEffect(() => {
     void load();
   }, [load, reloadKey]);
+
+  // Prices and coaches change elsewhere (a coach edits a session type in
+  // Trainings), so returning to Home refreshes quietly. The first focus is
+  // the mount, which the effect above already loads.
+  const focusedOnce = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (!focusedOnce.current) {
+        focusedOnce.current = true;
+        return;
+      }
+      void load({ silent: true });
+    }, [load]),
+  );
 
   if (state === 'loading') return <HomeSectionSkeleton cardWidth={CARD_WIDTH} cardHeight={250} />;
   if (coaches.length === 0) return null;

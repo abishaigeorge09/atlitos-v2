@@ -134,7 +134,10 @@ export default function HomeScreen() {
 
   // Track D defect 2: after "Explore the app first", Home nudges (never
   // forces) finishing onboarding while the profile still has no city.
-  const showFinishSetup = status === 'signed_in' && me != null && !me.city && !setupCardDismissed;
+  // A coach already finished a longer setup (their city lives on the coach
+  // profile), so the role and city nudge would read as a false alarm.
+  const showFinishSetup =
+    status === 'signed_in' && me != null && !me.city && !me.roles.includes('coach') && !setupCardDismissed;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>

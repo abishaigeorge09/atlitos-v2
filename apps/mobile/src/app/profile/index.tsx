@@ -3,13 +3,14 @@ import { COVER_IMAGE_SIZE } from '@/lib/image-sizes';
 import { inkOnMedia, mediaBackdrop, spacing } from '@atlitos/theme';
 import type { ApiError, Clip, ClipStatus } from '@atlitos/types';
 import { router } from 'expo-router';
-import { Bookmark, Heart, LayoutGrid, LogIn, RotateCcw, Settings, TriangleAlert } from 'lucide-react-native';
+import { Bookmark, Heart, LayoutGrid, LogIn, RotateCcw, Settings, Trash2, TriangleAlert } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Image, Pressable, RefreshControl, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
 import { ClutchPostCard } from '@/components/molecules/ClutchPostCard';
+import { ConfirmSheet } from '@/components/organisms/ConfirmSheet';
 import { EmptyState } from '@/components/organisms/EmptyState';
 import { AppBar } from '@/components/ui/app-bar';
 import { useClipPosters } from '@/hooks/use-clip-posters';
@@ -104,6 +105,9 @@ export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {
   // tile's retry never disables the whole grid.
   const [retryingId, setRetryingId] = useState<string | null>(null);
   const [retryErrors, setRetryErrors] = useState<Record<string, string>>({});
+  const [removeTarget, setRemoveTarget] = useState<Clip | null>(null);
+  const [removing, setRemoving] = useState(false);
+  const [removeError, setRemoveError] = useState<string | null>(null);
 
   const load = useCallback(
     async (silent: boolean) => {
@@ -209,6 +213,24 @@ export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {
     },
     [clutch, retryingId],
   );
+
+  /** A failed upload whose file is gone can only be retried with a new file,
+   * so the owner can also withdraw it. delete_my_clip (0100) is owner gated
+   * and moves the row to `removed`; the client never writes clips.status. */
+  const confirmRemove = useCallback(async () => {
+    if (!removeTarget) return;
+    setRemoving(true);
+    setRemoveError(null);
+    try {
+      await clutch.deleteMyClip(removeTarget.id);
+      setClips((prev) => prev.filter((c) => c.id !== removeTarget.id));
+      setRemoveTarget(null);
+    } catch (err) {
+      setRemoveError(toApiError(err).message);
+    } finally {
+      setRemoving(false);
+    }
+  }, [clutch, removeTarget]);
 
   // A signed in user whose own profile row failed to load (getMe threw, the
   // store's background retry may have given up) is NOT a guest: show the
@@ -516,11 +538,37 @@ export default function ProfileScreen({ asTab = false }: { asTab?: boolean } = {
                       {isRetrying ? 'Retrying' : 'Retry'}
                     </Text>
                   </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Remove failed upload"
+                    disabled={isRetrying}
+                    onPress={() => {
+                      setRemoveError(null);
+                      setRemoveTarget(item);
+                    }}
+                    className="flex-row items-center gap-xs rounded-pill px-sm py-xs"
+                  >
+                    <Trash2 size={12} strokeWidth={1.75} color={inkOnMedia} />
+                    <Text style={[textStyle('caption'), { color: inkOnMedia }]}>Remove</Text>
+                  </Pressable>
                 </View>
               ) : null}
             </View>
           );
         }}
+      />
+      <ConfirmSheet
+        visible={removeTarget !== null}
+        icon={Trash2}
+        title="Remove this upload?"
+        body="It never went live. Removing it clears it from your profile."
+        confirmLabel="Remove"
+        cancelLabel="Keep"
+        destructive
+        loading={removing}
+        errorMessage={removeError}
+        onConfirm={() => void confirmRemove()}
+        onCancel={() => setRemoveTarget(null)}
       />
     </SafeAreaView>
   );
