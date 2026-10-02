@@ -308,8 +308,11 @@ export function useCoaching(client: AtlitosClient) {
         const profileById = new Map((profileRows ?? []).map((row) => [row.id, row]));
         const minPriceByCoach = new Map<string, number>();
         for (const type of typeRows ?? []) {
+          // numeric arrives as a string ("600.00"); compare as numbers, not text.
+          const price = Number(type.price);
+          if (!Number.isFinite(price)) continue;
           const current = minPriceByCoach.get(type.coach_id);
-          if (current === undefined || type.price < current) minPriceByCoach.set(type.coach_id, type.price);
+          if (current === undefined || price < current) minPriceByCoach.set(type.coach_id, price);
         }
 
         const items = pageRows

@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ConfirmSheet } from '@/components/organisms/ConfirmSheet';
 import { TextField } from '@/components/organisms/_shared';
 import { AppBar } from '@/components/ui/app-bar';
 import { useNavBarInset } from '@/components/ui/bottom-nav';
@@ -55,6 +56,7 @@ export default function CoachAvailabilityScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<{ id: string; message: string } | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setState('loading');
@@ -200,7 +202,7 @@ export default function CoachAvailabilityScreen() {
                           variant="text"
                           size="sm"
                           loading={deletingId === window.id}
-                          onPress={() => void handleDelete(window.id)}
+                          onPress={() => setPendingDeleteId(window.id)}
                         >
                           <Trash2 size={16} strokeWidth={1.75} color={colors.danger} />
                         </Button>
@@ -243,6 +245,21 @@ export default function CoachAvailabilityScreen() {
           })}
         </ScrollView>
       )}
+      <ConfirmSheet
+        visible={pendingDeleteId !== null}
+        icon={Trash2}
+        title="Remove this window?"
+        body="Athletes will no longer see these slots."
+        confirmLabel="Remove"
+        cancelLabel="Keep"
+        destructive
+        onConfirm={() => {
+          const id = pendingDeleteId;
+          setPendingDeleteId(null);
+          if (id) void handleDelete(id);
+        }}
+        onCancel={() => setPendingDeleteId(null)}
+      />
     </SafeAreaView>
   );
 }

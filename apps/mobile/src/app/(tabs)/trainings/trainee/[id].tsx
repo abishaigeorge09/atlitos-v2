@@ -33,7 +33,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { StatTile } from '@/components/ui/stat-tile';
 import { StatusPill, type Status as StatusPillStatus } from '@/components/ui/status-pill';
 import { Text } from '@/components/ui/text';
-import { COACH_TRAINEE_VIDEO_REVIEW_ENABLED } from '@/lib/feature-flags';
+import { COACH_IN_APP_PAYMENT_ENABLED, COACH_TRAINEE_VIDEO_REVIEW_ENABLED } from '@/lib/feature-flags';
 import { SESSION_STATUS_PILL } from '@/lib/session-display';
 import { supabase } from '@/lib/supabase';
 import { textStyle } from '@/theme/text-style';
@@ -52,7 +52,8 @@ type SessionsFilter = 'upcoming' | 'all';
 const TABS: Array<{ key: ProfileTab; label: string }> = [
   { key: 'overview', label: 'Overview' },
   { key: 'sessions', label: 'Sessions' },
-  { key: 'payments', label: 'Payments' },
+  // Appointment mode: athletes pay the coach directly, nothing to list.
+  ...(COACH_IN_APP_PAYMENT_ENABLED ? [{ key: 'payments' as ProfileTab, label: 'Payments' }] : []),
   { key: 'notes', label: 'Notes' },
   ...(COACH_TRAINEE_VIDEO_REVIEW_ENABLED
     ? [{ key: 'video' as ProfileTab, label: 'Videos' }]

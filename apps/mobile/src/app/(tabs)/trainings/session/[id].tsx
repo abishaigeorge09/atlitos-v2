@@ -1,9 +1,9 @@
-import { useCoaching, useCoachSessions } from '@atlitos/api';
+import { useChat, useCoaching, useCoachSessions } from '@atlitos/api';
 import { canTransition, SESSION_TRANSITIONS } from '@atlitos/types';
 import type { ApiError, Session } from '@atlitos/types';
 import { radii, spacing } from '@atlitos/theme';
 import { router, useLocalSearchParams } from 'expo-router';
-import { CalendarClock, CheckCircle2, Play, TriangleAlert, XCircle } from 'lucide-react-native';
+import { CalendarClock, CheckCircle2, MessageCircle, Play, TriangleAlert, XCircle } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -173,6 +173,24 @@ export default function CoachSessionDetailScreen() {
     }
   }
 
+  const chat = useChat(supabase);
+  const [openingThread, setOpeningThread] = useState(false);
+
+  // Same coaching thread the athlete opens from their booking, keyed by this
+  // session, pushed on the trainings stack so Back returns here.
+  async function handleMessageAthlete() {
+    if (!session) return;
+    setOpeningThread(true);
+    try {
+      const threadId = await chat.openCoachingThread(session.playerId, session.id);
+      router.push({ pathname: '/(tabs)/trainings/chat-thread/[id]', params: { id: threadId } });
+    } catch (err) {
+      setActionError((err as ApiError).message ?? 'Could not open chat. Please try again.');
+    } finally {
+      setOpeningThread(false);
+    }
+  }
+
   async function handleConfirmReschedule() {
     if (!session || !reschedSelected) return;
     setReschedSubmitting(true);
@@ -291,6 +309,11 @@ export default function CoachSessionDetailScreen() {
         </View>
 
         {actionError ? <Text style={[textStyle('caption'), { color: colors.danger }]}>{actionError}</Text> : null}
+
+        <Button variant="secondary" loading={openingThread} onPress={() => void handleMessageAthlete()}>
+          <MessageCircle size={16} strokeWidth={1.75} color={colors.text} />
+          <Text style={{ color: colors.text }}>Message athlete</Text>
+        </Button>
 
         {canStart || canComplete || canCancel || canReschedule ? (
           <View style={{ gap: spacing.sm }}>

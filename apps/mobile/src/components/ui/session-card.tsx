@@ -79,7 +79,10 @@ function SessionCard({
         collide with its icon at 393pt. A long person name pushed the element on the
         right off screen instead of ellipsizing. Swept 2026-08-22. */}
         <Text numberOfLines={1} className="flex-1 font-sans-semibold text-lg text-text">{personName}</Text>
-        <Text className="font-mono text-sm text-text-secondary">{sessionType}</Text>
+        {/* The type name is coach entered and unbounded too; with a fixed width
+            it squeezed the athlete's name to a few letters. Both halves share
+            the row and truncate. */}
+        <Text numberOfLines={1} className="flex-1 text-right font-mono text-sm text-text-secondary">{sessionType}</Text>
       </View>
 
       <View style={{ pointerEvents: 'none' }} className="gap-xs">

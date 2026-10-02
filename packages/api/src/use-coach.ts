@@ -1140,7 +1140,10 @@ export function useCoachEarnings(client: AtlitosClient) {
         occurred_at: string;
       }[];
 
-      return rows.map((row) => ({
+      // get_my_transactions spans every role, so a coach who also plays sees
+      // their own court, shop and session spend. The coach ledger is money in
+      // and payouts only; charges belong to the player's own history.
+      return rows.filter((row) => row.kind !== "charge").map((row) => ({
         id: row.id,
         userId,
         kind: row.kind === "payout" ? "payout" : TRANSACTION_KIND_MAP[row.domain],
