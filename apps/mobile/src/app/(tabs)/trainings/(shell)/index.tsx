@@ -1,4 +1,4 @@
-import { useCoaching, useCoachSessions, useCoachVerification, useGroups, useLearn, type GroupMembership, type LearnHome } from '@atlitos/api';
+import { useCoaching, useCoachSessions, useCoachVerification, useGroups, useLearn, type GroupMembership, type LearnHome, istNow } from '@atlitos/api';
 import type { ApiError, Session } from '@atlitos/types';
 import { spacing } from '@atlitos/theme';
 import { router } from 'expo-router';
@@ -47,7 +47,7 @@ const LIVE_STATUSES: Session['status'][] = [
   'accepted',
   'in_progress',
   'completed',
-  'rescheduled',
+  // 'rescheduled' is the old row of a moved session; its new row is counted.
   'rated',
 ];
 
@@ -301,7 +301,12 @@ export default function TrainingsScreen() {
   const upcomingSessions = mySessions
     .filter((session) => (session.status === 'accepted' || session.status === 'in_progress') && session.date >= today)
     .sort(bySoonest);
-  const requestedSessions = mySessions.filter((session) => session.status === 'requested').sort(bySoonest);
+  // A request whose day has passed can no longer happen (appointments never
+  // expire server side), so it is not "awaiting" anything.
+  const todayIst = istNow(Date.now()).date;
+  const requestedSessions = mySessions
+    .filter((session) => session.status === 'requested' && session.date >= todayIst)
+    .sort(bySoonest);
   const hasAnySession = mySessions.length > 0;
 
   // Group sessions upcoming for the same "accepted future" window as 1:1
@@ -365,7 +370,7 @@ export default function TrainingsScreen() {
               ctaLabel="Retry"
               onCtaPress={() => void loadDashboard()}
             />
-          ) : stats && requests.length === 0 && upcoming.length === 0 && stats.sessionsThisMonth === 0 ? (
+          ) : stats && requests.length === 0 && upcoming.length === 0 && stats.totalSessions === 0 ? (
             // This state persists until the coach's first booking lands, which
             // can be long after session types and availability are both done.
             // `EmptyState` only takes one CTA (ctaLabel/onCtaPress), so a
@@ -401,10 +406,12 @@ export default function TrainingsScreen() {
                     <StatTile label="Total sessions" value={stats.totalSessions} icon={Dumbbell} />
                     <StatTile label="Sessions this month" value={stats.sessionsThisMonth} icon={CalendarClock} />
                   </View>
-                  <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-                    <StatTile label="Total earnings" value={formatINR(stats.lifetimeEarnings)} icon={IndianRupee} />
-                    <StatTile label="Earnings this month" value={formatINR(stats.earningsThisMonth)} icon={IndianRupee} />
-                  </View>
+                  {COACH_IN_APP_PAYMENT_ENABLED ? (
+                    <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                      <StatTile label="Total earnings" value={formatINR(stats.lifetimeEarnings)} icon={IndianRupee} />
+                      <StatTile label="Earnings this month" value={formatINR(stats.earningsThisMonth)} icon={IndianRupee} />
+                    </View>
+                  ) : null}
                 </View>
               ) : null}
 
@@ -538,7 +545,7 @@ export default function TrainingsScreen() {
               {totalUpcomingCount > UPCOMING_PREVIEW_COUNT ? (
                 <View className="flex-row items-center justify-between">
                   <Text style={[textStyle('h3'), { color: colors.text }]}>Upcoming sessions</Text>
-                  <Button variant="text" size="sm" onPress={() => router.push('/(tabs)/coaching/bookings')}>
+                  <Button variant="text" size="sm" onPress={() => router.push('/(tabs)/trainings/bookings')}>
                     <Text style={{ color: colors.accent }}>View all</Text>
                   </Button>
                 </View>

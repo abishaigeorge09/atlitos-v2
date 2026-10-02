@@ -1,9 +1,9 @@
-import { useCoaching, useCoachSessions } from '@atlitos/api';
+import { useChat, useCoaching, useCoachSessions } from '@atlitos/api';
 import { canTransition, SESSION_TRANSITIONS } from '@atlitos/types';
 import type { ApiError, Session } from '@atlitos/types';
 import { radii, spacing } from '@atlitos/theme';
 import { router, useLocalSearchParams } from 'expo-router';
-import { CalendarClock, CheckCircle2, Play, TriangleAlert, XCircle } from 'lucide-react-native';
+import { CalendarClock, CheckCircle2, MessageCircle, Play, TriangleAlert, XCircle } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -49,6 +49,16 @@ function todayISO(): string {
  * inserts a new row and tombstones this one. States: loading, the lifecycle
  * terminal displays, error.
  */
+/** Transition RPCs return the bare row, without the joined athlete and type
+ * names, so a plain replace blanked the header after Start or Cancel. */
+function keepNames(prev: Session | null, next: Session): Session {
+  return {
+    ...next,
+    playerName: next.playerName ?? prev?.playerName,
+    sessionTypeName: next.sessionTypeName ?? prev?.sessionTypeName,
+  };
+}
+
 export default function CoachSessionDetailScreen() {
   const colors = useThemeColors();
   const navInset = useNavBarInset();
@@ -115,11 +125,22 @@ export default function CoachSessionDetailScreen() {
     if (!reschedOpen || !session) return;
     setReschedSlotsLoading(true);
     setReschedSelected(undefined);
+    // Drop a late reply for a date the coach has already moved off.
+    let cancelled = false;
     coachSessions
       .getRescheduleSlotOptions(session.coachId, session.sessionTypeId, reschedDate)
-      .then(setReschedSlots)
-      .catch(() => setReschedSlots([]))
-      .finally(() => setReschedSlotsLoading(false));
+      .then((slots) => {
+        if (!cancelled) setReschedSlots(slots);
+      })
+      .catch(() => {
+        if (!cancelled) setReschedSlots([]);
+      })
+      .finally(() => {
+        if (!cancelled) setReschedSlotsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [reschedOpen, reschedDate, session?.coachId, session?.sessionTypeId]);
 
   async function handleStart() {
@@ -128,7 +149,7 @@ export default function CoachSessionDetailScreen() {
     setActionError(null);
     try {
       const updated = await coachSessions.startSession(session.id);
-      setSession(updated);
+      setSession((prev) => keepNames(prev, updated));
     } catch (err) {
       setActionError((err as ApiError).message);
     } finally {
@@ -142,7 +163,7 @@ export default function CoachSessionDetailScreen() {
     setActionError(null);
     try {
       const updated = await coachSessions.completeSession(session.id);
-      setSession(updated);
+      setSession((prev) => keepNames(prev, updated));
     } catch (err) {
       setActionError((err as ApiError).message);
     } finally {
@@ -164,12 +185,30 @@ export default function CoachSessionDetailScreen() {
     setActionError(null);
     try {
       const updated = await coachSessions.cancelSession(session.id, cancelReason.trim());
-      setSession(updated);
+      setSession((prev) => keepNames(prev, updated));
       setCancelOpen(false);
     } catch (err) {
       setActionError((err as ApiError).message);
     } finally {
       setCancelling(false);
+    }
+  }
+
+  const chat = useChat(supabase);
+  const [openingThread, setOpeningThread] = useState(false);
+
+  // Same coaching thread the athlete opens from their booking, keyed by this
+  // session, pushed on the trainings stack so Back returns here.
+  async function handleMessageAthlete() {
+    if (!session) return;
+    setOpeningThread(true);
+    try {
+      const threadId = await chat.openCoachingThread(session.playerId, session.id);
+      router.push({ pathname: '/(tabs)/trainings/chat-thread/[id]', params: { id: threadId } });
+    } catch (err) {
+      setActionError((err as ApiError).message ?? 'Could not open chat. Please try again.');
+    } finally {
+      setOpeningThread(false);
     }
   }
 
@@ -233,7 +272,7 @@ export default function CoachSessionDetailScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       <AppBar variant="backTitle" title="Session" onPressBack={() => router.back()} />
 
-      <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: navInset + spacing.xl }}>
+      <ScrollView automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: navInset + spacing.xl }}>
         <View
           style={{
             borderRadius: radii.xl,
@@ -291,6 +330,11 @@ export default function CoachSessionDetailScreen() {
         </View>
 
         {actionError ? <Text style={[textStyle('caption'), { color: colors.danger }]}>{actionError}</Text> : null}
+
+        <Button variant="secondary" loading={openingThread} onPress={() => void handleMessageAthlete()}>
+          <MessageCircle size={16} strokeWidth={1.75} color={colors.text} />
+          <Text style={{ color: colors.text }}>Message athlete</Text>
+        </Button>
 
         {canStart || canComplete || canCancel || canReschedule ? (
           <View style={{ gap: spacing.sm }}>

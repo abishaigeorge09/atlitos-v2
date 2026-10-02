@@ -45,7 +45,9 @@ export const SESSION_TRANSITIONS: TransitionMap<SessionStatus> = {
   // Ending early is allowed (no TOO_EARLY gate from here).
   in_progress: ['completed'],
   declined: [],
-  rescheduled: ['completed', 'cancelled', 'rescheduled'],
+  // 0077 moves the OLD row to 'rescheduled' and inserts a fresh 'accepted'
+  // row for the new slot, so a rescheduled row is a tombstone: no edges.
+  rescheduled: [],
   completed: ['rated'],
   cancelled: [],
   rated: [],

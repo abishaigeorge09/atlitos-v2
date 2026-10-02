@@ -118,7 +118,7 @@ export default function PlayerPaymentsScreen() {
             title="No payments yet"
             body="Book a session with a coach and your payment history will show up here."
             ctaLabel="Find a coach"
-            onCtaPress={() => router.push('/(tabs)/coaching')}
+            onCtaPress={() => router.push('/trainings/coaches')}
           />
         </View>
       ) : (

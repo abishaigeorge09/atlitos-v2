@@ -1,7 +1,7 @@
 import { useCoaching, useGroups } from '@atlitos/api';
 import type { ApiError, Session } from '@atlitos/types';
 import { formatINR, radii, spacing } from '@atlitos/theme';
-import { router } from 'expo-router';
+import { router, useSegments } from 'expo-router';
 import { CalendarClock, CalendarX2, Clock, TriangleAlert, Users, Wallet } from 'lucide-react-native';
 import { COACH_IN_APP_PAYMENT_ENABLED } from '@/lib/feature-flags';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -41,7 +41,7 @@ const LIVE_STATUSES: Session['status'][] = [
   'accepted',
   'in_progress',
   'completed',
-  'rescheduled',
+  // 'rescheduled' is the old row of a moved session; its new row is counted.
   'rated',
 ];
 
@@ -74,6 +74,8 @@ function byMostRecent(a: BookingRow, b: BookingRow): number {
  * for training delivered". States: loading, empty, populated, error.
  */
 export default function CoachingBookingsListScreen() {
+  // Also re-exported on the trainings stack (trainings/bookings); stay on it.
+  const inTrainings = (useSegments() as string[]).includes('trainings');
   const colors = useThemeColors();
   const navInset = useNavBarInset();
   const coaching = useCoaching(supabase);
@@ -199,7 +201,7 @@ export default function CoachingBookingsListScreen() {
           <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
             Book a coach and it will show up here.
           </Text>
-          <Button onPress={() => router.replace('/(tabs)/coaching')}>
+          <Button onPress={() => (inTrainings ? router.replace('/trainings/coaches') : router.replace('/(tabs)/coaching'))}>
             <Text style={{ color: colors.inkOnAccent }}>Find a coach</Text>
           </Button>
         </View>
@@ -231,7 +233,9 @@ export default function CoachingBookingsListScreen() {
             row.kind === 'session' ? (
               <Pressable
                 onPress={() =>
-                  router.push({ pathname: '/(tabs)/coaching/booking/[id]', params: { id: row.session.id } })
+                  inTrainings
+                    ? router.push({ pathname: '/(tabs)/trainings/booking/[id]', params: { id: row.session.id } })
+                    : router.push({ pathname: '/(tabs)/coaching/booking/[id]', params: { id: row.session.id } })
                 }
                 style={{
                   borderRadius: radii.xl,

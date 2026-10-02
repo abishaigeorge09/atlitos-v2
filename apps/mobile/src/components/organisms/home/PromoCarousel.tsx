@@ -7,6 +7,7 @@ import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
+import { DONATIONS_ENABLED } from '@/lib/feature-flags';
 import { supabase } from '@/lib/supabase';
 import { useThemeColors } from '@/theme/use-theme-colors';
 
@@ -16,6 +17,12 @@ const CARD_WIDTH = SCREEN_WIDTH - spacing.lg * 2;
 
 export interface PromoCarouselHandle {
   reload: () => Promise<void>;
+}
+
+const DONATION_ROUTE_PREFIXES = ['/home/empower', '/home/donate', '/home/upa'];
+
+function isDonationRoute(route: string | null | undefined): boolean {
+  return !!route && DONATION_ROUTE_PREFIXES.some((prefix) => route.startsWith(prefix));
 }
 
 /**
@@ -35,7 +42,10 @@ export function PromoCarousel({ reloadKey, onLoaded }: { reloadKey: number; onLo
   const load = useCallback(async () => {
     try {
       const rows = await home.listPromoBanners();
-      setBanners(rows);
+      // Banners are data, so a flagged off surface can still be promoted from
+      // the table. Drop any whose target is switched off on this platform
+      // (donations on iOS, App Store 3.2.2), never send a tap to a dead route.
+      setBanners(rows.filter((row) => DONATIONS_ENABLED || !isDonationRoute(row.ctaRoute)));
       onLoaded?.(true);
     } catch {
       setBanners([]);

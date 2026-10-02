@@ -137,6 +137,9 @@ export default function CoachProfileScreen() {
   const groups = useGroups(supabase);
   const { id } = useLocalSearchParams<{ id: string }>();
   const status = useSessionStore((state) => state.status);
+  const myId = useSessionStore((state) => state.me?.id);
+  // A coach previewing their own public profile cannot book themselves.
+  const isOwnProfile = !!myId && myId === id;
   const requiresAuthGate = status !== 'signed_in';
   const isSignedIn = status === 'signed_in';
 
@@ -222,13 +225,21 @@ export default function CoachProfileScreen() {
     // slot generation needs; get_coach_busy_slots is cheap and hides the
     // underlying session rows, this is a read-only preview regardless
     // (book-session re-checks authoritatively, see use-coaching.ts).
+    // Ignore a late reply for a date the athlete has already moved off.
+    let cancelled = false;
     coaching
       .getCoachBusySlots(id, date, addDaysISO(date, 14))
       .then((slots) => {
+        if (cancelled) return;
         setBusySlots(slots);
         setSlotsState('populated');
       })
-      .catch(() => setSlotsState('error'));
+      .catch(() => {
+        if (!cancelled) setSlotsState('error');
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [id, date, sessionType?.id]);
 
   const availableSlots = useMemo(() => {
@@ -294,12 +305,23 @@ export default function CoachProfileScreen() {
         <AppBar variant="back" onPressBack={() => router.back()} />
         <View style={{ flex: 1, padding: spacing.lg, justifyContent: 'center', alignItems: 'center', gap: spacing.md }}>
           <TriangleAlert size={40} color={colors.danger} strokeWidth={1.75} />
+          {/* NOT_FOUND also covers a coach who has since been hidden (for
+              example one still listed in an athlete's past sessions), where
+              Retry can never succeed. */}
           <Text style={[textStyle('h3'), { color: colors.text, textAlign: 'center' }]}>
-            {error?.message ?? 'This coach could not be found.'}
+            {error?.code === 'NOT_FOUND'
+              ? 'This coach is not taking bookings right now.'
+              : (error?.message ?? 'This coach could not be found.')}
           </Text>
-          <Button variant="secondary" onPress={() => void loadCoach()}>
-            <Text style={{ color: colors.text }}>Retry</Text>
-          </Button>
+          {error?.code === 'NOT_FOUND' ? (
+            <Button variant="secondary" onPress={() => router.back()}>
+              <Text style={{ color: colors.text }}>Go back</Text>
+            </Button>
+          ) : (
+            <Button variant="secondary" onPress={() => void loadCoach()}>
+              <Text style={{ color: colors.text }}>Retry</Text>
+            </Button>
+          )}
         </View>
       </SafeAreaView>
     );
@@ -580,15 +602,21 @@ export default function CoachProfileScreen() {
       </ScrollView>
 
       <View style={{ padding: spacing.lg, paddingBottom: navInset + spacing.lg, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.bg }}>
-        <Button disabled={!canBook} onPress={handleContinue}>
-          <Text style={{ color: colors.inkOnAccent }}>
-            {!canBook
-              ? 'Choose a type, date, and time'
-              : COACH_IN_APP_PAYMENT_ENABLED
-                ? `Continue, ${formatINR(sessionType!.price)}`
-                : 'Request appointment'}
+        {isOwnProfile ? (
+          <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
+            This is how athletes see your profile.
           </Text>
-        </Button>
+        ) : (
+          <Button disabled={!canBook} onPress={handleContinue}>
+            <Text style={{ color: colors.inkOnAccent }}>
+              {!canBook
+                ? 'Choose a type, date, and time'
+                : COACH_IN_APP_PAYMENT_ENABLED
+                  ? `Continue, ${formatINR(sessionType!.price)}`
+                  : 'Request appointment'}
+            </Text>
+          </Button>
+        )}
       </View>
 
       <LoginGateModal

@@ -1,12 +1,13 @@
 import { useCoaching, type CoachListItem } from '@atlitos/api';
-import { router } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 
 import { HomeSection, HomeSectionSkeleton } from '@/components/organisms/home/HomeSection';
 import { CoachGridCard } from '@/components/ui/coach-grid-card';
 import { supabase } from '@/lib/supabase';
 import { useLocationStore } from '@/store/location-store';
+import { useSessionStore } from '@/store/session-store';
 
 const CARD_WIDTH = 176;
 const MAX_COACHES = 10;
@@ -21,19 +22,23 @@ const MAX_COACHES = 10;
 export function HomeCoachesRail({ reloadKey, onLoaded }: { reloadKey: number; onLoaded?: (ok: boolean) => void }) {
   const coaching = useCoaching(supabase);
   const city = useLocationStore((state) => state.city);
+  const isCoach = useSessionStore((state) => state.me?.roles.includes('coach') ?? false);
 
   const [state, setState] = useState<'loading' | 'ready'>('loading');
   const [coaches, setCoaches] = useState<CoachListItem[]>([]);
 
-  const load = useCallback(async () => {
-    setState('loading');
+  const load = useCallback(async (options?: { silent?: boolean }) => {
+    if (!options?.silent) setState('loading');
     try {
       const page = await coaching.listCoaches({ city });
       setCoaches(page.items.slice(0, MAX_COACHES));
-      onLoaded?.(true);
+      if (!options?.silent) onLoaded?.(true);
     } catch {
-      setCoaches([]);
-      onLoaded?.(false);
+      // A failed background refresh keeps what is already on screen.
+      if (!options?.silent) {
+        setCoaches([]);
+        onLoaded?.(false);
+      }
     } finally {
       setState('ready');
     }
@@ -44,6 +49,20 @@ export function HomeCoachesRail({ reloadKey, onLoaded }: { reloadKey: number; on
     void load();
   }, [load, reloadKey]);
 
+  // Prices and coaches change elsewhere (a coach edits a session type in
+  // Trainings), so returning to Home refreshes quietly. The first focus is
+  // the mount, which the effect above already loads.
+  const focusedOnce = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (!focusedOnce.current) {
+        focusedOnce.current = true;
+        return;
+      }
+      void load({ silent: true });
+    }, [load]),
+  );
+
   if (state === 'loading') return <HomeSectionSkeleton cardWidth={CARD_WIDTH} cardHeight={250} />;
   if (coaches.length === 0) return null;
 
@@ -52,7 +71,9 @@ export function HomeCoachesRail({ reloadKey, onLoaded }: { reloadKey: number; on
       title="Train with a coach"
       subtitle="Verified coaches, book an appointment"
       seeAllLabel="See all coaches"
-      onSeeAll={() => router.push('/trainings/coaches')}
+      // A coach's Trainings module has no Coaches tab (it opens their own
+      // dashboard), so the full list is for athletes only.
+      onSeeAll={isCoach ? undefined : () => router.push('/trainings/coaches')}
     >
       {coaches.map((coach) => (
         <View key={coach.userId} style={{ width: CARD_WIDTH }}>

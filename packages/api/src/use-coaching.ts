@@ -308,8 +308,11 @@ export function useCoaching(client: AtlitosClient) {
         const profileById = new Map((profileRows ?? []).map((row) => [row.id, row]));
         const minPriceByCoach = new Map<string, number>();
         for (const type of typeRows ?? []) {
+          // numeric arrives as a string ("600.00"); compare as numbers, not text.
+          const price = Number(type.price);
+          if (!Number.isFinite(price)) continue;
           const current = minPriceByCoach.get(type.coach_id);
-          if (current === undefined || type.price < current) minPriceByCoach.set(type.coach_id, type.price);
+          if (current === undefined || price < current) minPriceByCoach.set(type.coach_id, price);
         }
 
         const items = pageRows
@@ -824,7 +827,7 @@ function dayOfWeekOf(dateISO: string): number {
 /** Now as IST calendar date and minutes past midnight, the clock
  * `book-session` judges "in the past" by (`istToday` / `istMinutes`). IST has
  * no daylight saving, so a fixed +5:30 offset is exact. */
-function istNow(nowMs: number): { date: string; minutes: number } {
+export function istNow(nowMs: number): { date: string; minutes: number } {
   const ist = new Date(nowMs + 5.5 * 60 * 60 * 1000);
   return { date: ist.toISOString().slice(0, 10), minutes: ist.getUTCHours() * 60 + ist.getUTCMinutes() };
 }

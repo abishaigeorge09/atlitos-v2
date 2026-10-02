@@ -1,10 +1,11 @@
-import { applyOnlineSessionTypeName, isOnlineSessionTypeName, useCoachSessionTypes } from '@atlitos/api';
+import { applyOnlineSessionTypeName, isOnlineSessionTypeName, useCoachAvailability, useCoachSessionTypes } from '@atlitos/api';
 import type { ApiError, SessionTypeOption } from '@atlitos/types';
 import { radii, spacing } from '@atlitos/theme';
 import { router } from 'expo-router';
 import { Clock, EyeOff, Plus, TriangleAlert, Wifi } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { TextField } from '@/components/organisms/_shared';
@@ -41,7 +42,8 @@ function draftIssue(draft: FormDraft): string | null {
   const duration = Number(draft.durationMinutes);
   if (!Number.isInteger(duration) || duration <= 0) return 'Duration must be a whole number of minutes above zero.';
   const price = Number(draft.price);
-  if (!Number.isFinite(price) || price <= 0) return 'Price must be above zero.';
+  // book-session refuses a price at or under the flat 10.00 platform fee.
+  if (!Number.isFinite(price) || price <= 10) return 'Price must be above 10 rupees.';
   return null;
 }
 
@@ -77,8 +79,13 @@ function draftIssue(draft: FormDraft): string | null {
  * plainly what it unblocks), error.
  */
 export default function CoachSessionTypesScreen() {
+  const navInset = useNavBarInset();
   const colors = useThemeColors();
   const sessionTypes = useCoachSessionTypes(supabase);
+  const availability = useCoachAvailability(supabase);
+  // Null until known, so the availability nudge never flashes for a coach
+  // who already has windows.
+  const [hasWindows, setHasWindows] = useState<boolean | null>(null);
 
   const [state, setState] = useState<ScreenState>('loading');
   const [types, setTypes] = useState<SessionTypeOption[]>([]);
@@ -97,6 +104,11 @@ export default function CoachSessionTypesScreen() {
     try {
       const result = await sessionTypes.listMyTypes();
       setTypes(result);
+      // The nudge is a hint, so a failed lookup just hides it.
+      availability
+        .listWindows()
+        .then((windows) => setHasWindows(windows.length > 0))
+        .catch(() => setHasWindows(true));
       setState('populated');
     } catch (err) {
       setError(err as ApiError);
@@ -207,7 +219,7 @@ export default function CoachSessionTypesScreen() {
           </Button>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing['4xl'] }}>
+        <ScrollView automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: navInset + spacing['4xl'] }}>
           <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
             Athletes book one of these. You need at least one active type before anyone can send you a request.
           </Text>
@@ -228,7 +240,7 @@ export default function CoachSessionTypesScreen() {
                 Add a session type with a duration and a price. Until you do, your profile shows no options to book.
               </Text>
             </View>
-          ) : (
+          ) : hasWindows === false ? (
             // Onward link once at least one type exists: a session type alone
             // does not make a coach bookable, availability does too, and this
             // screen otherwise offered no route there (the dashboard's zero
@@ -250,7 +262,7 @@ export default function CoachSessionTypesScreen() {
                 <Text style={{ color: colors.text }}>Set your availability</Text>
               </Button>
             </View>
-          )}
+          ) : null}
 
           {error ? <Text style={[textStyle('caption'), { color: colors.danger }]}>{error.message}</Text> : null}
 

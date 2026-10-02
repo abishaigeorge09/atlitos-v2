@@ -119,10 +119,25 @@ export default function ClutchFeedScreen() {
     }
   }, []);
 
+  // Tabs stay mounted, so the active clip kept playing (with sound, if
+  // unmuted) under other tabs and pushed screens. Play only while focused.
+  const [screenFocused, setScreenFocused] = useState(true);
+  useFocusEffect(
+    useCallback(() => {
+      setScreenFocused(true);
+      return () => setScreenFocused(false);
+    }, []),
+  );
+
+  const unmountedRef = useRef(false);
+
   const mintPlayback = useCallback(
     async (clipId: string) => {
       try {
         const playback = await clutch.getPlaybackUrl(clipId);
+        // A mint that lands after the screen unmounted must not arm a new
+        // refresh timer, or it re-mints in the background for the app's life.
+        if (unmountedRef.current) return;
         setPlaybackUrls((prev) => ({ ...prev, [clipId]: playback.url }));
         if (playback.thumbUrl) {
           setPosterUrls((prev) => ({ ...prev, [clipId]: playback.thumbUrl as string }));
@@ -144,6 +159,7 @@ export default function ClutchFeedScreen() {
           else clearTimer(clipId);
         }, refreshMs);
       } catch (err) {
+        if (unmountedRef.current) return;
         // SCALE-MEDIA M-1. This catch used to be empty, with a comment saying
         // the poster stayed in place. It does not: the SAME call mints the
         // poster, so a failure leaves no video URL AND no poster URL, and the
@@ -219,9 +235,11 @@ export default function ClutchFeedScreen() {
   }, [clutch]);
 
   useEffect(() => {
+    unmountedRef.current = false;
     void load();
     const timers = refreshTimers.current;
     return () => {
+      unmountedRef.current = true;
       Object.values(timers).forEach(clearTimeout);
     };
   }, [load]);
@@ -441,7 +459,7 @@ export default function ClutchFeedScreen() {
               <ClutchPostCard
                 clip={item}
                 variant="feed"
-                active={item.id === activeId}
+                active={screenFocused && item.id === activeId}
                 // F1: only the active card and its minted neighbors (the
                 // same "keep" window the playback-URL effect above already
                 // computes) get a real ClipVideo/useVideoPlayer instance.

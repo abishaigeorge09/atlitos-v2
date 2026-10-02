@@ -22,6 +22,7 @@ import { StatusPill } from '@/components/ui/status-pill';
 import { Text } from '@/components/ui/text';
 import { SESSION_STATUS_PILL } from '@/lib/session-display';
 import { supabase } from '@/lib/supabase';
+import { useSessionStore } from '@/store/session-store';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
 import { formatSlotWhen } from '@/lib/time-display';
@@ -67,6 +68,11 @@ export default function GroupSessionDetailScreen() {
   const [actionError, setActionError] = useState<string | null>(null);
 
   const [marks, setMarks] = useState<Record<string, AttendanceStatus>>({});
+  // Members reach this screen from the "session started" and "session
+  // completed" notifications (0103). The roster and the start, attendance
+  // and end controls are the group coach's alone.
+  const myId = useSessionStore((state) => state.me?.id);
+  const isGroupCoach = !!myId && group?.coachId === myId;
   const [starting, setStarting] = useState(false);
   const [marking, setMarking] = useState(false);
   const [ending, setEnding] = useState(false);
@@ -224,14 +230,14 @@ export default function GroupSessionDetailScreen() {
 
         {actionError ? <Text style={[textStyle('caption'), { color: colors.danger }]}>{actionError}</Text> : null}
 
-        {isPre ? (
+        {isGroupCoach && isPre ? (
           <Button loading={starting} onPress={() => void handleStart()}>
             <Play size={16} strokeWidth={1.75} color={colors.inkOnAccent} />
             <Text style={{ color: colors.inkOnAccent }}>Start session</Text>
           </Button>
         ) : null}
 
-        {isRunning || isCompleted ? (
+        {isGroupCoach && (isRunning || isCompleted) ? (
           <View style={{ gap: spacing.sm }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
               <Users size={20} color={colors.textSecondary} strokeWidth={1.75} />

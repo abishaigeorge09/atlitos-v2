@@ -18,7 +18,9 @@ import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
+import { COACH_IN_APP_PAYMENT_ENABLED } from '@/lib/feature-flags';
 import { supabase } from '@/lib/supabase';
+import { formatSlotDate } from '@/lib/time-display';
 import { textStyle } from '@/theme/text-style';
 import { useThemeColors } from '@/theme/use-theme-colors';
 
@@ -156,13 +158,18 @@ export default function CoachTraineesScreen() {
           </View>
           <Text style={[textStyle('h3'), { color: colors.text, textAlign: 'center' }]}>No trainees yet</Text>
           <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
-            Athletes you have trained will show up here once they book a session with you. You can start a training
-            group now and invite them from your profile.
+            {COACH_IN_APP_PAYMENT_ENABLED
+              ? 'Athletes you have trained will show up here once they book a session with you. You can start a training group now and invite them from your profile.'
+              : 'Athletes you have trained will show up here once they book a session with you.'}
           </Text>
-          <Button onPress={goToNewGroup}>
-            <Plus size={18} strokeWidth={1.75} color={colors.inkOnAccent} />
-            <Text style={{ color: colors.inkOnAccent }}>New training group</Text>
-          </Button>
+          {/* Groups run on a monthly in app fee and athletes cannot see them
+              while coach payments are off, so creating one is hidden too. */}
+          {COACH_IN_APP_PAYMENT_ENABLED ? (
+            <Button onPress={goToNewGroup}>
+              <Plus size={18} strokeWidth={1.75} color={colors.inkOnAccent} />
+              <Text style={{ color: colors.inkOnAccent }}>New training group</Text>
+            </Button>
+          ) : null}
         </View>
       ) : (
         <>
@@ -175,10 +182,12 @@ export default function CoachTraineesScreen() {
               paddingTop: spacing.sm,
             }}
           >
-            <Button variant="text" size="sm" onPress={goToNewGroup}>
-              <Plus size={16} strokeWidth={1.75} color={colors.accent} />
-              <Text style={{ color: colors.accent }}>New group</Text>
-            </Button>
+            {COACH_IN_APP_PAYMENT_ENABLED ? (
+              <Button variant="text" size="sm" onPress={goToNewGroup}>
+                <Plus size={16} strokeWidth={1.75} color={colors.accent} />
+                <Text style={{ color: colors.accent }}>New group</Text>
+              </Button>
+            ) : null}
           </View>
           <FlatList
             data={items}
@@ -191,12 +200,14 @@ export default function CoachTraineesScreen() {
               >
                 <Text style={[textStyle('callout'), { color: colors.textSecondary, textAlign: 'center' }]}>
                   {filter === 'group'
-                    ? 'No training groups yet. Create one to train several athletes together on a monthly fee.'
+                    ? COACH_IN_APP_PAYMENT_ENABLED
+                      ? 'No training groups yet. Create one to train several athletes together on a monthly fee.'
+                      : 'No training groups yet.'
                     : filter === 'online'
                       ? 'No online trainees yet.'
                       : 'No trainees match this filter.'}
                 </Text>
-                {filter === 'group' ? (
+                {filter === 'group' && COACH_IN_APP_PAYMENT_ENABLED ? (
                   <Button onPress={goToNewGroup}>
                     <Plus size={18} strokeWidth={1.75} color={colors.inkOnAccent} />
                     <Text style={{ color: colors.inkOnAccent }}>New training group</Text>
@@ -277,7 +288,7 @@ export default function CoachTraineesScreen() {
                   <View style={{ flex: 1, gap: spacing.xs }}>
                     <Text style={[textStyle('h3'), { color: colors.text }]}>{item.trainee.name}</Text>
                     <Text style={[textStyle('caption'), { color: colors.textTertiary }]}>
-                      {item.trainee.sessionCount} {item.trainee.sessionCount === 1 ? 'session' : 'sessions'}, last on {item.trainee.lastSessionDate}
+                      {item.trainee.sessionCount} {item.trainee.sessionCount === 1 ? 'session' : 'sessions'}, latest {formatSlotDate(item.trainee.lastSessionDate)}
                     </Text>
                     {item.trainee.hasOnline ? (
                       <Text style={[textStyle('caption'), { color: colors.textTertiary }]}>Trains online</Text>

@@ -5,6 +5,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { TriangleAlert } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { TextField } from '@/components/organisms/_shared';
@@ -90,6 +91,7 @@ function draftIssue(draft: FormDraft): string | null {
  * reasoning 0080's own header records.
  */
 export default function GroupEditScreen() {
+  const navInset = useNavBarInset();
   const colors = useThemeColors();
   const groups = useGroups(supabase);
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -262,7 +264,7 @@ export default function GroupEditScreen() {
         onPressBack={() => router.back()}
       />
 
-      <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing['4xl'] }}>
+      <ScrollView automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: navInset + spacing['4xl'] }}>
         <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
           A group trains together on a monthly fee. Athletes join from your coach profile.
         </Text>

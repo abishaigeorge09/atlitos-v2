@@ -508,6 +508,45 @@ export function makeProfileApi(client: AtlitosClient) {
       if (error) throw await mapEdgeFunctionError(error);
     },
 
+    /** The signed in coach's own public facing details, for editing. Scoped by
+     * owner explicitly (RLS is not scoping). Null when the user has no coach
+     * profile. */
+    async getMyCoachDetails(): Promise<{ bio: string; coachingStyle: string; experienceYears: number } | null> {
+      const { data: auth } = await client.auth.getUser();
+      const userId = auth.user?.id;
+      if (!userId) return null;
+      const { data, error } = await client
+        .from("coach_profiles")
+        .select("bio, coaching_style, experience_years")
+        .eq("user_id", userId)
+        .maybeSingle<{ bio: string | null; coaching_style: string | null; experience_years: number }>();
+      if (error) throw mapPostgrestError(error);
+      if (!data) return null;
+      return { bio: data.bio ?? "", coachingStyle: data.coaching_style ?? "", experienceYears: data.experience_years };
+    },
+
+    /** Edit the coach's own bio, coaching style and experience. Status and
+     * rating stay locked server side (lock_coach_profile_admin_fields). Fails
+     * loudly if no row changed, so an RLS refusal is never a silent no op. */
+    async updateMyCoachDetails(input: { bio: string; coachingStyle: string; experienceYears: number }): Promise<void> {
+      const { data: auth } = await client.auth.getUser();
+      const userId = auth.user?.id;
+      if (!userId) throw { code: "UNAUTHENTICATED", message: "Sign in to edit your coach profile.", status: 401 };
+      const { data, error } = await client
+        .from("coach_profiles")
+        .update({
+          bio: input.bio.trim() || null,
+          coaching_style: input.coachingStyle.trim() || null,
+          experience_years: input.experienceYears,
+        })
+        .eq("user_id", userId)
+        .select("user_id");
+      if (error) throw mapPostgrestError(error);
+      if (!data || data.length === 0) {
+        throw { code: "FORBIDDEN", message: "Could not save your coach details. Sign out and back in, then try again.", status: 403 };
+      }
+    },
+
     /** v1 `setupCoach` -> `submit_coach_verification` RPC. Returns the new
      * `verification_requests.id`. */
     async submitCoachVerification(payload: SubmitCoachVerificationPayload): Promise<string> {

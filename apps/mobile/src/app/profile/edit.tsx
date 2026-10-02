@@ -56,6 +56,30 @@ export default function EditProfileScreen() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Coach details (bio, style, experience) live on coach_profiles, separate
+  // from the player bio above. Shown only to coaches; there was no way to edit
+  // them after setup (device pass 2026-10-03).
+  const isCoach = !!me?.roles?.includes('coach');
+  const [coachLoaded, setCoachLoaded] = useState(false);
+  const [coachBio, setCoachBio] = useState('');
+  const [coachStyle, setCoachStyle] = useState('');
+  const [coachYears, setCoachYears] = useState('');
+  useEffect(() => {
+    if (!isCoach) return;
+    profileApi
+      .getMyCoachDetails()
+      .then((details) => {
+        if (details) {
+          setCoachBio(details.bio);
+          setCoachStyle(details.coachingStyle);
+          setCoachYears(String(details.experienceYears));
+          setCoachLoaded(true);
+        }
+      })
+      .catch(() => setCoachLoaded(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCoach]);
+
   const normalizedHandle = handle.trim().toLowerCase();
   const handleChanged = normalizedHandle !== (me?.handle ?? '');
 
@@ -166,6 +190,13 @@ export default function EditProfileScreen() {
         dob: dobValue.length > 0 ? dobValue : null,
         ...(handleChanged && normalizedHandle.length > 0 ? { handle: normalizedHandle } : {}),
       });
+      if (isCoach && coachLoaded) {
+        await profileApi.updateMyCoachDetails({
+          bio: coachBio,
+          coachingStyle: coachStyle,
+          experienceYears: Math.max(0, Math.min(60, Number.parseInt(coachYears, 10) || 0)),
+        });
+      }
       await refreshMe();
       router.back();
     } catch (err) {
@@ -195,7 +226,7 @@ export default function EditProfileScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       <AppBar variant="backTitle" title="Edit profile" onPressBack={() => router.back()} />
-      <ScrollView automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: spacing.lg, gap: spacing.xl, paddingBottom: spacing['3xl'] }}>
+      <ScrollView automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={{ padding: spacing.lg, gap: spacing.xl, paddingBottom: spacing['3xl'] }}>
         <View style={{ gap: spacing.sm }}>
           <Text style={[textStyle('label'), { color: colors.text }]}>Cover photo</Text>
           <Pressable
@@ -305,7 +336,7 @@ export default function EditProfileScreen() {
         <Input
           type="pincode"
           label="Date of birth"
-          placeholder="YYYY-MM-DD"
+          placeholder="Year, month, day"
           maxLength={10}
           value={dob}
           onChangeText={(value) => {
@@ -314,6 +345,33 @@ export default function EditProfileScreen() {
           }}
           error={dobError ?? undefined}
         />
+
+        {isCoach && coachLoaded ? (
+          <View style={{ gap: spacing.lg }}>
+            <Text style={[textStyle('h3'), { color: colors.text }]}>Coach profile</Text>
+            <Input
+              type="multiline"
+              label="About you as a coach"
+              value={coachBio}
+              onChangeText={(value) => setCoachBio(value.slice(0, 500))}
+              maxLength={500}
+              placeholder="Your coaching background and what athletes can expect."
+            />
+            <Input
+              label="Coaching style"
+              value={coachStyle}
+              onChangeText={setCoachStyle}
+              placeholder="For example, technical drills and match play"
+            />
+            <Input
+              type="pincode"
+              label="Years of experience"
+              value={coachYears}
+              maxLength={2}
+              onChangeText={(value) => setCoachYears(value.replace(/[^0-9]/g, ''))}
+            />
+          </View>
+        ) : null}
 
         {error ? <Text style={[textStyle('caption'), { color: colors.danger }]}>{error}</Text> : null}
 

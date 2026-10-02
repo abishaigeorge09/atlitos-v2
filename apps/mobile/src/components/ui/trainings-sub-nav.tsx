@@ -39,7 +39,9 @@ const TABS_BY_ROLE: Record<TrainingsSubNavRole, Array<{ key: TrainingsSubNavTab;
   coach: [
     { key: 'stats', label: 'Stats' },
     { key: 'trainees', label: 'Trainees' },
-    { key: 'earnings', label: 'Earnings' },
+    // Appointments are paid to the coach directly and write no ledger rows,
+    // so an in app wallet would sit at zero forever.
+    ...(COACH_IN_APP_PAYMENT_ENABLED ? [{ key: 'earnings' as const, label: 'Earnings' }] : []),
     { key: 'chat', label: 'Chat' },
     // "Analytics", NOT "Video Analytics". This tab opens NUMERIC analytics
     // (sessions, earnings, retention). Video analysis is NOT BUILT, and the
