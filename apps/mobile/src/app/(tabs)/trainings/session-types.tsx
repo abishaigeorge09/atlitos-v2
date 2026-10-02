@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import { Clock, EyeOff, Plus, TriangleAlert, Wifi } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { TextField } from '@/components/organisms/_shared';
@@ -77,6 +78,7 @@ function draftIssue(draft: FormDraft): string | null {
  * plainly what it unblocks), error.
  */
 export default function CoachSessionTypesScreen() {
+  const navInset = useNavBarInset();
   const colors = useThemeColors();
   const sessionTypes = useCoachSessionTypes(supabase);
 
@@ -207,7 +209,7 @@ export default function CoachSessionTypesScreen() {
           </Button>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing['4xl'] }}>
+        <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: navInset + spacing['4xl'] }}>
           <Text style={[textStyle('callout'), { color: colors.textSecondary }]}>
             Athletes book one of these. You need at least one active type before anyone can send you a request.
           </Text>

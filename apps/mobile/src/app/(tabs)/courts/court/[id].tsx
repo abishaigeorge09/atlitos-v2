@@ -190,7 +190,7 @@ export default function CourtDetailScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       <AppBar variant="back" onPressBack={() => router.back()} />
 
-      <ScrollView contentContainerStyle={{ paddingBottom: spacing['4xl'], gap: spacing.lg }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: navInset + spacing['4xl'], gap: spacing.lg }}>
         <View style={{ paddingHorizontal: spacing.lg }}>
           {court.images.length > 0 ? (
             <AdBannerCarousel

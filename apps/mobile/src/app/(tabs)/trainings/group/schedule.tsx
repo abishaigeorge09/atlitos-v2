@@ -5,6 +5,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { TriangleAlert, Users } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
+import { useNavBarInset } from '@/components/ui/bottom-nav';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { TextField } from '@/components/organisms/_shared';
@@ -59,6 +60,7 @@ function addMinutes(time: string, minutes: number): string {
  * the copy says out loud rather than surprising the coach.
  */
 export default function GroupScheduleSessionScreen() {
+  const navInset = useNavBarInset();
   const colors = useThemeColors();
   const groups = useGroups(supabase);
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
@@ -169,7 +171,7 @@ export default function GroupScheduleSessionScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       <AppBar variant="backTitle" title="Schedule session" onPressBack={() => router.back()} />
 
-      <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing['4xl'] }}>
+      <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: navInset + spacing['4xl'] }}>
         <View
           style={{
             flexDirection: 'row',
