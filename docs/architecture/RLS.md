@@ -362,7 +362,7 @@ Supabase Storage buckets get their own RLS-style policies on `storage.objects`, 
 
 | Bucket | Path convention | Read | Write |
 |---|---|---|---|
-| `coach-certificates` | `{coach_id}/...` | owner + admin | owner (insert only) |
+| `coach-certificates` | `{coach_id}/...` | owner + admin | owner (insert only; no coach role needed since `0144`, applicants upload before submit grants it) |
 | `venue-photos` | `{venue_id}/...` | public (matches verified venue visibility) | owning partner |
 | `upa-evidence` | `{application_id}/...` | owner + admin, **never public**, per PRD-05 FR-3 | owner (insert only) |
 | `clips` | `{clip_id}/...` | **PRIVATE (`public = false`), NO policy on `storage.objects` at all**: no anon, public, or authenticated direct read. This is the Supabase Storage equivalent of Cloudflare Stream's `requireSignedURLs: true`; no clip object is resolvable by a guessed or scraped path in any status. Playback is a short-lived (TTL 300s) signed URL minted by an edge function against the live clip row (`get_clip_playback_url` / `get_clip_moderation_url`, AT-96) | `stream-upload-url` edge function only, via a service-role-minted signed UPLOAD url (`0042`) |
